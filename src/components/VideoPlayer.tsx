@@ -3097,35 +3097,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const stopAndClosePlayer = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
-    // INSTANT close: fire onClose synchronously so React unmounts the player
-    // overlay immediately. All teardown happens after, off the critical path.
     clearHideTimer();
-    setIsClosing(true);
-    setShowControls(false);
-    setLocked(false);
-    setShowSettings(false);
-    setShowAudioPanel(false);
-    setShowQualityPanel(false);
-    setShowServerPanel(false);
-    setShowInfoSheet(false);
-    setShowLanguageSheet(false);
-    setShowSeasonSheet(false);
-    setShowLibrarySheet(false);
-    setShowDownloadQualityPicker(false);
 
     const v = videoRef.current;
     const iframe = embedIframeRef.current;
+    const hls = hlsRef.current;
 
-    // Stop audio instantly (cheap) — prevents lingering sound during animation.
-    try { v?.pause(); } catch {}
-    try { hlsRef.current?.destroy(); } catch {}
-    hlsRef.current = null;
-
-    // Notify parent after a tiny compositor-only transition; no blocking cleanup.
-    window.setTimeout(() => onClose(), 120);
+    // Close the React layer first. Clearing src/HLS before unmount caused the
+    // visible black-back flash the user reported.
+    onClose();
 
     // Heavy / async cleanup deferred to next tick so it never blocks close.
     setTimeout(() => {
+      try { v?.pause(); } catch {}
+      try { hls?.destroy(); } catch {}
+      if (hlsRef.current === hls) hlsRef.current = null;
       try {
         if (document.fullscreenElement) {
           try { (screen.orientation as any).unlock?.(); } catch {}
@@ -3170,20 +3156,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 0);
   }, [clearHideTimer, closeInlineSheets, onClose]);
 
-  // Back-button behavior: when in fullscreen, first exit fullscreen; otherwise close the player.
+  // Back button now performs one stable action: close the player immediately.
   const handleBackPress = useCallback(() => {
-    const inFs = !!document.fullscreenElement || isFullscreen;
-    if (inFs) {
-      try { (screen.orientation as any).unlock?.(); } catch {}
-      try {
-        const p = document.exitFullscreen?.();
-        if (p && typeof (p as Promise<void>).catch === "function") (p as Promise<void>).catch(() => {});
-      } catch {}
-      setIsFullscreen(false);
-      return;
-    }
     stopAndClosePlayer();
-  }, [isFullscreen, stopAndClosePlayer]);
+  }, [stopAndClosePlayer]);
 
   // Pause when user leaves the page/app. Never clear src here: ad popups / app
   // switching can fire pagehide, and wiping the media source restarts playback.
@@ -3998,7 +3974,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'} ${isClosing ? 'animate-out fade-out zoom-out-95 duration-150' : ''}`} ref={containerRef}>
+    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -4192,7 +4168,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onMouseEnter={() => { if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
               onMouseLeave={scheduleAnOverlayHide}
             >
-              <button onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }} onClick={(e) => e.stopPropagation()} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
+              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleBackPress(); }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
                 <ArrowLeft className="w-4 h-4 text-white" />
               </button>
               <div className="flex items-center gap-2">
@@ -4236,7 +4212,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
-                <button onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }} onClick={(e) => e.stopPropagation()} className="player-touch-button h-[40px] w-[40px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleBackPress(); }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="player-touch-button h-[40px] w-[40px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
                   <ArrowLeft className="w-[22px] h-[22px]" />
                 </button>
                 <div className="flex max-w-[calc(100%-46px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">

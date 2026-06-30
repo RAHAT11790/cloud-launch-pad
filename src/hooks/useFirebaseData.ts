@@ -3,6 +3,7 @@ import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { isLegacyAnEntry, stripLegacyAnItems } from "@/lib/legacyAn";
 
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
@@ -14,22 +15,8 @@ const MAX_CACHE_BYTES = 2_500_000;
 // AN (AnimeSalt) now runs 100% via live API. Any legacy AN entry that lingers in
 // Firebase or localStorage cache must be stripped at the source so it can never
 // leak into the user UI, regardless of which render path consumes it.
-const isLegacyAn = (item: any): boolean => {
-  if (!item || typeof item !== "object") return false;
-  const id = String(item.id || "");
-  return (
-    !!item.anSlug ||
-    !!item.animeSaltSlug ||
-    item.source === "animesalt" ||
-    item.sourceName === "AnimeSalt" ||
-    item.displayAs === "an" ||
-    id.startsWith("an_") ||
-    id.startsWith("an_mv_") ||
-    id.startsWith("as_")
-  );
-};
 const stripLegacy = <T,>(arr: T[] | undefined | null): T[] =>
-  Array.isArray(arr) ? (arr.filter((x) => !isLegacyAn(x)) as T[]) : [];
+  stripLegacyAnItems(arr);
 
 const readCache = <T,>(key: string, fallback: T): T => {
   try {
@@ -61,8 +48,8 @@ const newestFirst = (a: AnimeItem, b: AnimeItem) => (b.updatedAt || b.createdAt 
 
 const mergeById = (cached: AnimeItem[], fresh: AnimeItem[]) => {
   const map = new Map<string, AnimeItem>();
-  cached.forEach((item) => { if (item?.id && !isLegacyAn(item)) map.set(item.id, item); });
-  fresh.forEach((item) => { if (item?.id && !isLegacyAn(item)) map.set(item.id, item); });
+  cached.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
+  fresh.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
   return Array.from(map.values()).sort(newestFirst).slice(0, BACKFILL_CACHE_LIMIT);
 };
 

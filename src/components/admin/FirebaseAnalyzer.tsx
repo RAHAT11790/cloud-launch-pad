@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { db, get, ref, remove } from "@/lib/firebase";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { clearLegacyAnBrowserCaches, isLegacyAnEntry, LEGACY_AN_CARD_ROOTS, LEGACY_AN_ROOTS } from "@/lib/legacyAn";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -27,7 +28,6 @@ const ACTIVE_ROOTS = new Set([
   "weeklyPending", "XNXANIKPAY",
 ]);
 
-const LEGACY_AN_ROOTS = ["animesaltCache", "anSeries", "anMovies", "animesalt", "animesaltSelected"];
 const PAGE_SIZE = 120;
 
 const sortKeys = (keys: string[]) => [...keys].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -45,18 +45,7 @@ const previewValue = (value: unknown) => {
   }
 };
 
-const isLegacyAnEntry = (key: string, value: any) => {
-  const lowerKey = key.toLowerCase();
-  const source = String(value?.source || value?.sourceName || value?.provider || "").toLowerCase();
-  return (
-    lowerKey.startsWith("an_") ||
-    lowerKey.startsWith("an-mv") ||
-    lowerKey.startsWith("an_mv_") ||
-    source.includes("animesalt") ||
-    source === "an" ||
-    Boolean(value?.anSlug || value?.animeSaltSlug || value?.displayAs === "an")
-  );
-};
+const sleepFrame = () => new Promise((resolve) => window.setTimeout(resolve, 0));
 
 interface TreeRowProps {
   path: string;
@@ -254,6 +243,7 @@ function FirebaseAnalyticsActions({
   btnSecondary: string;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [legacyProgress, setLegacyProgress] = useState("");
   const orphanKeys = useMemo(() => rootKeys.filter((key) => !ACTIVE_ROOTS.has(key)), [rootKeys]);
   const legacyRoots = useMemo(() => rootKeys.filter((key) => LEGACY_AN_ROOTS.includes(key)), [rootKeys]);
 
@@ -294,27 +284,52 @@ function FirebaseAnalyticsActions({
   }, [orphanKeys, setRootKeys]);
 
   const purgeLegacyAn = useCallback(async () => {
-    if (!confirm("Delete old AN database cache and AN-tagged stored cards?")) return;
+    if (!confirm("Safe AN cleanup will delete only rows marked as AnimeSalt/AN from Web Series, Movies, New Releases, and the admin index. RS rows are protected. Continue?")) return;
     setBusy("legacy-an");
+    setLegacyProgress("Scanning AN markers...");
     try {
       let deletedCards = 0;
+      let deletedIndexes = 0;
       await Promise.all(LEGACY_AN_ROOTS.map((key) => remove(ref(db, key)).catch(() => undefined)));
-      for (const rootPath of ["webseries", "movies", "newEpisodeReleases"]) {
+      for (const rootPath of LEGACY_AN_CARD_ROOTS) {
+        setLegacyProgress(`Scanning ${rootPath}...`);
         const keys = await firebaseRestShallowKeys(rootPath).catch(() => []);
-        const candidateSet = new Set(keys.filter((key) => key.startsWith("an_") || key.startsWith("an_mv_") || key.toLowerCase().startsWith("an-mv")));
+        const candidateSet = new Set(keys.filter((key) => isLegacyAnEntry(key, null)));
         const unknown = keys.filter((key) => !candidateSet.has(key));
-        for (let index = 0; index < unknown.length; index += 24) {
-          const chunk = unknown.slice(index, index + 24);
-          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${rootPath}/${key}`, { shallow: true }).catch(() => null)] as const));
+        for (let index = 0; index < unknown.length; index += 16) {
+          const chunk = unknown.slice(index, index + 16);
+          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${rootPath}/${key}`).catch(() => null)] as const));
           values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
-          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          setLegacyProgress(`${rootPath}: scanned ${Math.min(index + chunk.length, unknown.length)}/${unknown.length}, found ${candidateSet.size}`);
+          await sleepFrame();
         }
-        await Promise.all([...candidateSet].map((key) => remove(ref(db, `${rootPath}/${key}`))));
+        await Promise.all([...candidateSet].map(async (key) => {
+          await remove(ref(db, `${rootPath}/${key}`));
+          if (rootPath === "webseries" || rootPath === "movies") await remove(ref(db, `adminContentIndex/${rootPath}/${key}`)).catch(() => undefined);
+        }));
         deletedCards += candidateSet.size;
       }
+      for (const indexRoot of ["webseries", "movies"] as const) {
+        const path = `adminContentIndex/${indexRoot}`;
+        setLegacyProgress(`Cleaning ${path}...`);
+        const keys = await firebaseRestShallowKeys(path).catch(() => []);
+        const candidateSet = new Set(keys.filter((key) => isLegacyAnEntry(key, null)));
+        const unknown = keys.filter((key) => !candidateSet.has(key));
+        for (let index = 0; index < unknown.length; index += 32) {
+          const chunk = unknown.slice(index, index + 32);
+          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${path}/${key}`).catch(() => null)] as const));
+          values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
+          await sleepFrame();
+        }
+        await Promise.all([...candidateSet].map((key) => remove(ref(db, `${path}/${key}`))));
+        deletedIndexes += candidateSet.size;
+      }
+      clearLegacyAnBrowserCaches();
       setRootKeys((keys) => keys.filter((key) => !LEGACY_AN_ROOTS.includes(key)));
-      toast.success(`Legacy AN removed: ${deletedCards} stored cards plus cache roots`);
+      setLegacyProgress(`Done: ${deletedCards} cards, ${deletedIndexes} index rows removed`);
+      toast.success(`Safe AN cleanup done: ${deletedCards} cards + ${deletedIndexes} index rows removed. RS kept safe.`);
     } catch (error: any) {
+      setLegacyProgress("");
       toast.error(`Legacy AN purge failed: ${error?.message || error}`);
     } finally {
       setBusy(null);
@@ -324,26 +339,45 @@ function FirebaseAnalyticsActions({
   const buttons = [
     { key: "tokens", label: "Expired Tokens", count: null as number | null, icon: <Trash2 size={13} />, action: deleteExpiredTokens },
     { key: "orphans", label: "Orphan Roots", count: orphanKeys.length, icon: <AlertTriangle size={13} />, action: deleteOrphanRoots },
-    { key: "legacy-an", label: "Legacy AN", count: legacyRoots.length, icon: <Trash2 size={13} />, action: purgeLegacyAn },
   ];
 
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
-      {buttons.map((button) => (
-        <button
-          key={button.key}
-          onClick={button.action}
-          disabled={busy !== null || (button.key === "orphans" && button.count === 0)}
-          className={`${btnSecondary} flex min-h-[46px] items-center justify-between gap-2 px-3 py-2 text-left text-[12px] disabled:cursor-not-allowed disabled:opacity-50`}
-          type="button"
-        >
-          <span className="inline-flex min-w-0 items-center gap-2">
-            {busy === button.key ? <Loader2 size={13} className="animate-spin" /> : button.icon}
-            <span className="truncate font-semibold">{button.label}</span>
+    <div className="space-y-2">
+      <button
+        onClick={purgeLegacyAn}
+        disabled={busy !== null}
+        className="flex min-h-[58px] w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-emerald-50 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+        type="button"
+      >
+        <span className="inline-flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-emerald-400/15 text-emerald-200">
+            {busy === "legacy-an" ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
           </span>
-          {button.count !== null && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-zinc-300">{button.count}</span>}
-        </button>
-      ))}
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-black">Safe AN Cleanup</span>
+            <span className="block truncate text-[11px] text-emerald-100/70">Deletes AnimeSalt/AN only from Web Series, Movies, New Releases, and admin index. RS stays protected.</span>
+          </span>
+        </span>
+        <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-bold text-emerald-100">{legacyRoots.length} roots</span>
+      </button>
+      {legacyProgress && <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-100">{legacyProgress}</p>}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {buttons.map((button) => (
+          <button
+            key={button.key}
+            onClick={button.action}
+            disabled={busy !== null || (button.key === "orphans" && button.count === 0)}
+            className={`${btnSecondary} flex min-h-[46px] items-center justify-between gap-2 px-3 py-2 text-left text-[12px] disabled:cursor-not-allowed disabled:opacity-50`}
+            type="button"
+          >
+            <span className="inline-flex min-w-0 items-center gap-2">
+              {busy === button.key ? <Loader2 size={13} className="animate-spin" /> : button.icon}
+              <span className="truncate font-semibold">{button.label}</span>
+            </span>
+            {button.count !== null && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-zinc-300">{button.count}</span>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

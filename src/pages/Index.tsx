@@ -423,6 +423,7 @@ import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
+import { isLegacyAnEntry } from "@/lib/legacyAn";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -687,18 +688,6 @@ const Index = () => {
   const activeSaltItems = useMemo(() => animeSaltEnabled ? animeSaltItems : [], [animeSaltEnabled, animeSaltItems]);
 
   // Strip legacy AN entries stored in Firebase. AN now runs 100% via live API.
-  const isLegacyAnEntry = (item: AnimeItem) => {
-    const id = String(item?.id || "");
-    return (
-      !!item?.anSlug ||
-      !!item?.animeSaltSlug ||
-      item?.sourceName === "AnimeSalt" ||
-      item?.source === "animesalt" ||
-      (item as any)?.displayAs === "an" ||
-      id.startsWith("an_") ||
-      id.startsWith("an_mv_")
-    );
-  };
   const cleanFirebaseAnime = useMemo(() => firebaseAnime.filter((a) => !isLegacyAnEntry(a)), [firebaseAnime]);
   const cleanWebseries = useMemo(() => webseries.filter((a) => !isLegacyAnEntry(a)), [webseries]);
   const cleanMovies = useMemo(() => movies.filter((a) => !isLegacyAnEntry(a)), [movies]);
@@ -1006,20 +995,24 @@ const Index = () => {
       });
     } catch {}
   }, []);
+  const cleanupPlaybackAfterUnmount = useCallback(() => {
+    window.requestAnimationFrame(() => window.setTimeout(stopAllPlayback, 0));
+  }, [stopAllPlayback]);
+
   const hardCloseToHome = useCallback(() => {
-    stopAllPlayback();
     setPlayerState(null);
     setSaltPlayerState(null);
     setSelectedAnime(null);
     setShowProfile(false);
     setCustomPostDetail(null);
     navigate("/", { replace: true });
-  }, [navigate, stopAllPlayback]);
+    cleanupPlaybackAfterUnmount();
+  }, [cleanupPlaybackAfterUnmount, navigate]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
-    stopAllPlayback();
     if (window.history.length > 1) navigate(-1);
     else navigate(fallback, { replace: true });
-  }, [navigate, stopAllPlayback]);
+    cleanupPlaybackAfterUnmount();
+  }, [cleanupPlaybackAfterUnmount, navigate]);
 
   // Persist activePage to sessionStorage
   useEffect(() => {
