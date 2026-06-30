@@ -8,8 +8,31 @@ const FETCH_TIMEOUT_MS = 12_000;
 // LocalStorage-first + Firebase-backed cache for AnimeSalt API responses.
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
-const CACHE_TTL_PLAYBACK_MS = 10 * 60 * 1000;          // playback links expire; keep fresh
+const CACHE_TTL_PLAYBACK_MS = 4 * 60 * 60 * 1000;      // 4 hours — playback links generally last several hours
 const memCache = new Map<string, { ts: number; data: any }>();
+
+// ===== In-flight request dedupe =====
+// Multiple cards/components hitting the same slug at once collapse to one fetch.
+const inflight = new Map<string, Promise<any>>();
+function dedupe<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+  const p = fn().finally(() => { inflight.delete(key); });
+  inflight.set(key, p);
+  return p;
+}
+
+// ===== Retry with exponential backoff =====
+async function withRetry<T>(label: string, fn: () => Promise<T>, tries = 3, baseDelay = 400): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (e) {
+      lastErr = e;
+      if (i < tries - 1) await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`${label} failed`);
+}
 
 const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
 
