@@ -698,7 +698,7 @@ export default function AnManager({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {filtered.map((it) => {
               const isSaved = !!saved[it.slug];
-              const display = saved[it.slug] || it;
+              const display = (saved[it.slug] || it) as SavedItem;
               const isSelected = selectedSlugs.has(it.slug);
               return (
                 <div
