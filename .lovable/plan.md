@@ -1,87 +1,66 @@
-# Plan: AN-কে আগের API system এ ফিরিয়ে আনা + Admin Ultra Optimization
+# AN Manager — Full Redesign
 
-## লক্ষ্য
-1. AN series-এর সব Firebase storage / cached link / synthetic HLS / prefetch — সবকিছু **সম্পূর্ণ delete**।
-2. AN আগের মতন **pure API-driven** হবে — click করলেই API call → fresh link → play। কোন stored link নাই, কোন expired link এর ঝামেলা নাই।
-3. Admin panel থেকে AN-related সব tab/loader/data-fetcher বাদ। RS-এর মতই super-fast করা।
-4. Whole site latency কমানো — Firebase load কমানো।
+পুরোনো ১৬০০-লাইনের `AnimeSaltManagerSection` সম্পূর্ণ বাদ দিয়ে নতুন একটা lean, professional manager বানাবো যেটা শুধু API দিয়ে চলবে। ভিডিও URL Firebase-এ কখনো store হবে না — শুধু slug + TMDB metadata save হবে।
 
----
+## ফাইল কাঠামো
 
-## কী কী Remove হবে
+নতুন ফাইল: `src/components/admin/AnManager.tsx` — সব logic এখানে আসবে (Admin.tsx থেকে inline বাদ)।
 
-### Firebase Paths (data delete হবে না, কোডে আর touch করবে না)
-- `animesalt/` / `an/` / synthetic HLS cache paths আর read/write হবে না।
-- (আপনি চাইলে পরে manual delete করতে পারবেন admin থেকে আলাদা cleanup দিয়ে।)
+Admin.tsx-এ পুরোনো `AnimeSaltManagerSection` ফাংশন আর তার call পুরোপুরি delete করে নতুন `<AnManager />` mount করবো।
 
-### Files — সম্পূর্ণ Delete
-- `src/components/admin/AnSeriesManager.tsx`
-- `src/components/admin/AnFirebasePrefetcher.tsx`
-- `src/hooks/useAnimeSaltData.ts` (Firebase-version)
-- `src/hooks/useSelectedAnimeSalt.ts` (যদি Firebase-cache logic থাকে)
-- `src/pages/AnExplorer.tsx` যদি Firebase data পড়ে — শুধু API-version রাখা হবে
-- `src/components/AnNativeView.tsx` (Firebase-tied হলে)
-- `mem/test-an-*.mjs`, `an_verify.cjs` — stale test files
-
-### Files — Refactor (Firebase reference সম্পূর্ণ বাদ)
-- `src/components/SaltPlayer.tsx` → শুধু `animeSaltApi` দিয়ে fresh fetch
-- `src/lib/animeSaltApi.ts` → API call optimize (parallel, abort, no cache write)
-- `src/pages/Index.tsx` → AN section API দিয়ে load (RS এর মতন hook pattern)
-- `src/pages/Admin.tsx` → AN tab/section সম্পূর্ণ remove
-- `supabase/functions/an-api/index.ts` → fast path verify, unnecessary HLS probe বাদ
-
----
-
-## আগের API Flow ফিরিয়ে আনা
+## ফিচার (top → bottom)
 
 ```text
-User clicks AN card
-   ↓
-navigate to /watch/an/<id>  (instant)
-   ↓
-SaltPlayer mount → animeSaltApi.fetchEpisode(id, ep)
-   ↓
-an-api edge fn → AnimeSalt player endpoint → fresh m3u8 URL
-   ↓
-HLS.js plays directly (proxy দিয়ে CORS/Referer handle)
+┌─ AnimeSalt Manager ──────────────────────────────────────┐
+│  [AN ON/OFF toggle]   [ Image Refresh ↻ ]   [ Reload ⟳ ] │
+│                                                          │
+│  Stats:  Total in API: 320   Selected: 47   Series/Movie │
+│                                                          │
+│  Bulk:  [ ✓ Select All ] [ ✗ Clear ]                     │
+│         [ ➕ Add All Selected ] [ 🗑 Delete All Saved ]   │
+│                                                          │
+│  Category dropdown ▾   🔍 Search…   Filter: All|Saved    │
+│                                                          │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐             │
+│  │ poster │ │ poster │ │ poster │ │ poster │  ← grid     │
+│  │ title  │ │ title  │ │ title  │ │ title  │             │
+│  │[✓ Add] │ │[ Edit ]│ │[ Add  ]│ │[Delete]│             │
+│  └────────┘ └────────┘ └────────┘ └────────┘             │
+└──────────────────────────────────────────────────────────┘
 ```
 
-কোন Firebase read/write নাই AN flow তে।
+### Behaviour
+- **Load on mount**: `animeSaltApi.browseAll()` → all series + movies as cards (cached 30 min in localStorage).
+- **Add All**: bulk-saves the currently filtered/selected slugs to `animesaltSelected/{slug}` with TMDB-enriched metadata (title, poster, backdrop, rating, year, genres, overview) — **no video URLs**.
+- **Delete All**: clears entire `animesaltSelected` node.
+- **Select All / Clear**: toggles checkbox state for visible cards.
+- **Per-card Add**: TMDB lookup by title → save 1 slug.
+- **Per-card Delete**: removes from `animesaltSelected/{slug}`.
+- **Per-card Edit**: modal to override title / poster / backdrop / rating / overview / category.
+- **AN ON/OFF**: writes `settings/animeSaltEnabled` (already read by user panel).
+- **Image Refresh**: clears `rs_img_seen_v1` + `caches.delete('rs-img-v1')` and force-reloads `<img>`s.
+- **Reload**: clears `rs_cache_animesalt_api_cards_v2` and re-calls `browseAll()`.
 
----
+### TMDB enrichment
+- Auto-search by title (clean Season N from query).
+- If exactly 1 result → save automatically.
+- If multiple → small picker (top 5 posters) before save.
+- Stores only metadata: `tmdbId`, `rating`, `genres`, `posterTmdb`, `backdrop`, `overview`, `year`.
 
-## Admin Panel Optimization
-- AN-related সব tab বাদ → bundle ছোট, latency কম।
-- `Admin.tsx` lazy-load প্রতিটা section আলাদা ভাবে (RS, Users, Free-access only on demand)।
-- Total counters শুধু shallow REST scan — already implemented, AN counter বাদ।
-- AnFirebasePrefetcher-এর `onMount` heavy listener সম্পূর্ণ গায়েব → Firebase quota অনেক কমবে।
+### User panel behaviour (no change needed)
+- `useSelectedAnimeSalt` already merges API list + filters by `animesaltSelected` slugs.
+- `Index.tsx` already reads `settings/animeSaltEnabled`.
+- Playback already pulls URLs live via `animeSaltApi.getEpisode/getMovie`.
 
----
+## Removed (old code)
+- 1596-line inline `AnimeSaltManagerSection` from `Admin.tsx` (lines ~10789–12380).
+- Episode preloader UI (URLs never stored anyway).
+- URL import section (not needed — browseAll covers all).
+- Inline TMDB modal duplication (moved to new component).
 
-## Latency Targets
-| জায়গা | আগে | পরে |
-|---|---|---|
-| AN card click → play start | 3–8s (Firebase + cache miss) | < 1s (single API call) |
-| Admin panel boot | 4–10s | < 1.5s |
-| Naruto-type big series fetch | Firebase disconnect | API stream, no disconnect |
+## Out of scope
+- No changes to `an-api` edge function.
+- No changes to `SaltPlayer.tsx` / `Index.tsx` playback path.
+- No legacy migration — old `animesaltSelected` rows remain compatible.
 
----
-
-## Technical Steps (যেই order এ করবো)
-
-1. **Delete files**: AnSeriesManager, AnFirebasePrefetcher, related hooks/tests।
-2. **Refactor `Admin.tsx`**: AN tab + import গুলা বাদ।
-3. **Refactor `Index.tsx`**: AN section কে `useAnimeSaltApi` hook দিয়ে replace (in-memory cache, no Firebase)।
-4. **Rewrite `useAnimeSaltData.ts`** → API-only, sessionStorage cache (15 min TTL) — কোন Firebase touch নাই।
-5. **`SaltPlayer.tsx` simplify**: synthetic HLS / Firebase link / stored quality — সব বাদ। শুধু API থেকে আসা fresh link play করবে।
-6. **`an-api` edge function**: একবারে fast path — token fetch → m3u8 rewrite → return। অতিরিক্ত probe/size check বাদ।
-7. **Build verify** + console/network check করে latency confirm।
-
----
-
-## ঝুঁকি / নোট
-- যেসব user এর AN partial progress save আছে localStorage এ, ওইটা ঠিক রাখবো (resume কাজ করবে)।
-- AnimeSalt site যদি down থাকে তখন user friendly error — fallback message।
-- Firebase এ পুরাতন `animesalt/` data থাকবে, কিন্তু code আর read করবে না। চাইলে পরে manual cleanup দিবো।
-
-**Approve করলে এক-শট এ পুরা refactor করে delivery দিবো — পুরাপুরি real testing সহ।**
+বানিয়ে দেবো এই plan অনুযায়ী?
