@@ -3168,6 +3168,16 @@ const Index = () => {
       {/* VideoPlayer is rendered via early-return above when playerState is active —
           this guarantees the home tree is fully unmounted while playing. */}
 
+      {/* Pre-player Loading Details overlay (AN content) */}
+      <LoadingDetailsOverlay
+        open={loadingDetails.open}
+        title={loadingDetails.title}
+        poster={loadingDetails.poster}
+        progress={loadingDetails.progress}
+        step={loadingDetails.step}
+        completed={loadingDetails.completed}
+      />
+
       {/* Live Support Chat */}
       <LiveSupportChat
         isOpen={chatOpen}
