@@ -399,7 +399,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const previousSpeedRef = useRef(1);
   const suppressNextClickRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const closingRef = useRef(false);
   const userPlaybackIntentRef = useRef(true);
   const lastPlaybackPositionRef = useRef(0);
