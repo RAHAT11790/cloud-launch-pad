@@ -548,7 +548,9 @@ export const animeSaltApi = {
     return { success: true, items: parseListPage(html) };
   },
 
-  async browseAll(maxPages = 40) {
+  async browseAll(maxPagesOrForce: number | boolean = 40, forceRefresh = false) {
+    const maxPages = typeof maxPagesOrForce === 'number' ? maxPagesOrForce : 40;
+    const force = typeof maxPagesOrForce === 'boolean' ? maxPagesOrForce : forceRefresh;
     const proxyUrl = await getAnimeSaltProxyUrl();
 
     const fetchType = async (type: 'series' | 'movies') => {
@@ -568,7 +570,7 @@ export const animeSaltApi = {
       };
       const getPage = async (page: number): Promise<{ items: any[]; maxPage?: number }> => {
         try {
-          const direct = await tryDirectApi(proxyUrl, { action: 'browse', type, page });
+          const direct = await tryDirectApi(proxyUrl, { action: 'browse', type, page }, force);
           let items = direct?.items as any[] | undefined;
           let maxPage = Number(direct?.maxPage || 0) || undefined;
           if (!items || !items.length) {
