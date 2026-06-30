@@ -61,10 +61,11 @@ const newestFirst = (a: AnimeItem, b: AnimeItem) => (b.updatedAt || b.createdAt 
 
 const mergeById = (cached: AnimeItem[], fresh: AnimeItem[]) => {
   const map = new Map<string, AnimeItem>();
-  cached.forEach((item) => { if (item?.id) map.set(item.id, item); });
-  fresh.forEach((item) => { if (item?.id) map.set(item.id, item); });
+  cached.forEach((item) => { if (item?.id && !isLegacyAn(item)) map.set(item.id, item); });
+  fresh.forEach((item) => { if (item?.id && !isLegacyAn(item)) map.set(item.id, item); });
   return Array.from(map.values()).sort(newestFirst).slice(0, BACKFILL_CACHE_LIMIT);
 };
+
 
 const loadBackfillCards = async (
   path: "webseries" | "movies",
