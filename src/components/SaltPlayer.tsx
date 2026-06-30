@@ -265,11 +265,9 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
     return {};
   };
 
-  const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
-    const epSrc = ep.link;
-    if (epSrc?.startsWith("animesalt://")) {
-      toast.error("AN episode URL is not saved in Firebase yet. Fetch it from Admin first.");
-    }
+  const handleEpisodeClick = async (_ep: any, _season: any, _sIdx: number, _eIdx: number) => {
+    // AN episode switching is driven by the parent (Index.tsx) which calls the
+    // live API to resolve a fresh HLS link. No Firebase lookup here.
   };
 
   // Filter episodes
