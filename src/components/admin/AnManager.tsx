@@ -831,12 +831,45 @@ export default function AnManager({
       {/* === Edit modal === */}
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setEditing(null)}>
-          <div className="bg-[#1a1530] rounded-2xl p-4 max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[#1a1530] rounded-2xl p-4 max-w-3xl w-full max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm">Edit: {editing.title}</h3>
               <button onClick={() => setEditing(null)} className="p-1 hover:bg-white/10 rounded"><X size={16} /></button>
             </div>
             <div className="space-y-2">
+              <div className="rounded-xl border border-purple-400/25 bg-purple-500/10 p-3">
+                <label className="text-[10px] text-purple-200 mb-1 block font-semibold">TMDB ID Fetch</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    value={editing.tmdbId || ""}
+                    onChange={(e) => setEditing({ ...editing, tmdbId: Number(e.target.value) || undefined })}
+                    placeholder="TMDB ID দিন (যেমন: 37854)"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <button
+                    onClick={fetchTmdbForEditing}
+                    disabled={tmdbBusySlug === editing.slug}
+                    className={`${btnPrimary} px-3 py-2 text-xs whitespace-nowrap disabled:opacity-50`}
+                  >
+                    {tmdbBusySlug === editing.slug ? <Loader2 size={13} className="animate-spin inline mr-1" /> : null}
+                    Fetch by ID
+                  </button>
+                  <button
+                    onClick={searchTmdbForEditing}
+                    disabled={tmdbBusySlug === editing.slug}
+                    className={`${btnSecondary} px-3 py-2 text-xs whitespace-nowrap disabled:opacity-50`}
+                  >
+                    Auto Search
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-400 mt-1">RS-এর মতো এখান থেকে সরাসরি TMDB ID দিয়ে poster, backdrop, year, rating, description, genres, cast load হবে।</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-3">
+                <div className="rounded-xl overflow-hidden bg-black/30 border border-white/10">
+                  {editing.poster ? <CachedImg src={editing.poster} alt={editing.title} className="w-full aspect-[2/3] object-cover" /> : <div className="aspect-[2/3] flex items-center justify-center text-xs text-zinc-400">No Poster</div>}
+                </div>
+                <div className="space-y-2">
               <div>
                 <label className="text-[10px] text-[#D1C4E9] mb-1 block">Title</label>
                 <input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} className={inputClass} />
@@ -848,6 +881,8 @@ export default function AnManager({
               <div>
                 <label className="text-[10px] text-[#D1C4E9] mb-1 block">Backdrop URL</label>
                 <input value={editing.backdrop || ""} onChange={(e) => setEditing({ ...editing, backdrop: e.target.value })} className={inputClass} />
+              </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -875,6 +910,38 @@ export default function AnManager({
                   className={`${inputClass} resize-none`}
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[#D1C4E9] mb-1 block">Genres (comma separated)</label>
+                  <input
+                    value={(editing.genres || []).join(", ")}
+                    onChange={(e) => setEditing({ ...editing, genres: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[#D1C4E9] mb-1 block">Directors</label>
+                  <input
+                    value={(editing.directors || []).join(", ")}
+                    onChange={(e) => setEditing({ ...editing, directors: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              {(editing.cast || []).length > 0 && (
+                <div>
+                  <label className="text-[10px] text-[#D1C4E9] mb-1 block">Voice/Cast Artists</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                    {(editing.cast || []).slice(0, 10).map((c, idx) => (
+                      <div key={`${c.name}-${idx}`} className="rounded-lg bg-white/5 border border-white/10 p-2 text-center">
+                        {c.photo ? <CachedImg src={c.photo} alt={c.name} className="w-12 h-12 rounded-full object-cover mx-auto mb-1" /> : <div className="w-12 h-12 rounded-full bg-white/10 mx-auto mb-1" />}
+                        <div className="text-[10px] font-semibold line-clamp-1">{c.name}</div>
+                        <div className="text-[9px] text-zinc-400 line-clamp-1">{c.character || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button onClick={saveEdit} className={`${btnPrimary} w-full py-2 mt-2`}>Save changes</button>
             </div>
           </div>
