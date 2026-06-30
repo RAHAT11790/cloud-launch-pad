@@ -2988,7 +2988,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  
  "apk-dw": "APK Download Center",
  "egd-manager": "EGD MANAGER",
- "fb-cleanup": "Firebase Add",
+ "fb-cleanup": "Firebase Analyzer",
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
