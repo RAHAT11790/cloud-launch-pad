@@ -4903,7 +4903,7 @@ ${tgBulkFooter}
  { section: "adsterra", icon: <Activity size={16} />, label: "Adsterra Ads" },
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
- { section: "fb-cleanup", icon: <Database size={16} />, label: "FB Add" },
+ { section: "fb-cleanup", icon: <Database size={16} />, label: "FB Analyzer" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
  { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
  { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
