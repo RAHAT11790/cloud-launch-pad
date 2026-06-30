@@ -13,7 +13,6 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 
