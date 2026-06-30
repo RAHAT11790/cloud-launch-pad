@@ -97,12 +97,13 @@ const loadBackfillCards = async (
 };
 
 export function useFirebaseData() {
-  const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
-  const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
+  const [webseries, setWebseries] = useState<AnimeItem[]>(() => stripLegacy(readCache<AnimeItem[]>(LS_WS, [])));
+  const [movies, setMovies] = useState<AnimeItem[]>(() => stripLegacy(readCache<AnimeItem[]>(LS_MOV, [])));
   const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
   const [loading, setLoading] = useState(() => {
     return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
   });
+
 
   useEffect(() => {
     let loadedCount = 0;
