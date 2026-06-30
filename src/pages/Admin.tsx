@@ -6993,7 +6993,7 @@ ${tgBulkFooter}
  )}
 
  {activeSection === "animesalt-manager" && (
- <AnimeSaltManagerSection
+ <AnManager
  glassCard={glassCard}
  inputClass={inputClass}
  btnPrimary={btnPrimary}
