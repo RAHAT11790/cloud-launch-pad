@@ -285,6 +285,8 @@ div[style*="z-index: 2147483647"],
     -webkit-backdrop-filter: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    contain: paint;
+    transform: translateZ(0);
   }
 
   .player-touch-button:active {
@@ -306,6 +308,17 @@ div[style*="z-index: 2147483647"],
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     touch-action: manipulation;
+    contain: paint;
+    transform: translateZ(0);
+  }
+
+  .player-controls-layer {
+    contain: layout paint;
+    will-change: opacity;
+    transform: translateZ(0);
+    background: linear-gradient(to bottom, hsl(0 0% 0% / 0.44), transparent 26%, transparent 58%, hsl(0 0% 0% / 0.52));
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */

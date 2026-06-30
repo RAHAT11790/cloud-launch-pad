@@ -3237,6 +3237,63 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     scheduleHideTimer();
   }, [scheduleHideTimer]);
 
+  const stopControlPress = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const toggleServerPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    stopControlPress(e);
+    setShowServerPanel((p) => !p);
+    setShowQualityPanel(false);
+    setShowAudioPanel(false);
+    setShowCcPanel(false);
+    setShowSettings(false);
+    resetHideTimer();
+  }, [resetHideTimer, stopControlPress]);
+
+  const toggleCcPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    stopControlPress(e);
+    setShowCcPanel((p) => !p);
+    setCcTab(hlsSubtitleOptions.length > 0 ? "subtitle" : "audio");
+    setShowAudioPanel(false);
+    setShowQualityPanel(false);
+    setShowSettings(false);
+    setShowServerPanel(false);
+    resetHideTimer();
+  }, [hlsSubtitleOptions.length, resetHideTimer, stopControlPress]);
+
+  const toggleQualityPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    stopControlPress(e);
+    setShowQualityPanel((p) => !p);
+    setShowAudioPanel(false);
+    setShowCcPanel(false);
+    setShowSettings(false);
+    setShowServerPanel(false);
+    resetHideTimer();
+  }, [resetHideTimer, stopControlPress]);
+
+  const toggleAudioPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    stopControlPress(e);
+    setShowAudioPanel((p) => !p);
+    setShowQualityPanel(false);
+    setShowCcPanel(false);
+    setShowSettings(false);
+    setShowServerPanel(false);
+    resetHideTimer();
+  }, [resetHideTimer, stopControlPress]);
+
+  const toggleSettingsPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
+    stopControlPress(e);
+    setShowSettings((p) => !p);
+    setSettingsTab("speed");
+    setShowAudioPanel(false);
+    setShowQualityPanel(false);
+    setShowCcPanel(false);
+    setShowServerPanel(false);
+    resetHideTimer();
+  }, [resetHideTimer, stopControlPress]);
+
   const toggleControls = useCallback(() => {
     setShowControls((prev) => {
       const next = !prev;
@@ -3825,12 +3882,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     } else {
       lastTap.current = { time: now, x: clientX };
       if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      if (!showControls) {
+        setShowControls(true);
+        scheduleHideTimer();
+        return;
+      }
       singleTapTimerRef.current = setTimeout(() => {
         toggleControls();
         singleTapTimerRef.current = null;
-      }, 210);
+      }, 120);
     }
-  }, [locked, seek, showAudioPanel, showCcPanel, showQualityPanel, showServerPanel, showSettings, togglePlay, playing, toggleControls]);
+  }, [locked, scheduleHideTimer, seek, showAudioPanel, showCcPanel, showControls, showQualityPanel, showServerPanel, showSettings, togglePlay, playing, toggleControls]);
 
   const clearSpeedHoldTimer = useCallback(() => {
     if (speedHoldTimerRef.current) {
@@ -4017,7 +4079,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               ref={embedIframeRef}
               src={currentSrc}
               className="absolute inset-0 w-full h-full bg-black border-0 block"
-              style={{ transform: embedTransform, transformOrigin: "center center" }}
+              style={{ transform: embedTransform, transformOrigin: "center center", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               allowFullScreen
               referrerPolicy="no-referrer"
@@ -4029,7 +4091,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               src={(isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
               crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
-              style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
+              style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               playsInline
               preload={adGateActive ? "none" : "auto"}
               autoPlay={!adGateActive}
@@ -4207,7 +4269,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* Controls Overlay - smooth fade in/out (RS direct video only) */}
           {!locked && !isEmbedPlayback && (
               <div
-                className={`absolute inset-0 z-[70] flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                className={`player-controls-layer absolute inset-0 z-[70] flex flex-col justify-between text-white transition-opacity duration-150 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
@@ -4227,7 +4289,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
+                      onPointerDown={toggleServerPanelFast}
+                      onClick={stopControlPress}
                       className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
                       <Server className="w-3.5 h-3.5" />
@@ -4238,8 +4301,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 {(isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
                     <button
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(hlsSubtitleOptions.length > 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
+                      onPointerDown={toggleCcPanelFast}
+                      onClick={stopControlPress}
                       className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-3.5 h-3.5" />
@@ -4315,7 +4378,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
+                        onPointerDown={toggleQualityPanelFast}
+                        onClick={stopControlPress}
                         className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center max-w-[54px] ${
                           currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
@@ -4326,7 +4390,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     {/* Bottom CC button removed — single CC lives in the top server row */}
                     {audioTrackOptions.length > 0 && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
+                        onPointerDown={toggleAudioPanelFast}
+                        onClick={stopControlPress}
                         className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 max-w-[62px] shrink-0 ${
                           currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
@@ -4340,7 +4405,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onPointerDown={toggleSettingsPanelFast} onClick={stopControlPress} className="player-touch-button w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">

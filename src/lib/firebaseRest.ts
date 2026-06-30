@@ -18,6 +18,23 @@ const withAuthParam = async (params?: Record<string, string | number | boolean>)
   return next;
 };
 
+const clearRestCacheForPath = (path: string) => {
+  if (typeof window === "undefined") return;
+  const normalized = String(path || "").replace(/^\/+|\/+$/g, "");
+  const parents = new Set<string>([normalized, ""]);
+  const parts = normalized.split("/").filter(Boolean);
+  for (let i = 1; i < parts.length; i += 1) parents.add(parts.slice(0, i).join("/"));
+  try {
+    Object.keys(sessionStorage).forEach((key) => {
+      if (!key.startsWith("rs_rest_cache:")) return;
+      const cachePath = key.slice("rs_rest_cache:".length).split(":{")[0];
+      if (parents.has(cachePath) || cachePath.startsWith(`${normalized}/`)) sessionStorage.removeItem(key);
+    });
+  } catch {}
+};
+
+export const firebaseRestClearCache = clearRestCacheForPath;
+
 export const firebaseRestUrl = (path: string, params?: Record<string, string | number | boolean>) => {
   const base = getDatabaseUrl();
   if (!base) throw new Error("Firebase databaseURL is missing");
@@ -28,9 +45,10 @@ export const firebaseRestUrl = (path: string, params?: Record<string, string | n
 };
 
 export const firebaseRestGet = async <T,>(path: string, params?: Record<string, string | number | boolean>): Promise<T | null> => {
-  const requestParams = await withAuthParam(params);
+  const isShallow = params?.shallow === true;
+  const requestParams = await withAuthParam(isShallow ? { ...(params || {}), _ts: Date.now() } : params);
   const cacheKey = `rs_rest_cache:${path}:${JSON.stringify(params || {})}`;
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && !isShallow) {
     try {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) return JSON.parse(cached) as T;
@@ -41,7 +59,7 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
   try {
     const res = await fetch(firebaseRestUrl(path, requestParams), {
       method: "GET",
-      cache: "force-cache",
+      cache: isShallow ? "no-store" : "force-cache",
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Firebase REST ${res.status}`);
@@ -53,6 +71,25 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
       } catch {}
     }
     return data;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
+export const firebaseRestDelete = async (path: string): Promise<void> => {
+  const normalized = String(path || "").replace(/^\/+|\/+$/g, "");
+  if (!normalized) throw new Error("Refusing to delete database root");
+  const requestParams = await withAuthParam({ _ts: Date.now() });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12_000);
+  try {
+    const res = await fetch(firebaseRestUrl(normalized, requestParams), {
+      method: "DELETE",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Firebase REST DELETE ${res.status}`);
+    clearRestCacheForPath(normalized);
   } finally {
     window.clearTimeout(timeout);
   }

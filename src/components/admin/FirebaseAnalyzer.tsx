@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { db, get, ref, remove } from "@/lib/firebase";
-import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { db, get, ref } from "@/lib/firebase";
+import { firebaseRestClearCache, firebaseRestDelete, firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 
 import { toast } from "sonner";
 import {
@@ -106,7 +106,10 @@ const TreeRow = memo(function TreeRow({ path, name, depth, onDeleted }: TreeRowP
     if (!confirm(`Delete this database path?\n\n${path}\n\nThis cannot be undone.`)) return;
     setDeleting(true);
     try {
-      await remove(ref(db, path));
+      await firebaseRestDelete(path);
+      setKind("empty");
+      setChildren([]);
+      setValue(null);
       onDeleted(path);
       toast.success(`Deleted ${path}`);
     } catch (error: any) {
@@ -257,7 +260,8 @@ function FirebaseAnalyticsActions({
         const expiresAt = Number(token?.expiresAt || 0);
         return token?.consumed || (expiresAt > 0 && expiresAt < now);
       });
-      await Promise.all(expired.map(([key]) => remove(ref(db, `unlockTokens/${key}`))));
+      await Promise.all(expired.map(([key]) => firebaseRestDelete(`unlockTokens/${key}`)));
+      firebaseRestClearCache("unlockTokens");
       toast.success(`Deleted ${expired.length} expired tokens`);
     } catch (error: any) {
       toast.error(`Token cleanup failed: ${error?.message || error}`);
@@ -271,7 +275,8 @@ function FirebaseAnalyticsActions({
     if (!confirm(`Delete ${orphanKeys.length} orphan root paths?\n\n${orphanKeys.join(", ")}`)) return;
     setBusy("orphans");
     try {
-      await Promise.all(orphanKeys.map((key) => remove(ref(db, key))));
+      await Promise.all(orphanKeys.map((key) => firebaseRestDelete(key)));
+      firebaseRestClearCache("");
       setRootKeys((keys) => keys.filter((key) => !orphanKeys.includes(key)));
       toast.success(`Deleted ${orphanKeys.length} orphan roots`);
     } catch (error: any) {
