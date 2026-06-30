@@ -1,40 +1,77 @@
-## যা সমস্যা সেইটা ধরছি
+## সমস্যা ও সমাধান প্ল্যান
 
-1. **User panel এ সব 500 item auto আসে** — `useSelectedAnimeSalt` Firebase না, API থেকে full browse list টানে। তাই Admin save না করলেও সব দেখায়।
-2. **Card click এ কিচ্ছু খুলে না / crash** — `handleCardClick`-এর AN branch এখনো Firebase-stored URL খোঁজে; না পেলে "Admin থেকে fetch করো" বলে toast দিয়ে রিটার্ন। আর `saltPlayerState` কোথাও render-ই হচ্ছে না (পূর্ববর্তী cleanup-এ JSX চলে গেছে)।
-3. **TMDB metadata incomplete** — `AnManager.buildEnriched` rating/overview/backdrop/genres pull করে, কিন্তু save করার সময় `id`, `source`, `sourceName`, `anSlug`, `animeSaltSlug`, `description`, proper `type` (webseries/movie) save করে না — তাই user-panel mapping ভেঙে যায়।
-4. **Admin "শুধু 25 দেখায়"** — Admin grid filter/render-এ অদৃশ্য cap নেই, কিন্তু `browseAll` যদি একটাই page fetch করে fall short করে তাহলে অল্প আসে। `maxPage` detection আছে কিন্তু পেজ ১-এর HTML যদি ফেরত না দেয় তাহলে ১ page-এই থেমে যায়। Reload button-এ `force=true` সঠিক ভাবে যেতে হবে।
+আপনার সব requirement বুঝলাম। নিচে A→Z কাজের list, প্রায়োরিটি অনুযায়ী।
 
-## যা করব
+### 1. Ultra-Fast API Layer (`src/lib/animeSaltApi.ts` + `supabase/functions/an-api`)
+- **Concurrency বাড়াব**: pagination concurrency 6→12, episode/season parallel fetch।
+- **Retry + Timeout + Abort**: প্রতিটা request-এ exponential backoff (3 try, 400ms→1.6s), 8s timeout, AbortController।
+- **In-flight dedup**: একই slug-এর parallel call একটাই network hit।
+- **Memory cache layer**: 5 min in-memory (Map), instant repeat hit।
+- **Multi-endpoint fallback**: edge function fail হলে direct origin + mirror domain try (already partial — পূর্ণ করব)।
+- **Edge function**: parallel page scrape, HTML stream parse (regex pre-compiled), gzip response।
 
-### A. User panel: admin-curated AN only
-`src/hooks/useSelectedAnimeSalt.ts` রিরাইট:
-- API call বাদ। `onValue(ref(db, "animesaltSelected"))` সাবস্ক্রাইব করব।
-- প্রতিটি saved row → `AnimeItem` map: `id` (`an_<slug>` বা `an_mv_<slug>`), `anSlug`, `animeSaltSlug`, `slug`, `source: "animesalt"`, `sourceName: "AnimeSalt"`, `type` (`webseries`/`movie`), `description = overview`, `rating`, `backdrop`, `poster`, `year`, `category`, `genres`.
-- localStorage write-through cache রাখব (instant repeat load)।
+### 2. Pre-Player Loading Flow (`src/pages/Index.tsx` + নতুন `LoadingDetailsOverlay.tsx`)
+- বর্তমান: card click → player open → "Video source is still loading"। **এটা সম্পূর্ণ সরাব।**
+- নতুন flow:
+  ```
+  Card click → Full-screen "Loading Details" overlay
+    ├─ Fetching episodes…
+    ├─ Loading audio tracks…
+    ├─ Preparing stream…
+    └─ Almost ready…
+  → সব ready হলে → Player open → instant play
+  ```
+- নতুন component `LoadingDetailsOverlay.tsx`: progressive step text, animated progress bar, anime poster background blur।
+- `handleCardClick` AN branch refactor: series হলে seasons + first episode streams + audio সব pre-resolve, তারপর `openPlayerFromAnime`।
+- `VideoPlayer.tsx` থেকে "Video source is still loading. Please tap again" toast/banner সম্পূর্ণ delete।
 
-### B. Admin: full TMDB record save
-`src/components/admin/AnManager.tsx` → `buildEnriched`/`saveOne`:
-- saved row-এ যোগ করব: `id`, `source: "animesalt"`, `sourceName: "AnimeSalt"`, `anSlug = slug`, `animeSaltSlug = slug`, `slug`, proper `type` (`series` → `webseries`, `movies` → `movie`), `description = overview`, `category` (default "Anime"), `genres`, `backdrop`, `rating`, `year`, `tmdbId`, `createdAt`, `updatedAt`.
-- Reload button-এ `browseAll(true)` সঠিক ভাবে force-refresh চালাবে আর `MAX_CARDS` clamp এ যেন full list render হয় তা নিশ্চিত করব।
+### 3. Local Cache (LocalStorage + IndexedDB)
+- নতুন `src/lib/anPlaybackCache.ts`:
+  - Key: `an_pb_<slug>`, TTL: 4 ঘন্টা।
+  - Series: full seasons + episode streams + audio।
+  - Movie: streams + audio।
+  - Episode-level cache: `an_ep_<slug>` TTL 4h।
+- Cache hit → 0ms playback open। Miss/expired → live fetch + background refresh।
+- IndexedDB fallback বড় payload-এর জন্য (idb-keyval pattern, lightweight)।
+- Firebase-এ video URL save **করব না** (আপনি বলেছেন)।
 
-### C. Card click → live API → in-app player
-`src/pages/Index.tsx`:
-1. `handleCardClick` AN branch থেকে `hasStoredFirebasePlayback` gate সরাব। তার বদলে:
-   - **Series**: `animeSaltApi.getSeries(slug)` → seasons/episodes; first episode-এর slug ধরে `animeSaltApi.getEpisode(epSlug)` → `embedUrl`, `streams`, `audio`.
-   - **Movie**: `animeSaltApi.getMovie(slug)` → একই shape।
-2. `setSaltPlayerState({ embedUrl, anime, anNativeData: { streams, audio, preferredQualityIdx, defaultAudioIdx }, loading: false, ... })` করব।
-3. JSX-এ saltPlayerState render path পুনঃস্থাপন করব: `saltPlayerState && <AnNativeView embedUrl={...} initialData={...} onFail={fallback to iframe} />` overlay দিয়ে। Player back/close handler `setSaltPlayerState(null)` করবে।
-4. Loading toast/state দেখাব যাতে fetch latency feel না হয়।
+### 4. Episode Timer Reset Bug (`VideoPlayer.tsx`)
+- Episode switch হলে `video.currentTime = 0` force, saved progress restore শুধু same episode resume-এ।
+- `lastPlayedKey` tracking যোগ করব episode change detect করতে।
 
-### D. Verify
-- Playwright দিয়ে localhost user-panel-এ Series page open করব → শুধুমাত্র admin-saved item দেখা যাবে।
-- Admin panel-এ "Add" → user panel reload → card click → player open → video play হচ্ছে confirm করব। Screenshot evidence সহ report দেব।
+### 5. TMDB Full Enrichment (`src/components/admin/AnManager.tsx`)
+- নতুন fields fetch + Firebase save: `rating`, `releaseYear`, `overview`, `genres`, `studios`, `runtime`, `seasonCount`, `episodeCount`, `originalTitle`, `nativeTitle`, `cast` (top 10 with character + photo), `directors`, `writers`, `producers`, `popularity`, `voteCount`, `logos`, `keywords`, `backdrop`।
+- নতুন button **"Load All Details"**: queue-based bulk updater, concurrency 4, progress bar (X/Y done), failed retry, resumable।
+- Per-row "Refresh" icon-button for single anime।
 
-## Technical notes
-- `useSelectedAnimeSalt` এর export shape একই থাকবে (`{ items, loading }`) — Index.tsx/SearchPageRoute.tsx-এ extra change লাগবে না।
-- AN edge function `an-api` যেই HLS extraction দেয় সেটাই `AnNativeView` consume করে; নতুন backend কাজ নেই।
-- Firebase write shape Admin → User end-to-end consistent থাকবে (`firebaseAnimeMapper`-এর সাথে compatible)।
-- Legacy `buildAnimeSaltEpisodePlaybackFromFirebase` path-গুলি অপরিবর্তিত রাখব — শুধু AN cards এর জন্য নতুন route যোগ করব, তাই RS playback ভাঙবে না।
+### 6. Card UI Fix (`src/components/AnimeCard.tsx` + `Index.tsx` map)
+- **AN badge** সব AN card-এ visible (currently missing) — `source==="animesalt"` check করে absolute corner badge।
+- **Rating** star + value সব card-এ; missing হলে "—" placeholder নয়, TMDB fallback।
+- **Year** badge সব card-এ।
+- Movie cards same treatment with "MOVIE" badge।
+- mapper `mapSaved`-এ TMDB fields properly pass through।
 
-Approve করলে A→D ক্রমে implement করে testing screenshot দিয়ে confirm করব।
+### 7. Multi-API Fallback Router
+- `animeSaltApi` এ ordered endpoint list: edge `an-api` → direct origin → mirror। প্রতিটাতে retry, fail হলে next।
+
+### 8. Error UX
+- সব path-এ try/catch + toast (Bengali friendly message)।
+- Player crash impossible — loading overlay-এ fail হলে retry button।
+
+### Technical details (developer notes)
+- Files to edit: `src/lib/animeSaltApi.ts`, `src/pages/Index.tsx`, `src/components/VideoPlayer.tsx`, `src/components/AnimeCard.tsx`, `src/components/admin/AnManager.tsx`, `src/hooks/useSelectedAnimeSalt.ts`, `supabase/functions/an-api/index.ts`।
+- Files to create: `src/lib/anPlaybackCache.ts`, `src/components/LoadingDetailsOverlay.tsx`।
+- Existing `src/lib/anLivePlayback.ts` extend করব cache integration-এর জন্য।
+- Card badge change pure presentational — backend untouched।
+- Timer fix scoped to AN branch, RS playback অপরিবর্তিত।
+
+### Verification
+- Build clean।
+- Playwright দিয়ে: card click → loading overlay visible → player opens instantly → no "still loading" toast → episode switch → timer 00:00।
+- Admin "Load All Details" run করে 10+ anime enrichment confirm, card-এ rating/year/AN badge দেখাব।
+
+### বাদ দিচ্ছি (intentional)
+- Firebase-এ video URL cache (আপনি না বলেছেন)।
+- Production-grade IndexedDB lib (lightweight wrapper যথেষ্ট)।
+
+Approve করলে A→8 ক্রমে implement করে screenshot proof সহ report দেব।
