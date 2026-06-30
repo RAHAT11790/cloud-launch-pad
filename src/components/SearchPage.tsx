@@ -25,6 +25,17 @@ const addToSearchHistory = (animeId: string) => {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
 };
 
+const getSourceBadge = (anime: AnimeItem) => {
+  const isAn = anime.source === "animesalt"
+    || String(anime.id || "").startsWith("as_")
+    || String(anime.id || "").startsWith("an_")
+    || /animesalt/i.test(String(anime.sourceName || ""))
+    || !!anime.anSlug
+    || !!anime.animeSaltSlug
+    || String(anime.displayAs || "").toLowerCase() === "an";
+  return isAn ? "AN" : "RS";
+};
+
 const removeFromHistory = (animeId: string) => {
   const history = getSearchHistory().filter(id => id !== animeId);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
@@ -148,7 +159,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
                     </button>
                     <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10">
                       <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${anime.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{anime.source === "animesalt" ? "AN" : "RS"}</span>
+                      {(() => { const badge = getSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 p-2">
                       <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>
@@ -186,7 +197,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
                 <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                 <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                   <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${anime.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{anime.source === "animesalt" ? "AN" : "RS"}</span>
+                  {(() => { const badge = getSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-2">
                   <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>

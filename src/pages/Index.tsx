@@ -547,6 +547,17 @@ const prefetchAnimePlayback = (anime: AnimeItem) => {
   try { loadFullFirebaseAnimeItem(anime); } catch {}
 };
 
+const getCardSourceBadge = (anime: AnimeItem | any) => {
+  const isAn = anime?.source === "animesalt"
+    || String(anime?.id || "").startsWith("as_")
+    || String(anime?.id || "").startsWith("an_")
+    || /animesalt/i.test(String(anime?.sourceName || ""))
+    || !!anime?.anSlug
+    || !!anime?.animeSaltSlug
+    || String(anime?.displayAs || "").toLowerCase() === "an";
+  return isAn ? "AN" : "RS";
+};
+
 // Expose so AnimeCard (separate file) can warm too without prop drilling.
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
@@ -554,7 +565,10 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
   <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
-    <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+    <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
+      {anime.year && <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
+      {(() => { const badge = getCardSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
+    </div>
     {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
     <div className="absolute bottom-0 left-0 right-0 p-2">
       <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>{anime.title}</p>
@@ -2823,15 +2837,14 @@ const Index = () => {
                     else if (m < 1440) agoLabel = `${Math.floor(m / 60)}h`;
                     else agoLabel = `${Math.floor(m / 1440)}d`;
                   }
-                  const idStr = String(item.id || "");
-                  const isAn = idStr.startsWith("as_") || idStr.startsWith("an_") || item.source === "animesalt" || item.sourceName === "AnimeSalt" || !!item.anSlug || !!item.animeSaltSlug;
+                  const badge = getCardSourceBadge(item);
                   return (
                     <div key={item.id} onClick={() => handleContinueWatching(item)}
                       className="flex-shrink-0 w-[130px] cursor-pointer">
                       <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
                         <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
-                        <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
+                        <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>
                         {agoLabel && (
                           <span className="absolute top-1.5 left-1.5 bg-black/65 text-white text-[8px] font-semibold px-1.5 py-0.5 rounded z-10">{agoLabel} ago</span>
                         )}

@@ -2,7 +2,6 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { Star, Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
-import { getBrandingSync } from "@/hooks/useBranding";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
 const watchlistCacheByUser = new Map<string, Set<string>>();
@@ -35,7 +34,6 @@ interface AnimeCardProps {
 
 const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const branding = getBrandingSync();
 
   const getUserId = (): string | null => {
     try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
@@ -116,6 +114,17 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     return "";
   }, [anime]);
 
+  const sourceBadge = useMemo(() => {
+    const isAn = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || /animesalt/i.test(String(anime.sourceName || ""))
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug
+      || String(anime.displayAs || "").toLowerCase() === "an";
+    return isAn ? "AN" : "RS";
+  }, [anime]);
+
   return (
     <div
       data-anime-card="true"
@@ -157,13 +166,13 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         )}
         <span
           className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${
-            anime.source === "animesalt"
+            sourceBadge === "AN"
               ? "bg-accent/85 text-accent-foreground"
               : "bg-primary/85 text-primary-foreground"
           }`}
           style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
         >
-          {anime.source === "animesalt" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
+          {sourceBadge}
         </span>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-2">
