@@ -20,12 +20,13 @@ import {
 type NodeKind = "branch" | "leaf" | "empty" | "unknown";
 
 const ACTIVE_ROOTS = new Set([
-  "admin", "analytics", "appUsers", "activePrizeLink", "bkashPayments", "bkashSettings",
-  "categories", "comments", "egdManager", "fcmTokens", "freeAccessUsers", "globalFreeAccess",
-  "liveTvCategories", "liveTvChannels", "maintenance", "miniApp", "movies", "newEpisodeReleases",
-  "notifications", "otpCodes", "passwordResets", "prizePool", "redeemCodes", "settings",
-  "supportChats", "telegramPerAnimeButtons", "telegramPosts", "unlockTokens", "users", "webseries",
-  "weeklyPending", "XNXANIKPAY",
+  "admin", "adminContentIndex", "analytics", "animesaltSelected", "appUsers", "activePrizeLink",
+  "bkashPayments", "bkashSettings", "categories", "comments", "egdManager", "fcmTokens",
+  "freeAccessUsers", "globalFreeAccess", "liveTvCategories", "liveTvChannels", "maintenance",
+  "miniApp", "movies", "newEpisodeReleases", "notifications", "otpCodes", "passwordResets",
+  "prizePool", "redeemCodes", "settings", "supportChats", "telegramPerAnimeButtons",
+  "telegramPosts", "unlockTokens", "users", "webseries", "weeklyPending", "weeklySchedule",
+  "XNXANIKPAY",
 ]);
 
 const PAGE_SIZE = 120;
