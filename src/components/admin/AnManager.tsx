@@ -232,6 +232,10 @@ export default function AnManager({
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [tmdbPicker, setTmdbPicker] = useState<{ item: ApiItem; results: TmdbResult[] } | null>(null);
   const [editing, setEditing] = useState<SavedItem | null>(null);
+  const [tmdbKeyInput, setTmdbKeyInput] = useState(() => getTmdbApiKey());
+  const [tmdbBusySlug, setTmdbBusySlug] = useState<string | null>(null);
+
+  const hasTmdbKey = !!getTmdbApiKey();
 
   // Load API list (cached 30m inside browseAll/animeSaltApi)
   const loadFromApi = async (forceRefresh = false) => {
@@ -312,7 +316,7 @@ export default function AnManager({
   const saveOne = async (item: ApiItem, opts: { skipPicker?: boolean } = {}) => {
     const cleaned = cleanTitleForTmdb(item.title);
     const isSeries = item.type === "series";
-    const results = TMDB_API_KEY ? await tmdbSearch(cleaned, isSeries) : [];
+    const results = getTmdbApiKey() ? await tmdbSearch(cleaned, isSeries) : [];
     if (!opts.skipPicker && results.length > 1) {
       setTmdbPicker({ item, results });
       return;
@@ -403,7 +407,7 @@ export default function AnManager({
   const onLoadAllDetails = async () => {
     const entries = Object.values(saved);
     if (entries.length === 0) return toast.error("Nothing saved yet");
-    if (!TMDB_API_KEY) return toast.error("TMDB_API_KEY not configured");
+    if (!getTmdbApiKey()) return toast.error("TMDB API key লাগানো নাই — উপরের TMDB API Key বক্সে key বসিয়ে Save Key চাপুন");
     if (!confirm(`Fetch full TMDB details for ${entries.length} saved item(s)? This may take a few minutes.`)) return;
 
     setBulkBusy(true);
@@ -418,8 +422,7 @@ export default function AnManager({
           if (it.rating && it.year && it.overview) { skipped++; }
           else {
             const isSeries = (it.type || "series") === "series";
-            const results = await tmdbSearch(it.title || "", isSeries);
-            const pick = results[0] || null;
+            const pick = it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
             if (pick) {
               const enriched = await buildEnriched(it as any, pick);
               // Preserve existing category / savedAt
@@ -431,7 +434,8 @@ export default function AnManager({
                 poster: enriched.poster || it.poster,
                 genres: enriched.genres,
                 year: enriched.year,
-                ...(enriched as any).directors ? { directors: (enriched as any).directors } : {},
+                ...((enriched as any).directors ? { directors: (enriched as any).directors } : {}),
+                ...((enriched as any).cast ? { cast: (enriched as any).cast } : {}),
               });
               ok++;
             } else {
@@ -482,10 +486,62 @@ export default function AnManager({
     }
   };
 
+  const saveTmdbKey = () => {
+    setRuntimeTmdbKey(tmdbKeyInput);
+    toast.success(getTmdbApiKey() ? "TMDB API key saved" : "TMDB API key cleared");
+  };
+
+  const fetchTmdbForEditing = async () => {
+    if (!editing) return;
+    if (!getTmdbApiKey()) return toast.error("আগে TMDB API Key বসিয়ে Save Key চাপুন");
+    const id = Number(editing.tmdbId || 0);
+    if (!id) return toast.error("TMDB ID দিন, তারপর Fetch চাপুন");
+    setTmdbBusySlug(editing.slug);
+    try {
+      const pick = await tmdbFetchById(id, editing.type === "series");
+      if (!pick) return toast.error("এই TMDB ID দিয়ে details পাওয়া যায়নি");
+      const enriched = await buildEnriched(editing, pick);
+      setEditing({
+        ...editing,
+        tmdbId: enriched.tmdbId,
+        title: enriched.title || editing.title,
+        poster: enriched.poster || editing.poster,
+        backdrop: enriched.backdrop || editing.backdrop,
+        rating: enriched.rating || editing.rating,
+        overview: enriched.overview || editing.overview,
+        genres: enriched.genres || editing.genres,
+        directors: enriched.directors || editing.directors,
+        cast: enriched.cast || editing.cast,
+        year: enriched.year || editing.year,
+      });
+      toast.success("TMDB details loaded");
+    } catch (e: any) {
+      toast.error("TMDB fetch failed: " + (e?.message || "unknown"));
+    } finally {
+      setTmdbBusySlug(null);
+    }
+  };
+
+  const searchTmdbForEditing = async () => {
+    if (!editing) return;
+    if (!getTmdbApiKey()) return toast.error("আগে TMDB API Key বসিয়ে Save Key চাপুন");
+    setTmdbBusySlug(editing.slug);
+    try {
+      const results = await tmdbSearch(cleanTitleForTmdb(editing.title || ""), editing.type === "series");
+      if (!results.length) return toast.error("TMDB match পাওয়া যায়নি — manual TMDB ID দিয়ে Fetch করুন");
+      setTmdbPicker({ item: editing, results });
+    } catch (e: any) {
+      toast.error("TMDB search failed: " + (e?.message || "unknown"));
+    } finally {
+      setTmdbBusySlug(null);
+    }
+  };
+
   const saveEdit = async () => {
     if (!editing) return;
     try {
       await update(ref(db, `${SELECTED_PATH}/${editing.slug}`), {
+        tmdbId: editing.tmdbId || null,
         title: editing.title,
         poster: editing.poster,
         backdrop: editing.backdrop || "",
@@ -493,6 +549,9 @@ export default function AnManager({
         overview: editing.overview || "",
         category: editing.category || "Anime",
         year: editing.year || "",
+        genres: editing.genres || [],
+        directors: editing.directors || [],
+        cast: editing.cast || [],
       });
       toast.success("Saved");
       setEditing(null);
