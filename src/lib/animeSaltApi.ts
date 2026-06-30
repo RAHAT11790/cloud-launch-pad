@@ -1,5 +1,4 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
-import { db, ref, get, set } from '@/lib/firebase';
 
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
