@@ -20,6 +20,8 @@ import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react"
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
 
+const AN_PLAYBACK_HLS_PROXY_PREFIX = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback/hls`;
+
 export type AnNativeResolvedData = {
   streams: Stream[];
   audio: Audio[];
@@ -46,9 +48,22 @@ interface Props {
 
 const hlsUrl = (u: string) => {
   const raw = String(u || "").trim();
-  const proxyMatch = raw.match(/\/(?:an-api|an-playback)\/hls\?url=([^&]+)/i);
-  if (proxyMatch) {
-    try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
+  if (!raw || raw.startsWith("data:")) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (/\/functions\/v1\/an-playback\/hls$/i.test(parsed.pathname)) return raw;
+    const legacyWrapped = /\/functions\/v1\/(?:an-api\/hls|hls)$/i.test(parsed.pathname)
+      ? parsed.searchParams.get("url")
+      : "";
+    if (legacyWrapped && AN_PLAYBACK_HLS_PROXY_PREFIX) {
+      const params = new URLSearchParams({ url: legacyWrapped });
+      const origin = parsed.searchParams.get("origin") || parsed.searchParams.get("parent") || parsed.searchParams.get("ref") || "";
+      if (origin) params.set("origin", origin);
+      return `${AN_PLAYBACK_HLS_PROXY_PREFIX}?${params.toString()}`;
+    }
+  } catch {}
+  if (/^https?:\/\//i.test(raw) && AN_PLAYBACK_HLS_PROXY_PREFIX) {
+    return `${AN_PLAYBACK_HLS_PROXY_PREFIX}?url=${encodeURIComponent(raw)}`;
   }
   return raw;
 };

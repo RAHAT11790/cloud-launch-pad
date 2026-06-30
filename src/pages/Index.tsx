@@ -40,7 +40,19 @@ const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
   if (raw.startsWith("data:application/vnd.apple.mpegurl")) return raw;
-  if (/\/(?:an-api|an-playback)\/hls\?/i.test(raw) || /\/functions\/v1\/hls\?/i.test(raw)) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (/\/functions\/v1\/an-playback\/hls$/i.test(parsed.pathname)) return raw;
+    if (/\/functions\/v1\/(?:an-api\/hls|hls)$/i.test(parsed.pathname)) {
+      const wrapped = parsed.searchParams.get("url") || "";
+      if (wrapped && AN_API_HLS_PROXY_PREFIX) {
+        const params = new URLSearchParams({ url: wrapped });
+        const origin = parsed.searchParams.get("origin") || parsed.searchParams.get("parent") || parsed.searchParams.get("ref") || "";
+        if (origin) params.set("origin", origin);
+        return `${AN_API_HLS_PROXY_PREFIX}?${params.toString()}`;
+      }
+    }
+  } catch {}
   // Firebase stores raw AnimeSalt video/audio URLs, but Android/desktop hls.js
   // cannot read AnimeSalt CDN directly because those playlists do not expose
   // CORS headers. Playback therefore wraps only at runtime; storage stays raw.
