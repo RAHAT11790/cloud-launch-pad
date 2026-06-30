@@ -234,8 +234,9 @@ export default function AnManager({
   const [editing, setEditing] = useState<SavedItem | null>(null);
   const [tmdbKeyInput, setTmdbKeyInput] = useState(() => getTmdbApiKey());
   const [tmdbBusySlug, setTmdbBusySlug] = useState<string | null>(null);
+  const [tmdbKeyVersion, setTmdbKeyVersion] = useState(0);
 
-  const hasTmdbKey = !!getTmdbApiKey();
+  const hasTmdbKey = useMemo(() => !!getTmdbApiKey(), [tmdbKeyVersion]);
 
   // Load API list (cached 30m inside browseAll/animeSaltApi)
   const loadFromApi = async (forceRefresh = false) => {
@@ -488,6 +489,7 @@ export default function AnManager({
 
   const saveTmdbKey = () => {
     setRuntimeTmdbKey(tmdbKeyInput);
+    setTmdbKeyVersion((v) => v + 1);
     toast.success(getTmdbApiKey() ? "TMDB API key saved" : "TMDB API key cleared");
   };
 
