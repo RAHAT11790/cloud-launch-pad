@@ -500,7 +500,10 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     if (v) h.set(k, v);
   }
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname) || /\/hls\//i.test(targetUrl.pathname);
+  // Do NOT treat every /hls/ URL as a playlist: AnimeSalt often serves TS
+  // fragments as .js files under /hls/ or /p/. Rewriting those binary segments
+  // as text corrupts playback and leaves the player stuck on loading.
+  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname);
   if (isM3u8) {
     h.delete("content-length");
     h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
@@ -508,7 +511,7 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
     return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), proxyPrefix), { status: upstream.status, headers: h });
   }
-  if (/\.(?:ts|m4s)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
+  if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
     h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
     h.set("content-disposition", "inline");
   }
