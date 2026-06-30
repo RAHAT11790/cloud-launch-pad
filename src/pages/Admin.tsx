@@ -48,6 +48,7 @@ import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 // AnSeriesManager removed — AN runs purely on API now
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
+import AnManager from "@/components/admin/AnManager";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
