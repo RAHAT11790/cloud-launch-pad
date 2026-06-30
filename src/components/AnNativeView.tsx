@@ -118,7 +118,7 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
 
-  // 1. Load streams + audio strictly from initialData/Firebase state.
+  // 1. Load streams + audio strictly from initialData (live AnimeSalt API).
   useEffect(() => {
     let cancelled = false;
     failedRef.current = false;
