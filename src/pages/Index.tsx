@@ -2197,13 +2197,9 @@ const Index = () => {
         if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
         if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
         if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
-        if (anime.source === "animesalt") {
-          const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
-          if (directFromFirebase?.src) {
-            src = directFromFirebase.src;
-            qualityOptions = directFromFirebase.qualityOptions;
-          }
-        }
+        // AN branch handled earlier via handleCardClick — no Firebase-stored
+        // AN URLs are ever consumed here.
+
       }
       if (src) {
         const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
