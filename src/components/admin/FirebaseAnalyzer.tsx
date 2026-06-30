@@ -243,9 +243,7 @@ function FirebaseAnalyticsActions({
   btnSecondary: string;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const [legacyProgress, setLegacyProgress] = useState("");
   const orphanKeys = useMemo(() => rootKeys.filter((key) => !ACTIVE_ROOTS.has(key)), [rootKeys]);
-  const legacyRoots = useMemo(() => rootKeys.filter((key) => LEGACY_AN_ROOT_SET.has(key)), [rootKeys]);
 
   const deleteExpiredTokens = useCallback(async () => {
     if (!confirm("Delete expired and consumed unlock tokens?")) return;
@@ -283,58 +281,7 @@ function FirebaseAnalyticsActions({
     }
   }, [orphanKeys, setRootKeys]);
 
-  const purgeLegacyAn = useCallback(async () => {
-    if (!confirm("Safe AN cleanup will delete only rows marked as AnimeSalt/AN from Web Series, Movies, New Releases, and the admin index. RS rows are protected. Continue?")) return;
-    setBusy("legacy-an");
-    setLegacyProgress("Scanning AN markers...");
-    try {
-      let deletedCards = 0;
-      let deletedIndexes = 0;
-      await Promise.all(LEGACY_AN_ROOTS.map((key) => remove(ref(db, key)).catch(() => undefined)));
-      for (const rootPath of LEGACY_AN_CARD_ROOTS) {
-        setLegacyProgress(`Scanning ${rootPath}...`);
-        const keys = await firebaseRestShallowKeys(rootPath).catch(() => []);
-        const candidateSet = new Set(keys.filter((key) => isLegacyAnEntry(key, null)));
-        const unknown = keys.filter((key) => !candidateSet.has(key));
-        for (let index = 0; index < unknown.length; index += 16) {
-          const chunk = unknown.slice(index, index + 16);
-          const values = await Promise.all(chunk.map(async (key) => [key, await get(ref(db, `${rootPath}/${key}`)).then((snap) => snap.val()).catch(() => null)] as const));
-          values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
-          setLegacyProgress(`${rootPath}: scanned ${Math.min(index + chunk.length, unknown.length)}/${unknown.length}, found ${candidateSet.size}`);
-          await sleepFrame();
-        }
-        await Promise.all([...candidateSet].map(async (key) => {
-          await remove(ref(db, `${rootPath}/${key}`));
-          if (rootPath === "webseries" || rootPath === "movies") await remove(ref(db, `adminContentIndex/${rootPath}/${key}`)).catch(() => undefined);
-        }));
-        deletedCards += candidateSet.size;
-      }
-      for (const indexRoot of ["webseries", "movies"] as const) {
-        const path = `adminContentIndex/${indexRoot}`;
-        setLegacyProgress(`Cleaning ${path}...`);
-        const keys = await firebaseRestShallowKeys(path).catch(() => []);
-        const candidateSet = new Set(keys.filter((key) => isLegacyAnEntry(key, null)));
-        const unknown = keys.filter((key) => !candidateSet.has(key));
-        for (let index = 0; index < unknown.length; index += 32) {
-          const chunk = unknown.slice(index, index + 32);
-          const values = await Promise.all(chunk.map(async (key) => [key, await get(ref(db, `${path}/${key}`)).then((snap) => snap.val()).catch(() => null)] as const));
-          values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
-          await sleepFrame();
-        }
-        await Promise.all([...candidateSet].map((key) => remove(ref(db, `${path}/${key}`))));
-        deletedIndexes += candidateSet.size;
-      }
-      clearLegacyAnBrowserCaches();
-      setRootKeys((keys) => keys.filter((key) => !LEGACY_AN_ROOT_SET.has(key)));
-      setLegacyProgress(`Done: ${deletedCards} cards, ${deletedIndexes} index rows removed`);
-      toast.success(`Safe AN cleanup done: ${deletedCards} cards + ${deletedIndexes} index rows removed. RS kept safe.`);
-    } catch (error: any) {
-      setLegacyProgress("");
-      toast.error(`Legacy AN purge failed: ${error?.message || error}`);
-    } finally {
-      setBusy(null);
-    }
-  }, [setRootKeys]);
+
 
   const buttons = [
     { key: "tokens", label: "Expired Tokens", count: null as number | null, icon: <Trash2 size={13} />, action: deleteExpiredTokens },
