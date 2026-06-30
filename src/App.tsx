@@ -25,8 +25,8 @@ installUiGuard();
 
 
 
-const lazyWithReload = <T,>(factory: () => Promise<{ default: T }>) =>
-  lazy(() => factory().catch((err) => {
+const lazyWithReload = <T extends React.ComponentType<any>>(factory: () => Promise<{ default: T }>) =>
+  lazy<T>(() => factory().catch((err) => {
     const key = "rs_chunk_reload_ts";
     const last = Number(sessionStorage.getItem(key) || 0);
     if (Date.now() - last > 10_000) {
