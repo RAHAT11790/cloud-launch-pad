@@ -37,6 +37,7 @@ type SavedItem = ApiItem & {
   backdrop?: string;
   genres?: string[];
   category?: string;
+  directors?: string[];
   savedAt?: number;
 };
 
