@@ -135,7 +135,7 @@ export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit 
   }
 };
 
-export const fetchAdminCount = async (path: string, ttlMs = 5 * 60 * 1000) => {
+export const fetchAdminCount = async (path: string, ttlMs = 30 * 1000) => {
   const key = countCacheKeyFor(path);
   try {
     const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
