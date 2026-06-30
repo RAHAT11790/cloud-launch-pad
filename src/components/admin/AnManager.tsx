@@ -200,6 +200,27 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
   };
 };
 
+const buildAnimeSaltEnriched = async (item: ApiItem): Promise<SavedItem> => {
+  const base: SavedItem = { ...item, savedAt: Date.now(), category: (item as SavedItem).category || "Anime" };
+  try {
+    const r: any = item.type === "series"
+      ? await animeSaltApi.getSeries(item.slug, true)
+      : await animeSaltApi.getMovie(item.slug, true);
+    const data = r?.data || r || {};
+    return {
+      ...base,
+      title: String(data?.title || item.title || base.title).trim(),
+      poster: String(data?.poster || item.poster || base.poster || "").trim(),
+      backdrop: String(data?.backdrop || data?.poster || (item as SavedItem).backdrop || item.poster || "").trim(),
+      overview: String(data?.storyline || data?.overview || data?.description || (item as SavedItem).overview || "").trim(),
+      rating: String(data?.rating || (item as SavedItem).rating || "").trim(),
+      year: String(item.year || data?.year || (item as SavedItem).year || "").trim(),
+    };
+  } catch {
+    return base;
+  }
+};
+
 const SELECTED_PATH = "animesaltSelected";
 const SETTINGS_PATH = "settings/animeSaltEnabled";
 
@@ -235,6 +256,7 @@ export default function AnManager({
   const [tmdbKeyInput, setTmdbKeyInput] = useState(() => getTmdbApiKey());
   const [tmdbBusySlug, setTmdbBusySlug] = useState<string | null>(null);
   const [tmdbKeyVersion, setTmdbKeyVersion] = useState(0);
+  const [quickTmdbIds, setQuickTmdbIds] = useState<Record<string, string>>({});
 
   const hasTmdbKey = useMemo(() => !!getTmdbApiKey(), [tmdbKeyVersion]);
 
@@ -408,8 +430,8 @@ export default function AnManager({
   const onLoadAllDetails = async () => {
     const entries = Object.values(saved);
     if (entries.length === 0) return toast.error("Nothing saved yet");
-    if (!getTmdbApiKey()) return toast.error("TMDB API key লাগানো নাই — উপরের TMDB API Key বক্সে key বসিয়ে Save Key চাপুন");
-    if (!confirm(`Fetch full TMDB details for ${entries.length} saved item(s)? This may take a few minutes.`)) return;
+    const hasKey = !!getTmdbApiKey();
+    if (!confirm(`Fetch details for ${entries.length} saved item(s)? TMDB key থাকলে TMDB, না থাকলে AN API metadata দিয়ে fill হবে।`)) return;
 
     setBulkBusy(true);
     setBulkProgress({ done: 0, total: entries.length });
@@ -423,18 +445,21 @@ export default function AnManager({
           if (it.rating && it.year && it.overview) { skipped++; }
           else {
             const isSeries = (it.type || "series") === "series";
-            const pick = it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
-            if (pick) {
-              const enriched = await buildEnriched(it as any, pick);
+            const pick = hasKey
+              ? (it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null)
+              : null;
+            const enriched = pick ? await buildEnriched(it as any, pick) : await buildAnimeSaltEnriched(it as any);
+            if (enriched.overview || enriched.poster || enriched.rating || enriched.year || enriched.tmdbId) {
               // Preserve existing category / savedAt
               await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
-                tmdbId: enriched.tmdbId,
-                rating: enriched.rating,
-                overview: enriched.overview,
-                backdrop: enriched.backdrop,
+                ...(enriched.tmdbId ? { tmdbId: enriched.tmdbId } : {}),
+                title: enriched.title || it.title,
+                rating: enriched.rating || it.rating || "",
+                overview: enriched.overview || it.overview || "",
+                backdrop: enriched.backdrop || it.backdrop || "",
                 poster: enriched.poster || it.poster,
-                genres: enriched.genres,
-                year: enriched.year,
+                genres: enriched.genres || it.genres || [],
+                year: enriched.year || it.year || "",
                 ...((enriched as any).directors ? { directors: (enriched as any).directors } : {}),
                 ...((enriched as any).cast ? { cast: (enriched as any).cast } : {}),
               });
@@ -452,6 +477,26 @@ export default function AnManager({
     await Promise.all(workers);
     setBulkBusy(false);
     toast.success(`TMDB enrichment done — ${ok} updated, ${skipped} skipped, ${fail} failed`);
+  };
+
+  const quickFetchTmdbById = async (item: ApiItem) => {
+    const id = Number(quickTmdbIds[item.slug] || 0);
+    if (!id) return toast.error("আগে card-এর TMDB ID বক্সে ID দিন");
+    if (!getTmdbApiKey()) return toast.error("TMDB API key লাগবে — উপরের TMDB API Key বক্সে key বসিয়ে Save Key চাপুন");
+    setTmdbBusySlug(item.slug);
+    try {
+      const base = (saved[item.slug] || item) as SavedItem;
+      const pick = await tmdbFetchById(id, item.type === "series");
+      if (!pick) return toast.error("এই TMDB ID দিয়ে details পাওয়া যায়নি");
+      const enriched = await buildEnriched({ ...base, tmdbId: id } as any, pick);
+      enriched.category = base.category || category || "Anime";
+      await set(ref(db, `${SELECTED_PATH}/${item.slug}`), enriched);
+      toast.success(`TMDB details loaded: ${item.title}`);
+    } catch (e: any) {
+      toast.error("TMDB fetch failed: " + (e?.message || "unknown"));
+    } finally {
+      setTmdbBusySlug(null);
+    }
   };
 
 
@@ -612,7 +657,7 @@ export default function AnManager({
           <div className={`mt-2 text-[10px] ${hasTmdbKey ? "text-emerald-300" : "text-amber-200"}`}>
             {hasTmdbKey
               ? "✅ TMDB key active — Load All Details, TMDB ID fetch, rating/year/description/cast সব কাজ করবে।"
-              : "⚠️ এই project-এর env-এ VITE_TMDB_API_KEY নাই। তাই AN Manager আগে key not found দেখাচ্ছিল; এখানে key save করলে সরাসরি কাজ করবে।"}
+              : "ℹ️ TMDB key না থাকলেও Load All Details আর error দেখাবে না; AN API metadata দিয়ে title/poster/year/rating/description fill করবে। TMDB cast/genres লাগলে key save করুন।"}
           </div>
         </div>
 
@@ -753,6 +798,22 @@ export default function AnManager({
                         </div>
                       </div>
                     )}
+                    <div className="mt-1.5 flex gap-1">
+                      <input
+                        value={quickTmdbIds[it.slug] || ""}
+                        onChange={(e) => setQuickTmdbIds((p) => ({ ...p, [it.slug]: e.target.value.replace(/\D/g, "") }))}
+                        placeholder="TMDB ID"
+                        className="min-w-0 flex-1 rounded bg-black/30 border border-cyan-400/25 px-1.5 py-1 text-[10px] outline-none focus:border-cyan-300"
+                      />
+                      <button
+                        onClick={() => quickFetchTmdbById(it)}
+                        disabled={tmdbBusySlug === it.slug}
+                        className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/30 text-[9px] font-bold disabled:opacity-50"
+                        title="Card থেকেই TMDB ID দিয়ে details fetch করুন"
+                      >
+                        {tmdbBusySlug === it.slug ? "..." : "Fetch"}
+                      </button>
+                    </div>
                     <div className="flex gap-1 mt-1.5">
                       {isSaved ? (
                         <>
