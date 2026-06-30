@@ -6,9 +6,9 @@ import { animeSaltApi } from "@/lib/animeSaltApi";
 // Browse list is fetched from AnimeSalt via the an-api edge function and
 // cached in localStorage for instant repeat loads.
 
-const CACHE_KEY = "rs_cache_animesalt_api_cards_v2";
+const CACHE_KEY = "rs_cache_animesalt_api_cards_v3";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_CARDS = 200;
+const MAX_CARDS = 1000;
 
 type CacheShape = { ts: number; items: AnimeItem[] };
 
