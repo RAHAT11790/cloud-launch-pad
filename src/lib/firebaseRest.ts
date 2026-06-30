@@ -46,7 +46,7 @@ export const firebaseRestUrl = (path: string, params?: Record<string, string | n
 
 export const firebaseRestGet = async <T,>(path: string, params?: Record<string, string | number | boolean>): Promise<T | null> => {
   const isShallow = params?.shallow === true;
-  const requestParams = await withAuthParam(isShallow ? { ...(params || {}), _ts: Date.now() } : params);
+  const requestParams = await withAuthParam(params);
   const cacheKey = `rs_rest_cache:${path}:${JSON.stringify(params || {})}`;
   if (typeof window !== "undefined" && !isShallow) {
     try {
@@ -79,7 +79,7 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
 export const firebaseRestDelete = async (path: string): Promise<void> => {
   const normalized = String(path || "").replace(/^\/+|\/+$/g, "");
   if (!normalized) throw new Error("Refusing to delete database root");
-  const requestParams = await withAuthParam({ _ts: Date.now() });
+  const requestParams = await withAuthParam();
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 12_000);
   try {
