@@ -254,6 +254,15 @@ export default function FirebaseCleanupSection({
           {busyKey === "__orphans__" ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
           Delete All Orphans ({orphans.length})
         </button>
+        <button
+          onClick={purgeLegacyAn}
+          disabled={busyKey === "__legacy_an__"}
+          className={`${btnPrimary} text-xs flex items-center gap-1.5`}
+          style={{ background: "linear-gradient(135deg, #8b5cf6, #ec4899)" }}>
+          {busyKey === "__legacy_an__" ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+          Purge Legacy AN Data
+        </button>
+
       </div>
 
       {/* Root keys list */}
