@@ -540,10 +540,13 @@ const preloadImage = (src?: string | null) => {
   });
 };
 
-// Ultra-opt: warm the saved Firebase row on pointerdown. Runtime AN API/live URL
-// refresh is intentionally disabled; playback must use Admin-saved data only.
+// Ultra-opt: warm the saved Firebase row on pointerdown for RS/admin content.
+// AN playback is API-driven because AnimeSalt HLS links expire; never require
+// Admin-saved media URLs for AN cards.
 const prefetchAnimePlayback = (anime: AnimeItem) => {
   if (!anime) return;
+  const isAn = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+  if (isAn) return;
   try { loadFullFirebaseAnimeItem(anime); } catch {}
 };
 
@@ -1886,7 +1889,14 @@ const Index = () => {
       return;
     }
 
-    anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+    const isAnimeSaltContentEarlyReload = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+    // Critical: AN card-click resolves fresh playback URLs from the live API
+    // before calling handlePlay(). Reloading the old Firebase row here replaces
+    // those fresh URLs with stale animesalt:// sentinels, which caused the
+    // "no saved Firebase HLS URL" toast and blocked every AN video.
+    if (!isAnimeSaltContentEarlyReload) {
+      anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+    }
 
     const fallbackTarget = getDefaultWatchTarget(anime);
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
@@ -1919,6 +1929,10 @@ const Index = () => {
     if (anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined) {
       const season = resolvedSeasons[resolvedSeasonIdx];
       const episode = season.episodes[resolvedEpIdx];
+      if (isAnimeSaltContent && isAnimeSaltSentinel(episode.link)) {
+        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link));
+        if (resolved) Object.assign(episode, resolved);
+      }
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
       if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
@@ -1953,7 +1967,7 @@ const Index = () => {
       const hasAccess = await checkAndShowAdGate(anime, resolvedSeasonIdx, resolvedEpIdx);
       if (!hasAccess) return;
       inPlayerSwitchRef.current = false;
-      toast.error("This AN episode has no saved 480p/720p/1080p Firebase HLS URL. Refresh this series from Admin.");
+      toast.error("Could not load this episode from AnimeSalt. Please try again.");
       return;
     }
 
@@ -1962,7 +1976,7 @@ const Index = () => {
       const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
       inPlayerSwitchRef.current = false;
-      toast.error("This AN movie has no saved Firebase HLS URL. Refresh this movie from Admin.");
+      toast.error("Could not load this movie from AnimeSalt. Please try again.");
       return;
     }
 
