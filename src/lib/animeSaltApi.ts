@@ -239,13 +239,13 @@ const normalizeAnApiBaseUrl = (value: string): string => {
     const url = new URL(raw);
     url.search = '';
     url.hash = '';
-    const endpointNames = new Set(['raw', 'search', 'anime', 'episode', 'embed', 'hls', 'subs']);
+    const endpointNames = new Set(['raw', 'search', 'anime', 'episode', 'embed', 'hls', 'subs', 'series', 'movies', 'movie']);
     const parts = url.pathname.split('/').filter(Boolean);
     while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
     url.pathname = `/${parts.join('/')}`.replace(/\/+$/, '');
     return url.toString().replace(/\/+$/, '');
   } catch {
-    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, '').replace(/\/+$/, '');
+    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs|series|movies|movie)(?:\?.*)?$/i, '').replace(/\/+$/, '');
   }
 };
 
