@@ -2867,19 +2867,25 @@ const Index = () => {
                   let qOpts = getEpisodeQualityOptions(nextEp);
                   let nextAudioTracks = nextEp.audioTracks;
                   let preferredLanguage = (playerState as any)?.selectedLanguage;
+                  if (playerState.anime.source === "animesalt" && isAnimeSaltSentinel(nextEp.link)) {
+                    // Resolve fresh HLS URLs for the next episode on-demand.
+                    const resolved = await resolveAnEpisodePlayback(slugFromSentinel(nextEp.link));
+                    if (resolved) Object.assign(nextEp, resolved);
+                  }
                   if (playerState.anime.source === "animesalt") {
-                    const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(nextEp);
-                    if (directFromFirebase?.src) {
-                      nextSrc = directFromFirebase.src;
-                      qOpts = directFromFirebase.qualityOptions || [];
-                      nextAudioTracks = directFromFirebase.audioTracks;
-                      preferredLanguage = directFromFirebase.preferredLanguage || preferredLanguage;
+                    const built = buildAnimeSaltEpisodePlaybackFromFirebase(nextEp);
+                    if (built?.src) {
+                      nextSrc = built.src;
+                      qOpts = built.qualityOptions || [];
+                      nextAudioTracks = built.audioTracks;
+                      preferredLanguage = built.preferredLanguage || preferredLanguage;
                     }
                   }
-                  if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
-                    toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+                  if (!nextSrc) {
+                    toast.error("Could not load next episode from AnimeSalt");
                     return;
                   }
+
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   const nextState = {
                     ...playerState,
