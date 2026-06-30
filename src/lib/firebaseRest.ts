@@ -27,6 +27,7 @@ const clearRestCacheForPath = (path: string) => {
   try {
     Object.keys(sessionStorage).forEach((key) => {
       if (!key.startsWith("rs_rest_cache:")) return;
+      if (!normalized) { sessionStorage.removeItem(key); return; }
       const cachePath = key.slice("rs_rest_cache:".length).split(":{")[0];
       if (parents.has(cachePath) || cachePath.startsWith(`${normalized}/`)) sessionStorage.removeItem(key);
     });
