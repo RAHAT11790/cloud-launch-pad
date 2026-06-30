@@ -337,12 +337,12 @@ const parseListPage = (html: string): { slug: string; title: string; poster: str
     const match = href.match(/\/(series|movies)\/([^/?#]+)/i);
     if (!match) return;
     const slug = match[2];
-    if (!slug || seen.has(slug)) return;
+    if (!slug || ['page', 'feed', 'wp-json', 'category', 'tag', 'author'].includes(slug.toLowerCase()) || seen.has(slug)) return;
 
     const card = anchor.closest('article, li, .item, .poster, .bs, .ml-item, .anime-card') || anchor;
     const title =
       decodeHtml(anchor.getAttribute('title') || '') ||
-      decodeHtml((anchor.querySelector('img')?.getAttribute('alt') || '')) ||
+      decodeHtml((anchor.querySelector('img')?.getAttribute('alt') || '')).replace(/^Image\s+/i, '') ||
       getText(card, ['h1', 'h2', 'h3', 'h4', '.entry-title', '.title']) ||
       slug.replace(/-/g, ' ');
     const poster =
