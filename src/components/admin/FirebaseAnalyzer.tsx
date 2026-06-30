@@ -333,8 +333,8 @@ function FirebaseAnalyticsActions({
         <button
           key={button.key}
           onClick={button.action}
-          disabled={busy !== null || (button.count === 0 && button.key !== "tokens")}
-          className={`${btnSecondary} min-h-[46px] justify-between px-3 py-2 text-left text-[12px] disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={busy !== null || (button.key === "orphans" && button.count === 0)}
+          className={`${btnSecondary} flex min-h-[46px] items-center justify-between gap-2 px-3 py-2 text-left text-[12px] disabled:cursor-not-allowed disabled:opacity-50`}
           type="button"
         >
           <span className="inline-flex min-w-0 items-center gap-2">
@@ -413,7 +413,7 @@ const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: 
               <p className="truncate text-[11px] text-zinc-500">Expand a path to load only that branch.</p>
             </div>
           </div>
-          <button onClick={loadRoots} disabled={loading} className={`${btnSecondary} h-9 px-3 text-[12px]`} type="button">
+          <button onClick={loadRoots} disabled={loading} className={`${btnSecondary} inline-flex h-9 items-center gap-2 px-3 text-[12px]`} type="button">
             {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
             Refresh
           </button>
