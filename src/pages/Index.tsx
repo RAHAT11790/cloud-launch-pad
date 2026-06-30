@@ -1762,18 +1762,59 @@ const Index = () => {
     const fullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime);
     const playableAnime = fullAnime || anime;
 
-    // AN public playback is Firebase-only. Admin fetch/save is the only place
-    // allowed to call the AN API; runtime must use stored RS-style URLs.
-    // Cards always open the details view; play action enforces the Firebase
-    // requirement so users can still browse AN entries without saved playback.
+    // AN cards are admin-curated metadata only — playback URLs are resolved
+    // LIVE from the AnimeSalt API on click (CDN links expire if stored).
     if (playableAnime.source === "animesalt") {
-      if (hasStoredFirebasePlayback(playableAnime)) {
-        await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
-      } else {
-        toast.error("AN video/audio is not saved in Firebase yet. Fetch it from Admin first.");
+      const slug = playableAnime.anSlug || playableAnime.animeSaltSlug || playableAnime.slug || "";
+      if (!slug) {
+        toast.error("Missing AnimeSalt slug for this title");
+        return;
+      }
+      const loadingId = toast.loading("Loading video…");
+      try {
+        if (playableAnime.type === "movie") {
+          const resolved = await resolveAnMoviePlayback(slug);
+          if (!resolved) {
+            toast.error("Could not load this movie from AnimeSalt");
+            return;
+          }
+          const enriched: AnimeItem = {
+            ...playableAnime,
+            ...resolved.fields,
+            audioTracks: resolved.audioTracks as any,
+          };
+          await openPlayerFromAnime(enriched, { seasonIdx: sIdx, epIdx: eIdx });
+        } else {
+          const seasons = await resolveAnSeriesSeasons(slug);
+          if (!seasons.length) {
+            toast.error("Could not load episodes from AnimeSalt");
+            return;
+          }
+          const targetSIdx = typeof sIdx === "number" ? Math.min(sIdx, seasons.length - 1) : 0;
+          const epList = seasons[targetSIdx]?.episodes || [];
+          const targetEIdx = typeof eIdx === "number" ? Math.min(eIdx, Math.max(epList.length - 1, 0)) : 0;
+          const firstEp = seasons[targetSIdx]?.episodes?.[targetEIdx];
+          let firstAudio: any[] | undefined;
+          if (firstEp && isAnimeSaltSentinel(firstEp.link)) {
+            const epData = await resolveAnEpisodePlayback(slugFromSentinel(firstEp.link));
+            if (epData) {
+              Object.assign(firstEp, epData);
+              firstAudio = epData.audioTracks as any;
+            }
+          }
+          const enriched: AnimeItem = {
+            ...playableAnime,
+            seasons,
+            audioTracks: firstAudio || (playableAnime.audioTracks as any),
+          };
+          await openPlayerFromAnime(enriched, { seasonIdx: targetSIdx, epIdx: targetEIdx });
+        }
+      } finally {
+        toast.dismiss(loadingId);
       }
       return;
     }
+
 
 
     // Reflect details view in the URL so back-button works as a real route.
