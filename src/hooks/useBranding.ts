@@ -43,8 +43,8 @@ const DEFAULT_BRANDING: BrandingConfig = {
   logoUrl: "",
   playerLogoUrl: "",
   playerName: "",
-  rsCardLabel: "",
-  anCardLabel: "",
+  rsCardLabel: "RS",
+  anCardLabel: "AN",
 };
 
 let cachedBranding: BrandingConfig | null = null;

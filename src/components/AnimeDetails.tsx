@@ -236,7 +236,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                 ? "bg-accent/85 text-accent-foreground"
                 : "bg-primary/85 text-primary-foreground"
             }`}>
-              {anime.source === "animesalt" ? branding.anCardLabel : branding.rsCardLabel}
+              {anime.source === "animesalt" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
             </span>
           </div>
         </div>
