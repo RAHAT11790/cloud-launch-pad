@@ -58,7 +58,7 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "adsterra" | "backdrop-ai" | "security-center";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -2988,7 +2988,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  
  "apk-dw": "APK Download Center",
  "egd-manager": "EGD MANAGER",
- "fb-cleanup": "Firebase Analyzer",
+ "fb-analytics": "Firebase Analytics",
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
@@ -4903,7 +4903,7 @@ ${tgBulkFooter}
  { section: "adsterra", icon: <Activity size={16} />, label: "Adsterra Ads" },
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
- { section: "fb-cleanup", icon: <Database size={16} />, label: "FB Analyzer" },
+ { section: "fb-analytics", icon: <Database size={16} />, label: "FB Analytics" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
  { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
  { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -8616,8 +8616,8 @@ ${footerLinksHtml}
  )}
 
 
-  {/* ==================== FIREBASE ANALYZER ==================== */}
-  {activeSection === "fb-cleanup" && (
+  {/* ==================== FIREBASE ANALYTICS ==================== */}
+  {activeSection === "fb-analytics" && (
   <FirebaseAnalyzer glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
   )}
 
