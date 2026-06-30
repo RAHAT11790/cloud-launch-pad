@@ -347,6 +347,62 @@ export default function AnManager({
     toast.success("AN API reloaded");
   };
 
+  /**
+   * Bulk TMDB enrichment for every saved AN item.
+   * Walks `animesaltSelected/*`, runs `tmdbSearch` + `tmdbDetails`, and writes
+   * back rating, year, overview, poster, backdrop, genres, directors, etc.
+   * Skips items that already have rating + year + overview (idempotent).
+   */
+  const onLoadAllDetails = async () => {
+    const entries = Object.values(saved);
+    if (entries.length === 0) return toast.error("Nothing saved yet");
+    if (!TMDB_API_KEY) return toast.error("TMDB_API_KEY not configured");
+    if (!confirm(`Fetch full TMDB details for ${entries.length} saved item(s)? This may take a few minutes.`)) return;
+
+    setBulkBusy(true);
+    setBulkProgress({ done: 0, total: entries.length });
+    let ok = 0, skipped = 0, fail = 0;
+    const queue = [...entries];
+    const workers = Array.from({ length: 4 }, async () => {
+      while (queue.length) {
+        const it = queue.shift()!;
+        try {
+          // Idempotent skip — already enriched
+          if (it.rating && it.year && it.overview) { skipped++; }
+          else {
+            const isSeries = (it.type || "series") === "series";
+            const results = await tmdbSearch(it.title || "", isSeries);
+            const pick = results[0] || null;
+            if (pick) {
+              const enriched = await buildEnriched(it as any, pick);
+              // Preserve existing category / savedAt
+              await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
+                tmdbId: enriched.tmdbId,
+                rating: enriched.rating,
+                overview: enriched.overview,
+                backdrop: enriched.backdrop,
+                poster: enriched.poster || it.poster,
+                genres: enriched.genres,
+                year: enriched.year,
+                ...(enriched as any).directors ? { directors: (enriched as any).directors } : {},
+              });
+              ok++;
+            } else {
+              fail++;
+            }
+          }
+        } catch {
+          fail++;
+        }
+        setBulkProgress((p) => ({ done: p.done + 1, total: p.total }));
+      }
+    });
+    await Promise.all(workers);
+    setBulkBusy(false);
+    toast.success(`TMDB enrichment done — ${ok} updated, ${skipped} skipped, ${fail} failed`);
+  };
+
+
   const onRefreshImages = async () => {
     try { localStorage.removeItem("rs_img_seen_v1"); } catch {}
     try {
