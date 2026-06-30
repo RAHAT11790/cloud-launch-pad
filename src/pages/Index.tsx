@@ -2921,19 +2921,24 @@ const Index = () => {
             let nextSrc = getEpisodeSrc(ep);
             let qOpts = getEpisodeQualityOptions(ep);
             let nextAudioTracks = ep.audioTracks || anime.audioTracks;
+            if (anime.source === "animesalt" && isAnimeSaltSentinel(ep.link)) {
+              const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link));
+              if (resolved) Object.assign(ep, resolved);
+            }
             if (anime.source === "animesalt") {
-              const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(ep);
-              if (directFromFirebase?.src) {
-                nextSrc = directFromFirebase.src;
-                qOpts = directFromFirebase.qualityOptions || [];
-                nextAudioTracks = directFromFirebase.audioTracks;
+              const built = buildAnimeSaltEpisodePlaybackFromFirebase(ep);
+              if (built?.src) {
+                nextSrc = built.src;
+                qOpts = built.qualityOptions || [];
+                nextAudioTracks = built.audioTracks;
               }
             }
-
-            if (anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
-              toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+            if (!nextSrc) {
+              toast.error("Could not load this episode from AnimeSalt");
               return;
             }
+
+
 
             const newAnime = { ...anime, seasons: newSeasons, baseLanguage: resolvedLabel, language: resolvedLabel };
             const nextState = {
