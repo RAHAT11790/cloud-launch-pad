@@ -1,5 +1,6 @@
 import { db, get, limitToLast, orderByChild, query, ref, remove, set } from "@/lib/firebase";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { isLegacyAnEntry } from "@/lib/legacyAn";
 
 export type AdminContentKind = "webseries" | "movies";
 
@@ -11,6 +12,7 @@ const countCacheKeyFor = (path: string) => `rs_admin_count_${path}_v1`;
 const indexPathFor = (kind: AdminContentKind) => `adminContentIndex/${kind}`;
 
 const values = (value: any): any[] => Array.isArray(value) ? value : (value && typeof value === "object" ? Object.values(value) : []);
+const stripLegacyAnFromAdminList = (items: any[]) => (items || []).filter((item) => !isLegacyAnEntry(item?.id, item));
 
 const countEpisodes = (item: any) => {
   if (Number.isFinite(Number(item?.episodeCount))) return Number(item.episodeCount) || 0;
@@ -66,7 +68,7 @@ export const readCachedAdminContentList = (kind: AdminContentKind) => {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!parsed?.ts || Date.now() - Number(parsed.ts) > CACHE_TTL_MS) return [];
-    return Array.isArray(parsed.items) ? parsed.items : [];
+    return Array.isArray(parsed.items) ? stripLegacyAnFromAdminList(parsed.items) : [];
   } catch {
     return [];
   }
@@ -74,7 +76,7 @@ export const readCachedAdminContentList = (kind: AdminContentKind) => {
 
 export const writeCachedAdminContentList = (kind: AdminContentKind, items: any[]) => {
   try {
-    localStorage.setItem(cacheKeyFor(kind), JSON.stringify({ ts: Date.now(), items }));
+    localStorage.setItem(cacheKeyFor(kind), JSON.stringify({ ts: Date.now(), items: stripLegacyAnFromAdminList(items) }));
   } catch {}
 };
 
@@ -87,6 +89,7 @@ export const mergeAdminContentLists = (...lists: any[][]) => {
   const map = new Map<string, any>();
   lists.flat().forEach((item) => {
     if (!item?.id) return;
+    if (isLegacyAnEntry(item.id, item)) return;
     map.set(String(item.id), { ...(map.get(String(item.id)) || {}), ...item });
   });
   return sortAdminContentList(Array.from(map.values()));
@@ -95,7 +98,7 @@ export const mergeAdminContentLists = (...lists: any[][]) => {
 export const fetchAdminContentIndex = async (kind: AdminContentKind) => {
   const snap = await get(ref(db, indexPathFor(kind)));
   const data = snap.val() || {};
-  return sortAdminContentList(Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item })));
+  return sortAdminContentList(stripLegacyAnFromAdminList(Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }))));
 };
 
 export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit = DEFAULT_RECENT_LIMIT) => {
@@ -104,7 +107,8 @@ export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit 
     const snap = await get(query(ref(db, kind), orderByChild("updatedAt"), limitToLast(limit)));
     const data = snap.val() || {};
     const items = Object.entries(data).map(([id, item]: [string, any]) => buildAdminContentIndexItem(id, item, kind));
-    if (items.length) return sortAdminContentList(items);
+    const cleanItems = stripLegacyAnFromAdminList(items);
+    if (cleanItems.length) return sortAdminContentList(cleanItems);
   } catch {}
   // 2) Fallback: shallow keys + paginated REST hydration. Required because
   // legacy webseries/movies rows written before the indexing system don't have
@@ -120,7 +124,7 @@ export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit 
       const rows = await Promise.all(chunk.map(async (id) => {
         try {
           const item = await firebaseRestGet<any>(`${kind}/${id}`);
-          return item ? buildAdminContentIndexItem(id, item, kind) : null;
+            return item && !isLegacyAnEntry(id, item) ? buildAdminContentIndexItem(id, item, kind) : null;
         } catch { return null; }
       }));
       rows.forEach((row) => { if (row) items.push(row); });
