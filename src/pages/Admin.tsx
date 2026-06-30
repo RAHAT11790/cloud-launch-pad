@@ -45,7 +45,7 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 
-import AnSeriesManager from "@/components/admin/AnSeriesManager";
+// AnSeriesManager removed — AN runs purely on API now
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
