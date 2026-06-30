@@ -30,15 +30,6 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
       localStorage.removeItem(`rs_an_cache:${sanitizeKey(key)}`);
     }
   } catch {}
-  try {
-    const snap = await get(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`));
-    const val = snap.val();
-    if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
-      memCache.set(key, { ts: Number(val.ts), data: val.data });
-      try { localStorage.setItem(`rs_an_cache:${sanitizeKey(key)}`, JSON.stringify({ ts: Number(val.ts), data: val.data })); } catch {}
-      return val.data;
-    }
-  } catch {}
   return null;
 }
 
@@ -53,10 +44,6 @@ function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: 
   const key = `${kind}:${slug}`;
   memCache.set(key, { ts, data });
   try { localStorage.setItem(`rs_an_cache:${sanitizeKey(key)}`, JSON.stringify({ ts, data })); } catch {}
-  try {
-    // Fire-and-forget; never block UX on cache writes.
-    set(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`), { ts, data }).catch(() => {});
-  } catch {}
 }
 
 type AnimeSaltLink = { quality: string; url: string };
