@@ -7,6 +7,7 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RECENT_LIMIT = 500;
 
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v1`;
+const countCacheKeyFor = (path: string) => `rs_admin_count_${path}_v1`;
 const indexPathFor = (kind: AdminContentKind) => `adminContentIndex/${kind}`;
 
 const values = (value: any): any[] => Array.isArray(value) ? value : (value && typeof value === "object" ? Object.values(value) : []);
@@ -128,6 +129,24 @@ export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit 
   } catch {
     return [];
   }
+};
+
+export const fetchAdminCount = async (path: string, ttlMs = 5 * 60 * 1000) => {
+  const key = countCacheKeyFor(path);
+  try {
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.ts && Date.now() - Number(parsed.ts) < ttlMs) return Number(parsed.count || 0);
+    }
+  } catch {}
+  const count = (await firebaseRestShallowKeys(path)).length;
+  try {
+    const payload = JSON.stringify({ ts: Date.now(), count });
+    sessionStorage.setItem(key, payload);
+    localStorage.setItem(key, payload);
+  } catch {}
+  return count;
 };
 
 export const upsertAdminContentIndex = async (kind: AdminContentKind, id: string, item: any) => {

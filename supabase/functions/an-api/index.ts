@@ -425,164 +425,72 @@ async function fetchMaster(master: string, embedUrl: string, origin: string) {
     { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: `${origin}/`, Origin: origin },
     { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: embedUrl, Origin: origin },
   ];
+  let lastStatus = 0;
   for (const headers of attempts) {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), PLAYER_TIMEOUT_MS);
     try {
-      const res = await fetch(master, { headers, redirect: "follow", signal: ac.signal });
-      if (res.ok) return setCache(`master:${master}`, await res.text(), 90_000) as string;
-      try { await res.body?.cancel(); } catch {}
+      const res = await fetch(master, { signal: ac.signal, headers, redirect: "follow" });
+      lastStatus = res.status;
+      if (res.ok) {
+        const text = await res.text();
+        if (/^#EXTM3U/i.test(text)) return setCache(`master:${master}`, text, 2 * 60_000) as string;
+      } else {
+        try { await res.body?.cancel(); } catch {}
+      }
     } catch {
-      // try next header strategy
+      // Try the next header/referrer combination. AnimeSalt CDNs sometimes
+      // reject one referrer style while accepting another.
     } finally {
       clearTimeout(timer);
     }
   }
-  throw new Error("master fetch failed");
+  throw new Error(`AN HLS upstream failed ${lastStatus || "network"}`);
 }
 
-async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
-  const cached = getCache<any>(`embed:${embedUrl}`, forceRefresh);
-  if (cached) return cached;
-  const m = embedUrl.match(/^(https?:\/\/[^/]+)\/video\/([a-f0-9]+)/i);
-  if (!m) return { embed: embedUrl, error: "unrecognized embed format", streams: [], audio: [] };
-  const origin = m[1];
-  const hash = m[2];
-  const apiUrl = `${origin}/player/index.php?data=${hash}&do=getVideo`;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), PLAYER_TIMEOUT_MS);
-  let txt = "";
-  let res: Response | null = null;
-  try {
-    res = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "User-Agent": UA,
-        Referer: embedUrl,
-        Origin: origin,
-        "X-Requested-With": "XMLHttpRequest",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ hash, r: `${AN_BASE}/` }).toString(),
-      redirect: "follow",
-      signal: ac.signal,
-    });
-    txt = await res.text();
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!res?.ok) return { embed: embedUrl, hash, error: `player upstream ${res?.status || 0}`, raw: txt.slice(0, 200), streams: [], audio: [] };
-
-  let data: any;
-  try { data = JSON.parse(txt); } catch { return { embed: embedUrl, hash, error: "player did not return JSON", raw: txt.slice(0, 200), streams: [], audio: [] }; }
-  const master = decode(String(data.videoSource || data.securedLink || data.file || data.source || ""));
-  let parsed: any = { streams: [] as any[], audio: [] as any[], defaultAudioIdx: 0, preferredAudio: "" };
-  if (master) {
-    try {
-      // Do NOT segment-probe the variant/audio playlists here. AnimeSalt's
-      // variant URLs are the exact URLs the admin needs to store (480/720/1080
-      // video-only + all separate audio renditions). Probing the first segment
-      // from the Edge Function can fail because of CDN/referrer rules even when
-      // the playlist is perfectly playable in the browser via hls.js. That made
-      // Fetch save zero quality URLs. Parse the master and return every playlist
-      // URL; the public player will combine video+audio from Firebase only.
-      parsed = parseMaster(master, await fetchMaster(master, embedUrl, origin));
-    }
-    catch (e) { return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: (e as Error).message }; }
-  }
-  if (master && parsed.streams.length === 0) {
-    return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: "no HLS variant playlists found" };
-  }
-  return setCache(`embed:${embedUrl}`, { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio, defaultAudioIdx: parsed.defaultAudioIdx, preferredAudio: parsed.preferredAudio }, 8 * 60_000);
+function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string) {
+  const value = decode(raw || "");
+  if (!value || value.startsWith("data:")) return value;
+  if (/\/an-api\/hls\?url=/i.test(value)) return value;
+  const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  return `${proxyPrefix}?url=${encodeURIComponent(abs)}`;
 }
 
-async function episode(slug: string, type?: string, forceRefresh = false) {
-  const cacheKey = `episode:${type || ""}:${slug}`;
-  const cached = getCache<any>(cacheKey, forceRefresh);
-  if (cached) return cached;
-  const candidates = type === "movies"
-    ? [`${AN_BASE}/movies/${slug}/`, `${AN_BASE}/episode/${slug}/`]
-    : [`${AN_BASE}/episode/${slug}/`, `${AN_BASE}/movies/${slug}/`, `${AN_BASE}/series/${slug}/`];
-
-  let html = "";
-  let pageUrl = candidates[0];
-  let embeds: string[] = [];
-  for (const candidate of candidates) {
-    try {
-      const h = await fetchText(candidate);
-      const found = collectEmbedsFromHtml(h);
-      if (!html) { html = h; pageUrl = candidate; }
-      if (found.length) { html = h; pageUrl = candidate; embeds = found; break; }
-    } catch {}
-  }
-
-  const titleM = html.match(/<meta property=["']og:title["'] content=["']([^"']+)/i) || html.match(/<title>([^<]+)/i);
-  const sources = await Promise.all(embeds.map(async (embed) => {
-    try { return await extractFromPlayer(embed, forceRefresh); }
-    catch (e) { return { embed, error: (e as Error).message, streams: [], audio: [] }; }
-  }));
-
-  const playableSources = sources.filter((s) => s.master || (Array.isArray(s.streams) && s.streams.length));
-  const links = playableSources.flatMap((source) =>
-    Array.isArray(source.streams) && source.streams.length
-      ? source.streams.map((stream: any) => ({ quality: stream.label || (stream.height ? `${stream.height}p` : "Auto"), url: stream.url }))
-      : [{ quality: "Auto", url: source.master }]
-  ).filter((x) => x.url);
-
-  const primary = playableSources[0] as any;
-  return setCache(cacheKey, {
-    slug,
-    title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
-    pageUrl,
-    sources,
-    links,
-    embedUrl: sources[0]?.embed || "",
-    allEmbeds: sources.map((s) => s.embed).filter(Boolean),
-    directUrl: playableSources[0]?.master || links[0]?.url || "",
-    defaultAudioIdx: typeof primary?.defaultAudioIdx === "number" ? primary.defaultAudioIdx : 0,
-    preferredAudio: primary?.preferredAudio || "",
-  }, 8 * 60_000);
-}
-
-// ---------- HLS PROXY ----------
-function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string {
-  const wrap = (u: string) => `${proxyPrefix}?url=${encodeURIComponent(resolveUrl(u, baseUrl))}`;
-  return text.split(/\r?\n/).map((line) => {
-    if (!line) return line;
-    if (line.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${wrap(u)}"`);
-    return wrap(line.trim());
+function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string) {
+  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix)}"`);
+  return body.split(/\r?\n/).map((raw) => {
+    const line = raw.trim();
+    if (!line) return raw;
+    if (line.startsWith("#")) return /URI="/i.test(line) ? rewriteUriAttr(raw) : raw;
+    return wrapHlsUrl(line, baseUrl, proxyPrefix);
   }).join("\n");
 }
 
 async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
-  const targetUrl = new URL(target);
-  const origin = `${targetUrl.protocol}//${targetUrl.host}`;
-  const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
-  const baseHeaders: Record<string, string> = {
+  let targetUrl: URL;
+  try { targetUrl = new URL(target); } catch { return new Response("bad url", { status: 400, headers: cors }); }
+  if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
+  const upstreamHeaders: Record<string, string> = {
     "User-Agent": UA,
-    Accept: "application/vnd.apple.mpegurl,video/*,*/*",
-    "Accept-Encoding": "identity",
+    Accept: targetUrl.pathname.toLowerCase().includes(".m3u8") ? "application/vnd.apple.mpegurl,*/*" : "*/*",
+    Referer: `${targetUrl.origin}/`,
+    Origin: targetUrl.origin,
   };
   const range = req.headers.get("range");
-  if (range) baseHeaders.Range = range;
+  if (range) upstreamHeaders.Range = range;
   let upstream: Response | null = null;
-  const attempts: Record<string, string>[] = [
-    baseHeaders,
-    { ...baseHeaders, Referer: `${origin}/` },
-    { ...baseHeaders, Referer: `${AN_BASE}/`, Origin: AN_BASE },
-    { ...baseHeaders, Referer: `${origin}/`, Origin: origin },
-  ];
-  for (const headers of attempts) {
-    try {
-      upstream = await fetch(target, { method: upstreamMethod, headers, redirect: "follow" });
-      if (upstream.ok || upstream.status === 206 || upstream.status === 304) break;
-      try { await upstream.body?.cancel(); } catch {}
-    } catch {
-      upstream = null;
-    }
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 20_000);
+  try {
+    upstream = await fetch(targetUrl.toString(), { method: req.method === "HEAD" ? "HEAD" : "GET", headers: upstreamHeaders, signal: ac.signal, redirect: "follow" });
+  } catch {
+    upstream = null;
+  } finally {
+    clearTimeout(timer);
   }
   if (!upstream) return new Response("AN upstream fetch failed: network", { status: 502, headers: cors });
   if (!upstream.ok && upstream.status !== 206 && upstream.status !== 304) {
+    try { await upstream.body?.cancel(); } catch {}
     return new Response(`AN upstream fetch failed: ${upstream.status}`, { status: 502, headers: cors });
   }
 
@@ -592,54 +500,106 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     if (v) h.set(k, v);
   }
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(target) || /\/hls\//i.test(targetUrl.pathname);
+  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname) || /\/hls\//i.test(targetUrl.pathname);
   if (isM3u8) {
-    if (req.method === "HEAD") {
-      h.delete("content-length");
-      h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      h.set("cache-control", "no-store");
-      return new Response(null, { status: upstream.status, headers: h });
-    }
-    const rewritten = rewriteM3U8(await upstream.text(), target, proxyPrefix);
     h.delete("content-length");
     h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     h.set("cache-control", "no-store");
-    return new Response(rewritten, { status: upstream.status, headers: h });
+    if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
+    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), proxyPrefix), { status: upstream.status, headers: h });
   }
-  // AnimeSalt serves MPEG-TS fragments from .js URLs with
-  // application/javascript. hls.js can fetch the bytes, but mobile browsers are
-  // stricter when the MIME looks like script. Force media headers on fragments.
-  if (/\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
-    h.set("content-type", "video/mp2t");
+  if (/\.(?:ts|m4s)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
+    h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
     h.set("content-disposition", "inline");
   }
   if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
-  const body = req.method === "HEAD" ? null : new ReadableStream({
-    async start(controller) {
-      const reader = upstream?.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          controller.enqueue(value);
-        }
-      } catch {
-        // Browser cancelled the HLS segment/playlist request (BadResource in Deno).
-        // This is normal when users leave Continue Watching or switch episodes.
-      } finally {
-        try { reader.releaseLock(); } catch {}
-        try { controller.close(); } catch {}
-      }
+  if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
+  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
+}
+
+function responseCookie(headers: Headers) {
+  const raw = headers.get("set-cookie") || "";
+  return raw.split(/,(?=\s*[^;,]+=)/).map((part) => part.split(";")[0].trim()).filter(Boolean).join("; ");
+}
+
+async function postPlayerJson(embedUrl: string, hash: string) {
+  const origin = new URL(embedUrl).origin;
+  let cookie = "";
+  try {
+    const page = await fetch(embedUrl, { headers: { "User-Agent": UA, Referer: `${AN_BASE}/` }, redirect: "follow" });
+    cookie = responseCookie(page.headers);
+    try { await page.body?.cancel(); } catch {}
+  } catch {}
+  const endpoint = `${origin}/player/index.php?data=${encodeURIComponent(hash)}&do=getVideo`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "User-Agent": UA,
+      Accept: "application/json,text/javascript,*/*;q=0.01",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: embedUrl,
+      Origin: origin,
+      ...(cookie ? { Cookie: cookie } : {}),
     },
-    cancel() {
-      try { upstream?.body?.cancel(); } catch {}
-    },
+    body: new URLSearchParams({ hash, r: `${AN_BASE}/` }).toString(),
+    redirect: "follow",
   });
-  return new Response(body, { status: upstream.status, statusText: upstream.statusText, headers: h });
+  if (!res.ok) throw new Error(`player ajax ${res.status}`);
+  const text = await res.text();
+  return JSON.parse(text);
+}
+
+async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
+  const cacheKey = `extract:${embedUrl}`;
+  const cached = getCache<any>(cacheKey, forceRefresh);
+  if (cached) return cached;
+  const hash = new URL(embedUrl).pathname.match(/\/video\/([A-Za-z0-9_-]+)/)?.[1] || "";
+  if (!hash) throw new Error("AN embed hash not found");
+  const origin = new URL(embedUrl).origin;
+  const jData = await postPlayerJson(embedUrl, hash);
+  const master = String(jData?.videoSource || jData?.securedLink || "").replace(/\\\//g, "/");
+  if (!master) throw new Error("AN player did not return HLS source");
+  const body = await fetchMaster(master, embedUrl, origin);
+  const parsedMaster = parseMaster(master, body);
+  // Some AnimeSalt/CDN playlists reject Edge-side validation but still play
+  // correctly through the browser HLS proxy. Never drop a valid master just
+  // because the server probe failed — that was causing endless loading.
+  const filtered = await filterWorkingHls(parsedMaster, embedUrl, origin).catch(() => null);
+  const parsed = filtered?.streams?.length ? filtered : parsedMaster;
+  const streams = parsed.streams?.length ? parsed.streams : [{ url: master, label: "Auto", height: 0, bandwidth: 0, resolution: "" }];
+  const out = {
+    success: true,
+    embedUrl,
+    directUrl: master,
+    videoSource: master,
+    securedLink: master,
+    poster: jData?.videoImage || "",
+    sources: [{ type: "hls", master, videoSource: master, securedLink: master, streams, audio: parsed.audio || [] }],
+    streams,
+    audio: parsed.audio || [],
+    links: streams.map((s: any) => ({ label: s.label, quality: s.label, height: s.height, url: s.url })),
+    defaultAudioIdx: parsed.defaultAudioIdx || 0,
+    preferredAudio: parsed.preferredAudio || "",
+  };
+  return setCache(cacheKey, out, 5 * 60_000);
+}
+
+async function episode(slug: string, type = "", forceRefresh = false) {
+  const t = type === "movies" || type === "movie" ? "movies" : "episode";
+  const pageUrl = t === "movies" ? `${AN_BASE}/movies/${slug}/` : `${AN_BASE}/episode/${slug}/`;
+  const html = await fetchText(pageUrl);
+  const embeds = collectEmbedsFromHtml(html);
+  let lastErr = "";
+  for (const embed of embeds) {
+    try {
+      const data = await extractFromPlayer(embed, forceRefresh);
+      return { ...data, slug, pageUrl, allEmbeds: embeds };
+    } catch (e) {
+      lastErr = (e as Error)?.message || String(e);
+    }
+  }
+  throw new Error(`No playable AN embed found${lastErr ? `: ${lastErr}` : ""}`);
 }
 
 const API_ENDPOINTS = {

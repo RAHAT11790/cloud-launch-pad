@@ -21,6 +21,7 @@ import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_I
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import {
  buildAdminContentIndexItem,
+ fetchAdminCount,
  fetchAdminContentIndex,
  fetchRecentAdminContentList,
  mergeAdminContentLists,
@@ -1982,6 +1983,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
+ const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
   const listItem = buildAdminContentIndexItem(id, item, kind);
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
@@ -2471,6 +2473,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  loadContentList("webseries");
  loadContentList("movies");
 
+  let countsCancelled = false;
+  Promise.all([
+   fetchAdminCount("webseries").catch(() => webseriesData.length),
+   fetchAdminCount("movies").catch(() => moviesData.length),
+   fetchAdminCount("users").catch(() => usersData.length),
+  ]).then(([webseries, movies, users]) => {
+   if (!countsCancelled) setAdminFastCounts({ webseries, movies, users });
+  });
+
  unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
  setCurrentMaintenance(snap.val());
  if (snap.val()?.active) setMaintenanceActive(true);
@@ -2514,12 +2525,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setAdminFcmTokensInput(tokens.join("\n"));
  }));
 
- return () => unsubs.forEach(u => u());
+  return () => { countsCancelled = true; unsubs.forEach(u => u()); };
  }, []);
 
  // Lazy-load USERS data (only when dashboard, users, notifications, or free-access section)
  useEffect(() => {
- const needsUsers = ["users", "notifications", "new-releases", "free-access", "analytics"].includes(activeSection);
+  const needsUsers = ["users", "free-access", "device-limits"].includes(activeSection);
  if (!needsUsers) return;
 
  const unsubs: (() => void)[] = [];
@@ -5161,10 +5172,10 @@ ${tgBulkFooter}
 
  <div className="grid grid-cols-2 gap-2.5 mb-4">
  {[
- { icon: <Film size={18} />, value: webseriesData.length, label: "Web Series", color: "text-indigo-400" },
- { icon: <Video size={18} />, value: moviesData.length, label: "Movies", color: "text-emerald-400" },
+ { icon: <Film size={18} />, value: Math.max(adminFastCounts.webseries, webseriesData.length), label: "Web Series", color: "text-indigo-400" },
+ { icon: <Video size={18} />, value: Math.max(adminFastCounts.movies, moviesData.length), label: "Movies", color: "text-emerald-400" },
  { icon: <FolderOpen size={18} />, value: totalCategories, label: "Categories", color: "text-amber-400" },
- { icon: <Users size={18} />, value: usersData.length, label: "Total Users", color: "text-sky-400" },
+ { icon: <Users size={18} />, value: Math.max(adminFastCounts.users, usersData.length), label: "Total Users", color: "text-sky-400" },
  ].map((stat, i) => (
  <div key={i} className="bg-[#141422] border border-white/5 rounded-xl p-4">
  <div className={`w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center mb-2.5 ${stat.color}`}>{stat.icon}</div>

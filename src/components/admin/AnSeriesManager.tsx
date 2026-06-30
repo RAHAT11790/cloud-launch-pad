@@ -630,8 +630,9 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const detectedLanguages = new Set<string>();
       const savedAt = Date.now();
 
-      await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
-        const fetched = await mapLimit(season.episodes || [], 12, async (ep: any, eIdx: number) => {
+      for (let sIdx = 0; sIdx < rawSeasons.length; sIdx += 1) {
+        const season: any = rawSeasons[sIdx];
+        const fetched = await mapLimit(season.episodes || [], 3, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const hasManualLinks = !!(ep?.link || ep?.link480 || ep?.link720 || ep?.link1080 || ep?.link4k || (Array.isArray(ep?.audioTracks) && ep.audioTracks.length));
@@ -654,7 +655,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           seasonNumber: Number(season?.seasonNumber || sIdx + 1),
           episodes,
         };
-      }));
+      }
 
       const languages = Array.from(new Set(Array.from(detectedLanguages).map((lang) => String(lang || "").trim()).filter(Boolean)));
       const baseLanguage = languages.find((lang) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(lang)) || languages[0] || "Multi";

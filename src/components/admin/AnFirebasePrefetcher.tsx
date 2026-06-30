@@ -1,5 +1,6 @@
+import { firebaseRestShallowKeys } from "@/lib/firebaseRest";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { db, ref, set, get, onValue } from "@/lib/firebase";
+import { db, ref, set, get } from "@/lib/firebase";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
@@ -46,12 +47,17 @@ const AnFirebasePrefetcher = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
   const logRef = useRef<HTMLDivElement | null>(null);
 
   // Watch stored count
+  // Watch stored count using shallow REST to avoid pulling massive subtree
   useEffect(() => {
-    const u = onValue(ref(db, "anSeries"), (snap) => {
-      const v = snap.val() || {};
-      setStoredCount(Object.keys(v).length);
-    });
-    return () => u();
+    const updateCount = async () => {
+      try {
+        const keys = await firebaseRestShallowKeys("anSeries");
+        setStoredCount(keys.length);
+      } catch {}
+    };
+    updateCount();
+    const interval = setInterval(updateCount, 120000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
