@@ -2380,19 +2380,24 @@ const Index = () => {
       let nextAudioTracks = clickedEp.audioTracks;
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
       let preferredLanguage = (playerState as any)?.selectedLanguage;
+      if (playerState?.anime.source === "animesalt" && isAnimeSaltSentinel(clickedEp.link)) {
+        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(clickedEp.link));
+        if (resolved) Object.assign(clickedEp, resolved);
+      }
       if (playerState?.anime.source === "animesalt") {
-        const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(clickedEp);
-        if (directFromFirebase?.src) {
-          nextSrc = directFromFirebase.src;
-          qOpts = directFromFirebase.qualityOptions || [];
-          nextAudioTracks = directFromFirebase.audioTracks;
-          preferredLanguage = directFromFirebase.preferredLanguage || preferredLanguage;
+        const built = buildAnimeSaltEpisodePlaybackFromFirebase(clickedEp);
+        if (built?.src) {
+          nextSrc = built.src;
+          qOpts = built.qualityOptions || [];
+          nextAudioTracks = built.audioTracks;
+          preferredLanguage = built.preferredLanguage || preferredLanguage;
         }
       }
-      if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
-        toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+      if (!nextSrc) {
+        toast.error("Could not load this episode from AnimeSalt");
         return;
       }
+
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       const nextState = {
         ...playerState!,
