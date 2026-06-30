@@ -6370,14 +6370,8 @@ ${tgBulkFooter}
  <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", movieLink: "" }); setMovieCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Manual
  </button>
- <button onClick={() => setMoviesTab("mv-an")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-an" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
- AN Movies
- </button>
+  {/* AN Movies tab removed — AN is API-only */}
  </div>
-
- {moviesTab === "mv-an" && (
- <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} mode="movie" onEditMovie={editMovie} onSaved={upsertAdminContentListItem} />
- )}
 
  {moviesTab === "mv-list" && (
  <div>
