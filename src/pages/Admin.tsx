@@ -44,7 +44,7 @@ import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
-import AnFirebasePrefetcher from "@/components/admin/AnFirebasePrefetcher";
+
 import AnSeriesManager from "@/components/admin/AnSeriesManager";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
