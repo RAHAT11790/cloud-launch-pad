@@ -1779,14 +1779,23 @@ const Index = () => {
         toast.error("Missing AnimeSalt slug for this title");
         return;
       }
-      const loadingId = toast.loading("Loading video…");
+      setLoadingDetails({
+        open: true,
+        title: playableAnime.title,
+        poster: playableAnime.poster || (playableAnime as any).backdrop,
+        progress: 10,
+        step: "Loading details",
+        completed: [],
+      });
       try {
         if (playableAnime.type === "movie") {
+          setLoadingDetails((s) => ({ ...s, step: "Fetching movie stream", progress: 35 }));
           const resolved = await resolveAnMoviePlayback(slug);
           if (!resolved) {
             toast.error("Could not load this movie from AnimeSalt");
             return;
           }
+          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 85, completed: [...s.completed, "Movie stream ready"] }));
           const enriched: AnimeItem = {
             ...playableAnime,
             ...resolved.fields,
@@ -1794,23 +1803,27 @@ const Index = () => {
           };
           await openPlayerFromAnime(enriched, { seasonIdx: sIdx, epIdx: eIdx });
         } else {
+          setLoadingDetails((s) => ({ ...s, step: "Fetching episodes", progress: 30 }));
           const seasons = await resolveAnSeriesSeasons(slug);
           if (!seasons.length) {
             toast.error("Could not load episodes from AnimeSalt");
             return;
           }
+          setLoadingDetails((s) => ({ ...s, progress: 55, completed: [...s.completed, `Loaded ${seasons.length} season${seasons.length > 1 ? "s" : ""}`] }));
           const targetSIdx = typeof sIdx === "number" ? Math.min(sIdx, seasons.length - 1) : 0;
           const epList = seasons[targetSIdx]?.episodes || [];
           const targetEIdx = typeof eIdx === "number" ? Math.min(eIdx, Math.max(epList.length - 1, 0)) : 0;
           const firstEp = seasons[targetSIdx]?.episodes?.[targetEIdx];
           let firstAudio: any[] | undefined;
           if (firstEp && isAnimeSaltSentinel(firstEp.link)) {
+            setLoadingDetails((s) => ({ ...s, step: "Loading audio & stream", progress: 75 }));
             const epData = await resolveAnEpisodePlayback(slugFromSentinel(firstEp.link));
             if (epData) {
               Object.assign(firstEp, epData);
               firstAudio = epData.audioTracks as any;
             }
           }
+          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 95, completed: [...s.completed, "Audio tracks ready"] }));
           const enriched: AnimeItem = {
             ...playableAnime,
             seasons,
@@ -1819,10 +1832,11 @@ const Index = () => {
           await openPlayerFromAnime(enriched, { seasonIdx: targetSIdx, epIdx: targetEIdx });
         }
       } finally {
-        toast.dismiss(loadingId);
+        setLoadingDetails({ open: false, progress: 0, step: "", completed: [] });
       }
       return;
     }
+
 
 
 
