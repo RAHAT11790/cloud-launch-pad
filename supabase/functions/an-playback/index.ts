@@ -70,6 +70,11 @@ function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentO
   }).join("\n");
 }
 
+function getPublicFunctionOrigin(reqUrl: URL) {
+  const protocol = /(?:^|\.)supabase\.co$/i.test(reqUrl.hostname) ? "https:" : reqUrl.protocol;
+  return `${protocol}//${reqUrl.host}`;
+}
+
 const isAnimeSaltIndexPlaylist = (url: URL) => /\/hls\/[^?#]+\/index\.ts$/i.test(url.pathname);
 const isLikelySegmentUrl = (url: URL) => !isAnimeSaltIndexPlaylist(url) && (/\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname));
 const isLikelyPlaylistUrl = (url: URL) => isAnimeSaltIndexPlaylist(url) || /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
@@ -145,7 +150,7 @@ Deno.serve(async (req) => {
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
       h.set("cache-control", "no-store");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
-      return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${reqUrl.origin}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
+      return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
     if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");

@@ -42,10 +42,12 @@ function getSafeOrigin(value?: string | null) {
 function playbackUrlFor(reqUrl: URL) {
   const target = reqUrl.searchParams.get("url") || "";
   if (!target) return "";
+  const protocol = /(?:^|\.)supabase\.co$/i.test(reqUrl.hostname) ? "https:" : reqUrl.protocol;
+  const origin = `${protocol}//${reqUrl.host}`;
   const pathPrefix = reqUrl.pathname.includes("/functions/v1/")
     ? reqUrl.pathname.slice(0, reqUrl.pathname.indexOf("/functions/v1/") + "/functions/v1".length)
     : "/functions/v1";
-  const playback = new URL(`${reqUrl.origin}${pathPrefix}/an-playback/hls`);
+  const playback = new URL(`${origin}${pathPrefix}/an-playback/hls`);
   playback.searchParams.set("url", deepDecodeUrl(target));
   const inheritedOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref"));
   if (inheritedOrigin) playback.searchParams.set("origin", inheritedOrigin);
