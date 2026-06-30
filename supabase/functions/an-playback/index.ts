@@ -70,8 +70,9 @@ function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentO
   }).join("\n");
 }
 
-const isLikelySegmentUrl = (url: URL) => /\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname);
-const isLikelyPlaylistUrl = (url: URL) => /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
+const isAnimeSaltIndexPlaylist = (url: URL) => /\/hls\/[^?#]+\/index\.ts$/i.test(url.pathname);
+const isLikelySegmentUrl = (url: URL) => !isAnimeSaltIndexPlaylist(url) && (/\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname));
+const isLikelyPlaylistUrl = (url: URL) => isAnimeSaltIndexPlaylist(url) || /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
 
 async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: string) {
   const range = req.headers.get("range");
@@ -138,7 +139,7 @@ Deno.serve(async (req) => {
       if (v) h.set(k, v);
     }
     const ct = (upstream.headers.get("content-type") || "").toLowerCase();
-    const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname);
+    const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname) || isAnimeSaltIndexPlaylist(targetUrl);
     if (isM3u8) {
       h.delete("content-length");
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");

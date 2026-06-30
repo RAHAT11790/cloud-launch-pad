@@ -9,7 +9,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 //   GET  /anime?slug=&type=series→ detail + seasons/episodes
 //   GET  /episode?slug=naruto-1x1→ embed + HLS streams/audio only
 //   GET  /embed?url=<embed-url>  → HLS streams/audio only
-//   GET  /hls?url=<m3u8/segment> → CORS HLS passthrough
+//   GET  /hls?url=<m3u8/segment> → legacy redirect to playback API
 //   POST {url} / {action,slug}   → backward-compatible app mode
 //
 // Subtitle extraction/proxy was intentionally removed. This restores the
@@ -722,7 +722,7 @@ const API_ENDPOINTS = {
   ok: true,
   name: "AnimeSalt Stream API — NEW ultra fast stable",
   subtitles: false,
-  endpoints: { series: "/series?page=1", movies: "/movies?page=1", search: "/search?q=naruto", anime: "/anime?slug=naruto&type=series", episode: "/episode?slug=naruto-1x1", embed: "/embed?url=...", hls: "/hls?url=..." },
+  endpoints: { series: "/series?page=1", movies: "/movies?page=1", search: "/search?q=naruto", anime: "/anime?slug=naruto&type=series", episode: "/episode?slug=naruto-1x1", embed: "/embed?url=...", playback: "/functions/v1/an-playback/hls?url=..." },
 };
 
 async function browse(type: string, page = 1, forceRefresh = false) {
@@ -808,7 +808,11 @@ Deno.serve(async (req) => {
     if (path === "/hls") {
       const target = url.searchParams.get("url") || "";
       if (!target) return new Response("missing ?url=", { status: 400, headers: cors });
-      return await hlsProxy(req, target, proxyPrefix);
+      const playback = new URL(`${publicProtocol}//${url.host}${normalizedPrefix}/an-playback/hls`.replace(/([^:]\/)\/+/g, "$1"));
+      playback.searchParams.set("url", target);
+      const origin = url.searchParams.get("origin") || url.searchParams.get("parent") || url.searchParams.get("ref") || "";
+      if (origin) playback.searchParams.set("origin", origin);
+      return new Response(null, { status: 302, headers: { ...cors, Location: playback.toString(), "Cache-Control": "no-store" } });
     }
     return json({ error: "not found", path }, 404);
   } catch (e) {
