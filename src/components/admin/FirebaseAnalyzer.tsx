@@ -1,337 +1,485 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { db, ref, remove, get } from "@/lib/firebase";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { db, get, ref, remove } from "@/lib/firebase";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 import { toast } from "sonner";
 import {
-  ChevronRight, ChevronDown, Trash2, Loader2, RefreshCw, Database,
-  Search, Copy, FileJson, FolderTree,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Database,
+  FileJson,
+  FolderTree,
+  Loader2,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
 } from "lucide-react";
-import FirebaseCleanupSection from "./FirebaseCleanup";
 
-/* ============================================================
-   Firebase Analyzer
-   - Top:    Cleanup + orphan/expired-token tools (reused)
-   - Bottom: Lazy-loaded tree browser (Firebase-console style)
-              * Expand any path on demand via shallow REST
-              * Inspect leaf values as JSON
-              * Delete any node with confirm
-   - Fully memoized rows, no global subscription => zero lag.
-   ============================================================ */
+type NodeKind = "branch" | "leaf" | "empty" | "unknown";
 
-type NodeKind = "branch" | "leaf" | "unknown";
+const ACTIVE_ROOTS = new Set([
+  "admin", "analytics", "appUsers", "activePrizeLink", "bkashPayments", "bkashSettings",
+  "categories", "comments", "egdManager", "fcmTokens", "freeAccessUsers", "globalFreeAccess",
+  "liveTvCategories", "liveTvChannels", "maintenance", "miniApp", "movies", "newEpisodeReleases",
+  "notifications", "otpCodes", "passwordResets", "prizePool", "redeemCodes", "settings",
+  "supportChats", "telegramPerAnimeButtons", "telegramPosts", "unlockTokens", "users", "webseries",
+  "weeklyPending", "XNXANIKPAY",
+]);
+
+const LEGACY_AN_ROOTS = ["animesaltCache", "anSeries", "anMovies", "animesalt", "animesaltSelected"];
+const PAGE_SIZE = 120;
+
+const sortKeys = (keys: string[]) => [...keys].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+const previewValue = (value: unknown) => {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (typeof value === "string") return value.length > 96 ? `${value.slice(0, 96)}...` : value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    const text = JSON.stringify(value);
+    return text.length > 96 ? `${text.slice(0, 96)}...` : text;
+  } catch {
+    return String(value);
+  }
+};
+
+const isLegacyAnEntry = (key: string, value: any) => {
+  const lowerKey = key.toLowerCase();
+  const source = String(value?.source || value?.sourceName || value?.provider || "").toLowerCase();
+  return (
+    lowerKey.startsWith("an_") ||
+    lowerKey.startsWith("an-mv") ||
+    lowerKey.startsWith("an_mv_") ||
+    source.includes("animesalt") ||
+    source === "an" ||
+    Boolean(value?.anSlug || value?.animeSaltSlug || value?.displayAs === "an")
+  );
+};
 
 interface TreeRowProps {
-  path: string;       // full Firebase path, e.g. "users/abc"
-  name: string;       // segment label
+  path: string;
+  name: string;
   depth: number;
   onDeleted: (path: string) => void;
 }
 
-const fmtBytes = (n: number) => {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-};
-
-const previewValue = (v: any): string => {
-  if (v === null) return "null";
-  if (typeof v === "string") return v.length > 80 ? v.slice(0, 80) + "…" : v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  try { const s = JSON.stringify(v); return s.length > 80 ? s.slice(0, 80) + "…" : s; }
-  catch { return String(v); }
-};
-
 const TreeRow = memo(function TreeRow({ path, name, depth, onDeleted }: TreeRowProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [children, setChildren] = useState<string[] | null>(null);
-  const [leaf, setLeaf] = useState<any>(undefined);
+  const [deleting, setDeleting] = useState(false);
   const [kind, setKind] = useState<NodeKind>("unknown");
+  const [children, setChildren] = useState<string[] | null>(null);
+  const [value, setValue] = useState<unknown>(undefined);
   const [filter, setFilter] = useState("");
-  const [visible, setVisible] = useState(200);
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
-  const load = useCallback(async () => {
+  const loadMeta = useCallback(async () => {
     setLoading(true);
     try {
-      // Shallow: object => keys, primitive => returns the value itself
-      const data: any = await firebaseRestGet(path, { shallow: true });
+      const data = await firebaseRestGet<any>(path, { shallow: true });
       if (data && typeof data === "object") {
-        const keys = Object.keys(data).sort();
-        setChildren(keys);
+        setChildren(sortKeys(Object.keys(data)));
         setKind("branch");
       } else if (data === null || data === undefined) {
         setChildren([]);
-        setKind("branch");
+        setKind("empty");
       } else {
-        setLeaf(data);
+        setValue(data);
         setKind("leaf");
       }
-    } catch (e: any) {
-      toast.error("Load failed: " + (e?.message || e));
+    } catch (error: any) {
+      toast.error(`Load failed: ${error?.message || error}`);
     } finally {
       setLoading(false);
     }
   }, [path]);
 
-  const toggle = async () => {
-    if (!open && children === null && kind !== "leaf") await load();
-    setOpen((v) => !v);
-  };
-
-  const fetchLeafFull = useCallback(async () => {
+  const loadFullValue = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await firebaseRestGet<any>(path);
-      setLeaf(data);
-    } catch (e: any) { toast.error("Fetch failed: " + (e?.message || e)); }
-    finally { setLoading(false); }
+      setValue(await firebaseRestGet(path));
+      setKind("leaf");
+    } catch (error: any) {
+      toast.error(`Value load failed: ${error?.message || error}`);
+    } finally {
+      setLoading(false);
+    }
   }, [path]);
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete "${path}"?\n\nThis cannot be undone.`)) return;
-    setBusy(true);
+  const toggle = useCallback(async () => {
+    if (!open && kind === "unknown") await loadMeta();
+    setOpen((current) => !current);
+  }, [kind, loadMeta, open]);
+
+  const deleteNode = useCallback(async () => {
+    if (!confirm(`Delete this database path?\n\n${path}\n\nThis cannot be undone.`)) return;
+    setDeleting(true);
     try {
       await remove(ref(db, path));
-      toast.success("Deleted " + path);
       onDeleted(path);
-    } catch (e: any) {
-      toast.error("Delete failed: " + (e?.message || e));
-    } finally { setBusy(false); }
-  };
+      toast.success(`Deleted ${path}`);
+    } catch (error: any) {
+      toast.error(`Delete failed: ${error?.message || error}`);
+    } finally {
+      setDeleting(false);
+    }
+  }, [onDeleted, path]);
 
-  const removeChild = (childPath: string) => {
-    const childName = childPath.slice(path.length + 1);
-    setChildren((arr) => (arr ? arr.filter((k) => k !== childName) : arr));
-  };
+  const removeChild = useCallback((childPath: string) => {
+    const childName = childPath.slice(path.length + 1).split("/")[0];
+    setChildren((current) => (current ? current.filter((key) => key !== childName) : current));
+  }, [path]);
 
-  const filtered = useMemo(() => {
+  const filteredChildren = useMemo(() => {
     if (!children) return [];
-    if (!filter.trim()) return children;
-    const q = filter.toLowerCase();
-    return children.filter((k) => k.toLowerCase().includes(q));
+    const query = filter.trim().toLowerCase();
+    if (!query) return children;
+    return children.filter((child) => child.toLowerCase().includes(query));
   }, [children, filter]);
 
-  const indent = { paddingLeft: `${depth * 14}px` };
+  const icon = loading ? (
+    <Loader2 size={13} className="animate-spin text-cyan-400" />
+  ) : open && kind === "branch" ? (
+    <ChevronDown size={13} className="text-cyan-300" />
+  ) : kind === "leaf" ? (
+    <FileJson size={13} className="text-amber-300" />
+  ) : kind === "empty" ? (
+    <FileJson size={13} className="text-zinc-500" />
+  ) : (
+    <ChevronRight size={13} className="text-zinc-400" />
+  );
 
   return (
     <div className="select-none">
       <div
-        style={indent}
-        className="group flex items-center gap-1.5 py-1.5 px-2 rounded-md hover:bg-zinc-800/60 transition-colors"
+        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 hover:border-cyan-500/20 hover:bg-cyan-500/5"
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
-        <button
-          onClick={toggle}
-          className="flex items-center gap-1 flex-1 min-w-0 text-left"
-        >
-          {loading ? (
-            <Loader2 size={12} className="animate-spin text-cyan-400 flex-shrink-0" />
-          ) : kind === "leaf" ? (
-            <FileJson size={12} className="text-amber-400 flex-shrink-0" />
-          ) : open ? (
-            <ChevronDown size={12} className="text-zinc-400 flex-shrink-0" />
-          ) : (
-            <ChevronRight size={12} className="text-zinc-500 flex-shrink-0" />
-          )}
-          <span className="font-mono text-xs text-white truncate">{name}</span>
-          {kind === "branch" && children && (
-            <span className="text-[10px] text-zinc-500 flex-shrink-0">
-              ({children.length})
+        <button onClick={toggle} className="flex min-w-0 items-center gap-2 text-left" type="button">
+          <span className="grid h-5 w-5 flex-shrink-0 place-items-center rounded-md bg-zinc-900/80">{icon}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-mono text-[12px] font-semibold text-zinc-100">{name}</span>
+            <span className="block truncate text-[10px] text-zinc-500">
+              {kind === "branch" ? `${children?.length || 0} child paths` : kind === "leaf" ? previewValue(value) : kind === "empty" ? "empty" : path}
             </span>
-          )}
-          {kind === "leaf" && leaf !== undefined && (
-            <span className="text-[10px] text-zinc-400 truncate ml-1">
-              = {previewValue(leaf)}
-            </span>
-          )}
+          </span>
         </button>
         <button
-          onClick={handleDelete}
-          disabled={busy}
+          onClick={deleteNode}
+          disabled={deleting}
+          className="grid h-8 w-8 place-items-center rounded-lg bg-red-500/10 text-red-300 transition-colors hover:bg-red-500/25 disabled:opacity-50"
           title={`Delete ${path}`}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/20 text-red-400 disabled:opacity-40"
+          type="button"
         >
-          {busy ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+          {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
         </button>
       </div>
 
-      {open && kind === "branch" && children && children.length > 0 && (
-        <>
-          {children.length > 12 && (
-            <div style={{ paddingLeft: `${(depth + 1) * 14}px` }} className="px-2 py-1">
+      {open && kind === "branch" && children && (
+        <div className="mt-1 space-y-1">
+          {children.length > 18 && (
+            <div className="pr-2" style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}>
               <div className="relative">
-                <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
                 <input
                   value={filter}
-                  onChange={(e) => { setFilter(e.target.value); setVisible(200); }}
-                  placeholder={`Filter ${children.length} keys…`}
-                  className="w-full pl-6 pr-2 py-1 rounded bg-zinc-900/80 border border-zinc-700 text-[11px] text-white outline-none focus:border-cyan-500"
+                  onChange={(event) => { setFilter(event.target.value); setVisible(PAGE_SIZE); }}
+                  placeholder={`Search ${children.length} keys`}
+                  className="h-8 w-full rounded-lg border border-zinc-800 bg-zinc-950/80 pl-7 pr-2 text-[12px] text-zinc-100 outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
           )}
-          {filtered.slice(0, visible).map((childName) => (
-            <TreeRow
-              key={childName}
-              path={`${path}/${childName}`}
-              name={childName}
-              depth={depth + 1}
-              onDeleted={removeChild}
-            />
+          {filteredChildren.slice(0, visible).map((child) => (
+            <TreeRow key={child} path={`${path}/${child}`} name={child} depth={depth + 1} onDeleted={removeChild} />
           ))}
-          {filtered.length > visible && (
-            <div style={{ paddingLeft: `${(depth + 1) * 14}px` }} className="px-2 py-1">
+          {filteredChildren.length > visible && (
+            <div className="py-1 pr-2" style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}>
               <button
-                onClick={() => setVisible((v) => v + 200)}
-                className="text-[10px] text-cyan-400 hover:text-cyan-300"
+                onClick={() => setVisible((count) => count + PAGE_SIZE)}
+                className="h-8 rounded-lg bg-zinc-800 px-3 text-[12px] font-semibold text-cyan-300 hover:bg-zinc-700"
+                type="button"
               >
-                Show {Math.min(200, filtered.length - visible)} more
-                ({filtered.length - visible} hidden)
+                Show next {Math.min(PAGE_SIZE, filteredChildren.length - visible)}
               </button>
             </div>
           )}
-        </>
+          {children.length === 0 && (
+            <div className="py-1 pr-2 text-[11px] text-zinc-500" style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}>
+              Empty path
+            </div>
+          )}
+        </div>
       )}
 
       {open && kind === "leaf" && (
-        <div style={{ paddingLeft: `${(depth + 1) * 14}px` }} className="px-2 pb-2">
-          <div className="flex gap-1.5 mb-1">
-            <button
-              onClick={fetchLeafFull}
-              className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center gap-1"
-            >
-              <RefreshCw size={9} /> Reload
+        <div className="py-2 pr-2" style={{ paddingLeft: `${24 + (depth + 1) * 16}px` }}>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <button onClick={loadFullValue} className="inline-flex h-8 items-center gap-1 rounded-lg bg-zinc-800 px-2.5 text-[11px] text-zinc-200 hover:bg-zinc-700" type="button">
+              <RefreshCw size={11} /> Reload
             </button>
             <button
               onClick={() => {
-                try { navigator.clipboard.writeText(JSON.stringify(leaf, null, 2)); toast.success("Copied"); }
-                catch { toast.error("Copy failed"); }
+                try {
+                  navigator.clipboard.writeText(JSON.stringify(value, null, 2));
+                  toast.success("JSON copied");
+                } catch {
+                  toast.error("Copy failed");
+                }
               }}
-              className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center gap-1"
+              className="inline-flex h-8 items-center gap-1 rounded-lg bg-zinc-800 px-2.5 text-[11px] text-zinc-200 hover:bg-zinc-700"
+              type="button"
             >
-              <Copy size={9} /> Copy JSON
+              <Copy size={11} /> Copy
             </button>
           </div>
-          <pre className="text-[10px] font-mono text-emerald-300 bg-zinc-950/80 border border-zinc-800 rounded p-2 max-h-60 overflow-auto whitespace-pre-wrap break-all">
-            {(() => { try { return JSON.stringify(leaf, null, 2); } catch { return String(leaf); } })()}
+          <pre className="max-h-72 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[11px] leading-relaxed text-emerald-300 whitespace-pre-wrap break-words">
+            {(() => { try { return JSON.stringify(value, null, 2); } catch { return String(value); } })()}
           </pre>
         </div>
       )}
-
-      {open && kind === "branch" && children && children.length === 0 && (
-        <div style={{ paddingLeft: `${(depth + 1) * 14}px` }} className="px-2 py-1 text-[10px] text-zinc-500 italic">
-          (empty)
-        </div>
-      )}
     </div>
   );
 });
 
-/* =================== Root browser =================== */
-const RootBrowser = memo(function RootBrowser() {
+function FirebaseAnalyticsActions({
+  rootKeys,
+  setRootKeys,
+  btnSecondary,
+}: {
+  rootKeys: string[];
+  setRootKeys: Dispatch<SetStateAction<string[]>>;
+  btnSecondary: string;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const orphanKeys = useMemo(() => rootKeys.filter((key) => !ACTIVE_ROOTS.has(key)), [rootKeys]);
+  const legacyRoots = useMemo(() => rootKeys.filter((key) => LEGACY_AN_ROOTS.includes(key)), [rootKeys]);
+
+  const deleteExpiredTokens = useCallback(async () => {
+    if (!confirm("Delete expired and consumed unlock tokens?")) return;
+    setBusy("tokens");
+    try {
+      const snap = await get(ref(db, "unlockTokens"));
+      const tokens = snap.val() || {};
+      const now = Date.now();
+      const expired = Object.entries<any>(tokens).filter(([, token]) => {
+        if (token?.mode === "prize" && token?.unlimited) return false;
+        const expiresAt = Number(token?.expiresAt || 0);
+        return token?.consumed || (expiresAt > 0 && expiresAt < now);
+      });
+      await Promise.all(expired.map(([key]) => remove(ref(db, `unlockTokens/${key}`))));
+      toast.success(`Deleted ${expired.length} expired tokens`);
+    } catch (error: any) {
+      toast.error(`Token cleanup failed: ${error?.message || error}`);
+    } finally {
+      setBusy(null);
+    }
+  }, []);
+
+  const deleteOrphanRoots = useCallback(async () => {
+    if (orphanKeys.length === 0) return toast.info("No orphan roots found");
+    if (!confirm(`Delete ${orphanKeys.length} orphan root paths?\n\n${orphanKeys.join(", ")}`)) return;
+    setBusy("orphans");
+    try {
+      await Promise.all(orphanKeys.map((key) => remove(ref(db, key))));
+      setRootKeys((keys) => keys.filter((key) => !orphanKeys.includes(key)));
+      toast.success(`Deleted ${orphanKeys.length} orphan roots`);
+    } catch (error: any) {
+      toast.error(`Orphan delete failed: ${error?.message || error}`);
+    } finally {
+      setBusy(null);
+    }
+  }, [orphanKeys, setRootKeys]);
+
+  const purgeLegacyAn = useCallback(async () => {
+    if (!confirm("Delete old AN database cache and AN-tagged stored cards?")) return;
+    setBusy("legacy-an");
+    try {
+      let deletedCards = 0;
+      await Promise.all(LEGACY_AN_ROOTS.map((key) => remove(ref(db, key)).catch(() => undefined)));
+      for (const rootPath of ["webseries", "movies", "newEpisodeReleases"]) {
+        const keys = await firebaseRestShallowKeys(rootPath).catch(() => []);
+        const candidateSet = new Set(keys.filter((key) => key.startsWith("an_") || key.startsWith("an_mv_") || key.toLowerCase().startsWith("an-mv")));
+        const unknown = keys.filter((key) => !candidateSet.has(key));
+        for (let index = 0; index < unknown.length; index += 24) {
+          const chunk = unknown.slice(index, index + 24);
+          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${rootPath}/${key}`, { shallow: true }).catch(() => null)] as const));
+          values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+        }
+        await Promise.all([...candidateSet].map((key) => remove(ref(db, `${rootPath}/${key}`))));
+        deletedCards += candidateSet.size;
+      }
+      setRootKeys((keys) => keys.filter((key) => !LEGACY_AN_ROOTS.includes(key)));
+      toast.success(`Legacy AN removed: ${deletedCards} stored cards plus cache roots`);
+    } catch (error: any) {
+      toast.error(`Legacy AN purge failed: ${error?.message || error}`);
+    } finally {
+      setBusy(null);
+    }
+  }, [setRootKeys]);
+
+  const buttons = [
+    { key: "tokens", label: "Expired Tokens", count: null as number | null, icon: <Trash2 size={13} />, action: deleteExpiredTokens },
+    { key: "orphans", label: "Orphan Roots", count: orphanKeys.length, icon: <AlertTriangle size={13} />, action: deleteOrphanRoots },
+    { key: "legacy-an", label: "Legacy AN", count: legacyRoots.length, icon: <Trash2 size={13} />, action: purgeLegacyAn },
+  ];
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-3">
+      {buttons.map((button) => (
+        <button
+          key={button.key}
+          onClick={button.action}
+          disabled={busy !== null || (button.count === 0 && button.key !== "tokens")}
+          className={`${btnSecondary} min-h-[46px] justify-between px-3 py-2 text-left text-[12px] disabled:cursor-not-allowed disabled:opacity-50`}
+          type="button"
+        >
+          <span className="inline-flex min-w-0 items-center gap-2">
+            {busy === button.key ? <Loader2 size={13} className="animate-spin" /> : button.icon}
+            <span className="truncate font-semibold">{button.label}</span>
+          </span>
+          {button.count !== null && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-zinc-300">{button.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: string }) {
   const [rootKeys, setRootKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const mountedRef = useRef(true);
 
-  const refresh = useCallback(async () => {
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
+  const loadRoots = useCallback(async () => {
     setLoading(true);
     try {
-      const keys = await firebaseRestShallowKeys("");
-      setRootKeys(keys.sort());
-    } catch (e: any) {
-      toast.error("Root load failed: " + (e?.message || e));
-    } finally { setLoading(false); }
+      const keys = sortKeys(await firebaseRestShallowKeys(""));
+      if (mountedRef.current) setRootKeys(keys);
+    } catch (error: any) {
+      toast.error(`Database load failed: ${error?.message || error}`);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { loadRoots(); }, [loadRoots]);
 
   const filtered = useMemo(() => {
-    if (!filter.trim()) return rootKeys;
-    const q = filter.toLowerCase();
-    return rootKeys.filter((k) => k.toLowerCase().includes(q));
-  }, [rootKeys, filter]);
+    const query = filter.trim().toLowerCase();
+    if (!query) return rootKeys;
+    return rootKeys.filter((key) => key.toLowerCase().includes(query));
+  }, [filter, rootKeys]);
 
   const removeRoot = useCallback((path: string) => {
-    const name = path.split("/")[0];
-    setRootKeys((arr) => arr.filter((k) => k !== name));
+    const rootName = path.split("/")[0];
+    setRootKeys((keys) => keys.filter((key) => key !== rootName));
   }, []);
 
+  const activeCount = useMemo(() => rootKeys.filter((key) => ACTIVE_ROOTS.has(key)).length, [rootKeys]);
+  const orphanCount = rootKeys.length - activeCount;
+
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2 text-white text-sm font-semibold">
-          <FolderTree size={15} className="text-cyan-400" />
-          Database Browser
-          <span className="text-[10px] text-zinc-500 font-normal">
-            ({rootKeys.length} roots)
-          </span>
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Root Paths</p>
+          <p className="mt-1 text-xl font-black text-white">{rootKeys.length}</p>
         </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="text-[11px] px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center gap-1 disabled:opacity-50"
-        >
-          {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-          Refresh
-        </button>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200">Active</p>
+          <p className="mt-1 text-xl font-black text-white">{activeCount}</p>
+        </div>
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-red-200">Orphan</p>
+          <p className="mt-1 text-xl font-black text-white">{orphanCount}</p>
+        </div>
       </div>
 
-      <div className="relative mb-2">
-        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter root paths…"
-          className="w-full pl-7 pr-2 py-1.5 rounded-md bg-zinc-950/80 border border-zinc-700 text-xs text-white outline-none focus:border-cyan-500"
-        />
-      </div>
+      <FirebaseAnalyticsActions rootKeys={rootKeys} setRootKeys={setRootKeys} btnSecondary={btnSecondary} />
 
-      <div className="max-h-[70vh] overflow-y-auto rounded-md bg-zinc-950/40 border border-zinc-800/80 p-1">
-        {loading && rootKeys.length === 0 ? (
-          <div className="flex items-center justify-center py-6 text-zinc-500 text-xs gap-2">
-            <Loader2 size={12} className="animate-spin" /> Loading database tree…
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/60">
+        <div className="flex flex-col gap-2 border-b border-zinc-800 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <FolderTree size={16} className="flex-shrink-0 text-cyan-300" />
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-bold text-white">Database Tree</h3>
+              <p className="truncate text-[11px] text-zinc-500">Expand a path to load only that branch.</p>
+            </div>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center text-xs text-zinc-500 py-6">No paths</div>
-        ) : (
-          filtered.map((k) => (
-            <TreeRow key={k} path={k} name={k} depth={0} onDeleted={removeRoot} />
-          ))
-        )}
-      </div>
+          <button onClick={loadRoots} disabled={loading} className={`${btnSecondary} h-9 px-3 text-[12px]`} type="button">
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Refresh
+          </button>
+        </div>
 
-      <p className="mt-2 text-[10px] text-zinc-500">
-        Tip: Click any node to expand. Hover a row to reveal the delete button.
-        Leaf values load on demand — zero data is fetched up-front.
-      </p>
+        <div className="border-b border-zinc-800 p-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={filter}
+              onChange={(event) => { setFilter(event.target.value); setVisible(PAGE_SIZE); }}
+              placeholder="Search root paths"
+              className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900/80 pl-9 pr-3 text-[13px] text-zinc-100 outline-none focus:border-cyan-500"
+            />
+          </div>
+        </div>
+
+        <div className="max-h-[68vh] overflow-y-auto p-2">
+          {loading && rootKeys.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-400">
+              <Loader2 size={16} className="animate-spin" /> Loading database...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-10 text-center text-sm text-zinc-500">No database paths found</div>
+          ) : (
+            filtered.slice(0, visible).map((key) => <TreeRow key={key} path={key} name={key} depth={0} onDeleted={removeRoot} />)
+          )}
+          {filtered.length > visible && (
+            <div className="p-2 text-center">
+              <button onClick={() => setVisible((count) => count + PAGE_SIZE)} className="h-9 rounded-lg bg-zinc-800 px-4 text-[12px] font-semibold text-cyan-300 hover:bg-zinc-700" type="button">
+                Show next {Math.min(PAGE_SIZE, filtered.length - visible)} paths
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 });
 
-/* =================== Public component =================== */
 export default function FirebaseAnalyzer({
-  glassCard, btnPrimary, btnSecondary,
-}: { glassCard: string; btnPrimary: string; btnSecondary: string }) {
+  glassCard,
+  btnSecondary,
+}: {
+  glassCard: string;
+  btnPrimary: string;
+  btnSecondary: string;
+}) {
   return (
     <div className="space-y-4">
-      <div className={`${glassCard}`}>
-        <div className="flex items-center gap-2 mb-1">
-          <Database size={18} className="text-cyan-400" />
-          <h2 className="text-lg font-bold text-white">Firebase Analyzer</h2>
+      <div className={`${glassCard} p-4`}> 
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-cyan-500/10 text-cyan-300">
+            <Database size={20} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-black text-white">Firebase Analytics</h2>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-zinc-400">
+              Full database browser with lazy loading, path inspection, copy, and delete controls.
+            </p>
+          </div>
         </div>
-        <p className="text-xs text-zinc-400">
-          Inspect, audit, and clean the entire Realtime Database. Lazy-loaded
-          for zero lag — nothing is fetched until you expand a path.
-        </p>
       </div>
 
-      <FirebaseCleanupSection
-        glassCard={glassCard}
-        btnPrimary={btnPrimary}
-        btnSecondary={btnSecondary}
-      />
-
-      <RootBrowser />
+      <RootBrowser btnSecondary={btnSecondary} />
     </div>
   );
 }
