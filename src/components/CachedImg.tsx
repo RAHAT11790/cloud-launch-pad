@@ -1,20 +1,24 @@
-import { forwardRef, ImgHTMLAttributes } from "react";
+import { forwardRef, ImgHTMLAttributes, useState } from "react";
 
 /**
- * CachedImg — drop-in <img> with three caching layers:
- *   1. In-memory hard ref (Map of decoded HTMLImageElements) so GC can't
- *      evict and force a re-download mid-session.
- *   2. localStorage "seen URL" set — survives reloads. URLs previously
- *      rendered are flagged eager / decoding="sync" so they paint
- *      instantly without the fade flicker.
- *   3. Cache Storage API ("rs-img-v1") — persists the actual bytes
- *      across sessions; the browser HTTP cache reuses them when the
- *      same URL is re-requested.
+ * CachedImg — drop-in <img> with zero-duplicate-fetch caching.
+ *
+ * Previous version called `caches.add(url)` inside `onLoad`, which issued
+ * a SECOND network request for every image. In the Admin panel that
+ * showed up as the "বারবার preload" the user complained about.
+ *
+ * Strategy now:
+ *   1. In-memory Map<url, HTMLImageElement> — survives re-renders so the
+ *      browser keeps the decoded bitmap and paints instantly.
+ *   2. localStorage "seen" set — survives reloads. Known URLs render with
+ *      eager loading + sync decoding so no fade flicker on the second
+ *      session.
+ *   3. Browser HTTP cache + Service Worker handle persistence. No extra
+ *      fetches are issued from JS.
  */
 
 const SEEN_KEY = "rs_img_seen_v1";
-const SEEN_CAP = 3000;
-const CACHE_NAME = "rs-img-v1";
+const SEEN_CAP = 4000;
 
 const decodedCache = new Map<string, HTMLImageElement>();
 let seenSet: Set<string>;
@@ -32,18 +36,7 @@ const schedulePersist = () => {
       const arr = Array.from(seenSet).slice(-SEEN_CAP);
       localStorage.setItem(SEEN_KEY, JSON.stringify(arr));
     } catch {}
-  }, 1500);
-};
-
-const persistBytes = (url: string) => {
-  if (!("caches" in window)) return;
-  try {
-    caches.open(CACHE_NAME).then((c) => {
-      c.match(url).then((hit) => {
-        if (!hit) c.add(url).catch(() => {});
-      });
-    }).catch(() => {});
-  } catch {}
+  }, 2000);
 };
 
 const markSeen = (url: string, el?: HTMLImageElement) => {
@@ -52,18 +45,18 @@ const markSeen = (url: string, el?: HTMLImageElement) => {
   if (!seenSet.has(url)) {
     seenSet.add(url);
     schedulePersist();
-    persistBytes(url);
   }
 };
 
 type Props = ImgHTMLAttributes<HTMLImageElement>;
 
 const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
-  { src, loading, decoding, onLoad, ...rest },
+  { src, loading, decoding, onLoad, style, ...rest },
   ref,
 ) {
   const url = typeof src === "string" ? src : "";
   const warm = !!url && (decodedCache.has(url) || seenSet.has(url));
+  const [loaded, setLoaded] = useState(warm);
 
   return (
     <img
@@ -72,8 +65,14 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
       src={url || undefined}
       loading={loading ?? (warm ? "eager" : "lazy")}
       decoding={decoding ?? (warm ? "sync" : "async")}
+      style={{
+        ...(style || {}),
+        opacity: loaded ? 1 : 0.001,
+        transition: warm ? undefined : "opacity 180ms ease-out",
+      }}
       onLoad={(event) => {
         markSeen(url, event.currentTarget);
+        setLoaded(true);
         onLoad?.(event);
       }}
     />
