@@ -2985,11 +2985,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const target = Math.max(Number(pendingTarget ?? 0), Number(recoveryTarget ?? 0));
     if (!Number.isFinite(target) || target < 0) {
       pendingSeek.current = null;
+      mediaRecoverySeekRef.current = null;
       return false;
     }
 
     const hasSeekContext = v.readyState >= 1 || (Number.isFinite(v.duration) && v.duration > 0);
     if (!hasSeekContext) return false;
+
+    // CRITICAL: never seek BACKWARD on a buffering hiccup. If the video is already
+    // playing past the saved point, the user has moved on — clear the pending seek
+    // instead of yanking them back. Only restore when the player genuinely reset to 0.
+    const current = Number(v.currentTime) || 0;
+    if (current >= target - 1.5) {
+      pendingSeek.current = null;
+      mediaRecoverySeekRef.current = null;
+      return false;
+    }
+    // Only honor a backward jump when the player has actually reset near zero.
+    if (current > 2.5) {
+      pendingSeek.current = null;
+      mediaRecoverySeekRef.current = null;
+      return false;
+    }
 
     const maxTarget = Number.isFinite(v.duration) && v.duration > 0
       ? Math.max(0, v.duration - 0.25)
@@ -3009,6 +3026,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return false;
     }
   }, []);
+
 
   useEffect(() => {
     const v = videoRef.current;
