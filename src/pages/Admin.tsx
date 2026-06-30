@@ -42,7 +42,7 @@ import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 import AdsterraConfig from "@/components/admin/AdsterraConfig";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
-import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
+import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 
 // AnSeriesManager removed — AN runs purely on API now
