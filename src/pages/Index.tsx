@@ -423,6 +423,7 @@ import {
   slugFromSentinel,
 } from "@/lib/anLivePlayback";
 import LiveSupportChat from "@/components/LiveSupportChat";
+import LoadingDetailsOverlay from "@/components/LoadingDetailsOverlay";
 import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
