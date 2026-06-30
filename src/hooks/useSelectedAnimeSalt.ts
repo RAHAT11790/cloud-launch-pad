@@ -1,90 +1,93 @@
 import { useEffect, useState } from "react";
 import type { AnimeItem } from "@/data/animeData";
-import { animeSaltApi } from "@/lib/animeSaltApi";
+import { db, ref, onValue } from "@/lib/firebase";
 
-// AN data is now 100% API-driven. No Firebase reads/writes for AN cards.
-// Browse list is fetched from AnimeSalt via the an-api edge function and
-// cached in localStorage for instant repeat loads.
+// AN cards are now admin-curated. The user panel reads ONLY from
+// `animesaltSelected/{slug}` in Firebase. Video URLs are NEVER stored —
+// they are resolved live from the AnimeSalt API at click time.
 
-const CACHE_KEY = "rs_cache_animesalt_api_cards_v3";
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_CARDS = 1000;
+const SELECTED_PATH = "animesaltSelected";
+const CACHE_KEY = "rs_cache_animesalt_selected_v1";
 
-type CacheShape = { ts: number; items: AnimeItem[] };
+type SavedItem = {
+  slug: string;
+  title: string;
+  poster: string;
+  year?: string;
+  type?: "series" | "movies";
+  tmdbId?: number;
+  rating?: string;
+  overview?: string;
+  backdrop?: string;
+  genres?: string[];
+  category?: string;
+  savedAt?: number;
+};
 
-const readCache = (): CacheShape | null => {
+const readCache = (): AnimeItem[] | null => {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.items)) return parsed;
+    if (Array.isArray(parsed)) return parsed;
   } catch {}
   return null;
 };
 
 const writeCache = (items: AnimeItem[]) => {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items: items.slice(0, MAX_CARDS) }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(items));
   } catch {}
 };
 
-const mapBrowseItem = (raw: any): AnimeItem | null => {
-  const slug = String(raw?.slug || "").trim();
-  const title = String(raw?.title || "").trim();
-  const poster = String(raw?.poster || "").trim();
-  if (!slug || !title || !poster) return null;
-  const isMovie = String(raw?.type || "").toLowerCase().includes("movie");
-  const id = `an_${slug}`;
+const mapSaved = (row: SavedItem): AnimeItem | null => {
+  const slug = String(row?.slug || "").trim();
+  const title = String(row?.title || "").trim();
+  if (!slug || !title) return null;
+  const isMovie = String(row?.type || "").toLowerCase().includes("movie");
+  const id = isMovie ? `an_mv_${slug}` : `an_${slug}`;
+  const poster = String(row?.poster || "").trim();
   return {
     id,
     title,
     poster,
-    description: "",
-    rating: 0,
-    category: "Anime",
+    backdrop: String(row?.backdrop || poster || "").trim(),
+    year: String(row?.year || "").trim(),
+    rating: String(row?.rating || "").trim(),
+    language: "Hindi",
+    category: String(row?.category || "Anime").trim() || "Anime",
     type: isMovie ? "movie" : "webseries",
-    year: String(raw?.year || ""),
-    duration: "",
-    seasons: [],
-    movieLinks: [],
-    animeSaltSlug: slug,
-    anSlug: slug,
+    storyline: String(row?.overview || "").trim(),
     source: "animesalt",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  } as unknown as AnimeItem;
+    sourceName: "AnimeSalt",
+    anSlug: slug,
+    animeSaltSlug: slug,
+    slug,
+    seasons: [],
+    createdAt: Number(row?.savedAt || Date.now()),
+    updatedAt: Number(row?.savedAt || Date.now()),
+  } as AnimeItem;
 };
 
 export function useSelectedAnimeSalt() {
   const initial = readCache();
-  const fresh = initial && Date.now() - initial.ts < CACHE_TTL_MS;
-  const [items, setItems] = useState<AnimeItem[]>(initial?.items || []);
-  const [loading, setLoading] = useState(!fresh);
+  const [items, setItems] = useState<AnimeItem[]>(initial || []);
+  const [loading, setLoading] = useState(!initial);
 
   useEffect(() => {
-    if (fresh) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await animeSaltApi.browseAll();
-        if (cancelled) return;
-        const mapped = (res?.items || [])
-          .map(mapBrowseItem)
-          .filter(Boolean) as AnimeItem[];
-        if (mapped.length) {
-          setItems(mapped);
-          writeCache(mapped);
-        }
-      } catch {
-        // Silent — keep cached items if available
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fresh]);
+    const unsub = onValue(ref(db, SELECTED_PATH), (snap) => {
+      const val = (snap.val() as Record<string, SavedItem>) || {};
+      const list = Object.values(val)
+        .map(mapSaved)
+        .filter(Boolean) as AnimeItem[];
+      // Newest first
+      list.sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
+      setItems(list);
+      writeCache(list);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
   return { items, loading };
 }
