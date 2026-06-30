@@ -30,22 +30,75 @@ const resolveUrl = (value: string, baseUrl: string) => {
   try { return new URL(raw, baseUrl).toString(); } catch { return raw; }
 };
 
-function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string) {
+function getSafeOrigin(value?: string | null) {
+  const raw = decode(value || "");
+  if (!raw) return "";
+  try { return new URL(raw).origin; } catch { return ""; }
+}
+
+function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
   if (/\/functions\/v1\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value)) return value;
   const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
-  return `${proxyPrefix}?url=${encodeURIComponent(abs)}`;
+  const params = new URLSearchParams({ url: abs });
+  const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
+  if (inheritedOrigin) params.set("origin", inheritedOrigin);
+  return `${proxyPrefix}?${params.toString()}`;
 }
 
-function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string) {
-  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix)}"`);
+function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
+  const playlistOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
+  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix, playlistOrigin)}"`);
   return body.split(/\r?\n/).map((raw) => {
     const line = raw.trim();
     if (!line) return raw;
     if (line.startsWith("#")) return /URI="/i.test(line) ? rewriteUriAttr(raw) : raw;
-    return wrapHlsUrl(line, baseUrl, proxyPrefix);
+    return wrapHlsUrl(line, baseUrl, proxyPrefix, playlistOrigin);
   }).join("\n");
+}
+
+const isLikelySegmentUrl = (url: URL) => /\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname);
+const isLikelyPlaylistUrl = (url: URL) => /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
+
+async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: string) {
+  const range = req.headers.get("range");
+  const playlist = isLikelyPlaylistUrl(targetUrl);
+  const accept = playlist ? "application/vnd.apple.mpegurl,*/*" : "video/mp2t,video/*,*/*";
+  const refererOrigin = getSafeOrigin(parentOrigin) || targetUrl.origin;
+  const baseHeaders: Record<string, string> = {
+    "User-Agent": UA,
+    Accept: accept,
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: `${refererOrigin}/`,
+  };
+  if (range) baseHeaders.Range = range;
+  const attempts: Record<string, string>[] = [
+    baseHeaders,
+    { ...baseHeaders, Referer: `${targetUrl.origin}/` },
+    ...(playlist ? [{ ...baseHeaders, Origin: refererOrigin }] : []),
+  ];
+  let lastStatus = 0;
+  for (const headers of attempts) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20_000);
+    try {
+      const res = await fetch(targetUrl.toString(), {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers,
+        signal: ac.signal,
+        redirect: "follow",
+      });
+      lastStatus = res.status;
+      if (res.ok || res.status === 206 || res.status === 304) return res;
+      try { await res.body?.cancel(); } catch {}
+    } catch {
+      // Try next safe header profile.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { errorStatus: lastStatus } as const;
 }
 
 Deno.serve(async (req) => {
@@ -65,35 +118,9 @@ Deno.serve(async (req) => {
   try { targetUrl = new URL(decode(target)); } catch { return new Response("bad url", { status: 400, headers: cors }); }
   if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
 
-  const upstreamHeaders: Record<string, string> = {
-    "User-Agent": UA,
-    Accept: targetUrl.pathname.toLowerCase().includes(".m3u8") ? "application/vnd.apple.mpegurl,*/*" : "*/*",
-    Referer: `${targetUrl.origin}/`,
-    Origin: targetUrl.origin,
-  };
-  const range = req.headers.get("range");
-  if (range) upstreamHeaders.Range = range;
-
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 20_000);
-  let upstream: Response;
-  try {
-    upstream = await fetch(targetUrl.toString(), {
-      method: req.method === "HEAD" ? "HEAD" : "GET",
-      headers: upstreamHeaders,
-      signal: ac.signal,
-      redirect: "follow",
-    });
-  } catch {
-    clearTimeout(timer);
-    return new Response("AN upstream fetch failed: network", { status: 502, headers: cors });
-  }
-  clearTimeout(timer);
-
-  if (!upstream.ok && upstream.status !== 206 && upstream.status !== 304) {
-    try { await upstream.body?.cancel(); } catch {}
-    return new Response(`AN upstream fetch failed: ${upstream.status}`, { status: 502, headers: cors });
-  }
+  const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
+  const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
+  if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
 
   const h = new Headers(cors);
   for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
@@ -108,7 +135,7 @@ Deno.serve(async (req) => {
     h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     h.set("cache-control", "no-store");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
-    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${reqUrl.origin}/functions/v1/hls`), {
+    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${reqUrl.origin}/functions/v1/hls`, parentOrigin), {
       status: upstream.status,
       headers: h,
     });

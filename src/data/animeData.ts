@@ -76,7 +76,10 @@ export interface AnimeItem {
   seasonsByLanguage?: Record<string, Season[]>;
   episodeCount?: number;
   audioTracks?: AudioTrack[];
-  cast?: { name: string; character?: string; photo: string }[];
+  tmdbId?: number | string;
+  genres?: string[];
+  directors?: string[];
+  cast?: { name: string; character?: string; photo?: string }[];
 }
 
 export const categories = ["Action", "Romance", "Fantasy", "Sci-Fi", "Horror", "Comedy"];

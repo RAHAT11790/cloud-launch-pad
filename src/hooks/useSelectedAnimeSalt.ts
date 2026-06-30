@@ -20,6 +20,8 @@ type SavedItem = {
   overview?: string;
   backdrop?: string;
   genres?: string[];
+  directors?: string[];
+  cast?: { name: string; character?: string; photo?: string }[] | Record<string, { name: string; character?: string; photo?: string }>;
   category?: string;
   savedAt?: number;
 };
@@ -58,6 +60,10 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
     category: String(row?.category || "Anime").trim() || "Anime",
     type: isMovie ? "movie" : "webseries",
     storyline: String(row?.overview || "").trim(),
+    tmdbId: row?.tmdbId,
+    genres: Array.isArray(row?.genres) ? row.genres : undefined,
+    directors: Array.isArray(row?.directors) ? row.directors : undefined,
+    cast: Array.isArray(row?.cast) ? row.cast : row?.cast ? Object.values(row.cast) : undefined,
     source: "animesalt",
     sourceName: "AnimeSalt",
     anSlug: slug,

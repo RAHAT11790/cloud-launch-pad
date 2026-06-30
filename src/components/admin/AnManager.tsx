@@ -200,27 +200,6 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
   };
 };
 
-const buildAnimeSaltEnriched = async (item: ApiItem): Promise<SavedItem> => {
-  const base: SavedItem = { ...item, savedAt: Date.now(), category: (item as SavedItem).category || "Anime" };
-  try {
-    const r: any = item.type === "series"
-      ? await animeSaltApi.getSeries(item.slug, true)
-      : await animeSaltApi.getMovie(item.slug, true);
-    const data = r?.data || r || {};
-    return {
-      ...base,
-      title: String(data?.title || item.title || base.title).trim(),
-      poster: String(data?.poster || item.poster || base.poster || "").trim(),
-      backdrop: String(data?.backdrop || data?.poster || (item as SavedItem).backdrop || item.poster || "").trim(),
-      overview: String(data?.storyline || data?.overview || data?.description || (item as SavedItem).overview || "").trim(),
-      rating: String(data?.rating || (item as SavedItem).rating || "").trim(),
-      year: String(item.year || data?.year || (item as SavedItem).year || "").trim(),
-    };
-  } catch {
-    return base;
-  }
-};
-
 const SELECTED_PATH = "animesaltSelected";
 const SETTINGS_PATH = "settings/animeSaltEnabled";
 
@@ -337,14 +316,16 @@ export default function AnManager({
 
   // Save one (with TMDB auto-pick if exactly 1 result; otherwise opens picker)
   const saveOne = async (item: ApiItem, opts: { skipPicker?: boolean } = {}) => {
+    if (!getTmdbApiKey()) throw new Error("TMDB API key required — AN details fallback is disabled");
     const cleaned = cleanTitleForTmdb(item.title);
     const isSeries = item.type === "series";
-    const results = getTmdbApiKey() ? await tmdbSearch(cleaned, isSeries) : [];
+    const results = await tmdbSearch(cleaned, isSeries);
     if (!opts.skipPicker && results.length > 1) {
       setTmdbPicker({ item, results });
       return;
     }
     const pick = results[0] || null;
+    if (!pick) throw new Error("TMDB match not found — use manual TMDB ID fetch");
     const enriched = await buildEnriched(item, pick);
     enriched.category = category || enriched.category || "Anime";
     await set(ref(db, `${SELECTED_PATH}/${item.slug}`), enriched);
@@ -430,8 +411,8 @@ export default function AnManager({
   const onLoadAllDetails = async () => {
     const entries = Object.values(saved);
     if (entries.length === 0) return toast.error("Nothing saved yet");
-    const hasKey = !!getTmdbApiKey();
-    if (!confirm(`Fetch details for ${entries.length} saved item(s)? TMDB key থাকলে TMDB, না থাকলে AN API metadata দিয়ে fill হবে।`)) return;
+    if (!getTmdbApiKey()) return toast.error("TMDB API key required — AN API details fallback is disabled");
+    if (!confirm(`Fetch details for ${entries.length} saved item(s)? Only TMDB থেকে rating/year/description/cast/directors আসবে।`)) return;
 
     setBulkBusy(true);
     setBulkProgress({ done: 0, total: entries.length });
@@ -445,11 +426,9 @@ export default function AnManager({
           if (it.rating && it.year && it.overview) { skipped++; }
           else {
             const isSeries = (it.type || "series") === "series";
-            const pick = hasKey
-              ? (it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null)
-              : null;
-            const enriched = pick ? await buildEnriched(it as any, pick) : await buildAnimeSaltEnriched(it as any);
-            if (enriched.overview || enriched.poster || enriched.rating || enriched.year || enriched.tmdbId) {
+            const pick = it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
+            const enriched = pick ? await buildEnriched(it as any, pick) : null;
+            if (enriched && (enriched.overview || enriched.poster || enriched.rating || enriched.year || enriched.tmdbId)) {
               // Preserve existing category / savedAt
               await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
                 ...(enriched.tmdbId ? { tmdbId: enriched.tmdbId } : {}),
@@ -657,7 +636,7 @@ export default function AnManager({
           <div className={`mt-2 text-[10px] ${hasTmdbKey ? "text-emerald-300" : "text-amber-200"}`}>
             {hasTmdbKey
               ? "✅ TMDB key active — Load All Details, TMDB ID fetch, rating/year/description/cast সব কাজ করবে।"
-              : "ℹ️ TMDB key না থাকলেও Load All Details আর error দেখাবে না; AN API metadata দিয়ে title/poster/year/rating/description fill করবে। TMDB cast/genres লাগলে key save করুন।"}
+              : "⚠️ TMDB key required — AN API details fallback disabled. Rating/year/description/cast/directors শুধু TMDB থেকেই আসবে।"}
           </div>
         </div>
 

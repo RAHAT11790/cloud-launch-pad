@@ -503,51 +503,94 @@ async function fetchMaster(master: string, embedUrl: string, origin: string) {
   throw new Error(`AN HLS upstream failed ${lastStatus || "network"}`);
 }
 
-function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string) {
+function getSafeOrigin(value?: string | null) {
+  const raw = decode(value || "");
+  if (!raw) return "";
+  try { return new URL(raw).origin; } catch { return ""; }
+}
+
+function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
   if (/\/an-api\/hls\?url=/i.test(value)) return value;
   const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
-  return `${proxyPrefix}?url=${encodeURIComponent(abs)}`;
+  const params = new URLSearchParams({ url: abs });
+  const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
+  // Preserve the playlist origin for its child playlists/segments.  AnimeSalt
+  // often serves playlists from as-cdn21 and segments from as-cdn22; using the
+  // segment host as Origin/Referer makes as-cdn22 return 500, which surfaced in
+  // the player as repeated 502/504 proxy errors.
+  if (inheritedOrigin) params.set("origin", inheritedOrigin);
+  return `${proxyPrefix}?${params.toString()}`;
 }
 
-function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string) {
-  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix)}"`);
+function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
+  const playlistOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
+  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix, playlistOrigin)}"`);
   return body.split(/\r?\n/).map((raw) => {
     const line = raw.trim();
     if (!line) return raw;
     if (line.startsWith("#")) return /URI="/i.test(line) ? rewriteUriAttr(raw) : raw;
-    return wrapHlsUrl(line, baseUrl, proxyPrefix);
+    return wrapHlsUrl(line, baseUrl, proxyPrefix, playlistOrigin);
   }).join("\n");
+}
+
+const isLikelySegmentUrl = (url: URL) => /\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname);
+const isLikelyPlaylistUrl = (url: URL) => /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
+
+async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: string) {
+  const range = req.headers.get("range");
+  const playlist = isLikelyPlaylistUrl(targetUrl);
+  const accept = playlist ? "application/vnd.apple.mpegurl,*/*" : "video/mp2t,video/*,*/*";
+  const refererOrigin = getSafeOrigin(parentOrigin) || targetUrl.origin;
+  const baseHeaders: Record<string, string> = {
+    "User-Agent": UA,
+    Accept: accept,
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: `${refererOrigin}/`,
+  };
+  if (range) baseHeaders.Range = range;
+
+  // Do not send Origin on the first attempts. The CDN accepts the same segment
+  // with no Origin (or playlist-origin Origin) but returns 500 when Origin is the
+  // segment host, which was the exact 502 loop users saw in playback.
+  const attempts: Record<string, string>[] = [
+    baseHeaders,
+    { ...baseHeaders, Referer: `${targetUrl.origin}/` },
+    ...(playlist ? [{ ...baseHeaders, Origin: refererOrigin }] : []),
+  ];
+
+  let lastStatus = 0;
+  for (const headers of attempts) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20_000);
+    try {
+      const res = await fetch(targetUrl.toString(), {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers,
+        signal: ac.signal,
+        redirect: "follow",
+      });
+      lastStatus = res.status;
+      if (res.ok || res.status === 206 || res.status === 304) return res;
+      try { await res.body?.cancel(); } catch {}
+    } catch {
+      // Try the next safe header profile.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { errorStatus: lastStatus } as const;
 }
 
 async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
   let targetUrl: URL;
   try { targetUrl = new URL(target); } catch { return new Response("bad url", { status: 400, headers: cors }); }
   if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
-  const upstreamHeaders: Record<string, string> = {
-    "User-Agent": UA,
-    Accept: targetUrl.pathname.toLowerCase().includes(".m3u8") ? "application/vnd.apple.mpegurl,*/*" : "*/*",
-    Referer: `${targetUrl.origin}/`,
-    Origin: targetUrl.origin,
-  };
-  const range = req.headers.get("range");
-  if (range) upstreamHeaders.Range = range;
-  let upstream: Response | null = null;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 20_000);
-  try {
-    upstream = await fetch(targetUrl.toString(), { method: req.method === "HEAD" ? "HEAD" : "GET", headers: upstreamHeaders, signal: ac.signal, redirect: "follow" });
-  } catch {
-    upstream = null;
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!upstream) return new Response("AN upstream fetch failed: network", { status: 502, headers: cors });
-  if (!upstream.ok && upstream.status !== 206 && upstream.status !== 304) {
-    try { await upstream.body?.cancel(); } catch {}
-    return new Response(`AN upstream fetch failed: ${upstream.status}`, { status: 502, headers: cors });
-  }
+  const reqUrl = new URL(req.url);
+  const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
+  const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
+  if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
 
   const h = new Headers(cors);
   for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
@@ -564,7 +607,7 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     h.set("cache-control", "no-store");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
-    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), proxyPrefix), { status: upstream.status, headers: h });
+    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), proxyPrefix, parentOrigin), { status: upstream.status, headers: h });
   }
   if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
     h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
