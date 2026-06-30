@@ -5378,15 +5378,8 @@ ${tgBulkFooter}
  <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); const initialSeasons = [{ name: "Season 1", seasonNumber: 1, episodes: [] }]; const initialMap = { Hindi: initialSeasons }; setSeriesForm(syncSeriesLanguageSummary({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0, audioTracks: [] }, initialMap)); setSeriesSeasonsByLanguage(initialMap); setSeasonsData(cloneSeasonList(initialSeasons)); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Manual
  </button>
-  <button onClick={() => setSeriesTab("ws-an")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-an" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
-  AN Series
-  </button>
-  {/* Weekly EP feature removed */}
-  </div>
-
-  {seriesTab === "ws-an" && (
-  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} onEditSeries={editSeries} onSaved={upsertAdminContentListItem} />
-  )}
+   {/* AN Series tab removed — AN now runs purely on API, no Firebase storage */}
+   </div>
 
  {seriesTab === "ws-list" && (
  <div>
