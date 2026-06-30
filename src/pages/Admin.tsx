@@ -8616,10 +8616,10 @@ ${footerLinksHtml}
  )}
 
 
- {/* ==================== FIREBASE CLEANUP ==================== */}
- {activeSection === "fb-cleanup" && (
- <FirebaseMultiManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
- )}
+  {/* ==================== FIREBASE ANALYZER ==================== */}
+  {activeSection === "fb-cleanup" && (
+  <FirebaseAnalyzer glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+  )}
 
  {/* ==================== AI CONFIG ==================== */}
  {activeSection === "ai-config" && (
