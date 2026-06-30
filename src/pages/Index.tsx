@@ -2212,7 +2212,7 @@ const Index = () => {
           selectedLanguage,
           seasonIdx: sIdx,
           epIdx: eIdx,
-          audioTracks: anime.source === "animesalt" ? (buildAnimeSaltEpisodePlaybackFromFirebase(episode)?.audioTracks || episode?.audioTracks) : episode?.audioTracks,
+          audioTracks: episode?.audioTracks,
           subtitleTracks: (episode as any)?.subtitleTracks,
           resumeTime: item.currentTime || 0,
           qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
