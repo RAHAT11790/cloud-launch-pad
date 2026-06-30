@@ -1967,7 +1967,10 @@ const Index = () => {
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
-      toast.error("Video source is still loading. Please tap again in a moment.");
+      // No src resolved — fail silently; the LoadingDetailsOverlay path already
+      // surfaces explicit errors for AN content. RS content shouldn't reach this
+      // branch in practice (loadFullFirebaseAnimeItemWithTimeout fills src).
+      console.warn("[handlePlay] no src resolved for", anime?.title);
     }
   };
 
