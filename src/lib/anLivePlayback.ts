@@ -4,8 +4,9 @@ import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
 import { db, ref, get, set, remove } from "@/lib/firebase";
 
-type ApiStream = { url: string; height?: number | string; label?: string };
-type ApiAudio = { language?: string; name?: string; uri?: string };
+type ApiStream = { url: string; height?: number | string; label?: string; resolution?: string; filename?: string; bandwidth?: number };
+type ApiAudio = { language?: string; name?: string; uri?: string; url?: string; link?: string };
+type ApiSource = { streams?: ApiStream[]; audio?: ApiAudio[]; master?: string; videoSource?: string; securedLink?: string };
 
 const PLAYBACK_TTL_MS = 150 * 60 * 1000; // safer than AnimeSalt's ~2-3h signed URL window
 const SERIES_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -81,7 +82,7 @@ const isHindi = (a: ApiAudio) =>
 const toAudioTrack = (a: ApiAudio, idx: number): AudioTrack => {
   const label = String(a?.name || a?.language || `Audio ${idx + 1}`).trim();
   const language = String(a?.language || label).trim();
-  const uri = String(a?.uri || "").trim();
+  const uri = String(a?.uri || a?.url || a?.link || "").trim();
   return {
     language,
     label,
@@ -92,8 +93,62 @@ const toAudioTrack = (a: ApiAudio, idx: number): AudioTrack => {
   };
 };
 
+const streamHeight = (s: ApiStream) => {
+  const raw = `${s?.height ?? ""} ${s?.label || ""} ${s?.resolution || ""} ${s?.filename || ""} ${s?.url || ""}`;
+  const direct = Number(s?.height);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const m = raw.match(/(?:^|[^0-9])(2160|1080|720|480|360|240)p?(?:[^0-9]|$)/i) || raw.match(/x(2160|1080|720|480|360|240)(?:[^0-9]|$)/i);
+  return m ? Number(m[1]) : 0;
+};
+
+const collectPlaybackStreams = (data: any): ApiStream[] => {
+  const list: ApiStream[] = [];
+  const seen = new Set<string>();
+  const push = (stream: any, fallbackLabel = "Auto") => {
+    const url = String(stream?.url || stream?.src || stream || "").trim();
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    list.push({
+      url,
+      height: stream?.height,
+      label: stream?.label || stream?.quality || fallbackLabel,
+      resolution: stream?.resolution,
+      filename: stream?.filename,
+      bandwidth: stream?.bandwidth,
+    });
+  };
+
+  if (Array.isArray(data?.streams)) data.streams.forEach((s: any) => push(s));
+  if (Array.isArray(data?.sources)) {
+    (data.sources as ApiSource[]).forEach((source: any) => {
+      if (Array.isArray(source?.streams)) source.streams.forEach((s: any) => push(s));
+      push(source?.master, "Auto");
+      push(source?.videoSource, "Auto");
+      push(source?.securedLink, "Auto");
+    });
+  }
+  push(data?.directUrl, "Auto");
+  push(data?.videoSource, "Auto");
+  push(data?.securedLink, "Auto");
+  return list;
+};
+
+const collectPlaybackAudio = (data: any): ApiAudio[] => {
+  const list: ApiAudio[] = [];
+  const seen = new Set<string>();
+  const push = (a: any) => {
+    const uri = String(a?.uri || a?.url || a?.link || "").trim();
+    if (!uri || seen.has(uri)) return;
+    seen.add(uri);
+    list.push(a);
+  };
+  if (Array.isArray(data?.audio)) data.audio.forEach(push);
+  if (Array.isArray(data?.sources)) (data.sources as ApiSource[]).forEach((source: any) => Array.isArray(source?.audio) && source.audio.forEach(push));
+  return list;
+};
+
 const streamFields = (streams: ApiStream[]) => {
-  const find = (h: number) => streams.find((s) => Number(s.height) === h)?.url;
+  const find = (h: number) => streams.find((s) => streamHeight(s) === h)?.url;
   const link1080 = find(1080);
   const link720 = find(720);
   const link480 = find(480);
@@ -103,7 +158,7 @@ const streamFields = (streams: ApiStream[]) => {
     link720,
     link1080,
     link4k,
-    link: link1080 || link720 || link480 || streams[0]?.url || "",
+    link: link1080 || link720 || link480 || streams.find((s) => streamHeight(s) > 0)?.url || streams[0]?.url || "",
   };
 };
 
@@ -116,9 +171,9 @@ export async function resolveAnEpisodePlayback(slug: string): Promise<Partial<Ep
     if (cached?.link) return cached;
     const r: any = await animeSaltApi.getEpisode(slug);
     const data = pickPayload(r);
-    const streams = (data?.streams || []) as ApiStream[];
+    const streams = collectPlaybackStreams(data);
     if (!streams.length) return null;
-    const audio = ((data?.audio || []) as ApiAudio[]).map(toAudioTrack);
+    const audio = collectPlaybackAudio(data).map(toAudioTrack);
     const resolved = { ...streamFields(streams), audioTracks: audio };
     await writePlaybackCache("episode", slug, resolved);
     return resolved;
@@ -136,9 +191,9 @@ export async function resolveAnMoviePlayback(
     if (cached?.fields?.movieLink) return cached;
     const r: any = await animeSaltApi.getMovie(slug);
     const data = pickPayload(r);
-    const streams = (data?.streams || []) as ApiStream[];
+    const streams = collectPlaybackStreams(data);
     if (!streams.length) return null;
-    const audioTracks = ((data?.audio || []) as ApiAudio[]).map(toAudioTrack);
+    const audioTracks = collectPlaybackAudio(data).map(toAudioTrack);
     const sf = streamFields(streams);
     const resolved = {
       fields: {
