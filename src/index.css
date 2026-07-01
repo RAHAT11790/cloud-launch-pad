@@ -919,6 +919,11 @@ div[style*="z-index: 2147483647"],
     100% { background-position: 0% 50%; }
   }
 
+  .premium-shine {
+    background-size: 200% 100%;
+    animation: premiumShimmer 2.4s ease-in-out infinite;
+  }
+
   @keyframes unlockCtaFill {
     0% { transform: translateX(-100%); opacity: 0.22; }
     45% { transform: translateX(-40%); opacity: 0.5; }
