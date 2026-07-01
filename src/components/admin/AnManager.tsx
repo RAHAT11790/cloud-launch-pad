@@ -203,6 +203,23 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
 
 const SELECTED_PATH = "animesaltSelected";
 const SETTINGS_PATH = "settings/animeSaltEnabled";
+const GENERIC_CATEGORIES = new Set(["", "anime", "animesalt"]);
+
+const normalizeGenres = (genres?: string[]) =>
+  Array.isArray(genres) ? genres.map((g) => String(g || "").trim()).filter(Boolean) : [];
+
+const autoCategoryFromGenres = (genres?: string[]) => normalizeGenres(genres).join(", ");
+
+const resolveSavedCategory = (manualCategory: string | undefined, genres?: string[], fallback = "Anime") => {
+  const manual = String(manualCategory || "").trim();
+  if (manual && !GENERIC_CATEGORIES.has(manual.toLowerCase())) return manual;
+  return autoCategoryFromGenres(genres) || manual || fallback;
+};
+
+const hasRealCategory = (item: Pick<SavedItem, "category" | "genres">) => {
+  const cat = String(item.category || "").trim().toLowerCase();
+  return (!!cat && !GENERIC_CATEGORIES.has(cat)) || normalizeGenres(item.genres).length > 0;
+};
 
 export default function AnManager({
   categoryList,
@@ -304,6 +321,13 @@ export default function AnManager({
     };
   }, [apiItems, saved, filtered]);
 
+  const missingCategoryItems = useMemo(() =>
+    Object.values(saved)
+      .filter((item) => !hasRealCategory(item))
+      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""))),
+    [saved],
+  );
+
   const toggleSelect = (slug: string) => {
     setSelectedSlugs((prev) => {
       const next = new Set(prev);
@@ -328,7 +352,7 @@ export default function AnManager({
     const pick = results[0] || null;
     if (!pick) throw new Error("TMDB match not found — use manual TMDB ID fetch");
     const enriched = await buildEnriched(item, pick);
-    enriched.category = category || enriched.category || "Anime";
+    enriched.category = resolveSavedCategory(category, enriched.genres, enriched.category || "Anime");
     await set(ref(db, `${SELECTED_PATH}/${item.slug}`), enriched);
   };
 
@@ -444,7 +468,7 @@ export default function AnManager({
             const pick = it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
             const enriched = pick ? await buildEnriched(it as any, pick) : null;
             if (enriched && (enriched.overview || enriched.poster || enriched.rating || enriched.year || enriched.tmdbId)) {
-              // Preserve existing category / savedAt
+                const nextCategory = resolveSavedCategory(it.category, enriched.genres, it.category || "Anime");
               await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
                 ...(enriched.tmdbId ? { tmdbId: enriched.tmdbId } : {}),
                 title: enriched.title || it.title,
@@ -453,6 +477,7 @@ export default function AnManager({
                 backdrop: enriched.backdrop || it.backdrop || "",
                 poster: enriched.poster || it.poster,
                 genres: enriched.genres || it.genres || [],
+                 category: nextCategory,
                 year: enriched.year || it.year || "",
                 ...((enriched as any).directors ? { directors: (enriched as any).directors } : {}),
                 ...((enriched as any).cast ? { cast: (enriched as any).cast } : {}),
@@ -483,7 +508,7 @@ export default function AnManager({
       const pick = await tmdbFetchById(id, item.type === "series");
       if (!pick) return toast.error("এই TMDB ID দিয়ে details পাওয়া যায়নি");
       const enriched = await buildEnriched({ ...base, tmdbId: id } as any, pick);
-      enriched.category = base.category || category || "Anime";
+      enriched.category = resolveSavedCategory(base.category || category, enriched.genres, "Anime");
       await set(ref(db, `${SELECTED_PATH}/${item.slug}`), enriched);
       toast.success(`TMDB details loaded: ${item.title}`);
     } catch (e: any) {
@@ -517,7 +542,7 @@ export default function AnManager({
     if (!tmdbPicker) return;
     try {
       const enriched = await buildEnriched(tmdbPicker.item, result);
-      enriched.category = category || enriched.category || "Anime";
+      enriched.category = resolveSavedCategory(category, enriched.genres, enriched.category || "Anime");
       await set(ref(db, `${SELECTED_PATH}/${tmdbPicker.item.slug}`), enriched);
       toast.success(`Saved: ${tmdbPicker.item.title}`);
       setTmdbPicker(null);
@@ -588,7 +613,7 @@ export default function AnManager({
         backdrop: editing.backdrop || "",
         rating: editing.rating || "",
         overview: editing.overview || "",
-        category: editing.category || "Anime",
+        category: resolveSavedCategory(editing.category, editing.genres, "Anime"),
         year: editing.year || "",
         genres: editing.genres || [],
         directors: editing.directors || [],
