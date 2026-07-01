@@ -1,106 +1,83 @@
-# Premium System — Full Build Plan
+# Premium + Ads + RS Player/Download — 4 ধাপে সম্পূর্ণ overhaul
 
-অনেক বড় feature request। একবারে সব ঠিকঠাক বানানোর জন্য নিচের কাঠামো follow করব।
+আপনার screenshot-গুলার Monetag ad code দেখেই সঠিক SDK placement করবো (One-Click Popunder, Direct Link/Social Bar, Banner)। নিচে ৪টা ধাপ:
 
-## 1. Data Model (Firebase RTDB)
+---
 
-**Anime/Series flags** (`animeSaltSelected/<slug>` & `series/<id>`):
-- `dubType`: `"official" | "fan"` (Admin toggle)
-- `premium`: `true/false` (whole series lock)
-- `premiumEpisodes`: `{ "s1e5": true, ... }` (per-episode lock)
-- `qualityLocks`: `{ "1080p": true, "4k": true }` (per-series quality lock)
+## ধাপ ১ — Premium Center সম্পূর্ণ ঠিক করা
 
-**Global settings** (`settings/premium`):
-- `globalQualityLocks`: `{ "4k": true, "1080p": false }` — site-wide
-- `globalDownloadLock`: `true` (premium-only downloads)
-- `coinPlan`: `{ coins: 20, days: 5 }` (editable, default only plan)
-- `extraPlans`: `[ { name, coins, days } ]` (admin can add)
+**Series Lock (Full)**
+- Premium Center-এর search bar আসলে কাজ করবে (deferred filter + prefix/fuzzy match RS + AN dataset-এ)।
+- প্রতিটা series card-এ একটা golden "Lock/Unlock" toggle button — click করলে সাথে সাথে `series.premium = true` Firebase-এ save হবে।
+- Admin dashboard-এর series row-এ (Edit / Delete button-এর পাশে) নতুন **"Premium Lock"** button — এক click-এ series full lock/unlock।
 
-**User** (`users/<uid>/premium`):
-- `active: bool`, `expiresAt: ms`, `source: "coin"|"bkash"|"redeem"`
-- `coins: number`
-- `adWatchLog`: `{ [YYYY-MM-DD]: { count, adIds: [] } }` (max 5/day)
+**Episode Lock (Partial)**
+- Premium Center-এ নতুন **"Episode Lock"** tab। Series select → সব season+episode accordion-এ show → tap করে individual episode toggle → `premiumEpisodes["s1e5"] = true`।
+- User-side card grid-এ locked episode-এ ছোট gold crown icon overlay।
+- Locked episode-এ click করলে সুন্দর professional message modal: "🔒 এই episode শুধু Premium members-এর জন্য" + "Get Premium" button।
 
-## 2. Admin Panel Changes
+**Card Premium Animation**
+- Locked series card-এ ultra-professional gold shimmer border, corner "PRO" ribbon, subtle glow pulse — একদম দেখেই প্রিমিয়াম বোঝা যাবে (framer-motion + CSS gradient border animation)।
 
-### A. Series Editor (existing `AnManager` + RS `Admin.tsx` series list)
-- Dub selector: **Official Dub / Fan Dub** radio → splits list into two columns/tabs.
-- New row button beside Edit/Delete: **⭐ Premium** (toggles full-series lock).
-- Inside editor modal: 
-  - Quality lock checkboxes (480/720/1080/4K)
-  - Episode lock grid (click episodes to toggle premium)
+---
 
-### B. New Top-Level Admin Tab: **"Premium Center"**
-Central hub for all premium controls:
-- **Series Lock Manager** — searchable list of all AN + RS with Premium toggle
-- **Episode Lock Manager** — pick series → toggle episodes
-- **Quality Lock Manager** — global + per-series quality locks (4K default on, 1080p off)
-- **Download Lock Toggle** — global switch
-- **Plans Manager** — default `20 coins / 5 days`, add/edit/remove extra plans
-- **Coin Ad Manager** — paste up to 5 Adsterra direct-link scripts
-- **User Premium Overview** — search user, grant/revoke premium, view coin balance
+## ধাপ ২ — Ad SDK + Coin System + Free Premium Page
 
-### C. Fan Dub Section
-New sidebar button **"Fan Dub Anime"** → dedicated page listing only `dubType === "fan"` series with quick premium/lock controls.
+**Monetag SDK proper integration** (আপনার screenshot-গুলা reference করে)
+- `src/lib/monetagAds.ts` নতুন module:
+  - **One-Click Popunder** — `<script src="//groleegni.net/401/..."></script>` runtime inject with de-dup।
+  - **Direct Link / Social Bar** — URL-based, new tab open।
+  - **Banner Ad** — iframe/script slot rendering with proper container।
+- Admin Premium Center-এর "Ad Sources" tab-এ ৩টা textarea (Popunder script, Direct Link URL, Banner script) — default-এ আপনার screenshot-এর সব code pre-filled থাকবে। Save + Test button।
 
-## 3. User Panel Changes
+**Coin Center in Profile**
+- ProfilePage-এ নতুন section: current coin balance (Coins icon + count animation), today's remaining ad watches, "Get Free Premium" big button।
+- Card animation: coin flip + counter tween।
 
-### A. Premium Gate
-When free user clicks a premium series/episode/quality → route to `/premium-required` page:
-- Big website logo, gradient hero
-- "This content is Premium Only"
-- Two CTAs: **Buy Premium** → `/premium` , **Get Free Premium** → `/free-premium`
-- Smooth motion (framer-motion), glass-morphism cards
+**Free Premium Page (`/premium/free`)**
+- Scrollable container (banner ads scroll কাজ করবে) with proper `overflow-y-auto`।
+- Header: "Watch Ads → Earn Coins → Get Premium Free"।
+- ৫টা ad slot card। প্রতিটা ad button-এ two-tap logic:
+  - **1st tap** → Social bar/Direct link open + top toast: "⚠️ This ad is not counted. Come back and tap again." → **কোনো counter start হবে না**।
+  - **2nd tap (same ad, after return)** → Direct link ad open + top toast: "✅ Ad counted! Watch for 15 seconds." → background 15s timer start → user back এলে +1 coin animation।
+- Daily cap enforcement, per-ad de-dup।
+- ২০ coin জমলে auto-notify "You can now redeem Premium!"।
 
-### B. `/premium` Page (Buy)
-Three buttons (existing bKash, Redeem Code + **new "Buy with Coins"**):
-- Coin button shows current balance, plan (`20 coins → 5 days`), disabled if <20
-- On click → deduct 20 coins, activate `premium.active=true, expiresAt=now+5d`
-- Extra admin-added plans render as extra cards
+**Card click → Premium Required Page redesign**
+- Locked series card click করলে `/premium-required?series=xxx` route open — professional message, series poster blur backdrop, "If you want Premium free, tap here" bell button → `/premium/free`।
 
-### C. `/free-premium` Page (Earn Coins)
-Master ad grid — up to 5 Adsterra direct-link cards (only 1/day per ad):
-- Click card → opens ad URL in new tab, starts 15s background timer
-- If user returns before 15s → no coin
-- After 15s + return → **coin animation** (floating +1 coin dropping into balance) + Firebase write
-- Daily cap: 5 coins/day (one per ad)
-- Progress bar: `X/20 coins → Buy 5-day Premium`
+---
 
-### D. Profile Page
-New **Coin Balance Card** with animated counter + "Redeem for Premium" button.
+## ধাপ ৩ — RS Player Time Reset + Quality Persist + Download Manager Fix
 
-### E. Video Player
-- Before load: check `premium` flags → if locked & user not premium, redirect to gate page
-- Quality selector: locked qualities show 🔒 → click routes to gate
-- Download button: if `globalDownloadLock` && !premium → 🔒 → gate
-- Keep existing 4K lock, remove auto-1080p lock behavior
+**RS Player**
+- **Time reset bug**: Episode switch করলে `video.currentTime = 0` reset হবে (episode change handler-এ resumeAt clear করা)। Continue-watching resume শুধু same episode reopen-এ কাজ করবে।
+- **Quality persistence**: `localStorage["rs_preferred_quality"]` — user 4K/1080p/720p যা select করবে, next episode-ও ওই quality-তেই start হবে (available থাকলে)। না থাকলে nearest quality fallback।
 
-## 4. Technical Details
+**RS Download Manager**
+- Size probe fix: HEAD → GET Range 0-0 fallback → filename-based estimate — zero size আর show করবে না।
+- Browser download route: proper `<a download>` blob/direct link redirect যাতে browser default downloader-এ চলে যায়।
+- Select-all bulk download queue ঠিকভাবে কাজ করবে।
+- **Premium lock message**: download locked হলে সুন্দর card modal:
+  > 🔒 **Premium Only Download**
+  > "This RS video is available for download only to Premium members. Upgrade to unlock unlimited downloads across all quality tiers."
+  > [ Get Premium → ] button — click করলে `/premium/buy` open হবে।
+- Unlock mode-এ সব user download পাবে normally।
 
-**New files:**
-- `src/pages/PremiumRequired.tsx` — gate page
-- `src/pages/PremiumPage.tsx` — buy page (refactor if exists)
-- `src/pages/FreePremium.tsx` — coin earning page
-- `src/components/CoinAnimation.tsx` — floating +1 animation
-- `src/components/admin/PremiumCenter.tsx` — admin hub
-- `src/components/admin/FanDubManager.tsx` — fan dub list
-- `src/lib/premiumAccess.ts` — `isPremium(user)`, `canPlay(anime, ep, quality, user)`, `spendCoins()`, `awardCoin()`
-- `src/hooks/usePremium.ts` — reactive user premium state
+---
 
-**Routes:** `/premium-required`, `/premium`, `/free-premium` added to `App.tsx`.
+## ধাপ ৪ — Full Testing & Verification
 
-**Guard integration:** hook into `Index.tsx handlePlay` — before opening player, run `canPlay()` gate.
+- TypeScript check + vitest run।
+- Playwright smoke: Admin Premium Center → search "Naruto" → lock toggle → verify Firebase write। User side card locked animation visible → click → premium-required page → Free Premium page → 2-tap ad flow → coin +1।
+- RS episode switch time reset verify (screenshot proof)।
+- Download unlock/lock message verify।
+- UI polish pass — spacing, gradient border, message box padding, emoji alignment।
 
-**Design system:** use existing semantic tokens; gold/amber gradient for premium (`--premium: 45 100% 55%`), coin icon = Lucide `Coins`. Glass cards, framer-motion enter animations, professional spacing.
+---
 
-## 5. Delivery Order (single build)
+**Technical notes (for reference)**
+- Files touched: `PremiumCenter.tsx`, `Admin.tsx` (series row lock button), `AnimeCard.tsx` (premium overlay), `ProfilePage.tsx` (coin center + Get Free Premium button), `FreePremium.tsx` (2-tap ad logic), `PremiumRequired.tsx` (message redesign), `VideoPlayer.tsx` (time reset + quality persist), `downloadManager.ts` + `DownloadProgressOverlay.tsx` (size probe + lock modal), new `src/lib/monetagAds.ts`.
+- No breaking changes to Firebase schema — only adds `premiumEpisodes`, `qualityLocks`, `settings/monetag`।
 
-1. Data helpers (`premiumAccess.ts`, `usePremium.ts`) + Firebase paths
-2. Admin Premium Center + series editor buttons + Fan Dub tab
-3. Premium gate page + route guards in player
-4. `/premium` Buy-with-Coins button
-5. `/free-premium` ad grid + 15s timer + coin animation
-6. Profile balance card
-7. Preview test: lock a series, verify gate → earn coins → buy → unlock
-
-সব একসাথে বানাব, প্রতিটা step টেস্ট করে দেখাব। শুরু করি?
+Approve করলে ধাপ ১ থেকে একে একে শুরু করবো।
