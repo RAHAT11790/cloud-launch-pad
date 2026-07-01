@@ -19,8 +19,8 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 const AN_BASE = "https://animesalt.ac";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const TEXT_TIMEOUT_MS = 9_000;
-const PLAYER_TIMEOUT_MS = 8_000;
+const TEXT_TIMEOUT_MS = 7_000;
+const PLAYER_TIMEOUT_MS = 6_500;
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
 const getCache = <T>(key: string, forceRefresh = false): T | null => {
   if (forceRefresh) {
@@ -98,28 +98,41 @@ function safeAtob(value: string): string {
   return "";
 }
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function fetchText(url: string, init?: RequestInit): Promise<string> {
   const target = new URL(url);
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), TEXT_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      ...init,
-      signal: ac.signal,
-      headers: {
-        "User-Agent": UA,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        Referer: target.origin === AN_BASE ? `${AN_BASE}/` : `${target.origin}/`,
-        ...(init?.headers || {}),
-      },
-      redirect: "follow",
-    });
-    if (!res.ok) throw new Error(`Upstream ${res.status} for ${url}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
+  let lastStatus = 0;
+  let lastErr = "network";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), TEXT_TIMEOUT_MS + attempt * 1500);
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: ac.signal,
+        headers: {
+          "User-Agent": UA,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          Referer: target.origin === AN_BASE ? `${AN_BASE}/` : `${target.origin}/`,
+          ...(init?.headers || {}),
+        },
+        redirect: "follow",
+      });
+      lastStatus = res.status;
+      if (res.ok) return await res.text();
+      lastErr = `Upstream ${res.status}`;
+      try { await res.body?.cancel(); } catch {}
+      if (res.status === 404) break;
+    } catch (e) {
+      lastErr = (e as Error)?.name === "AbortError" ? "timeout" : ((e as Error)?.message || "network");
+    } finally {
+      clearTimeout(timer);
+    }
+    if (attempt < 2) await delay(180 + attempt * 320);
   }
+  throw new Error(`${lastErr}${lastStatus ? ` (${lastStatus})` : ""} for ${url}`);
 }
 
 function parseHlsAttrs(line: string): Record<string, string> {
