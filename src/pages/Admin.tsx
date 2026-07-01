@@ -5217,7 +5217,7 @@ ${tgBulkFooter}
  </header>
 
  {/* Main Content */}
-<main className="admin-optimized-panel admin-scroll-smooth pt-[64px] px-3 pb-[220px] min-h-screen">
+<main className="admin-scroll-smooth pt-[64px] px-3 pb-[220px] min-h-screen">
  {/* ==================== DASHBOARD ==================== */}
  {activeSection === "dashboard" && (
  <div>
