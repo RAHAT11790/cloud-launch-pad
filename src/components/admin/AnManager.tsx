@@ -974,7 +974,7 @@ export default function AnManager({
                 const it = tmdbPicker.item;
                 setTmdbPicker(null);
                 const enriched = await buildEnriched(it, null);
-                enriched.category = category || "Anime";
+                enriched.category = resolveSavedCategory(category, enriched.genres, "Anime");
                 await set(ref(db, `${SELECTED_PATH}/${it.slug}`), enriched);
                 toast.success(`Saved without TMDB: ${it.title}`);
               }}
