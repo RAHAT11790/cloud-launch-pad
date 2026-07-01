@@ -313,9 +313,28 @@ async function detail(slug: string, type: string, forceRefresh = false) {
   };
 
   const postId = html.match(/data-post=["'](\d+)["']/)?.[1];
-  const seasonNums = Array.from(new Set(
+  const seasonButtons: { season: number; postId: string; html: string; text: string; regional: boolean }[] = [];
+  const seasonBtnRe = /<a\b[^>]*data-post=["'](\d+)["'][^>]*data-season=["'](\d+)["'][^>]*>[\s\S]*?<\/a>/gi;
+  let btn: RegExpExecArray | null;
+  while ((btn = seasonBtnRe.exec(html))) {
+    const raw = btn[0] || "";
+    const s = Number(btn[2]);
+    if (!Number.isFinite(s) || s <= 0) continue;
+    const text = decode(raw).replace(/\s+/g, " ").trim();
+    const isSubOnly = /\bnon-regional\b/i.test(raw) || /\[(?:sub|subbed)\]/i.test(text) || /\bsubbed\s*only\b/i.test(text);
+    seasonButtons.push({ season: s, postId: btn[1], html: raw, text, regional: !isSubOnly });
+  }
+  const rawSeasonNums = Array.from(new Set(
     Array.from(html.matchAll(/data-season=["'](\d+)["']/g)).map((m) => Number(m[1])).filter((n) => Number.isFinite(n) && n > 0),
   )).sort((a, b) => a - b);
+  // AnimeSalt itself marks seasons after Hindi/regional dub as
+  // `non-regional` / `[Sub]` in the season selector (Naruto S17-S22).  Use that
+  // cheap index-level signal instead of opening every episode/player. This
+  // returns S1..S16 in one fast pass and never leaks sub-only/broken seasons.
+  const regionalSeasonNums = seasonButtons.length
+    ? Array.from(new Set(seasonButtons.filter((b) => b.regional).map((b) => b.season))).sort((a, b) => a - b)
+    : rawSeasonNums;
+  const seasonNums = regionalSeasonNums.length ? regionalSeasonNums : rawSeasonNums;
 
   // Only harvest from the static HTML if AnimeSalt didn't expose a season
   // selector — otherwise the AJAX responses are the authoritative source per
@@ -325,25 +344,28 @@ async function detail(slug: string, type: string, forceRefresh = false) {
   }
 
   if (postId && seasonNums.length) {
-    // AnimeSalt marks the exact point where regional dubs (Hindi/Bengali/etc.)
-    // stop with this separator.  For Naruto Shippuden it appears in S16, and
-    // everything after it/S17+ resolves to a black-screen/non-Hindi stream.  We
-    // therefore harvest seasons sequentially and stop as soon as that marker is
-    // seen instead of blindly returning all 22 seasons.
-    const regionalDubStopRe = /below\s+episodes\s+aren['’]?t\s+dubbed\s+in\s+regional\s+languages/i;
-    let stopAfterRegionalDubMarker = false;
+    const CONCURRENCY = 8;
+    let cursor = 0;
+    const htmlBySeason = new Map<number, string>();
+    const workers = Array.from({ length: Math.min(CONCURRENCY, seasonNums.length) }, async () => {
+      while (cursor < seasonNums.length) {
+        const sNum = seasonNums[cursor++];
+        try {
+          const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*", Referer: `${AN_BASE}/${t}/${slug}/` },
+          });
+          htmlBySeason.set(sNum, seasonHtml);
+        } catch {}
+      }
+    });
+    await Promise.all(workers);
     for (const sNum of seasonNums) {
-      if (stopAfterRegionalDubMarker) break;
-      try {
-        const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
-          headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },
-        });
-        const marker = seasonHtml.search(regionalDubStopRe);
-        const harvestHtml = marker >= 0 ? seasonHtml.slice(0, marker) : seasonHtml;
-        // Strict: only accept episodes whose slug encodes this exact season.
-        harvestEpisodes(harvestHtml, sNum, true);
-        if (marker >= 0) stopAfterRegionalDubMarker = true;
-      } catch {}
+      const seasonHtml = htmlBySeason.get(sNum);
+      if (!seasonHtml) continue;
+      // Strict: only accept episodes whose slug encodes this exact season.
+      // Do not slice the in-season separator: on Naruto it appears before the
+      // last regional episode; the selector already removed S17+ sub-only data.
+      harvestEpisodes(seasonHtml, sNum, true);
     }
   }
 
@@ -363,6 +385,8 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     storyline: descM ? decode(descM[1]) : "",
     postId: postId || null,
     seasonNumbers: seasonNums,
+    sourceSeasonNumbers: rawSeasonNums,
+    skippedSubOnlySeasons: rawSeasonNums.filter((n) => !seasonNums.includes(n)),
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
     hindiFiltered: t !== "movies",
