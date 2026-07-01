@@ -1,5 +1,3 @@
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
-
 // ============================================================
 // an-api — NEW ultra-fast AnimeSalt extractor (NO subtitle logic)
 // ============================================================
@@ -56,7 +54,7 @@ function isAllowedAnimeItem(item: any) {
 const filterAnimeOnly = <T extends any>(items: T[]): T[] => (Array.isArray(items) ? items.filter(isAllowedAnimeItem) : []);
 
 const cors: Record<string, string> = {
-  ...corsHeaders,
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified",
@@ -786,18 +784,18 @@ Deno.serve(async (req) => {
         const result = await browse(type, body?.page || 1, forceRefresh);
         return json({ success: true, ...result });
       }
-      return json({ success: false, error: "unsupported POST body" }, 400);
+      return json({ success: false, error: "unsupported POST body" }, 200);
     }
 
     if (path === "/" || path === "") return json(API_ENDPOINTS);
     if (path === "/raw") {
       const target = url.searchParams.get("url") || "";
-      if (!target) return json({ error: "missing ?url=" }, 400);
+      if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       return json({ success: true, html: await fetchText(target) });
     }
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";
-      if (!q.trim()) return json({ error: "missing ?q=" }, 400);
+      if (!q.trim()) return json({ success: false, error: "missing ?q=" }, 200);
       return json(filterAnimeOnly(await search(q.trim())));
     }
     if (path === "/series" || path === "/movies") {
@@ -807,30 +805,30 @@ Deno.serve(async (req) => {
     if (path === "/anime") {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "series";
-      if (!slug) return json({ error: "missing ?slug=" }, 400);
+      if (!slug) return json({ success: false, error: "missing ?slug=" }, 200);
       return json(await detail(slug, type, url.searchParams.get("force") === "1"));
     }
     if (path === "/episode") {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "";
-      if (!slug) return json({ error: "missing ?slug=" }, 400);
+      if (!slug) return json({ success: false, error: "missing ?slug=" }, 200);
       return json(await episode(slug, type, url.searchParams.get("force") === "1"));
     }
     if (path === "/embed") {
       const embedUrl = url.searchParams.get("url") || "";
-      if (!embedUrl) return json({ error: "missing ?url=" }, 400);
+      if (!embedUrl) return json({ success: false, error: "missing ?url=" }, 200);
       return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1"));
     }
     if (path === "/hls") {
       const target = url.searchParams.get("url") || "";
-      if (!target) return new Response("missing ?url=", { status: 400, headers: cors });
+      if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       const playback = new URL(`${publicProtocol}//${url.host}${normalizedPrefix}/an-playback/hls`.replace(/([^:]\/)\/+/g, "$1"));
       playback.searchParams.set("url", target);
       const origin = url.searchParams.get("origin") || url.searchParams.get("parent") || url.searchParams.get("ref") || "";
       if (origin) playback.searchParams.set("origin", origin);
       return new Response(null, { status: 302, headers: { ...cors, Location: playback.toString(), "Cache-Control": "no-store" } });
     }
-    return json({ error: "not found", path }, 404);
+    return json({ success: false, error: "not found", path }, 200);
   } catch (e) {
     // Permanent safety net: AN upstream failures must never surface as a raw
     // Edge runtime 500/502 that blanks the app.  The frontend treats this JSON
