@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, onValue } from "@/lib/firebase";
+import {
+  GENERIC_CATEGORIES,
+  normalizeCastFrom,
+  normalizeCategoryFrom,
+  normalizeDirectorsFrom,
+  normalizeGenresFrom,
+  normalizeOverviewFrom,
+  normalizeRatingFrom,
+  normalizeYearFrom,
+} from "@/lib/contentMetadata";
 
 // AN cards are now admin-curated. The user panel reads ONLY from
 // `animesaltSelected/{slug}` in Firebase. Video URLs are NEVER stored —
 // they are resolved live from the AnimeSalt API at click time.
 
 const SELECTED_PATH = "animesaltSelected";
-const CACHE_KEY = "rs_cache_animesalt_selected_v1";
+const CACHE_KEY = "rs_cache_animesalt_selected_v2";
 const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|cartoon\s*network|nickelodeon|disney|pixar|tintin|tin\s*tin|avatar\s*the\s*last\s*airbender|sponge\s*bob|jurassic\s*world|sausage\s*party|maya\s*and\s*the\s*three|hazbin\s*hotel|captain\s*laserhawk|invincible|zig\s*and\s*sharko|twilight\s*of\s*the\s*gods|arcane|jentry\s*chau|vox\s*machina|dragon\s*prince|castlevania)\b/i;
 const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan)\b/i;
-const GENERIC_CATEGORIES = new Set(["", "anime", "animesalt"]);
-
 type SavedItem = {
   slug: string;
   title: string;
@@ -21,6 +29,8 @@ type SavedItem = {
   tmdbId?: number;
   rating?: string;
   overview?: string;
+  storyline?: string;
+  description?: string;
   backdrop?: string;
   genres?: string[];
   directors?: string[];
@@ -45,9 +55,6 @@ const writeCache = (items: AnimeItem[]) => {
   } catch {}
 };
 
-const normalizeSavedGenres = (genres: SavedItem["genres"]): string[] =>
-  Array.isArray(genres) ? genres.map((g) => String(g || "").trim()).filter(Boolean) : [];
-
 const mapSaved = (row: SavedItem): AnimeItem | null => {
   const slug = String(row?.slug || "").trim();
   const title = String(row?.title || "").trim();
@@ -57,26 +64,25 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
   const isMovie = String(row?.type || "").toLowerCase().includes("movie");
   const id = isMovie ? `an_mv_${slug}` : `an_${slug}`;
   const poster = String(row?.poster || "").trim();
-  const genres = normalizeSavedGenres(row?.genres);
-  const rawCategory = String(row?.category || "").trim();
-  const category = rawCategory && !GENERIC_CATEGORIES.has(rawCategory.toLowerCase())
-    ? rawCategory
-    : (genres.join(", ") || rawCategory || "Anime");
+  const genres = normalizeGenresFrom(row);
+  const category = normalizeCategoryFrom(row, genres, "Anime");
+  const cast = normalizeCastFrom(row, 12);
+  const directors = normalizeDirectorsFrom(row);
   return {
     id,
     title,
     poster,
     backdrop: String(row?.backdrop || poster || "").trim(),
-    year: String(row?.year || "").trim(),
-    rating: String(row?.rating || "").trim(),
+    year: normalizeYearFrom(row),
+    rating: normalizeRatingFrom(row),
     language: "Hindi",
     category,
     type: isMovie ? "movie" : "webseries",
-    storyline: String(row?.overview || "").trim(),
+    storyline: normalizeOverviewFrom(row),
     tmdbId: row?.tmdbId,
     genres: genres.length ? genres : undefined,
-    directors: Array.isArray(row?.directors) ? row.directors : undefined,
-    cast: Array.isArray(row?.cast) ? row.cast : row?.cast ? Object.values(row.cast) : undefined,
+    directors: directors.length ? directors : undefined,
+    cast: cast.length ? cast : undefined,
     source: "animesalt",
     sourceName: "AnimeSalt",
     anSlug: slug,
@@ -94,6 +100,7 @@ export function useSelectedAnimeSalt() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    try { localStorage.removeItem("rs_cache_animesalt_selected_v1"); } catch {}
     let selectedList: AnimeItem[] = readCache() || [];
     if (selectedList.length) {
       setItems(selectedList);
