@@ -423,6 +423,7 @@ function collectEmbedsFromHtml(html: string): string[] {
     const raw = decode(value || "");
     const abs = raw.startsWith("//") ? `https:${raw}` : raw;
     if (/^https?:\/\/[^\s"'<>]+\/video\/[a-f0-9]{16,}/i.test(abs)) out.add(abs);
+    if (/^https?:\/\/megaplay\.buzz\/stream\/s-\d+\/\d+\/(?:sub|dub)\b/i.test(abs)) out.add(abs);
   };
 
   const attrRe = /(?:src|data-src|data-embed|data-player|data-video|href)=["']([^"']+)["']/gi;
@@ -431,6 +432,9 @@ function collectEmbedsFromHtml(html: string): string[] {
 
   const anyRe = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]{16,}/gi;
   while ((m = anyRe.exec(html))) push(m[0]);
+
+  const megaRe = /https?:\/\/megaplay\.buzz\/stream\/s-\d+\/\d+\/(?:sub|dub)\b/gi;
+  while ((m = megaRe.exec(html))) push(m[0]);
 
   const multiRe = /multi-lang-plyr\/player\.php\?data=([A-Za-z0-9_\-=+/]+)/gi;
   while ((m = multiRe.exec(html))) {
@@ -442,7 +446,14 @@ function collectEmbedsFromHtml(html: string): string[] {
     } catch {}
   }
 
-  return Array.from(out);
+  // Prefer regional dubbed streams first.  AnimeSalt's MegaPlay pages expose
+  // both /sub and /dub; /sub can be valid but not Hindi, which caused AN to
+  // fetch/play later Naruto episodes that should be filtered out.
+  return Array.from(out).sort((a, b) => {
+    const ad = /\/dub\b/i.test(a) ? 0 : 1;
+    const bd = /\/dub\b/i.test(b) ? 0 : 1;
+    return ad - bd;
+  });
 }
 
 function parseMaster(masterUrl: string, body: string) {
@@ -734,15 +745,35 @@ async function postPlayerJson(embedUrl: string, hash: string) {
   return JSON.parse(text);
 }
 
+async function getMegaPlaySources(embedUrl: string) {
+  const origin = new URL(embedUrl).origin;
+  const page = await fetchText(embedUrl, { headers: { Referer: `${AN_BASE}/` } });
+  const dataId = page.match(/data-id=["'](\d+)["']/i)?.[1] || page.match(/\bid\s*[:=]\s*["']?(\d{3,})/i)?.[1] || "";
+  if (!dataId) throw new Error("MegaPlay data-id not found");
+  const res = await fetch(`${origin}/stream/getSources?id=${encodeURIComponent(dataId)}`, {
+    headers: {
+      "User-Agent": UA,
+      Accept: "application/json,text/javascript,*/*;q=0.01",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: embedUrl,
+      Origin: origin,
+    },
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error(`MegaPlay getSources ${res.status}`);
+  return await res.json();
+}
+
 async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   const cacheKey = `extract:${embedUrl}`;
   const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
-  const hash = new URL(embedUrl).pathname.match(/\/video\/([A-Za-z0-9_-]+)/)?.[1] || "";
-  if (!hash) throw new Error("AN embed hash not found");
   const origin = new URL(embedUrl).origin;
-  const jData = await postPlayerJson(embedUrl, hash);
-  const master = String(jData?.videoSource || jData?.securedLink || "").replace(/\\\//g, "/");
+  const isMegaPlay = /megaplay\.buzz\/stream\//i.test(embedUrl);
+  const hash = isMegaPlay ? "" : (new URL(embedUrl).pathname.match(/\/video\/([A-Za-z0-9_-]+)/)?.[1] || "");
+  if (!isMegaPlay && !hash) throw new Error("AN embed hash not found");
+  const jData = isMegaPlay ? await getMegaPlaySources(embedUrl) : await postPlayerJson(embedUrl, hash);
+  const master = String(jData?.sources?.file || jData?.videoSource || jData?.securedLink || jData?.file || "").replace(/\\\//g, "/");
   if (!master) throw new Error("AN player did not return HLS source");
   const body = await fetchMaster(master, embedUrl, origin);
   const parsedMaster = parseMaster(master, body);
@@ -754,6 +785,7 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   const streams = parsed.streams?.length ? parsed.streams : [{ url: master, label: "Auto", height: 0, bandwidth: 0, resolution: "" }];
   const out = {
     success: true,
+    hindiDub: /\/dub(?:[/?#]|$)/i.test(embedUrl),
     embedUrl,
     directUrl: master,
     videoSource: master,
@@ -770,29 +802,33 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
 }
 
 async function episode(slug: string, type = "", forceRefresh = false) {
-  if (!isAllowedAnimeItem({ slug, title: slug })) {
-    return { success: false, blocked: true, animeOnly: true, slug, error: "Blocked non-anime/cartoon slug" };
+  const cleanSlug = String(slug || "").trim();
+  if (/^https?:\/\//i.test(cleanSlug)) {
+    return await extractFromPlayer(cleanSlug, forceRefresh);
+  }
+  if (!isAllowedAnimeItem({ slug: cleanSlug, title: cleanSlug })) {
+    return { success: false, blocked: true, animeOnly: true, slug: cleanSlug, error: "Blocked non-anime/cartoon slug" };
   }
   const t = type === "movies" || type === "movie" ? "movies" : "episode";
-  const pageUrl = t === "movies" ? `${AN_BASE}/movies/${slug}/` : `${AN_BASE}/episode/${slug}/`;
+  const pageUrl = t === "movies" ? `${AN_BASE}/movies/${cleanSlug}/` : `${AN_BASE}/episode/${cleanSlug}/`;
   let html = "";
   try {
     html = await fetchText(pageUrl);
   } catch (e) {
-    return { success: false, playable: false, slug, pageUrl, error: (e as Error)?.message || String(e), retryable: true };
+    return { success: false, playable: false, slug: cleanSlug, pageUrl, error: (e as Error)?.message || String(e), retryable: true };
   }
   const embeds = collectEmbedsFromHtml(html);
-  if (!embeds.length) return { success: false, playable: false, slug, pageUrl, allEmbeds: [], error: "No AN embed found" };
+  if (!embeds.length) return { success: false, playable: false, slug: cleanSlug, pageUrl, allEmbeds: [], error: "No AN embed found" };
   let lastErr = "";
   for (const embed of embeds) {
     try {
       const data = await extractFromPlayer(embed, forceRefresh);
-      return { ...data, slug, pageUrl, allEmbeds: embeds };
+      return { ...data, slug: cleanSlug, pageUrl, allEmbeds: embeds };
     } catch (e) {
       lastErr = (e as Error)?.message || String(e);
     }
   }
-  return { success: false, playable: false, slug, pageUrl, allEmbeds: embeds, error: `No playable AN embed found${lastErr ? `: ${lastErr}` : ""}` };
+  return { success: false, playable: false, slug: cleanSlug, pageUrl, allEmbeds: embeds, error: `No playable AN embed found${lastErr ? `: ${lastErr}` : ""}` };
 }
 
 const API_ENDPOINTS = {
