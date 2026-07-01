@@ -1749,6 +1749,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, []);
 
+  // Hard reset playback position when the user navigates to a DIFFERENT
+  // episode/season without an explicit resume time. Fixes the bug where
+  // episode 2 continued from episode 1's timestamp.
+  const prevEpKeyRef = useRef<string>("");
+  useEffect(() => {
+    const key = `${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    const changed = prevEpKeyRef.current && prevEpKeyRef.current !== key;
+    prevEpKeyRef.current = key;
+    if (!changed) return;
+    const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
+    if (hasExplicitResume) return;
+    pendingSeek.current = 0;
+    const v = videoRef.current;
+    if (v) { try { v.currentTime = 0; } catch {} }
+  }, [currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+
+
 
   // Restore watch position (per-account)
   useEffect(() => {
