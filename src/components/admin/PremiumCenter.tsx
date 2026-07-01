@@ -23,7 +23,7 @@ type Tab = "overview" | "series" | "quality" | "download" | "plans" | "ads";
 
 interface SeriesRow {
   id: string;
-  path: "series" | "animeSaltSelected";
+  path: "series" | "animesaltSelected";
   title: string;
   poster?: string;
   year?: string | number;
