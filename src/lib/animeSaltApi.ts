@@ -20,6 +20,7 @@ const filterAnimeOnly = <T extends { title?: string; slug?: string }>(items: T[]
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
 const CACHE_TTL_PLAYBACK_MS = 4 * 60 * 60 * 1000;      // 4 hours — playback links generally last several hours
+const AN_CACHE_PREFIX = 'rs_an_cache_v4_separate_av';
 const memCache = new Map<string, { ts: number; data: any }>();
 
 // ===== In-flight request dedupe =====
@@ -54,14 +55,14 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
   const now = Date.now();
   if (mem && now - mem.ts < ttl) return mem.data;
   try {
-    const raw = localStorage.getItem(`rs_an_cache:${sanitizeKey(key)}`);
+      const raw = localStorage.getItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`);
     if (raw) {
       const val = JSON.parse(raw);
       if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
         memCache.set(key, { ts: Number(val.ts), data: val.data });
         return val.data;
       }
-      localStorage.removeItem(`rs_an_cache:${sanitizeKey(key)}`);
+      localStorage.removeItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`);
     }
   } catch {}
   return null;
@@ -70,14 +71,14 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
 function clearAsCache(kind: 'series' | 'movie' | 'episode', slug: string) {
   const key = `${kind}:${slug}`;
   memCache.delete(key);
-  try { localStorage.removeItem(`rs_an_cache:${sanitizeKey(key)}`); } catch {}
+  try { localStorage.removeItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`); } catch {}
 }
 
 function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: any) {
   const ts = Date.now();
   const key = `${kind}:${slug}`;
   memCache.set(key, { ts, data });
-  try { localStorage.setItem(`rs_an_cache:${sanitizeKey(key)}`, JSON.stringify({ ts, data })); } catch {}
+  try { localStorage.setItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`, JSON.stringify({ ts, data })); } catch {}
 }
 
 type AnimeSaltLink = { quality: string; url: string };
@@ -647,7 +648,7 @@ export const animeSaltApi = {
       const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug }, forceRefresh);
       if (directResult) {
         const normalized = normalizeSeriesPayload(directResult);
-        if (normalized.seasons.length > 0) {
+          if (normalized.seasons.length > 0) {
           writeAsCache('series', slug, normalized);
           return { success: true, data: normalized };
         }

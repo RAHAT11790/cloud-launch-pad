@@ -19,6 +19,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const TEXT_TIMEOUT_MS = 7_000;
 const PLAYER_TIMEOUT_MS = 6_500;
+const API_CACHE_VERSION = "v6-separate-av-only";
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
 const getCache = <T>(key: string, forceRefresh = false): T | null => {
   if (forceRefresh) {
@@ -260,7 +261,7 @@ async function search(q: string) {
 // ---------- DETAIL / EPISODES ----------
 async function detail(slug: string, type: string, forceRefresh = false) {
   const t = type === "movies" ? "movies" : "series";
-  const cacheKey = `detail:${t}:${slug}`;
+  const cacheKey = `detail:${API_CACHE_VERSION}:${t}:${slug}`;
   const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
   const html = await fetchText(`${AN_BASE}/${t}/${slug}/`);
@@ -354,19 +355,6 @@ async function detail(slug: string, type: string, forceRefresh = false) {
       episodes: s.episodes.sort((a, b) => a.number - b.number),
     }));
 
-  // Hindi-only playability filter. Only episodes whose AN embed actually
-  // resolves to a working HLS with a Hindi audio track are returned. Anything
-  // that would surface as a black-screen in the player is dropped here so the
-  // client never even sees the box. Results cached per-episode for 6h so a
-  // second refresh is instant.
-  if (t !== "movies") {
-    const allEpisodes = seasonsArr.flatMap((s) => s.episodes.map((e) => e.slug as string));
-    const verified = await verifyHindiPlayableBatch(allEpisodes);
-    seasonsArr = seasonsArr
-      .map((s) => ({ ...s, episodes: s.episodes.filter((e) => verified.get(e.slug) === true) }))
-      .filter((s) => s.episodes.length > 0);
-  }
-
   return setCache(cacheKey, {
     slug,
     type: t,
@@ -378,17 +366,19 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
     hindiFiltered: t !== "movies",
+    playbackPolicy: "fast-season-index; episode playback accepts only separate video playlists + separate Hindi audio",
   }, 60 * 60_000);
 }
 
 // ---------- HINDI PLAYABILITY VERIFICATION ----------
 async function verifyEpisodeHindiPlayable(epSlug: string): Promise<boolean> {
-  const key = `hindiOk:${epSlug}`;
+  const key = `hindiOk:${API_CACHE_VERSION}:${epSlug}`;
   const cached = getCache<boolean>(key);
   if (cached !== null) return cached;
   try {
     const data: any = await episode(epSlug, "", false);
     const ok = !!data?.success
+      && data?.separateAudioVideo === true
       && Array.isArray(data.streams) && data.streams.length > 0
       && (data?.hindiDub === true || (Array.isArray(data.audio) && data.audio.some((a: any) =>
         a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`),
@@ -492,10 +482,6 @@ function parseMaster(masterUrl: string, body: string) {
     }
   }
 
-  if (streams.length === 0 && /^#EXTM3U/i.test(body) && /#EXTINF:/i.test(body)) {
-    streams.push({ url: masterUrl, filename: "auto.m3u8", resolution: "", height: 0, bandwidth: 0, label: "Auto" });
-  }
-
   streams.sort((a, b) => b.height - a.height);
   const uniqueAudio = uniqueBy(audio, (a) => a.uri);
   // Default audio policy: Hindi ALWAYS wins. Only fall back to the HLS-declared
@@ -504,11 +490,14 @@ function parseMaster(masterUrl: string, body: string) {
   const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
   const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
   uniqueAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
+  const separateAudioVideo = streams.length > 0 && uniqueAudio.length > 0;
   return {
     streams: uniqueBy(streams, (s) => s.url),
     audio: uniqueAudio,
     defaultAudioIdx: defaultIdx,
     preferredAudio: uniqueAudio[defaultIdx]?.name || "",
+    separateAudioVideo,
+    rejected: separateAudioVideo ? "" : "mixed/master-only HLS rejected: video and audio are not separate",
   };
 }
 
@@ -543,6 +532,9 @@ async function isWorkingMediaPlaylist(url: string, embedUrl: string, origin: str
 }
 
 async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
+  if (parsed?.separateAudioVideo !== true) {
+    return { streams: [], audio: [], defaultAudioIdx: 0, preferredAudio: "", separateAudioVideo: false, rejected: "mixed/master-only HLS rejected" };
+  }
   const [streams, audio] = await Promise.all([
     Promise.all((parsed.streams || []).map(async (stream: any) => ({ stream, ok: await isWorkingMediaPlaylist(stream.url, embedUrl, origin) }))),
     Promise.all((parsed.audio || []).map(async (track: any) => ({ track, ok: await isWorkingMediaPlaylist(track.uri, embedUrl, origin) }))),
@@ -562,6 +554,7 @@ async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
     audio: workingAudio,
     defaultAudioIdx: defaultIdx,
     preferredAudio: workingAudio[defaultIdx]?.name || "",
+    separateAudioVideo: workingStreams.length > 0 && workingAudio.length > 0,
     rejected: workingStreams.length === 0 ? "no validated video playlists" : "",
   };
 }
@@ -765,7 +758,7 @@ async function getMegaPlaySources(embedUrl: string) {
 }
 
 async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
-  const cacheKey = `extract:${embedUrl}`;
+  const cacheKey = `extract:${API_CACHE_VERSION}:${embedUrl}`;
   const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
   const origin = new URL(embedUrl).origin;
@@ -777,21 +770,26 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   if (!master) throw new Error("AN player did not return HLS source");
   const body = await fetchMaster(master, embedUrl, origin);
   const parsedMaster = parseMaster(master, body);
-  // Some AnimeSalt/CDN playlists reject Edge-side validation but still play
-  // correctly through the browser HLS proxy. Never drop a valid master just
-  // because the server probe failed — that was causing endless loading.
-  const filtered = await filterWorkingHls(parsedMaster, embedUrl, origin).catch(() => null);
-  const parsed = filtered?.streams?.length ? filtered : parsedMaster;
-  const streams = parsed.streams?.length ? parsed.streams : [{ url: master, label: "Auto", height: 0, bandwidth: 0, resolution: "" }];
+  if (parsedMaster.separateAudioVideo !== true) {
+    throw new Error("Rejected mixed/master-only AN stream: video and audio are not separate");
+  }
+  const hasHindiAudio = (parsedMaster.audio || []).some((a: any) => a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`));
+  if (!hasHindiAudio) {
+    throw new Error("Rejected AN stream without Hindi audio");
+  }
+  const parsed = parsedMaster;
+  const streams = parsed.streams || [];
+  const primaryVideo = streams[0]?.url || "";
   const out = {
     success: true,
-    hindiDub: /\/dub(?:[/?#]|$)/i.test(embedUrl),
+    hindiDub: true,
+    separateAudioVideo: true,
     embedUrl,
-    directUrl: master,
-    videoSource: master,
-    securedLink: master,
+    directUrl: primaryVideo,
+    videoSource: primaryVideo,
+    securedLink: primaryVideo,
     poster: jData?.videoImage || "",
-    sources: [{ type: "hls", master, videoSource: master, securedLink: master, streams, audio: parsed.audio || [] }],
+    sources: [{ type: "hls", separateAudioVideo: true, streams, audio: parsed.audio || [] }],
     streams,
     audio: parsed.audio || [],
     links: streams.map((s: any) => ({ label: s.label, quality: s.label, height: s.height, url: s.url })),
