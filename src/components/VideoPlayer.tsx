@@ -16,6 +16,7 @@ import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -928,27 +929,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     );
   }, [anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, normalizedLanguageTracks, src]);
 
-  const infoCast = useMemo(() => {
-    if (!anime?.cast?.length) return [];
-    return anime.cast.filter((person) => person?.name || person?.character || person?.photo).slice(0, 12);
-  }, [anime]);
+  const infoCast = useMemo(() => normalizeCastFrom(anime, 24), [anime]);
 
   const infoDirectors = useMemo(() => {
-    if (!anime?.directors?.length) return [];
-    return anime.directors.map((name) => String(name || "").trim()).filter(Boolean).slice(0, 4);
-  }, [anime?.directors]);
+    const directors = normalizeDirectorsFrom(anime);
+    return directors.length ? directors : [];
+  }, [anime]);
 
-  const infoStoryline = anime?.storyline || (anime as any)?.overview || "No storyline available yet.";
+  const infoStoryline = normalizeOverviewFrom(anime) || "No storyline available yet.";
+
+  const infoCategories = useMemo(() => contentCategoryLabels(anime).slice(0, 6), [anime]);
 
   const infoMetaItems = useMemo(() => {
     const items = [
       anime?.rating ? `★ ${anime.rating}` : "",
       anime?.year ? String(anime.year) : "",
-      anime?.category ? String(anime.category) : "",
+      infoCategories.length ? infoCategories.join(", ") : (anime?.category ? String(anime.category) : ""),
       anime?.type === "webseries" ? "Anime" : "Movie",
     ].filter(Boolean);
     return items;
-  }, [anime?.category, anime?.rating, anime?.type, anime?.year]);
+  }, [anime?.category, anime?.rating, anime?.type, anime?.year, infoCategories]);
 
   const downloadLanguageChoices = useMemo(() => {
     const labels = new Set<string>();
