@@ -17,6 +17,7 @@ let lastPrune = 0;
 const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 const localKey = (kind: string, slug: string) => `rs_an_playback_v4_separate_av:${kind}:${safeKey(slug)}`;
 const fbPath = (kind: string, slug: string) => `anPlaybackCache_v4_separate_av/${kind}/${safeKey(slug)}`;
+const FB_CACHE_ROOT =
 
 export async function pruneExpiredPlaybackCache() {
   const now = Date.now();
