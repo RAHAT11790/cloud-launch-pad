@@ -8621,6 +8621,12 @@ ${footerLinksHtml}
  <SecurityCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
+ {/* ==================== PREMIUM CENTER ==================== */}
+ {activeSection === "premium-center" && (
+ <PremiumCenter />
+ )}
+
+
 
   {/* ==================== FIREBASE ANALYTICS ==================== */}
   {activeSection === "fb-analytics" && (
