@@ -287,13 +287,16 @@ const verifyAnPlayable = async (item: ApiItem, force = false): Promise<boolean> 
   return ok;
 };
 
-const filterPlayableItems = async (items: ApiItem[], force = false): Promise<ApiItem[]> => {
+const filterPlayableItems = async (items: ApiItem[], force = false, onProgress?: (done: number, total: number) => void): Promise<ApiItem[]> => {
   const out: ApiItem[] = [];
   const queue = [...items];
+  let done = 0;
   const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
     while (queue.length) {
       const item = queue.shift()!;
       if (await verifyAnPlayable(item, force)) out.push(item);
+      done += 1;
+      onProgress?.(done, items.length);
     }
   });
   await Promise.all(workers);
