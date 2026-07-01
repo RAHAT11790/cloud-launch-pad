@@ -1912,6 +1912,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <p className="text-[10px] text-muted-foreground">Watch ads, earn coins, unlock premium</p>
           </div>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
+        </div>
         <div onClick={() => setActivePanel("settings")}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <Settings className="w-5 h-5 text-primary" />
