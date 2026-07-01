@@ -62,7 +62,7 @@ export default function FreePremium() {
           setCoinAnimTick((t) => t + 1);
           toast({ title: "+1 Coin earned 🎉", description: `Balance: ${res.coins} coins` });
         } else {
-          const reason = res.reason;
+          const reason = (res as any).reason;
           if (reason === "already_watched") toast({ title: "Already watched today", description: "Try another ad." });
           else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `You can watch ${settings.dailyAdCap} ads/day.` });
           else if (reason === "no_user") toast({ title: "Login required", variant: "destructive" });
