@@ -18,6 +18,11 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
 const AN_API_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api`;
 const AN_PLAYBACK_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback`;
 const AN_API_HLS_PROXY_PREFIX = `${AN_PLAYBACK_BASE || AN_API_BASE}/hls`;
+const AN_AUDIO_LANGUAGE_PREF_KEY = "rs_an_audio_language_pref";
+
+const getSavedAnAudioLanguagePref = () => {
+  try { return localStorage.getItem(AN_AUDIO_LANGUAGE_PREF_KEY) || ""; } catch { return ""; }
+};
 
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
@@ -2578,7 +2583,7 @@ const Index = () => {
       let qOpts = getEpisodeQualityOptions(clickedEp);
       let nextAudioTracks = clickedEp.audioTracks;
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
-      let preferredLanguage = (playerState as any)?.selectedLanguage;
+      let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
       if (playerState?.anime.source === "animesalt" && isAnimeSaltSentinel(clickedEp.link)) {
         const resolved = await resolveAnEpisodePlayback(slugFromSentinel(clickedEp.link));
         if (resolved) Object.assign(clickedEp, resolved);
@@ -2589,7 +2594,7 @@ const Index = () => {
           nextSrc = built.src;
           qOpts = built.qualityOptions || [];
           nextAudioTracks = built.audioTracks;
-          preferredLanguage = built.preferredLanguage || preferredLanguage;
+          preferredLanguage = preferredLanguage || built.preferredLanguage;
         }
       }
       if (!nextSrc) {
@@ -2627,7 +2632,7 @@ const Index = () => {
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
     let nextAudioTracks = ep.audioTracks;
     let nextSubtitleTracks = (ep as any).subtitleTracks;
-    let preferredLanguage = (playerState as any)?.selectedLanguage;
+    let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
     if (playerState.anime.source === "animesalt" && isAnimeSaltSentinel(ep.link)) {
       const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link));
       if (resolved) Object.assign(ep, resolved);
@@ -2638,7 +2643,7 @@ const Index = () => {
         nextSrc = built.src;
         qOpts = built.qualityOptions || [];
         nextAudioTracks = built.audioTracks;
-        preferredLanguage = built.preferredLanguage || preferredLanguage;
+        preferredLanguage = preferredLanguage || built.preferredLanguage;
       }
     }
     if (!nextSrc) {
@@ -3077,7 +3082,7 @@ const Index = () => {
                   let nextSrc = getEpisodeSrc(nextEp);
                   let qOpts = getEpisodeQualityOptions(nextEp);
                   let nextAudioTracks = nextEp.audioTracks;
-                  let preferredLanguage = (playerState as any)?.selectedLanguage;
+                  let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
                   if (playerState.anime.source === "animesalt" && isAnimeSaltSentinel(nextEp.link)) {
                     // Resolve fresh HLS URLs for the next episode on-demand.
                     const resolved = await resolveAnEpisodePlayback(slugFromSentinel(nextEp.link));
@@ -3089,7 +3094,7 @@ const Index = () => {
                       nextSrc = built.src;
                       qOpts = built.qualityOptions || [];
                       nextAudioTracks = built.audioTracks;
-                      preferredLanguage = built.preferredLanguage || preferredLanguage;
+                      preferredLanguage = preferredLanguage || built.preferredLanguage;
                     }
                   }
                   if (!nextSrc) {
