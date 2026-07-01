@@ -1917,6 +1917,19 @@ const Index = () => {
           const enriched: AnimeItem = {
             ...playableAnime,
             ...resolved.fields,
+            // Preserve Admin-saved Info Modal metadata. Playback resolver only
+            // owns stream fields; it must never wipe overview/cast/directors.
+            title: playableAnime.title,
+            poster: playableAnime.poster || (resolved.fields as any).poster,
+            backdrop: playableAnime.backdrop || (resolved.fields as any).backdrop,
+            rating: playableAnime.rating || (resolved.fields as any).rating,
+            year: playableAnime.year || (resolved.fields as any).year,
+            category: playableAnime.category || (resolved.fields as any).category,
+            storyline: playableAnime.storyline || (playableAnime as any).overview || (resolved.fields as any).storyline,
+            overview: (playableAnime as any).overview || playableAnime.storyline || (resolved.fields as any).overview,
+            genres: playableAnime.genres?.length ? playableAnime.genres : (resolved.fields as any).genres,
+            directors: playableAnime.directors?.length ? playableAnime.directors : (resolved.fields as any).directors,
+            cast: playableAnime.cast?.length ? playableAnime.cast : (resolved.fields as any).cast,
             audioTracks: resolved.audioTracks as any,
           };
           await openPlayerFromAnime(enriched, { seasonIdx: sIdx, epIdx: eIdx });
@@ -1946,6 +1959,8 @@ const Index = () => {
           const enriched: AnimeItem = {
             ...playableAnime,
             seasons,
+            storyline: playableAnime.storyline || (playableAnime as any).overview,
+            overview: (playableAnime as any).overview || playableAnime.storyline,
             audioTracks: firstAudio || (playableAnime.audioTracks as any),
           };
           await openPlayerFromAnime(enriched, { seasonIdx: targetSIdx, epIdx: targetEIdx });
