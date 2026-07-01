@@ -325,6 +325,7 @@ export default function AnManager({
   const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 });
+  const [verifyProgress, setVerifyProgress] = useState({ done: 0, total: 0 });
   const [category, setCategory] = useState("");
   const [imgVersion, setImgVersion] = useState(0);
   const [globalEnabled, setGlobalEnabled] = useState(true);
@@ -348,9 +349,14 @@ export default function AnManager({
       // de-dup by slug, prefer series flavour
       const dedup = new Map<string, ApiItem>();
       mapped.forEach((x) => { if (!dedup.has(x.slug)) dedup.set(x.slug, x); });
-      setApiItems(Array.from(dedup.values()));
+      const candidates = Array.from(dedup.values());
+      setVerifyProgress({ done: 0, total: candidates.length });
+      const playable = await filterPlayableItems(candidates, forceRefresh, (done, total) => setVerifyProgress({ done, total }));
+      setApiItems(playable);
     } catch (e: any) {
       toast.error("AN API load failed: " + (e?.message || "unknown"));
+    } finally {
+      setVerifyProgress({ done: 0, total: 0 });
     }
   };
 
