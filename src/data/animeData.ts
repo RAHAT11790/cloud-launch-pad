@@ -55,6 +55,8 @@ export interface AnimeItem {
   category: string;
   type: "webseries" | "movie";
   storyline: string;
+  overview?: string;
+  description?: string;
   seasons?: Season[];
   movieLink?: string;
   movieLink480?: string;
