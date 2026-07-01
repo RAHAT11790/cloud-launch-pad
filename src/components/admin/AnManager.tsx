@@ -249,16 +249,19 @@ const playbackHasMedia = (payload: any) => {
   const data = payload?.data || payload;
   const streams = Array.isArray(data?.streams) ? data.streams : [];
   const links = Array.isArray(data?.links) ? data.links : [];
-  const embeds = Array.isArray(data?.allEmbeds) ? data.allEmbeds : Array.isArray(data?.embedUrls) ? data.embedUrls : [];
   const audio = Array.isArray(data?.audio) ? data.audio : [];
+  const sourceStreams = Array.isArray(data?.sources)
+    ? data.sources.flatMap((s: any) => Array.isArray(s?.streams) ? s.streams : [])
+    : [];
   const sourceAudio = Array.isArray(data?.sources)
     ? data.sources.flatMap((s: any) => Array.isArray(s?.audio) ? s.audio : [])
     : [];
-  const hasVideo = streams.length > 0 || links.length > 0 || embeds.length > 0 || !!data?.embedUrl || !!data?.directUrl || !!data?.videoSource || !!data?.securedLink;
-  // If AnimeSalt gives separate audio, keep only when audio is present.  Some
-  // masters are self-contained, so video-only responses without declared audio
-  // are still accepted to avoid false negatives.
-  const hasAudio = audio.length > 0 || sourceAudio.length > 0 || !Array.isArray(data?.audio);
+  const hlsLinks = links.filter((l: any) => /\.m3u8(?:$|\?)/i.test(String(l?.url || l || "")));
+  const hasVideo = streams.length > 0 || sourceStreams.length > 0 || hlsLinks.length > 0 || /\.m3u8(?:$|\?)/i.test(String(data?.directUrl || data?.videoSource || data?.securedLink || ""));
+  const declaredAudio = audio.length + sourceAudio.length;
+  // Admin list must contain only titles whose real video stream is resolved.
+  // Embed-only pages are rejected because they may fail later in the player.
+  const hasAudio = declaredAudio > 0 || !Array.isArray(data?.audio);
   return !!hasVideo && !!hasAudio && data?.success !== false;
 };
 
@@ -273,11 +276,14 @@ const verifyAnPlayable = async (item: ApiItem, force = false): Promise<boolean> 
     } else {
       const series: any = await animeSaltApi.getSeries(item.slug, force);
       const seasons = series?.data?.seasons || series?.seasons || [];
-      const firstEp = seasons.flatMap((s: any) => Array.isArray(s?.episodes) ? s.episodes : [])[0];
-      const epSlug = String(firstEp?.slug || firstEp?.episodeSlug || "").trim();
-      if (epSlug) {
-        const ep = await animeSaltApi.getEpisode(epSlug, force);
-        ok = playbackHasMedia(ep);
+      const epSlugs = seasons
+        .flatMap((s: any) => Array.isArray(s?.episodes) ? s.episodes : [])
+        .map((ep: any) => String(ep?.slug || ep?.episodeSlug || "").trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      for (const epSlug of epSlugs) {
+        const ep = await animeSaltApi.getEpisode(epSlug, force).catch(() => null);
+        if (playbackHasMedia(ep)) { ok = true; break; }
       }
     }
   } catch {
@@ -440,6 +446,8 @@ export default function AnManager({
 
   // Save one (with TMDB auto-pick if exactly 1 result; otherwise opens picker)
   const saveOne = async (item: ApiItem, opts: { skipPicker?: boolean } = {}) => {
+    const playable = await verifyAnPlayable(item, true);
+    if (!playable) throw new Error("AN playback/audio/video unavailable — skipped");
     if (!getTmdbApiKey()) throw new Error("TMDB API key required — AN details fallback is disabled");
     const cleaned = cleanTitleForTmdb(item.title);
     const isSeries = item.type === "series";
