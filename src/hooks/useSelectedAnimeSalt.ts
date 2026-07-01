@@ -74,6 +74,9 @@ const mergeBySlug = (...groups: AnimeItem[][]) => {
   return Array.from(map.values()).sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0));
 };
 
+const normalizeSavedGenres = (genres: SavedItem["genres"]): string[] =>
+  Array.isArray(genres) ? genres.map((g) => String(g || "").trim()).filter(Boolean) : [];
+
 const mapSaved = (row: SavedItem): AnimeItem | null => {
   const slug = String(row?.slug || "").trim();
   const title = String(row?.title || "").trim();
@@ -83,6 +86,8 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
   const isMovie = String(row?.type || "").toLowerCase().includes("movie");
   const id = isMovie ? `an_mv_${slug}` : `an_${slug}`;
   const poster = String(row?.poster || "").trim();
+  const genres = normalizeSavedGenres(row?.genres);
+  const category = String(row?.category || genres.join(", ") || "Anime").trim() || "Anime";
   return {
     id,
     title,
@@ -91,11 +96,11 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
     year: String(row?.year || "").trim(),
     rating: String(row?.rating || "").trim(),
     language: "Hindi",
-    category: String(row?.category || "Anime").trim() || "Anime",
+    category,
     type: isMovie ? "movie" : "webseries",
     storyline: String(row?.overview || "").trim(),
     tmdbId: row?.tmdbId,
-    genres: Array.isArray(row?.genres) ? row.genres : undefined,
+    genres: genres.length ? genres : undefined,
     directors: Array.isArray(row?.directors) ? row.directors : undefined,
     cast: Array.isArray(row?.cast) ? row.cast : row?.cast ? Object.values(row.cast) : undefined,
     source: "animesalt",
@@ -144,16 +149,15 @@ const mapApiItem = (row: any): AnimeItem | null => {
 };
 
 export function useSelectedAnimeSalt() {
-  const initial = mergeBySlug(readApiCache() || [], readCache() || []);
+  const initial = readCache() || [];
   const [items, setItems] = useState<AnimeItem[]>(initial || []);
   const [loading, setLoading] = useState(!initial);
 
   useEffect(() => {
     let cancelled = false;
     let selectedList: AnimeItem[] = readCache() || [];
-    const cachedApi = readApiCache() || [];
-    if (cachedApi.length || selectedList.length) {
-      setItems(mergeBySlug(cachedApi, selectedList));
+    if (selectedList.length) {
+      setItems(selectedList);
       setLoading(false);
     }
 
@@ -179,14 +183,11 @@ export function useSelectedAnimeSalt() {
         .filter(Boolean) as AnimeItem[];
       // Newest first
       selectedList.sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
-      const apiItems = readApiCache() || [];
-      setItems(mergeBySlug(apiItems, selectedList));
+      setItems(selectedList);
       writeCache(selectedList);
       setLoading(false);
-      void loadApiCards(false);
     });
 
-    void loadApiCards(false);
     return () => { cancelled = true; unsub(); };
   }, []);
 
