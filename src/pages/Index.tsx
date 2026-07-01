@@ -490,6 +490,8 @@ const mergeAnimeCards = (...groups: AnimeItem[][]) => {
     year: incoming.year || base.year,
     category: incoming.category || base.category,
     storyline: incoming.storyline || base.storyline,
+    overview: incoming.overview || base.overview,
+    description: incoming.description || base.description,
     genres: incoming.genres?.length ? incoming.genres : base.genres,
     directors: incoming.directors?.length ? incoming.directors : base.directors,
     cast: incoming.cast?.length ? incoming.cast : base.cast,
