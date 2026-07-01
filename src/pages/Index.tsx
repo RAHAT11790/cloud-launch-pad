@@ -479,6 +479,13 @@ const mergeAnimeCards = (...groups: AnimeItem[][]) => {
   const mergeRich = (base: AnimeItem, incoming: AnimeItem): AnimeItem => ({
     ...base,
     ...incoming,
+    seasons: incoming.seasons?.length ? incoming.seasons : base.seasons,
+    movieLink: incoming.movieLink || base.movieLink,
+    movieLink480: incoming.movieLink480 || base.movieLink480,
+    movieLink720: incoming.movieLink720 || base.movieLink720,
+    movieLink1080: incoming.movieLink1080 || base.movieLink1080,
+    movieLink4k: incoming.movieLink4k || base.movieLink4k,
+    audioTracks: incoming.audioTracks?.length ? incoming.audioTracks : base.audioTracks,
     rating: incoming.rating || base.rating,
     year: incoming.year || base.year,
     category: incoming.category || base.category,
