@@ -271,7 +271,7 @@ const verifyAnPlayable = async (item: ApiItem, force = false): Promise<boolean> 
       const movie = await animeSaltApi.getMovie(item.slug, force);
       ok = playbackHasMedia(movie?.data || movie);
     } else {
-      const series = await animeSaltApi.getSeries(item.slug, force);
+      const series: any = await animeSaltApi.getSeries(item.slug, force);
       const seasons = series?.data?.seasons || series?.seasons || [];
       const firstEp = seasons.flatMap((s: any) => Array.isArray(s?.episodes) ? s.episodes : [])[0];
       const epSlug = String(firstEp?.slug || firstEp?.episodeSlug || "").trim();
