@@ -89,8 +89,24 @@ export default function WeeklyEpisodeManager({
     return map;
   }, [webseriesData]);
 
-  const countEpisodes = (s: any) =>
-    (s?.seasons || []).reduce((acc: number, se: any) => acc + (se?.episodes?.length || 0), 0);
+  const countEpisodes = (s: any) => {
+    if (!s) return 0;
+    const fromIndex = Number(s?.episodeCount);
+    if (Number.isFinite(fromIndex) && fromIndex > 0) return fromIndex;
+    const values = (v: any) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
+    const sumSeasons = (seasons: any) => values(seasons).reduce((n: number, se: any) => n + values(se?.episodes).length, 0);
+    const direct = sumSeasons(s?.seasons);
+    if (direct > 0) return direct;
+    const custom = sumSeasons(s?.customSeasons);
+    if (custom > 0) return custom;
+    if (s?.seasonsByLanguage && typeof s.seasonsByLanguage === "object") {
+      const lang = Math.max(0, ...Object.values(s.seasonsByLanguage).map(sumSeasons));
+      if (lang > 0) return lang;
+    }
+    const declared = Number(s?.totalEpisodes || s?.numberOfEpisodes || 0);
+    return Number.isFinite(declared) && declared > 0 ? declared : 0;
+  };
+
 
   const scheduledIds = Object.keys(schedules);
   const availableSeries = useMemo(() => {
