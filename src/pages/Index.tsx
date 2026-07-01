@@ -1378,7 +1378,8 @@ const Index = () => {
         const withProgress = Array.from(merged.values()).filter((i: any) => {
           // Respect 30-day retention window
           if (i.watchedAt && now - i.watchedAt > THIRTY_DAYS) return false;
-          if (i.id?.startsWith('as_')) return true;
+          const idStr = String(i.id || "");
+          if (idStr.startsWith('as_') || idStr.startsWith('an_')) return true;
           return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
         withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
