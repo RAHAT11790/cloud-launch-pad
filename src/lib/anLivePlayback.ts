@@ -15,8 +15,8 @@ const mem = new Map<string, { expiresAt: number; data: any }>();
 let lastPrune = 0;
 
 const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
-const localKey = (kind: string, slug: string) => `rs_an_playback:${kind}:${safeKey(slug)}`;
-const fbPath = (kind: string, slug: string) => `anPlaybackCache/${kind}/${safeKey(slug)}`;
+const localKey = (kind: string, slug: string) => `rs_an_playback_v2:${kind}:${safeKey(slug)}`;
+const fbPath = (kind: string, slug: string) => `anPlaybackCache_v2/${kind}/${safeKey(slug)}`;
 
 export async function pruneExpiredPlaybackCache() {
   const now = Date.now();
