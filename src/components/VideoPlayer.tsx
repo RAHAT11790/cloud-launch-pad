@@ -2877,9 +2877,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     lastEpisodeKeyRef.current = episodeKey;
     instantSwitchRef.current = true;
     const nextQualityOptions: QualityOption[] = [{ label: "Auto", src }, ...(qualityOptions || []).filter((q) => q.src)];
+    let savedQualityLabel = "";
+    try { savedQualityLabel = localStorage.getItem("rs_preferred_quality") || ""; } catch {}
     const preservedQuality = manualQualitySelectedRef.current && currentQuality !== "Auto"
       ? nextQualityOptions.find((q) => q.label === currentQuality)
-      : null;
+      : (savedQualityLabel && savedQualityLabel !== "Auto"
+          ? nextQualityOptions.find((q) => q.label === savedQualityLabel && (!is4KLabel(q.label) || isPremium))
+          : null);
+    if (preservedQuality) manualQualitySelectedRef.current = true;
     const baseRawSrc = preservedQuality?.src || src;
     const isFastHlsSource = isHlsLikeUrl(baseRawSrc);
     const hadManualServer = manualServerSelectedRef.current;
