@@ -521,7 +521,9 @@ const splitCategoryLabels = (value?: string | null) => {
 const categoryMatches = (item: AnimeItem, activeCategory: string) => {
   if (activeCategory === "All") return true;
   const active = activeCategory.trim().toLowerCase();
-  return splitCategoryTokens(item.category).includes(active);
+  const tokens = splitCategoryTokens(item.category);
+  const rawCategory = String(item.category || "").toLowerCase();
+  return tokens.some((token) => token === active || token.includes(active) || active.includes(token)) || rawCategory.includes(active);
 };
 
 const normalizeRouteLookup = (value?: string | null) => String(value || "").trim().toLowerCase();
@@ -568,7 +570,12 @@ const preloadImage = (src?: string | null) => {
 // Admin-saved media URLs for AN cards.
 const prefetchAnimePlayback = (anime: AnimeItem) => {
   if (!anime) return;
-  const isAn = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+  const isAn = anime.source === "animesalt"
+    || String(anime.id || "").startsWith("as_")
+    || String(anime.id || "").startsWith("an_")
+    || String(anime.id || "").startsWith("an_mv_")
+    || !!anime.anSlug
+    || !!anime.animeSaltSlug;
   if (isAn) return;
   try { loadFullFirebaseAnimeItem(anime); } catch {}
 };
@@ -598,6 +605,13 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
     {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
     <div className="absolute bottom-0 left-0 right-0 p-2">
       <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>{anime.title}</p>
+      {(anime.rating || anime.year) && (
+        <p className="mt-1 text-[8px] text-white/85 flex items-center gap-1" style={{ textShadow: "0 1px 5px rgba(0,0,0,0.9)" }}>
+          {anime.rating ? <span>★ {anime.rating}</span> : null}
+          {anime.rating && anime.year ? <span className="opacity-50">·</span> : null}
+          {anime.year ? <span>{anime.year}</span> : null}
+        </p>
+      )}
     </div>
   </div>
 );
