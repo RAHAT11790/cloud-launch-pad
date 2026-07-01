@@ -9243,7 +9243,7 @@ ${footerLinksHtml}
  <CachedImg src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
  <div className="flex-1 text-left min-w-0">
  <p className="text-[11px] font-semibold text-white truncate">{s.title}</p>
- <p className="text-[9px] text-zinc-500">{s.seasons ? (Array.isArray(s.seasons) ? s.seasons.length : Object.keys(s.seasons).length) : 0} seasons</p>
+ <p className="text-[9px] text-zinc-500">{Number(s.seasonCount) || (Array.isArray(s.seasons) ? s.seasons.length : (s.seasons && typeof s.seasons === "object" ? Object.keys(s.seasons).length : 0))} seasons{Number(s.episodeCount) > 0 ? ` • ${s.episodeCount} eps` : ""}</p>
  </div>
  {selectedSeriesId === s.id && <Check size={14} className="text-cyan-400 flex-shrink-0" />}
  </button>
