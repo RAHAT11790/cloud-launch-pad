@@ -1903,7 +1903,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
         <div
-          onClick={() => { onClose(); navigate("/free-premium"); }}
+          onClick={() => { onClose(); window.location.assign("/free-premium"); }}
           className="flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/8 to-transparent hover:border-amber-400/60"
         >
           <Gift className="w-5 h-5" style={{ color: "hsl(45,90%,55%)" }} />
