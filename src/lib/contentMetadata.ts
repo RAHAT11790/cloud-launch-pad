@@ -62,7 +62,18 @@ export const normalizeYearFrom = (row: any): string => {
 };
 
 export const normalizeOverviewFrom = (row: any): string =>
-  firstText(row?.overview, row?.storyline, row?.description, row?.plot, row?.synopsis, row?.summary);
+  firstText(
+    row?.overview,
+    row?.storyline,
+    row?.description,
+    row?.plot,
+    row?.synopsis,
+    row?.summary,
+    row?.tmdbOverview,
+    row?.tmdb?.overview,
+    row?.details?.overview,
+    row?.details?.description,
+  );
 
 const resolveTmdbPhoto = (photo: string) => {
   if (!photo) return "";
@@ -73,7 +84,7 @@ const resolveTmdbPhoto = (photo: string) => {
 export type NormalizedCastPerson = { name: string; character?: string; photo?: string };
 
 export const normalizeCastFrom = (row: any, limit = 12): NormalizedCastPerson[] => {
-  const raw = row?.cast ?? row?.voiceArtists ?? row?.voiceArtist ?? row?.voice_actors ?? row?.voiceActors ?? row?.actors ?? row?.stars ?? row?.credits?.cast;
+  const raw = row?.cast ?? row?.voiceArtists ?? row?.voiceArtist ?? row?.voice_artists ?? row?.voice_actors ?? row?.voiceActors ?? row?.actors ?? row?.stars ?? row?.credits?.cast ?? row?.tmdb?.credits?.cast;
   const seen = new Set<string>();
   const out: NormalizedCastPerson[] = [];
   values(raw).forEach((entry) => {
@@ -90,13 +101,13 @@ export const normalizeCastFrom = (row: any, limit = 12): NormalizedCastPerson[] 
     }
     if (!entry || typeof entry !== "object") return;
     const obj = entry as Record<string, unknown>;
-    const name = firstText(obj.name, obj.original_name, obj.title, obj.actor, obj.artist, obj.voice, obj.voiceActor);
+    const name = firstText(obj.name, obj.original_name, obj.title, obj.actor, obj.artist, obj.voice, obj.voiceActor, obj.voice_actor);
     if (!name) return;
     const key = name.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    const character = firstText(obj.character, obj.role, obj.as, obj.voiceRole);
-    const photo = resolveTmdbPhoto(firstText(obj.photo, obj.profile, obj.profileUrl, obj.profile_url, obj.image, obj.avatar, obj.profile_path));
+    const character = firstText(obj.character, obj.role, obj.as, obj.voiceRole, obj.voice_role, obj.characters);
+    const photo = resolveTmdbPhoto(firstText(obj.photo, obj.profile, obj.profileUrl, obj.profile_url, obj.image, obj.avatar, obj.profile_path, obj.poster, obj.picture));
     out.push({ name, ...(character ? { character } : {}), ...(photo ? { photo } : {}) });
   });
   return out;
