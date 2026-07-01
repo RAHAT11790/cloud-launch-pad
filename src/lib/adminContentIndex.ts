@@ -15,28 +15,34 @@ const values = (value: any): any[] => Array.isArray(value) ? value : (value && t
 const stripLegacyAnFromAdminList = (items: any[]) => (items || []).filter((item) => !isLegacyAnEntry(item?.id, item));
 
 const countEpisodes = (item: any) => {
-  if (Number.isFinite(Number(item?.episodeCount))) return Number(item.episodeCount) || 0;
+  if (Number.isFinite(Number(item?.episodeCount)) && Number(item.episodeCount) > 0) return Number(item.episodeCount);
   const countSeasonList = (seasons: any) => values(seasons).reduce((sum, season) => sum + values(season?.episodes).length, 0);
   const direct = countSeasonList(item?.seasons);
   if (direct > 0) return direct;
   const custom = countSeasonList(item?.customSeasons);
   if (custom > 0) return custom;
   if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
-    return Math.max(0, ...Object.values(item.seasonsByLanguage).map(countSeasonList));
+    const fromLangs = Math.max(0, ...Object.values(item.seasonsByLanguage).map(countSeasonList));
+    if (fromLangs > 0) return fromLangs;
   }
-  return 0;
+  const declared = Number(item?.totalEpisodes || item?.numberOfEpisodes || 0);
+  return Number.isFinite(declared) && declared > 0 ? declared : 0;
 };
 
 const countSeasons = (item: any) => {
+  if (Number.isFinite(Number(item?.seasonCount)) && Number(item.seasonCount) > 0) return Number(item.seasonCount);
   const direct = values(item?.seasons).length;
   if (direct > 0) return direct;
   const custom = values(item?.customSeasons).length;
   if (custom > 0) return custom;
   if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
-    return Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => values(seasons).length));
+    const fromLangs = Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => values(seasons).length));
+    if (fromLangs > 0) return fromLangs;
   }
-  return 0;
+  const declared = Number(item?.numberOfSeasons || 0);
+  return Number.isFinite(declared) && declared > 0 ? declared : 0;
 };
+
 
 export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminContentKind) => ({
   id,
