@@ -2264,6 +2264,12 @@ const Index = () => {
           ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== anime.id) : []),
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
+        // Live-update the home rail so the card appears immediately (even before first timeupdate).
+        setContinueWatching((prev) => {
+          const first = nextCache[0];
+          const filtered = Array.isArray(prev) ? prev.filter((x: any) => x?.id !== first.id) : [];
+          return [first, ...filtered].slice(0, 50);
+        });
       } catch {}
 
       if (!userId) return;
