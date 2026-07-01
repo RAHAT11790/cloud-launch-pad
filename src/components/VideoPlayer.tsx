@@ -4954,7 +4954,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
                         <div className="aspect-[3/4] overflow-hidden rounded-[8px] bg-white/[0.06]">
-                          {person.photo ? <img src={optimizedImageUrl(person.photo, "poster")} alt={person.name} className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <div className="w-full h-full flex items-center justify-center text-[9px] text-white/35">No photo</div>}
+                          {person.photo ? <img src={optimizedImageUrl(person.photo, "avatar")} alt={person.name} className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <div className="w-full h-full flex items-center justify-center text-[9px] text-white/35">No photo</div>}
                         </div>
                         <p className="mt-1.5 text-[11px] font-medium text-white line-clamp-2">{person.name}</p>
                         {person.character ? <p className="mt-0.5 text-[10px] leading-4 text-white/55 line-clamp-2">{person.character}</p> : null}
