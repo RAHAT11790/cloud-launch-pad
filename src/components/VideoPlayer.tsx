@@ -103,6 +103,13 @@ const sanitizeAnimeDownloadTitle = (value: string): string => {
     .trim();
 };
 
+const AN_AUDIO_LANGUAGE_PREF_KEY = "rs_an_audio_language_pref";
+const saveAnAudioLanguagePref = (value?: string) => {
+  const label = String(value || "").trim();
+  if (!label) return;
+  try { localStorage.setItem(AN_AUDIO_LANGUAGE_PREF_KEY, label); } catch {}
+};
+
 const isInsecureHttpSource = (url: string): boolean => {
   return String(url || "").trim().toLowerCase().startsWith("http://");
 };
@@ -2470,26 +2477,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const applyPreferredHlsAudio = () => {
       const tracks = hls.audioTracks || [];
       if (tracks.length === 0) return;
-      // Hard policy: Hindi ALWAYS wins for AN content when present in the
-      // manifest. This overrides whatever `selectedLanguage` was passed in
-      // (which may be a stale "Japanese"/"English" from the anime's stored
-      // default language) so the player opens directly in Hindi.
+      // AN opens Hindi by default, but after the user selects English/another
+      // available track, episode changes must keep that user-selected language.
       const hindiIdx = tracks.findIndex((track: any) => {
         const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
         return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
       });
       const preferredLanguage = selectedLanguageRef.current;
       const preferredToken = String(getPrimaryLanguageToken(preferredLanguage) || preferredLanguage || "").toLowerCase();
-      const preferredIdx = hindiIdx >= 0
-        ? hindiIdx
-        : (preferredToken
-            ? tracks.findIndex((track: any) => {
-                const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
-                return blob.includes(preferredToken);
-              })
-            : -1);
+      const preferredIdx = preferredToken
+        ? tracks.findIndex((track: any) => {
+            const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+            return blob.includes(preferredToken);
+          })
+        : -1;
       const defaultIdx = tracks.findIndex((track: any) => track?.default);
-      const wanted = preferredIdx >= 0 ? preferredIdx : (defaultIdx >= 0 ? defaultIdx : 0);
+      const wanted = preferredIdx >= 0 ? preferredIdx : (hindiIdx >= 0 ? hindiIdx : (defaultIdx >= 0 ? defaultIdx : 0));
       try { hls.audioTrack = wanted; } catch {}
     };
 
@@ -2654,6 +2657,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const label = track.label || track.language || `Audio ${idx + 1}`;
       setCurrentAudioTrack(label);
       setSelectedLanguageLabel(getPrimaryLanguageToken(label) || label);
+      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(label) || label);
     }
     setCurrentHlsAudio(idx);
     setShowCcPanel(false);
@@ -2723,6 +2727,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         setCurrentHlsAudio(matchedIdx);
         setCurrentAudioTrack(track.label);
         setSelectedLanguageLabel(track.label || track.language || "");
+        if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
         setShowAudioPanel(false);
         return;
       }
@@ -2733,6 +2738,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       hlsRef.current.audioTrack = track.hlsAudioIndex;
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
+      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.nativeIndex !== undefined) {
       // Switch native audio track
       const audioTracks = (v as any).audioTracks;
@@ -2743,6 +2749,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
+      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.src) {
       if (isAnimeSaltContent && isHlsLikeUrl(track.src) && !isDataHlsUrl(track.src)) {
         // For AnimeSalt the prop track URL is an audio-only HLS rendition.
@@ -2750,6 +2757,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         // through hls.js audioTrack from the synthetic multi-audio master.
         setCurrentAudioTrack(track.label);
         setSelectedLanguageLabel(track.label || track.language || "");
+        if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
         setShowAudioPanel(false);
         return;
       }
@@ -2769,6 +2777,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
+      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {

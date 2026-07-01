@@ -338,7 +338,7 @@ async function detail(slug: string, type: string, forceRefresh = false) {
           headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },
         });
         const marker = seasonHtml.search(regionalDubStopRe);
-        const harvestHtml = seasonHtml;
+        const harvestHtml = marker >= 0 ? seasonHtml.slice(0, marker) : seasonHtml;
         // Strict: only accept episodes whose slug encodes this exact season.
         harvestEpisodes(harvestHtml, sNum, true);
         if (marker >= 0) stopAfterRegionalDubMarker = true;
