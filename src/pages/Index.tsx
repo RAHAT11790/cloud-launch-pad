@@ -806,7 +806,7 @@ const Index = () => {
 
   const userCategoryPills = useMemo(() => {
     const byKey = new Map<string, string>();
-    [...categories, ...allAnime.flatMap((item) => contentCategoryLabels(item))]
+    [...categories, ...allSeries.flatMap((item) => contentCategoryLabels(item))]
       .map((cat) => String(cat || "").trim())
       .filter(Boolean)
       .forEach((cat) => {
@@ -814,7 +814,7 @@ const Index = () => {
         if (!byKey.has(key)) byKey.set(key, cat);
       });
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
-  }, [allAnime, categories]);
+  }, [allSeries, categories]);
 
   
   // Maintenance mode check
@@ -1541,9 +1541,11 @@ const Index = () => {
   }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
   const filteredAnime = useMemo(() => {
-    if (activeCategory !== "All") return allAnime.filter(a => categoryMatches(a, activeCategory));
-    return allAnime;
-  }, [activeCategory, allAnime]);
+    // Home/category screens are series-first only. Movies live in the dedicated
+    // Movies tab plus the single "Most Favorite Movies" rail on Home.
+    if (activeCategory !== "All") return allSeries.filter(a => categoryMatches(a, activeCategory));
+    return allSeries;
+  }, [activeCategory, allSeries]);
 
   // Live popularity signals from analytics — used to rank Trending content
   const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
@@ -1658,7 +1660,7 @@ const Index = () => {
 
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
-    filteredAnime.forEach((a) => {
+    filteredSeries.forEach((a) => {
       const labels = splitCategoryLabels(a.category);
       const targetLabels = labels.length ? labels : [a.category || "Anime"];
       targetLabels.forEach((label) => {
@@ -1667,7 +1669,7 @@ const Index = () => {
       });
     });
     return groups;
-  }, [filteredAnime]);
+  }, [filteredSeries]);
 
   // Hero slides: randomized mix from all anime with backdrop
   const [heroRotation, setHeroRotation] = useState(0);
@@ -1727,7 +1729,7 @@ const Index = () => {
   }, []);
 
   const heroSlides = useMemo(() => {
-    const withBackdrop = allAnime.filter(a => a.backdrop);
+    const withBackdrop = allSeries.filter(a => a.backdrop);
     if (withBackdrop.length === 0) return [];
     
     // Seeded shuffle based on rotation
@@ -1794,7 +1796,7 @@ const Index = () => {
     }
 
     return randomSlides;
-  }, [allAnime, heroRotation, pinnedHeroPosts]);
+  }, [allSeries, heroRotation, pinnedHeroPosts]);
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
@@ -1822,7 +1824,7 @@ const Index = () => {
       const cardTargets = [
         ...continueWatching.slice(0, 8).map((item: any) => optimizedImageUrl(item.poster, "poster")),
         ...trendingSeries.slice(0, 10).map((item) => optimizedImageUrl(item.poster, "poster")),
-        ...filteredMovies.slice(0, 10).map((item) => optimizedImageUrl(item.poster, "poster")),
+        ...filteredMovies.slice(0, 6).map((item) => optimizedImageUrl(item.poster, "poster")),
         ...allAnimeSaltUnique.slice(0, 18).map((item) => optimizedImageUrl(item.poster, "poster")),
       ];
       const allTargets = heroTargets.concat(cardTargets).filter(Boolean) as string[];
