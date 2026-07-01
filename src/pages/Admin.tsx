@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import CachedImg from "@/components/CachedImg";
-import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
+import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
@@ -45,12 +45,13 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 
-// AnSeriesManager removed — AN runs purely on API now
-import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
-import PremiumCenter from "@/components/admin/PremiumCenter";
-import AnManager from "@/components/admin/AnManager";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
+
+// Heavy admin sections are lazy-loaded so the main Admin shell stays responsive.
+const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
+const PremiumCenter = lazy(() => import("@/components/admin/PremiumCenter"));
+const AnManager = lazy(() => import("@/components/admin/AnManager"));
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
@@ -102,6 +103,28 @@ const applyAdminEnglish = (root: ParentNode) => {
  });
  }
 };
+
+const ADMIN_VISIBLE_CARD_LIMIT = 80;
+const ADMIN_DROPDOWN_LIMIT = 60;
+
+const adminIdle = (callback: () => void, timeout = 1200) => {
+ const idle = (window as any).requestIdleCallback;
+ if (typeof idle === "function") {
+  const id = idle(callback, { timeout });
+  return () => { try { (window as any).cancelIdleCallback?.(id); } catch {} };
+ }
+ const id = window.setTimeout(callback, Math.min(timeout, 350));
+ return () => window.clearTimeout(id);
+};
+
+const yieldAdminFrame = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+const AdminSectionLoader = ({ label }: { label: string }) => (
+ <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-zinc-400">
+  <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-purple-400" />
+  {label}
+ </div>
+);
 
 interface CastMember {
  name: string;
@@ -1986,22 +2009,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
  const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
+ const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
   const listItem = buildAdminContentIndexItem(id, item, kind);
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-  setter(prev => {
+  startTransition(() => setter(prev => {
    const next = mergeAdminContentLists(prev, [listItem]);
    writeCachedAdminContentList(kind, next);
    return next;
-  });
+  }));
  }, []);
  const removeAdminContentListItem = useCallback((kind: AdminContentKind, id: string) => {
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-  setter(prev => {
+  startTransition(() => setter(prev => {
    const next = sortAdminContentList(prev.filter((item: any) => item.id !== id));
    writeCachedAdminContentList(kind, next);
    return next;
-  });
+  }));
  }, []);
  const getFullAdminContentItem = useCallback(async (kind: AdminContentKind, id: string) => {
   const snap = await get(ref(db, `${kind}/${id}`));
@@ -2055,6 +2079,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [movieResults, setMovieResults] = useState<any[]>([]);
  const [wsListSearch, setWsListSearch] = useState("");
  const [mvListSearch, setMvListSearch] = useState("");
+ const deferredWsListSearch = useDeferredValue(wsListSearch);
+ const deferredMvListSearch = useDeferredValue(mvListSearch);
  const [movieEditId, setMovieEditId] = useState("");
 
  // Notification form
@@ -2079,6 +2105,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [showSeasonEpisode, setShowSeasonEpisode] = useState(false);
  const [releaseSearchQuery, setReleaseSearchQuery] = useState("");
  const [releaseContentSearch, setReleaseContentSearch] = useState("");
+ const deferredReleaseContentSearch = useDeferredValue(releaseContentSearch);
 
  // Redeem code state
  const [redeemCodesData, setRedeemCodesData] = useState<any[]>([]);
@@ -2147,6 +2174,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Expanded episodes
  const [expandedSeasons, setExpandedSeasons] = useState<Record<number, boolean>>({});
+  const [episodeRenderLimits, setEpisodeRenderLimits] = useState<Record<number, number>>({});
 
  // JSON import for Web Series
  const [wsJsonImportMode, setWsJsonImportMode] = useState(false);
@@ -2450,21 +2478,21 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  useEffect(() => {
  const unsubs: (() => void)[] = [];
 
- unsubs.push(onValue(ref(db, "categories"), (snap) => {
- setCategoriesData(snap.val() || {});
- }));
+  unsubs.push(onValue(ref(db, "categories"), (snap) => {
+  startTransition(() => setCategoriesData(snap.val() || {}));
+  }));
 
  const loadContentList = async (kind: AdminContentKind) => {
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
   const cached = readCachedAdminContentList(kind);
-  if (cached.length) setter(sortAdminContentList(cached));
+   if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
   try {
    const [indexed, recent] = await Promise.all([
     fetchAdminContentIndex(kind).catch(() => []),
     fetchRecentAdminContentList(kind).catch(() => []),
    ]);
    const merged = mergeAdminContentLists(cached, indexed, recent);
-   setter(merged);
+    startTransition(() => setter(merged));
    writeCachedAdminContentList(kind, merged);
    if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
   } catch (err) {
@@ -2480,33 +2508,34 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    fetchAdminCount("webseries").catch(() => webseriesData.length),
    fetchAdminCount("movies").catch(() => moviesData.length),
    fetchAdminCount("users").catch(() => usersData.length),
-  ]).then(([webseries, movies, users]) => {
-   if (!countsCancelled) setAdminFastCounts({ webseries, movies, users });
+   ]).then(([webseries, movies, users]) => {
+    if (!countsCancelled) startTransition(() => setAdminFastCounts({ webseries, movies, users }));
   });
 
  unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
- setCurrentMaintenance(snap.val());
- if (snap.val()?.active) setMaintenanceActive(true);
- else setMaintenanceActive(false);
+  const val = snap.val();
+  startTransition(() => {
+  setCurrentMaintenance(val);
+  setMaintenanceActive(!!val?.active);
+  });
  }));
 
  unsubs.push(onValue(ref(db, "globalFreeAccess"), (snap) => {
- setGlobalFreeAccess(snap.val() || null);
+  startTransition(() => setGlobalFreeAccess(snap.val() || null));
  }));
 
  unsubs.push(onValue(ref(db, "settings/tutorialLink"), (snap) => {
  const val = snap.val() || "";
- setTutorialLink(val);
- setTutorialLinkInput(val);
+  startTransition(() => { setTutorialLink(val); setTutorialLinkInput(val); });
  }));
 
  unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
  const val = snap.val();
  if (val && typeof val === "object") {
  const list = Object.entries(val).map(([k, v]: any) => ({ id: k, title: v.title || "", url: v.url || "" }));
- setTutorialVideos(list);
+  startTransition(() => setTutorialVideos(list));
  } else {
- setTutorialVideos([]);
+  startTransition(() => setTutorialVideos([]));
  }
  }));
 
@@ -2521,10 +2550,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const tokens = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
  .map((item: any) => String(item || "").trim())
  .filter((item): item is string => Boolean(item)))] as string[];
- setSavedAdminUserId(userIds.join("\n"));
- setAdminUserIdInput(userIds.join("\n"));
- setSavedAdminFcmTokens(tokens);
- setAdminFcmTokensInput(tokens.join("\n"));
+  startTransition(() => {
+  setSavedAdminUserId(userIds.join("\n"));
+  setAdminUserIdInput(userIds.join("\n"));
+  setSavedAdminFcmTokens(tokens);
+  setAdminFcmTokensInput(tokens.join("\n"));
+  });
  }));
 
   return () => { countsCancelled = true; unsubs.forEach(u => u()); };
@@ -2537,13 +2568,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const unsubs: (() => void)[] = [];
 
- unsubs.push(onValue(ref(db, "users"), (snap) => {
+ unsubs.push(onValue(query(ref(db, "users"), limitToLast(1000)), (snap) => {
  const data = snap.val() || {};
- setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
+  startTransition(() => setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user }))));
  }));
 
- unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
- setAppUsersGlobal(snap.val() || {});
+ unsubs.push(onValue(query(ref(db, "appUsers"), limitToLast(1000)), (snap) => {
+  startTransition(() => setAppUsersGlobal(snap.val() || {}));
  }));
 
  // FCM token stats listener removed
@@ -2558,12 +2589,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const data = snap.val() || {};
  const allNotifs: any[] = [];
  Object.entries(data).forEach(([uid, userNotifs]: any) => {
+  if (allNotifs.length >= 1000) return;
  Object.entries(userNotifs || {}).forEach(([notifId, notif]: any) => {
+  if (allNotifs.length >= 1000) return;
  allNotifs.push({ ...notif, id: notifId, oderId: uid, userId: uid });
  });
  });
  allNotifs.sort((a, b) => b.timestamp - a.timestamp);
- setNotificationsData(allNotifs);
+  startTransition(() => setNotificationsData(allNotifs));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2571,11 +2604,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Lazy-load NEW RELEASES data
  useEffect(() => {
  if (activeSection !== "new-releases" && activeSection !== "telegram-post") return;
- const unsub = onValue(ref(db, "newEpisodeReleases"), (snap) => {
+ const unsub = onValue(query(ref(db, "newEpisodeReleases"), limitToLast(300)), (snap) => {
  const data = snap.val() || {};
  const arr = Object.entries(data).map(([id, r]: any) => ({ id, ...r }));
  arr.sort((a, b) => b.timestamp - a.timestamp);
- setReleasesData(arr);
+  startTransition(() => setReleasesData(arr));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2584,7 +2617,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  useEffect(() => {
  if (activeSection !== "new-releases" && activeSection !== "notifications") return;
  const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
- setAnimesaltSelectedData(snap.val() || {});
+  startTransition(() => setAnimesaltSelectedData(snap.val() || {}));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2594,7 +2627,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (activeSection !== "redeem-codes") return;
  const unsub = onValue(ref(db, "redeemCodes"), (snap) => {
  const data = snap.val() || {};
- setRedeemCodesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
+  startTransition(() => setRedeemCodesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item }))));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2661,7 +2694,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
 
  const list = Object.values(map).sort((a: any, b: any) => b.unlockedAt - a.unlockedAt);
- setFreeAccessUsers(list);
+  startTransition(() => setFreeAccessUsers(list));
  try { sessionStorage.setItem("admin_freeAccessUsers_cache", JSON.stringify(list)); } catch {}
  };
 
@@ -2670,7 +2703,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  faLoaded = true;
  merge();
  });
- const unsub2 = onValue(ref(db, "users"), (snap) => {
+ const unsub2 = onValue(query(ref(db, "users"), limitToLast(1500)), (snap) => {
  usersData = snap.val() || {};
  usersLoaded = true;
  merge();
@@ -2725,7 +2758,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  list.push({ id, ...item });
  });
  list.sort((a, b) => (b.claimedAt || 0) - (a.claimedAt || 0));
- setPrizePoolUsers(list);
+  startTransition(() => setPrizePoolUsers(list.slice(0, 250)));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2749,22 +2782,22 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  unsubs.push(onValue(ref(db, "bkashSettings"), (snap) => {
  const data = snap.val();
  if (data) {
- setBkashSettings(data);
+  startTransition(() => setBkashSettings(data));
  try { sessionStorage.setItem("admin_bkashSettings_cache", JSON.stringify(data)); } catch {}
  }
- setBkashSettingsLoaded(true);
+  startTransition(() => setBkashSettingsLoaded(true));
  }));
  unsubs.push(onValue(ref(db, "bkashPayments"), (snap) => {
  const data = snap.val() || {};
  const list = Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
- setBkashPaymentRequests(list);
+  startTransition(() => setBkashPaymentRequests(list.slice(0, 250)));
  try { sessionStorage.setItem("admin_bkashPayments_cache", JSON.stringify(list.slice(0, 200))); } catch {}
  }));
  unsubs.push(onValue(ref(db, "XNXANIKPAY"), (snap) => {
  const data = snap.val() || {};
  const list = Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
  .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0));
- setBkashSmsFeed(list);
+  startTransition(() => setBkashSmsFeed(list.slice(0, 150)));
  try { sessionStorage.setItem("admin_bkashSmsFeed_cache", JSON.stringify(list.slice(0, 100))); } catch {}
  }));
  // 🔁 Start GLOBAL auto-matcher while admin panel is open on bkash section
@@ -2797,7 +2830,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  });
  allComments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
- setCommentsData(allComments);
+  startTransition(() => setCommentsData(allComments.slice(0, 500)));
  });
  return () => unsub();
  }, [activeSection]);
@@ -2877,7 +2910,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", createdAt: m.updatedAt || m.createdAt || 0 }));
  // Sort by updatedAt/createdAt descending so newest edited/added items appear first
  options.sort((a, b) => b.createdAt - a.createdAt);
- setContentOptions(options);
+  startTransition(() => setContentOptions(options));
  }, [webseriesData, moviesData]);
 
  // Close dropdowns on outside click
@@ -3140,10 +3173,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Ref to store last saved series ID (for Save+Notify on new series)
  const lastSavedSeriesIdRef = useRef<string>("");
 
- const saveSeries = () => {
+ const saveSeries = async () => {
  if (!seriesForm) return;
  if (!seriesForm.title) { toast.error("Please enter title"); return; }
  if (!seriesForm.category) { toast.error("Please select category"); return; }
+  setAdminBusyTask("Saving series…");
+  await yieldAdminFrame();
 
  const nextMap = sanitizeSeasonLanguageMap({
  ...seriesSeasonsByLanguage,
@@ -3215,15 +3250,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  data.createdAt = Date.now();
  }
  lastSavedSeriesIdRef.current = newId;
- set(saveRef, data)
- .then(async () => {
+  try {
+  await set(saveRef, data);
   upsertAdminContentListItem("webseries", newId, data);
   await upsertAdminContentIndex("webseries", newId, data).catch(() => {});
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
- setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
- })
- .catch(err => toast.error("Error: " + err.message));
+  startTransition(() => { setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list"); setEpisodeRenderLimits({}); });
+  return newId;
+  } catch (err: any) {
+  toast.error("Error: " + err.message);
+  } finally {
+  setAdminBusyTask(null);
+  }
  };
 
  const editSeries = async (id: string) => {
@@ -3255,6 +3294,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const expandMap: Record<number, boolean> = {};
  if (loadedSeasons.length > 0) expandMap[latestIdx] = true;
  setExpandedSeasons(expandMap);
+  setEpisodeRenderLimits({ [latestIdx]: 50 });
  }
  // Snapshot baseline episodes per season for auto-detect on Save+Notify
  {
@@ -3371,11 +3411,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  finally { setFetchingOverlay(false); }
  };
 
- const saveMovie = () => {
+ const saveMovie = async () => {
  if (!movieForm) return;
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
  if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
+  setAdminBusyTask("Saving movie…");
+  await yieldAdminFrame();
 
  const data = {
  ...movieForm,
@@ -3399,14 +3441,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   newMovieId = saveRef.key || "";
  data.createdAt = Date.now();
  }
- set(saveRef, data)
- .then(async () => {
+  try {
+  await set(saveRef, data);
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
- setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
- })
- .catch(err => toast.error("Error: " + err.message));
+  startTransition(() => { setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list"); });
+  return newMovieId;
+  } catch (err: any) {
+  toast.error("Error: " + err.message);
+  } finally {
+  setAdminBusyTask(null);
+  }
  };
 
  const editMovie = async (id: string) => {
@@ -3615,42 +3661,45 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  try {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
- // Send notification
- const usersSnap = await get(ref(db, "users"));
- const users = usersSnap.val() || {};
  const releaseNotifTitle = contentType === "webseries" ? `New Episode: ${content.title}` : `New Movie: ${content.title}`;
  const releaseNotifMsg = contentType === "webseries"
  ? `${episodeInfo.seasonName} - Episode ${episodeInfo.episodeNumber} is now available!`
  : `${content.title} (${content.year}) is now available!`;
-
- const userNotifUpdates: Record<string, any> = {};
- const seenUserIds = new Set<string>();
- Object.entries(users).forEach(([userKey, userData]: any) => {
- const effectiveUserId = String(userData?.id || userKey || "").trim();
- if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
- seenUserIds.add(effectiveUserId);
-
- const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
- if (!notifKey) return;
-
- userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
- title: releaseNotifTitle,
- message: releaseNotifMsg,
- type: "new_episode",
- contentId,
- contentType,
- image: content.poster || "",
- poster: content.poster || "",
- timestamp: Date.now(),
- read: false,
- };
- });
-
- if (Object.keys(userNotifUpdates).length > 0) {
- await update(ref(db), userNotifUpdates);
- }
- toast.success("In-app notification sent to users");
- setReleaseContent(""); setShowSeasonEpisode(false);
+  startTransition(() => { setReleaseContent(""); setShowSeasonEpisode(false); });
+  adminIdle(async () => {
+  try {
+  const usersSnap = await get(ref(db, "users"));
+  const users = usersSnap.val() || {};
+  const entries = Object.entries(users);
+  const seenUserIds = new Set<string>();
+  let sent = 0;
+  for (let i = 0; i < entries.length; i += 150) {
+  const userNotifUpdates: Record<string, any> = {};
+  entries.slice(i, i + 150).forEach(([userKey, userData]: any) => {
+  const effectiveUserId = String(userData?.id || userKey || "").trim();
+  if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
+  seenUserIds.add(effectiveUserId);
+  const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
+  if (!notifKey) return;
+  userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
+  title: releaseNotifTitle,
+  message: releaseNotifMsg,
+  type: "new_episode",
+  contentId,
+  contentType,
+  image: content.poster || "",
+  poster: content.poster || "",
+  timestamp: Date.now(),
+  read: false,
+  };
+  });
+  const keys = Object.keys(userNotifUpdates);
+  if (keys.length > 0) { await update(ref(db), userNotifUpdates); sent += keys.length; }
+  await yieldAdminFrame();
+  }
+  if (sent > 0) toast.success(`In-app notification sent to ${sent} users`);
+  } catch (err: any) { console.warn("Background release notification failed", err); }
+  }, 500);
  
  // FCM push removed — in-app notifications above are sufficient
  } catch (err: any) { toast.error("Error: " + err.message); }
@@ -4446,6 +4495,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!tgTitle.trim()) { toast.error("Enter a title"); return; }
  if (!tgChannelId.trim()) { toast.error("Enter channel ID(s)"); return; }
  setTgSending(true);
+  setAdminBusyTask("Sending Telegram post…");
+  await yieldAdminFrame();
  try {
  // Build footer links HTML
  const footerLinksHtml = tgFooterLinks.map(l =>
@@ -4490,7 +4541,8 @@ ${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`;
  }
  });
 
- for (const chatId of channelIds) {
+  for (const chatId of channelIds) {
+  await yieldAdminFrame();
  const payload = {
  chatId,
  caption,
@@ -4559,6 +4611,7 @@ ${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`;
  toast.error("Telegram post failed: " + (err.message || "Unknown error"));
  } finally {
  setTgSending(false);
+  setAdminBusyTask(null);
  }
  };
 
@@ -5033,19 +5086,26 @@ ${tgBulkFooter}
   }
 
   return (
- <div className="min-h-screen bg-[#0D0D1A] text-white font-['Poppins',sans-serif]">
+ <div className="admin-shell min-h-screen bg-[#0D0D1A] text-white font-['Poppins',sans-serif]">
  {/* Fetching Overlay */}
  {fetchingOverlay && (
- <div className="fixed inset-0 bg-black/90 z-[5000] flex flex-col items-center justify-center">
- <div className="w-10 h-10 border-3 border-[#1E1E32] border-t-indigo-500 rounded-full animate-spin" />
- <p className="mt-4 text-sm text-zinc-400">Fetching data from TMDB...</p>
+   <div className="admin-isolated-overlay pointer-events-none fixed right-3 top-3 z-[5000] flex items-center gap-2 rounded-xl border border-indigo-500/25 bg-[#10101f]/95 px-3 py-2 shadow-xl backdrop-blur-md">
+  <div className="w-4 h-4 border-2 border-[#1E1E32] border-t-indigo-500 rounded-full animate-spin" />
+  <p className="text-xs text-zinc-300">Fetching data…</p>
  </div>
  )}
+
+  {adminBusyTask && (
+   <div className="admin-isolated-overlay pointer-events-none fixed right-3 bottom-4 z-[5000] flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-[#10101f]/95 px-3 py-2 shadow-xl backdrop-blur-md">
+  <div className="w-4 h-4 border-2 border-[#1E1E32] border-t-emerald-400 rounded-full animate-spin" />
+  <p className="text-xs text-zinc-300">{adminBusyTask}</p>
+  </div>
+  )}
 
  {/* Push progress overlay removed — FCM disabled site-wide */}
 
  {showPinSetup && (
- <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4" onClick={() => setShowPinSetup(false)}>
+ <div className="admin-isolated-overlay fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4" onClick={() => setShowPinSetup(false)}>
  <div className={`${glassCard} p-6 w-full max-w-[350px]`} onClick={e => e.stopPropagation()}>
  <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
  <KeyRound size={18} className="text-indigo-500" /> {pinExists ? "Change PIN" : "Set PIN"}
@@ -5062,10 +5122,10 @@ ${tgBulkFooter}
  )}
 
  {/* Overlay */}
- {sidebarOpen && <div className="fixed inset-0 bg-black/60 z-[999]" onClick={() => setSidebarOpen(false)} />}
+ {sidebarOpen && <div className="admin-isolated-overlay fixed inset-0 bg-black/60 z-[999]" onClick={() => setSidebarOpen(false)} />}
 
  {/* Sidebar */}
- <div className={`fixed top-0 ${sidebarOpen ? "left-0" : "-left-[260px]"} w-[260px] h-screen bg-[#111120] z-[1000] transition-all duration-200 border-r border-white/6 flex flex-col`}>
+ <div className={`admin-isolated-overlay fixed top-0 ${sidebarOpen ? "left-0" : "-left-[260px]"} w-[260px] h-screen bg-[#111120] z-[1000] transition-all duration-200 border-r border-white/6 flex flex-col`}>
  <div className="p-4 border-b border-white/6">
  <div className="flex items-center gap-3">
  {adminBranding.logoUrl ? (
@@ -5157,7 +5217,7 @@ ${tgBulkFooter}
  </header>
 
  {/* Main Content */}
- <main className="pt-[64px] px-3 pb-[220px] min-h-screen">
+<main className="admin-optimized-panel admin-scroll-smooth pt-[64px] px-3 pb-[220px] min-h-screen">
  {/* ==================== DASHBOARD ==================== */}
  {activeSection === "dashboard" && (
  <div>
@@ -5404,7 +5464,7 @@ ${tgBulkFooter}
  const tb = Number(b?.updatedAt || b?.createdAt || 0);
  return tb - ta;
  });
- const q = wsListSearch.trim().toLowerCase();
+  const q = deferredWsListSearch.trim().toLowerCase();
  let filtered = latestFirst;
  if (q) {
  // 50%-similarity fuzzy match (bigram Dice coefficient) + substring fast path
@@ -5430,9 +5490,11 @@ ${tgBulkFooter}
  .sort((a, b) => b.score - a.score)
  .map(x => x.item);
  }
- return filtered.length === 0 ? (
+  const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
+  return filtered.length === 0 ? (
  <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
- ) : filtered.map(item => (
+  ) : <>
+  {visible.map(item => (
  <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
  <div className="flex gap-3.5">
  <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
@@ -5454,7 +5516,11 @@ ${tgBulkFooter}
  </div>
  </div>
  </div>
- ));
+  ))}
+  {filtered.length > visible.length && (
+  <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Use search to narrow instantly.</div>
+  )}
+  </>;
  })()}
  </div>
  )}
@@ -5719,20 +5785,22 @@ ${tgBulkFooter}
  )}
  {expandedSeasons[sIdx] && (
  <div>
+  {(() => {
+  const episodeList = Array.isArray(season.episodes) ? season.episodes : [];
+  const renderLimit = episodeRenderLimits[sIdx] || 50;
+  const visibleEpisodes = episodeList.map((ep, eIdx) => ({ ep, eIdx })).slice().reverse().slice(0, renderLimit);
+  return <>
  {/* Quick Add Episode (TOP) — fast workflow: add new ep without scrolling */}
  <button onClick={() => addEpisode(sIdx)}
  className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
  <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
  </button>
-  {(Array.isArray(season.episodes) ? season.episodes : []).length > 0 && (
+   {episodeList.length > 0 && (
  <p className="text-[10px] text-zinc-500 mb-2 px-1">
-  Showing newest first • {(Array.isArray(season.episodes) ? season.episodes : []).length} episode{(Array.isArray(season.episodes) ? season.episodes : []).length === 1 ? "" : "s"}
+   Showing newest first • {Math.min(renderLimit, episodeList.length)}/{episodeList.length} episode{episodeList.length === 1 ? "" : "s"}
  </p>
  )}
-  {(Array.isArray(season.episodes) ? season.episodes : [])
- .map((ep, eIdx) => ({ ep, eIdx }))
- .slice()
- .reverse()
+   {visibleEpisodes
  .map(({ ep, eIdx }) => {
  const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
  const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
@@ -5868,6 +5936,14 @@ ${tgBulkFooter}
  </div>
  );
  })}
+  {episodeList.length > visibleEpisodes.length && (
+  <button type="button" onClick={() => setEpisodeRenderLimits(prev => ({ ...prev, [sIdx]: (prev[sIdx] || 50) + 50 }))}
+  className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 text-[11px] font-bold text-zinc-200 hover:bg-white/10 transition-all">
+  Load 50 more episodes ({visibleEpisodes.length}/{episodeList.length})
+  </button>
+  )}
+  </>;
+  })()}
  </div>
  )}
  </div>
@@ -6077,14 +6153,14 @@ ${tgBulkFooter}
  if (endIdx >= 0) setWsNotifyEpisodeEnd(String(endIdx));
  }
 
- saveSeries();
- // After save, update seriesId from lastSavedSeriesIdRef for new series
- setTimeout(() => {
+  saveSeries().then((savedId) => {
+  if (!savedId) return;
+  // After save, update seriesId from saved result for new series
  if (wsNotifyContextRef.current && (wsNotifyContextRef.current.seriesId === "__pending__" || !wsNotifyContextRef.current.seriesId)) {
- wsNotifyContextRef.current.seriesId = lastSavedSeriesIdRef.current || "";
+  wsNotifyContextRef.current.seriesId = savedId || lastSavedSeriesIdRef.current || "";
  }
  setWsSaveNotifyModal(true);
- }, 800);
+  });
  }} className="flex-1 py-4 text-[14px] font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-lg transition-colors cursor-pointer border-none">
  <Bell size={16} /> Save + Notify
  </button>
@@ -6103,8 +6179,8 @@ ${tgBulkFooter}
  const ctxForm = ctx?.form;
  const ctxSeriesId = ctx?.seriesId || "";
  return (
- <div className="fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => setWsSaveNotifyModal(false)}>
- <div className="bg-[#16162A] border border-white/10 rounded-2xl w-full max-w-[440px] max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+  <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => setWsSaveNotifyModal(false)}>
+  <div className="admin-optimized-panel admin-scroll-smooth bg-[#16162A] border border-white/10 rounded-2xl w-full max-w-[440px] max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
  {wsNotifyStep === "release" ? (
  <div>
  <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> Create New Release</h3>
@@ -6390,12 +6466,14 @@ ${tgBulkFooter}
  </div>
  </div>
  {(() => {
- const filtered = mvListSearch.trim()
- ? moviesData.filter(item => item.title?.toLowerCase().includes(mvListSearch.toLowerCase()))
+  const filtered = deferredMvListSearch.trim()
+  ? moviesData.filter(item => item.title?.toLowerCase().includes(deferredMvListSearch.toLowerCase()))
  : moviesData;
- return filtered.length === 0 ? (
- <p className="text-[#957DAD] text-[13px] text-center py-8">{mvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
- ) : filtered.map(item => (
+  const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
+  return filtered.length === 0 ? (
+  <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
+  ) : <>
+  {visible.map(item => (
  <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
  <div className="flex gap-3.5">
  <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
@@ -6417,7 +6495,11 @@ ${tgBulkFooter}
  </div>
  </div>
  </div>
- ));
+  ))}
+  {filtered.length > visible.length && (
+  <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Use search to narrow instantly.</div>
+  )}
+  </>;
  })()}
  </div>
  )}
@@ -6852,18 +6934,22 @@ ${tgBulkFooter}
  </div>
  <div className="overflow-y-auto max-h-[260px]">
  {(() => {
- const filtered = releaseContentSearch.trim()
- ? contentOptions.filter(o => o.label.toLowerCase().includes(releaseContentSearch.toLowerCase()))
+  const filtered = deferredReleaseContentSearch.trim()
+  ? contentOptions.filter(o => o.label.toLowerCase().includes(deferredReleaseContentSearch.toLowerCase()))
  : contentOptions;
+  const visible = filtered.slice(0, ADMIN_DROPDOWN_LIMIT);
  return filtered.length === 0 ? (
  <p className="text-[#957DAD] text-[11px] text-center py-4">any content পা যায়নি</p>
- ) : filtered.map(o => (
+  ) : <>
+  {visible.map(o => (
  <div key={o.value} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${releaseContent === o.value ? "bg-purple-500/30" : ""}`}
  onClick={() => { handleReleaseContentChange(o.value); setReleaseDropdownOpen(false); setReleaseContentSearch(''); }}>
  <CachedImg src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" loading="lazy" decoding="async" />
  <span className="text-sm truncate">{o.label}</span>
  </div>
- ));
+  ))}
+  {filtered.length > visible.length && <div className="px-3 py-2 text-center text-[10px] text-[#957DAD]">Showing {visible.length}/{filtered.length} — type to narrow</div>}
+  </>;
  })()}
  </div>
  </div>
@@ -6998,6 +7084,7 @@ ${tgBulkFooter}
  )}
 
  {activeSection === "animesalt-manager" && (
+  <Suspense fallback={<AdminSectionLoader label="Loading AN Manager…" />}>
  <AnManager
  glassCard={glassCard}
  inputClass={inputClass}
@@ -7006,6 +7093,7 @@ ${tgBulkFooter}
  categoryList={categoryList}
  selectClass={selectClass}
  />
+  </Suspense>
  )}
 
  {/* ==================== ADD CONTENT ==================== */}
@@ -7863,12 +7951,14 @@ ${footerLinksHtml}
 
  // Load saved posts
  useEffect(() => {
- const unsub = onValue(ref(db, "telegramPosts"), (snap) => {
+ const unsub = onValue(query(ref(db, "telegramPosts"), limitToLast(300)), (snap) => {
  const val = snap.val() || {};
  const arr = Object.entries(val).map(([k, v]: any) => ({ firebaseKey: k, ...v }));
  arr.sort((a: any, b: any) => (b.sentAt || 0) - (a.sentAt || 0));
- setTgPosts(arr);
- setTgPostsLoading(false);
+  startTransition(() => {
+  setTgPosts(arr.slice(0, 300));
+  setTgPostsLoading(false);
+  });
  });
  return () => unsub();
  }, []);
@@ -8623,7 +8713,9 @@ ${footerLinksHtml}
 
  {/* ==================== PREMIUM CENTER ==================== */}
  {activeSection === "premium-center" && (
+  <Suspense fallback={<AdminSectionLoader label="Loading Premium Center…" />}>
  <PremiumCenter />
+  </Suspense>
  )}
 
 
@@ -8934,6 +9026,7 @@ ${footerLinksHtml}
  const [replacing, setReplacing] = useState(false);
  const [replaceResult, setReplaceResult] = useState<{ total: number; replaced: number } | null>(null);
  const [searchFilter, setSearchFilter] = useState("");
+  const deferredSearchFilter = useDeferredValue(searchFilter);
  const [showSelector, setShowSelector] = useState(false);
  const [quickPasteText, setQuickPasteText] = useState("");
  const [showQuickPaste, setShowQuickPaste] = useState(false);
@@ -8951,9 +9044,10 @@ ${footerLinksHtml}
 
  const sortedSeries = useMemo(() => {
  const sorted = [...webseriesData].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
- if (!searchFilter.trim()) return sorted;
- return sorted.filter(s => s.title?.toLowerCase().includes(searchFilter.toLowerCase()));
- }, [webseriesData, searchFilter]);
+  const q = deferredSearchFilter.trim().toLowerCase();
+  if (!q) return sorted.slice(0, ADMIN_DROPDOWN_LIMIT);
+  return sorted.filter(s => s.title?.toLowerCase().includes(q)).slice(0, ADMIN_DROPDOWN_LIMIT);
+  }, [webseriesData, deferredSearchFilter]);
 
  const selectedSeries = webseriesData.find(s => s.id === selectedSeriesId);
 
@@ -9576,6 +9670,7 @@ ${footerLinksHtml}
 
  {/* ==================== WEEKLY EPISODE ==================== */}
  {activeSection === "weekly-episode" && (
+  <Suspense fallback={<AdminSectionLoader label="Loading Weekly Manager…" />}>
  <WeeklyEpisodeManager
  webseriesData={webseriesData}
  glassCard={glassCard}
@@ -9585,6 +9680,7 @@ ${footerLinksHtml}
  btnSecondary={btnSecondary}
  onEditSeries={(id) => editSeries(id)}
  />
+  </Suspense>
  )}
 
 
@@ -10084,7 +10180,7 @@ const AdminLiveSupportSection = ({
 
  // Load all support chats
  useEffect(() => {
- const unsub = onValue(ref(db, "supportChats"), (snap) => {
+ const unsub = onValue(query(ref(db, "supportChats"), orderByChild("meta/lastTimestamp"), limitToLast(200)), (snap) => {
  const data = snap.val() || {};
  const chatList = Object.entries(data).map(([userId, chat]: any) => ({
  userId,
@@ -10094,7 +10190,7 @@ const AdminLiveSupportSection = ({
  unread: chat.meta?.unread || false,
  }));
  chatList.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
- setChats(chatList);
+  startTransition(() => setChats(chatList.slice(0, 200)));
  });
  return () => unsub();
  }, []);
@@ -10104,11 +10200,11 @@ const AdminLiveSupportSection = ({
  if (!selectedChat) { setChatMessages([]); return; }
  // Mark as read
  update(ref(db, `supportChats/${selectedChat}/meta`), { unread: false }).catch(() => {});
- const unsub = onValue(ref(db, `supportChats/${selectedChat}/messages`), (snap) => {
+ const unsub = onValue(query(ref(db, `supportChats/${selectedChat}/messages`), limitToLast(300)), (snap) => {
  const data = snap.val() || {};
  const msgs = Object.entries(data).map(([id, msg]: any) => ({ id, ...msg }));
  msgs.sort((a, b) => a.timestamp - b.timestamp);
- setChatMessages(msgs);
+  startTransition(() => setChatMessages(msgs.slice(-300)));
  });
  return () => unsub();
  }, [selectedChat]);

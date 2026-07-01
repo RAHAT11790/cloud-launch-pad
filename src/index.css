@@ -158,6 +158,27 @@ div[style*="z-index: 2147483647"],
     border: none;
   }
 
+  .admin-shell {
+    content-visibility: auto;
+    contain-intrinsic-size: 900px 1400px;
+  }
+
+  .admin-optimized-panel,
+  .admin-isolated-overlay {
+    contain: layout paint style;
+    isolation: isolate;
+  }
+
+  .admin-isolated-overlay {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .admin-scroll-smooth {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .neu-raised {
     box-shadow: var(--neu-shadow);
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
@@ -360,8 +360,14 @@ export default function AnManager({
       mapped.forEach((x) => { if (!dedup.has(x.slug)) dedup.set(x.slug, x); });
       const candidates = Array.from(dedup.values());
       setVerifyProgress({ done: 0, total: candidates.length });
-      const playable = await filterPlayableItems(candidates, forceRefresh, (done, total) => setVerifyProgress({ done, total }));
-      setApiItems(playable);
+      let lastProgress = 0;
+      const playable = await filterPlayableItems(candidates, forceRefresh, (done, total) => {
+        if (done === total || done - lastProgress >= 6) {
+          lastProgress = done;
+          startTransition(() => setVerifyProgress({ done, total }));
+        }
+      });
+      startTransition(() => setApiItems(playable));
     } catch (e: any) {
       toast.error("AN API load failed: " + (e?.message || "unknown"));
     } finally {
@@ -380,7 +386,7 @@ export default function AnManager({
   // Saved listener
   useEffect(() => {
     const unsub = onValue(ref(db, SELECTED_PATH), (snap) => {
-      setSaved((snap.val() as Record<string, SavedItem>) || {});
+      startTransition(() => setSaved((snap.val() as Record<string, SavedItem>) || {}));
     });
     return () => unsub();
   }, []);
@@ -388,13 +394,15 @@ export default function AnManager({
   // Global toggle listener
   useEffect(() => {
     const unsub = onValue(ref(db, SETTINGS_PATH), (snap) => {
-      setGlobalEnabled(snap.val() !== false);
+      startTransition(() => setGlobalEnabled(snap.val() !== false));
     });
     return () => unsub();
   }, []);
 
+  const deferredQuery = useDeferredValue(query);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     const merged = new Map<string, ApiItem | SavedItem>();
     apiItems.forEach((it) => merged.set(it.slug, it));
     Object.values(saved).forEach((it) => {
@@ -412,7 +420,7 @@ export default function AnManager({
       if (q && !it.title.toLowerCase().includes(q) && !it.slug.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [apiItems, query, typeFilter, saved]);
+  }, [apiItems, deferredQuery, typeFilter, saved]);
 
   const stats = useMemo(() => {
     const seriesCount = apiItems.filter((x) => x.type === "series").length;
@@ -425,6 +433,8 @@ export default function AnManager({
       filtered: filtered.length,
     };
   }, [apiItems, saved, filtered]);
+
+  const visibleFiltered = useMemo(() => filtered.slice(0, 96), [filtered]);
 
   const missingCategoryItems = useMemo(() =>
     Object.values(saved)
@@ -441,7 +451,7 @@ export default function AnManager({
     });
   };
 
-  const selectAllVisible = () => setSelectedSlugs(new Set(filtered.map((x) => x.slug)));
+  const selectAllVisible = () => setSelectedSlugs(new Set(visibleFiltered.map((x) => x.slug)));
   const clearSelection = () => setSelectedSlugs(new Set());
 
   // Save one (with TMDB auto-pick if exactly 1 result; otherwise opens picker)
@@ -933,8 +943,14 @@ export default function AnManager({
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-[#D1C4E9]">No items match your filters.</div>
         ) : (
+          <>
+          {filtered.length > visibleFiltered.length && (
+            <div className="mb-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-100">
+              Showing first {visibleFiltered.length} of {filtered.length}. Use search/type filters for more precise results.
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {filtered.map((it) => {
+            {visibleFiltered.map((it) => {
               const isSaved = !!saved[it.slug];
               const display = (saved[it.slug] || it) as SavedItem;
               const isSelected = selectedSlugs.has(it.slug);
@@ -1044,6 +1060,7 @@ export default function AnManager({
               );
             })}
           </div>
+          </>
         )}
       </div>
 

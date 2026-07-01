@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
@@ -66,6 +66,7 @@ export default function WeeklyEpisodeManager({
   // Picker state
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
+  const deferredPickerSearch = useDeferredValue(pickerSearch);
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [selectedDay, setSelectedDay] = useState<Day>(todayName());
 
@@ -78,7 +79,7 @@ export default function WeeklyEpisodeManager({
 
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklySchedule"), snap => {
-      setSchedules(snap.val() || {});
+      startTransition(() => setSchedules(snap.val() || {}));
     });
     return () => unsub();
   }, []);
@@ -110,10 +111,12 @@ export default function WeeklyEpisodeManager({
 
   const scheduledIds = Object.keys(schedules);
   const availableSeries = useMemo(() => {
+    const q = deferredPickerSearch.trim().toLowerCase();
     return webseriesData
       .filter(s => !scheduledIds.includes(s.id))
-      .filter(s => !pickerSearch.trim() || s.title?.toLowerCase().includes(pickerSearch.toLowerCase()));
-  }, [webseriesData, scheduledIds, pickerSearch]);
+      .filter(s => !q || s.title?.toLowerCase().includes(q))
+      .slice(0, 80);
+  }, [webseriesData, scheduledIds, deferredPickerSearch]);
 
   const dayCounts = useMemo(() => {
     const counts: Record<Day, number> = {
@@ -130,7 +133,8 @@ export default function WeeklyEpisodeManager({
         if (activeDay === "AllDay") return s.day === "AllDay";
         return s.day === activeDay || s.day === "AllDay";
       })
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .slice(0, 120);
   }, [schedules, activeDay]);
 
   async function saveSchedule(seriesId: string, day: Day, opts?: { silent?: boolean }) {
