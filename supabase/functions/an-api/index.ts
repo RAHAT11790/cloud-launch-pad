@@ -259,13 +259,17 @@ async function detail(slug: string, type: string, forceRefresh = false) {
 
   const seasons = new Map<number, { name: string; seasonNumber: number; episodes: any[] }>();
 
-  const addEpisode = (epSlug: string, defaultSeason: number, rawTitle = "") => {
+  const addEpisode = (epSlug: string, defaultSeason: number, rawTitle = "", strictSeason = false) => {
     const cleanSlug = String(epSlug || "").trim().replace(/^\/+|\/+$/g, "");
     if (!cleanSlug) return;
     const sx = cleanSlug.match(/(?:^|[-_])(\d+)x(\d+)$/i) || cleanSlug.match(/s(\d+)e(\d+)$/i);
     const seasonNum = sx ? Number(sx[1]) : defaultSeason;
     const epNum = sx ? Number(sx[2]) : 0;
     if (!Number.isFinite(seasonNum) || seasonNum <= 0) return;
+    // Strict mode: reject episode slugs whose encoded season differs from the
+    // season AnimeSalt is actually serving. Prevents S2/S3/S4 leakage from
+    // cross-links on the main page or "related" strips.
+    if (strictSeason && seasonNum !== defaultSeason) return;
     if (!seasons.has(seasonNum)) seasons.set(seasonNum, { name: `Season ${seasonNum}`, seasonNumber: seasonNum, episodes: [] });
     const bucket = seasons.get(seasonNum)!.episodes;
     if (bucket.some((e) => e.slug === cleanSlug)) return;
@@ -279,12 +283,7 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     });
   };
 
-  const harvestEpisodes = (body: string, defaultSeason: number) => {
-    // AnimeSalt's AJAX fragments are small <li> blocks, but the markup shifts
-    // between pages.  The old extractor depended on a complete closing </a> and
-    // therefore sometimes captured only one later-season episode.  First parse
-    // every episode href (the reliable source of truth), then optionally improve
-    // the title from the surrounding anchor text.
+  const harvestEpisodes = (body: string, defaultSeason: number, strictSeason = false) => {
     const hrefRe = /href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/([^"'/?#]+)\/?["']/gi;
     let m: RegExpExecArray | null;
     while ((m = hrefRe.exec(body))) {
@@ -292,26 +291,23 @@ async function detail(slug: string, type: string, forceRefresh = false) {
       const end = Math.min(body.length, m.index + 1200);
       const around = body.slice(start, end);
       const anchor = around.match(/<a\b[^>]*href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/[^"']+["'][^>]*>([\s\S]*?)<\/a>/i);
-      addEpisode(m[1], defaultSeason, anchor?.[1] || "");
+      addEpisode(m[1], defaultSeason, anchor?.[1] || "", strictSeason);
     }
-
-    // Fallback for JS-escaped URLs or future markup that exposes episode URLs
-    // outside href attributes.
     const urlRe = /(?:https?:)?\\?\/\\?\/animesalt\.(?:ac|top)\\?\/episode\\?\/([a-z0-9-]+)\\?\/?/gi;
-    while ((m = urlRe.exec(body))) addEpisode(m[1], defaultSeason);
+    while ((m = urlRe.exec(body))) addEpisode(m[1], defaultSeason, "", strictSeason);
   };
 
-  // Static HTML usually contains only the currently-selected season (Season 1).
-  harvestEpisodes(html, 1);
-
-  // AnimeSalt loads each additional season via WP AJAX:
-  //   /wp-admin/admin-ajax.php?action=action_select_season&season=N&post=POSTID
-  // Without this fetch we only ever see Season 1 — which is why Demon Slayer
-  // and every multi-season anime had episodes missing.
   const postId = html.match(/data-post=["'](\d+)["']/)?.[1];
   const seasonNums = Array.from(new Set(
     Array.from(html.matchAll(/data-season=["'](\d+)["']/g)).map((m) => Number(m[1])).filter((n) => Number.isFinite(n) && n > 0),
   )).sort((a, b) => a - b);
+
+  // Only harvest from the static HTML if AnimeSalt didn't expose a season
+  // selector — otherwise the AJAX responses are the authoritative source per
+  // season and the static HTML tends to contain cross-links to unrelated seasons.
+  if (!postId || !seasonNums.length) {
+    harvestEpisodes(html, 1, true);
+  }
 
   if (postId && seasonNums.length) {
     await Promise.all(seasonNums.map(async (sNum) => {
@@ -319,7 +315,8 @@ async function detail(slug: string, type: string, forceRefresh = false) {
         const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
           headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },
         });
-        harvestEpisodes(seasonHtml, sNum);
+        // Strict: only accept episodes whose slug encodes this exact season.
+        harvestEpisodes(seasonHtml, sNum, true);
       } catch {}
     }));
   }
