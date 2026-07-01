@@ -452,6 +452,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     } catch { return true; }
   })();
   const brandingCfg = useBranding();
+  const { wallet: coinWallet } = usePremium();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try {
