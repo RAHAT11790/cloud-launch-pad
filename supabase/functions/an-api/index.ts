@@ -19,7 +19,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const TEXT_TIMEOUT_MS = 7_000;
 const PLAYER_TIMEOUT_MS = 6_500;
-const API_CACHE_VERSION = "v6-separate-av-only";
+const API_CACHE_VERSION = "v7-season-range-index";
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
 const getCache = <T>(key: string, forceRefresh = false): T | null => {
   if (forceRefresh) {
@@ -312,6 +312,26 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     return added;
   };
 
+  const harvestEpisodesFromSeasonRanges = (buttons: typeof seasonButtons) => {
+    let added = 0;
+    for (const button of buttons) {
+      if (!button.regional) continue;
+      const text = button.text || "";
+      const range = text.match(/(?:^|\D)(\d{1,4})\s*-\s*(\d{1,4})(?:\D|$)/);
+      const count = text.match(/\((\d{1,4})\)/);
+      if (!range) continue;
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      const expected = count ? Number(count[1]) : (end - start + 1);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start || end - start > 250) continue;
+      if (Number.isFinite(expected) && expected > 0 && expected !== end - start + 1) continue;
+      for (let ep = start; ep <= end; ep++) {
+        if (addEpisode(`${slug}-${button.season}x${ep}`, button.season, `Episode ${ep}`, true)) added++;
+      }
+    }
+    return added;
+  };
+
   const postId = html.match(/data-post=["'](\d+)["']/)?.[1];
   const seasonButtons: { season: number; postId: string; html: string; text: string; regional: boolean }[] = [];
   const seasonBtnRe = /<a\b[^>]*data-post=["'](\d+)["'][^>]*data-season=["'](\d+)["'][^>]*>[\s\S]*?<\/a>/gi;
@@ -336,14 +356,21 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     : rawSeasonNums;
   const seasonNums = regionalSeasonNums.length ? regionalSeasonNums : rawSeasonNums;
 
+  // Fast authoritative path: AnimeSalt's selector already contains the exact
+  // regional episode ranges, e.g. Naruto Shippuden S1..S16 and S17..S22 marked
+  // [Sub]. Generating the canonical episode slugs from that selector avoids the
+  // heavy AJAX fan-out that was hitting Edge worker limits and prevents random
+  // partial results such as only S1/S16/S22.
+  const rangeGenerated = seasonButtons.length ? harvestEpisodesFromSeasonRanges(seasonButtons) : 0;
+
   // Only harvest from the static HTML if AnimeSalt didn't expose a season
   // selector — otherwise the AJAX responses are the authoritative source per
   // season and the static HTML tends to contain cross-links to unrelated seasons.
-  if (!postId || !seasonNums.length) {
+  if (!rangeGenerated && (!postId || !seasonNums.length)) {
     harvestEpisodes(html, 1, true);
   }
 
-  if (postId && seasonNums.length) {
+  if (!rangeGenerated && postId && seasonNums.length) {
     const CONCURRENCY = 8;
     let cursor = 0;
     const htmlBySeason = new Map<number, string>();
@@ -931,18 +958,18 @@ Deno.serve(async (req) => {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "series";
       if (!slug) return json({ success: false, error: "missing ?slug=" }, 200);
-      return json(await detail(slug, type, url.searchParams.get("force") === "1"));
+      return json(await detail(slug, type, url.searchParams.get("force") === "1" || url.searchParams.get("refresh") === "1"));
     }
     if (path === "/episode") {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "";
       if (!slug) return json({ success: false, error: "missing ?slug=" }, 200);
-      return json(await episode(slug, type, url.searchParams.get("force") === "1"));
+      return json(await episode(slug, type, url.searchParams.get("force") === "1" || url.searchParams.get("refresh") === "1"));
     }
     if (path === "/embed") {
       const embedUrl = url.searchParams.get("url") || "";
       if (!embedUrl) return json({ success: false, error: "missing ?url=" }, 200);
-      return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1"));
+      return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1" || url.searchParams.get("refresh") === "1"));
     }
     if (path === "/hls") {
       const target = url.searchParams.get("url") || "";
