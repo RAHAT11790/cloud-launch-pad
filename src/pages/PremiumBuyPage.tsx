@@ -31,7 +31,7 @@ export default function PremiumBuyPage() {
     if (res.ok) {
       toast({ title: "Premium Activated 🎉", description: `Enjoy ${plan.days} days of premium!` });
     } else {
-      toast({ title: "Purchase failed", description: res.reason, variant: "destructive" });
+      toast({ title: "Purchase failed", description: (res as any).reason, variant: "destructive" });
     }
   };
 
