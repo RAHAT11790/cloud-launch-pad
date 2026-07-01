@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useMemo } from "react";
-import { Star, Heart } from "lucide-react";
+import { Star, Heart, Crown } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
 import { optimizedImageUrl } from "@/lib/imageCache";
