@@ -983,6 +983,8 @@ export default function AnManager({
                         src={display.poster}
                         alt={display.title}
                         className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[10px] text-[#D1C4E9]">No image</div>
