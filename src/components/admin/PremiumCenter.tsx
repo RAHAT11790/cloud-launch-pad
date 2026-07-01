@@ -102,7 +102,7 @@ export default function PremiumCenter() {
   const filtered = useMemo(() => {
     return allSeries.filter((s) => {
       if (sourceFilter === "RS" && s.path !== "series") return false;
-      if (sourceFilter === "AN" && s.path !== "animeSaltSelected") return false;
+      if (sourceFilter === "AN" && s.path !== "animesaltSelected") return false;
       if (dubFilter !== "all" && (s.dubType || "official") !== dubFilter) return false;
       if (premiumFilter === "premium" && !s.premium) return false;
       if (premiumFilter === "free" && s.premium) return false;
