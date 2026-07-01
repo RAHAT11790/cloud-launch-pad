@@ -25,7 +25,7 @@ const withCorsJson = (data: unknown, status = 200) => json({ success: false, leg
 Deno.serve(async (req) => {
   try {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    if (req.method !== "GET" && req.method !== "POST") return json({ success: false, error: "method not allowed" }, 405);
+    if (req.method !== "GET" && req.method !== "POST") return json({ success: false, error: "method not allowed" }, 200);
 
     const url = new URL(req.url);
     const requestedSlug = url.searchParams.get("slug") || "";
