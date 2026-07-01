@@ -221,7 +221,7 @@ const hasRealCategory = (item: Pick<SavedItem, "category" | "genres">) => {
   return (!!cat && !GENERIC_CATEGORIES.has(cat)) || normalizeGenres(item.genres).length > 0;
 };
 
-const PLAYABLE_CACHE_PREFIX = "rs_an_playable_v1:";
+const PLAYABLE_CACHE_PREFIX = "rs_an_playable_v2:";
 const PLAYABLE_OK_TTL = 24 * 60 * 60 * 1000;
 const PLAYABLE_FAIL_TTL = 2 * 60 * 60 * 1000;
 const playableCacheKey = (item: Pick<ApiItem, "type" | "slug">) => `${PLAYABLE_CACHE_PREFIX}${item.type}:${item.slug}`;
@@ -544,6 +544,7 @@ export default function AnManager({
       localStorage.removeItem("rs_cache_animesalt_api_cards_v2");
       localStorage.removeItem("rs_cache_animesalt_api_cards_v3");
       localStorage.removeItem("animesalt_all_v3");
+      Object.keys(localStorage).filter((k) => k.startsWith("rs_an_playable_")).forEach((k) => localStorage.removeItem(k));
     } catch {}
     toast.success("Loaded AN cards cleared");
   };
