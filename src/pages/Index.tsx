@@ -1997,6 +1997,17 @@ const Index = () => {
       return;
     }
 
+    // Premium gate — series-level or per-episode lock
+    const seriesLike = anime as any;
+    const sIdx = seasonIdx ?? 0;
+    const eIdx = epIdx ?? 0;
+    const locked = isSeriesLocked(seriesLike) || isEpisodeLocked(seriesLike, sIdx, eIdx);
+    if (locked && !userIsPremium) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+      return;
+    }
+
+
   const isAnimeSaltContentEarly = anime.source === "animesalt"
     || String(anime.id || "").startsWith("as_")
     || String(anime.id || "").startsWith("an_")
