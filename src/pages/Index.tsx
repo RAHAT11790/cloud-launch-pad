@@ -878,6 +878,7 @@ const Index = () => {
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+  const { isPremium: userIsPremium } = usePremium();
 
   // Device limit enforcement for already logged-in users
   const [deviceLimitWarning, setDeviceLimitWarning] = useState<{
