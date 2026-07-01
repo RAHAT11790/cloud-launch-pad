@@ -19,7 +19,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const TEXT_TIMEOUT_MS = 7_000;
 const PLAYER_TIMEOUT_MS = 6_500;
-const API_CACHE_VERSION = "v7-season-range-index";
+const API_CACHE_VERSION = "v8-tail-playability";
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
 const getCache = <T>(key: string, forceRefresh = false): T | null => {
   if (forceRefresh) {
@@ -404,6 +404,27 @@ async function detail(slug: string, type: string, forceRefresh = false) {
       episodes: s.episodes.sort((a, b) => a.number - b.number),
     }));
 
+  // The season selector is the fast source of truth for Hindi/regional ranges,
+  // but AnimeSalt can still leave a final boundary episode as a mixed/master-only
+  // HLS entry.  Probe only the trailing edge and trim those entries.  This keeps
+  // detail fetching fast while enforcing the current policy: no mixed A/V URLs in
+  // the user panel list.
+  const trimmedTailEpisodes: string[] = [];
+  let tailProbes = 0;
+  const MAX_TAIL_PROBES = 8;
+  outer: for (let si = seasonsArr.length - 1; si >= 0; si--) {
+    const season = seasonsArr[si];
+    while (season.episodes.length && tailProbes < MAX_TAIL_PROBES) {
+      const last = season.episodes[season.episodes.length - 1];
+      tailProbes++;
+      const ok = await verifyEpisodeHindiPlayable(last.slug);
+      if (ok) break outer;
+      trimmedTailEpisodes.push(last.slug);
+      season.episodes.pop();
+    }
+  }
+  seasonsArr = seasonsArr.filter((s) => s.episodes.length > 0);
+
   return setCache(cacheKey, {
     slug,
     type: t,
@@ -414,6 +435,7 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     seasonNumbers: seasonNums,
     sourceSeasonNumbers: rawSeasonNums,
     skippedSubOnlySeasons: rawSeasonNums.filter((n) => !seasonNums.includes(n)),
+    trimmedTailEpisodes,
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
     hindiFiltered: t !== "movies",
