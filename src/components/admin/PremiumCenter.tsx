@@ -56,7 +56,7 @@ export default function PremiumCenter() {
   useEffect(() => subscribeCoinAds(setAds), []);
 
   useEffect(() => {
-    const mapRows = (raw: any, path: "series" | "animeSaltSelected"): SeriesRow[] =>
+    const mapRows = (raw: any, path: "series" | "animesaltSelected"): SeriesRow[] =>
       Object.entries(raw || {}).map(([id, v]: any) => {
         const seasons = Array.isArray(v?.seasons) ? v.seasons : [];
         const episodesCount = seasons.reduce(
@@ -77,8 +77,8 @@ export default function PremiumCenter() {
         };
       });
     const u1 = onValue(ref(db, "series"), (snap) => setRsSeries(mapRows(snap.val(), "series")));
-    const u2 = onValue(ref(db, "animeSaltSelected"), (snap) =>
-      setAnSeries(mapRows(snap.val(), "animeSaltSelected")),
+    const u2 = onValue(ref(db, "animesaltSelected"), (snap) =>
+      setAnSeries(mapRows(snap.val(), "animesaltSelected")),
     );
     return () => { u1(); u2(); };
   }, []);
