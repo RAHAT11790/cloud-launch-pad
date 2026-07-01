@@ -452,6 +452,8 @@ import { optimizedImageUrl } from "@/lib/imageCache";
 import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { isLegacyAnEntry } from "@/lib/legacyAn";
 import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
+import { usePremium } from "@/hooks/usePremium";
+import { isEpisodeLocked, isSeriesLocked } from "@/lib/premiumAccess";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
