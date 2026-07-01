@@ -1,4 +1,13 @@
 import type { AnimeItem, AudioTrack, Episode, Season, SubtitleTrack } from "@/data/animeData";
+import {
+  normalizeCastFrom,
+  normalizeCategoryFrom,
+  normalizeDirectorsFrom,
+  normalizeGenresFrom,
+  normalizeOverviewFrom,
+  normalizeRatingFrom,
+  normalizeYearFrom,
+} from "@/lib/contentMetadata";
 
 type MapOptions = { full?: boolean };
 
@@ -85,6 +94,9 @@ const isAnimeSaltRow = (item: any) => Boolean(item?.anSlug || item?.animeSaltSlu
 export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions = {}): AnimeItem => {
   const isAn = isAnimeSaltRow(item);
   const displayAs = String(item?.displayAs || (isAn ? "an" : "rs")).toLowerCase();
+  const genres = normalizeGenresFrom(item);
+  const cast = normalizeCastFrom(item, 12);
+  const directors = normalizeDirectorsFrom(item);
   const seasons = opts.full ? mapSeasons(item?.seasons) : undefined;
   const seasonsByLanguage = opts.full && item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object"
     ? Object.fromEntries(
@@ -103,19 +115,19 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     title: item?.title || "",
     poster: item?.poster || "",
     backdrop: item?.backdrop || "",
-    year: item?.year || "",
-    rating: item?.rating || "",
+    year: normalizeYearFrom(item),
+    rating: normalizeRatingFrom(item),
     language: item?.language || "",
     baseLanguage: item?.baseLanguage || item?.language || "",
     availableLanguages: Array.isArray(item?.availableLanguages) ? item.availableLanguages : undefined,
     seasonsByLanguage,
-    category: item?.category || "",
+    category: normalizeCategoryFrom(item, genres, ""),
     type: "webseries",
-    storyline: item?.storyline || "",
+    storyline: normalizeOverviewFrom(item),
     tmdbId: item?.tmdbId || undefined,
-    genres: Array.isArray(item?.genres) ? item.genres : undefined,
-    directors: Array.isArray(item?.directors) ? item.directors : undefined,
-    cast: opts.full ? (Array.isArray(item?.cast) ? item.cast : item?.cast ? Object.values(item.cast) : undefined) : undefined,
+    genres: genres.length ? genres : undefined,
+    directors: directors.length ? directors : undefined,
+    cast: opts.full ? (cast.length ? cast : undefined) : (cast.length ? cast : undefined),
     audioTracks: opts.full ? mapAudioTracks(item?.audioTracks) : undefined,
     dubType: item?.dubType || "official",
     seasons,
@@ -130,6 +142,9 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
 export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {}): AnimeItem => {
   const isAn = isAnimeSaltRow(item);
   const displayAs = String(item?.displayAs || (isAn ? "an" : "rs")).toLowerCase();
+  const genres = normalizeGenresFrom(item);
+  const cast = normalizeCastFrom(item, 12);
+  const directors = normalizeDirectorsFrom(item);
   return {
     id,
     source: displayAs === "an" ? "animesalt" : "firebase",
@@ -141,18 +156,18 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
     title: item?.title || "",
     poster: item?.poster || "",
     backdrop: item?.backdrop || "",
-    year: item?.year || "",
-    rating: item?.rating || "",
+    year: normalizeYearFrom(item),
+    rating: normalizeRatingFrom(item),
     language: item?.language || "",
     baseLanguage: item?.baseLanguage || item?.language || "",
     availableLanguages: Array.isArray(item?.availableLanguages) ? item.availableLanguages : undefined,
-    category: item?.category || "",
+    category: normalizeCategoryFrom(item, genres, ""),
     type: "movie",
-    storyline: item?.storyline || "",
+    storyline: normalizeOverviewFrom(item),
     tmdbId: item?.tmdbId || undefined,
-    genres: Array.isArray(item?.genres) ? item.genres : undefined,
-    directors: Array.isArray(item?.directors) ? item.directors : undefined,
-    cast: opts.full ? (Array.isArray(item?.cast) ? item.cast : item?.cast ? Object.values(item.cast) : undefined) : undefined,
+    genres: genres.length ? genres : undefined,
+    directors: directors.length ? directors : undefined,
+    cast: opts.full ? (cast.length ? cast : undefined) : (cast.length ? cast : undefined),
     audioTracks: mapAudioTracks(item?.audioTracks),
     dubType: item?.dubType || "official",
     movieLink: item?.movieLink || "",
@@ -169,6 +184,9 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
 
 export const mapAnimeSaltSelectedItem = (slug: string, item: any): AnimeItem => {
   const isMovie = item?.type === "movies" || item?.type === "movie";
+  const genres = normalizeGenresFrom(item);
+  const cast = normalizeCastFrom(item, 12);
+  const directors = normalizeDirectorsFrom(item);
   return {
     id: isMovie ? `as_mv_${slug}` : `as_${slug}`,
     source: "animesalt",
@@ -179,18 +197,18 @@ export const mapAnimeSaltSelectedItem = (slug: string, item: any): AnimeItem => 
     title: item?.title || slug,
     poster: item?.poster || item?.tmdbPoster || item?.posterUrl || "",
     backdrop: item?.backdrop || item?.tmdbBackdrop || item?.backdropUrl || item?.poster || "",
-    year: item?.year || "",
-    rating: item?.rating || "",
+    year: normalizeYearFrom(item),
+    rating: normalizeRatingFrom(item),
     language: item?.language || "",
     baseLanguage: item?.baseLanguage || item?.language || "",
     availableLanguages: Array.isArray(item?.availableLanguages) ? item.availableLanguages : undefined,
-    category: item?.category || "AnimeSalt",
+    category: normalizeCategoryFrom(item, genres, "Anime"),
     type: isMovie ? "movie" : "webseries",
-    storyline: item?.storyline || "",
+    storyline: normalizeOverviewFrom(item),
     tmdbId: item?.tmdbId || undefined,
-    genres: Array.isArray(item?.genres) ? item.genres : undefined,
-    directors: Array.isArray(item?.directors) ? item.directors : undefined,
-    cast: Array.isArray(item?.cast) ? item.cast : item?.cast ? Object.values(item.cast) : undefined,
+    genres: genres.length ? genres : undefined,
+    directors: directors.length ? directors : undefined,
+    cast: cast.length ? cast : undefined,
     dubType: item?.dubType || "official",
     createdAt: item?.createdAt || item?.addedAt || 0,
     updatedAt: item?.updatedAt || item?.addedAt || 0,
