@@ -332,13 +332,26 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     }));
   }
 
-  const seasonsArr = Array.from(seasons.values())
+  let seasonsArr = Array.from(seasons.values())
     .sort((a, b) => a.seasonNumber - b.seasonNumber)
     .map((s) => ({
       name: s.name,
       seasonNumber: s.seasonNumber,
       episodes: s.episodes.sort((a, b) => a.number - b.number),
     }));
+
+  // Hindi-only playability filter. Only episodes whose AN embed actually
+  // resolves to a working HLS with a Hindi audio track are returned. Anything
+  // that would surface as a black-screen in the player is dropped here so the
+  // client never even sees the box. Results cached per-episode for 6h so a
+  // second refresh is instant.
+  if (t !== "movies") {
+    const allEpisodes = seasonsArr.flatMap((s) => s.episodes.map((e) => e.slug as string));
+    const verified = await verifyHindiPlayableBatch(allEpisodes);
+    seasonsArr = seasonsArr
+      .map((s) => ({ ...s, episodes: s.episodes.filter((e) => verified.get(e.slug) === true) }))
+      .filter((s) => s.episodes.length > 0);
+  }
 
   return setCache(cacheKey, {
     slug,
@@ -350,7 +363,43 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     seasonNumbers: seasonNums,
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
+    hindiFiltered: t !== "movies",
   }, 60 * 60_000);
+}
+
+// ---------- HINDI PLAYABILITY VERIFICATION ----------
+async function verifyEpisodeHindiPlayable(epSlug: string): Promise<boolean> {
+  const key = `hindiOk:${epSlug}`;
+  const cached = getCache<boolean>(key);
+  if (cached !== null) return cached;
+  try {
+    const data: any = await episode(epSlug, "", false);
+    const ok = !!data?.success
+      && Array.isArray(data.streams) && data.streams.length > 0
+      && Array.isArray(data.audio) && data.audio.some((a: any) =>
+        a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`),
+      );
+    setCache(key, ok, ok ? 6 * 60 * 60_000 : 30 * 60_000);
+    return ok;
+  } catch {
+    setCache(key, false, 10 * 60_000);
+    return false;
+  }
+}
+
+async function verifyHindiPlayableBatch(slugs: string[]): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  const CONCURRENCY = 16;
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(CONCURRENCY, slugs.length) }, async () => {
+    while (cursor < slugs.length) {
+      const idx = cursor++;
+      const s = slugs[idx];
+      out.set(s, await verifyEpisodeHindiPlayable(s));
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 // ---------- STREAM EXTRACTION ----------
