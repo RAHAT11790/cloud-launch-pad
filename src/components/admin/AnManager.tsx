@@ -300,7 +300,10 @@ export default function AnManager({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return apiItems.filter((it) => {
+    const merged = new Map<string, ApiItem | SavedItem>();
+    apiItems.forEach((it) => merged.set(it.slug, it));
+    Object.values(saved).forEach((it) => { if (it?.slug) merged.set(it.slug, { ...merged.get(it.slug), ...it }); });
+    return Array.from(merged.values()).filter((it) => {
       if (typeFilter === "series" && it.type !== "series") return false;
       if (typeFilter === "movies" && it.type !== "movies") return false;
       if (typeFilter === "saved" && !saved[it.slug]) return false;
