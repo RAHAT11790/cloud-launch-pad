@@ -933,6 +933,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return anime.cast.filter((person) => person?.name || person?.character || person?.photo).slice(0, 12);
   }, [anime]);
 
+  const infoDirectors = useMemo(() => {
+    if (!anime?.directors?.length) return [];
+    return anime.directors.map((name) => String(name || "").trim()).filter(Boolean).slice(0, 4);
+  }, [anime?.directors]);
+
+  const infoStoryline = anime?.storyline || (anime as any)?.overview || "No storyline available yet.";
+
   const infoMetaItems = useMemo(() => {
     const items = [
       anime?.rating ? `★ ${anime.rating}` : "",
@@ -4932,7 +4939,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               <div className="space-y-1.5">
                 <h5 className="text-[13px] font-semibold">Info</h5>
-                <p className="text-[12px] leading-5 text-white/70">{anime?.storyline || 'No storyline available yet.'}</p>
+                <p className="text-[12px] leading-5 text-white/70">{infoStoryline}</p>
+                {!!infoDirectors.length && (
+                  <p className="text-[11px] leading-5 text-white/55">
+                    <span className="text-white/75 font-semibold">Director:</span> {infoDirectors.join(", ")}
+                  </p>
+                )}
               </div>
 
               {!!infoCast.length && (
