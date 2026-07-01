@@ -1,77 +1,106 @@
-## সমস্যা ও সমাধান প্ল্যান
+# Premium System — Full Build Plan
 
-আপনার সব requirement বুঝলাম। নিচে A→Z কাজের list, প্রায়োরিটি অনুযায়ী।
+অনেক বড় feature request। একবারে সব ঠিকঠাক বানানোর জন্য নিচের কাঠামো follow করব।
 
-### 1. Ultra-Fast API Layer (`src/lib/animeSaltApi.ts` + `supabase/functions/an-api`)
-- **Concurrency বাড়াব**: pagination concurrency 6→12, episode/season parallel fetch।
-- **Retry + Timeout + Abort**: প্রতিটা request-এ exponential backoff (3 try, 400ms→1.6s), 8s timeout, AbortController।
-- **In-flight dedup**: একই slug-এর parallel call একটাই network hit।
-- **Memory cache layer**: 5 min in-memory (Map), instant repeat hit।
-- **Multi-endpoint fallback**: edge function fail হলে direct origin + mirror domain try (already partial — পূর্ণ করব)।
-- **Edge function**: parallel page scrape, HTML stream parse (regex pre-compiled), gzip response।
+## 1. Data Model (Firebase RTDB)
 
-### 2. Pre-Player Loading Flow (`src/pages/Index.tsx` + নতুন `LoadingDetailsOverlay.tsx`)
-- বর্তমান: card click → player open → "Video source is still loading"। **এটা সম্পূর্ণ সরাব।**
-- নতুন flow:
-  ```
-  Card click → Full-screen "Loading Details" overlay
-    ├─ Fetching episodes…
-    ├─ Loading audio tracks…
-    ├─ Preparing stream…
-    └─ Almost ready…
-  → সব ready হলে → Player open → instant play
-  ```
-- নতুন component `LoadingDetailsOverlay.tsx`: progressive step text, animated progress bar, anime poster background blur।
-- `handleCardClick` AN branch refactor: series হলে seasons + first episode streams + audio সব pre-resolve, তারপর `openPlayerFromAnime`।
-- `VideoPlayer.tsx` থেকে "Video source is still loading. Please tap again" toast/banner সম্পূর্ণ delete।
+**Anime/Series flags** (`animeSaltSelected/<slug>` & `series/<id>`):
+- `dubType`: `"official" | "fan"` (Admin toggle)
+- `premium`: `true/false` (whole series lock)
+- `premiumEpisodes`: `{ "s1e5": true, ... }` (per-episode lock)
+- `qualityLocks`: `{ "1080p": true, "4k": true }` (per-series quality lock)
 
-### 3. Local Cache (LocalStorage + IndexedDB)
-- নতুন `src/lib/anPlaybackCache.ts`:
-  - Key: `an_pb_<slug>`, TTL: 4 ঘন্টা।
-  - Series: full seasons + episode streams + audio।
-  - Movie: streams + audio।
-  - Episode-level cache: `an_ep_<slug>` TTL 4h।
-- Cache hit → 0ms playback open। Miss/expired → live fetch + background refresh।
-- IndexedDB fallback বড় payload-এর জন্য (idb-keyval pattern, lightweight)।
-- Firebase-এ video URL save **করব না** (আপনি বলেছেন)।
+**Global settings** (`settings/premium`):
+- `globalQualityLocks`: `{ "4k": true, "1080p": false }` — site-wide
+- `globalDownloadLock`: `true` (premium-only downloads)
+- `coinPlan`: `{ coins: 20, days: 5 }` (editable, default only plan)
+- `extraPlans`: `[ { name, coins, days } ]` (admin can add)
 
-### 4. Episode Timer Reset Bug (`VideoPlayer.tsx`)
-- Episode switch হলে `video.currentTime = 0` force, saved progress restore শুধু same episode resume-এ।
-- `lastPlayedKey` tracking যোগ করব episode change detect করতে।
+**User** (`users/<uid>/premium`):
+- `active: bool`, `expiresAt: ms`, `source: "coin"|"bkash"|"redeem"`
+- `coins: number`
+- `adWatchLog`: `{ [YYYY-MM-DD]: { count, adIds: [] } }` (max 5/day)
 
-### 5. TMDB Full Enrichment (`src/components/admin/AnManager.tsx`)
-- নতুন fields fetch + Firebase save: `rating`, `releaseYear`, `overview`, `genres`, `studios`, `runtime`, `seasonCount`, `episodeCount`, `originalTitle`, `nativeTitle`, `cast` (top 10 with character + photo), `directors`, `writers`, `producers`, `popularity`, `voteCount`, `logos`, `keywords`, `backdrop`।
-- নতুন button **"Load All Details"**: queue-based bulk updater, concurrency 4, progress bar (X/Y done), failed retry, resumable।
-- Per-row "Refresh" icon-button for single anime।
+## 2. Admin Panel Changes
 
-### 6. Card UI Fix (`src/components/AnimeCard.tsx` + `Index.tsx` map)
-- **AN badge** সব AN card-এ visible (currently missing) — `source==="animesalt"` check করে absolute corner badge।
-- **Rating** star + value সব card-এ; missing হলে "—" placeholder নয়, TMDB fallback।
-- **Year** badge সব card-এ।
-- Movie cards same treatment with "MOVIE" badge।
-- mapper `mapSaved`-এ TMDB fields properly pass through।
+### A. Series Editor (existing `AnManager` + RS `Admin.tsx` series list)
+- Dub selector: **Official Dub / Fan Dub** radio → splits list into two columns/tabs.
+- New row button beside Edit/Delete: **⭐ Premium** (toggles full-series lock).
+- Inside editor modal: 
+  - Quality lock checkboxes (480/720/1080/4K)
+  - Episode lock grid (click episodes to toggle premium)
 
-### 7. Multi-API Fallback Router
-- `animeSaltApi` এ ordered endpoint list: edge `an-api` → direct origin → mirror। প্রতিটাতে retry, fail হলে next।
+### B. New Top-Level Admin Tab: **"Premium Center"**
+Central hub for all premium controls:
+- **Series Lock Manager** — searchable list of all AN + RS with Premium toggle
+- **Episode Lock Manager** — pick series → toggle episodes
+- **Quality Lock Manager** — global + per-series quality locks (4K default on, 1080p off)
+- **Download Lock Toggle** — global switch
+- **Plans Manager** — default `20 coins / 5 days`, add/edit/remove extra plans
+- **Coin Ad Manager** — paste up to 5 Adsterra direct-link scripts
+- **User Premium Overview** — search user, grant/revoke premium, view coin balance
 
-### 8. Error UX
-- সব path-এ try/catch + toast (Bengali friendly message)।
-- Player crash impossible — loading overlay-এ fail হলে retry button।
+### C. Fan Dub Section
+New sidebar button **"Fan Dub Anime"** → dedicated page listing only `dubType === "fan"` series with quick premium/lock controls.
 
-### Technical details (developer notes)
-- Files to edit: `src/lib/animeSaltApi.ts`, `src/pages/Index.tsx`, `src/components/VideoPlayer.tsx`, `src/components/AnimeCard.tsx`, `src/components/admin/AnManager.tsx`, `src/hooks/useSelectedAnimeSalt.ts`, `supabase/functions/an-api/index.ts`।
-- Files to create: `src/lib/anPlaybackCache.ts`, `src/components/LoadingDetailsOverlay.tsx`।
-- Existing `src/lib/anLivePlayback.ts` extend করব cache integration-এর জন্য।
-- Card badge change pure presentational — backend untouched।
-- Timer fix scoped to AN branch, RS playback অপরিবর্তিত।
+## 3. User Panel Changes
 
-### Verification
-- Build clean।
-- Playwright দিয়ে: card click → loading overlay visible → player opens instantly → no "still loading" toast → episode switch → timer 00:00।
-- Admin "Load All Details" run করে 10+ anime enrichment confirm, card-এ rating/year/AN badge দেখাব।
+### A. Premium Gate
+When free user clicks a premium series/episode/quality → route to `/premium-required` page:
+- Big website logo, gradient hero
+- "This content is Premium Only"
+- Two CTAs: **Buy Premium** → `/premium` , **Get Free Premium** → `/free-premium`
+- Smooth motion (framer-motion), glass-morphism cards
 
-### বাদ দিচ্ছি (intentional)
-- Firebase-এ video URL cache (আপনি না বলেছেন)।
-- Production-grade IndexedDB lib (lightweight wrapper যথেষ্ট)।
+### B. `/premium` Page (Buy)
+Three buttons (existing bKash, Redeem Code + **new "Buy with Coins"**):
+- Coin button shows current balance, plan (`20 coins → 5 days`), disabled if <20
+- On click → deduct 20 coins, activate `premium.active=true, expiresAt=now+5d`
+- Extra admin-added plans render as extra cards
 
-Approve করলে A→8 ক্রমে implement করে screenshot proof সহ report দেব।
+### C. `/free-premium` Page (Earn Coins)
+Master ad grid — up to 5 Adsterra direct-link cards (only 1/day per ad):
+- Click card → opens ad URL in new tab, starts 15s background timer
+- If user returns before 15s → no coin
+- After 15s + return → **coin animation** (floating +1 coin dropping into balance) + Firebase write
+- Daily cap: 5 coins/day (one per ad)
+- Progress bar: `X/20 coins → Buy 5-day Premium`
+
+### D. Profile Page
+New **Coin Balance Card** with animated counter + "Redeem for Premium" button.
+
+### E. Video Player
+- Before load: check `premium` flags → if locked & user not premium, redirect to gate page
+- Quality selector: locked qualities show 🔒 → click routes to gate
+- Download button: if `globalDownloadLock` && !premium → 🔒 → gate
+- Keep existing 4K lock, remove auto-1080p lock behavior
+
+## 4. Technical Details
+
+**New files:**
+- `src/pages/PremiumRequired.tsx` — gate page
+- `src/pages/PremiumPage.tsx` — buy page (refactor if exists)
+- `src/pages/FreePremium.tsx` — coin earning page
+- `src/components/CoinAnimation.tsx` — floating +1 animation
+- `src/components/admin/PremiumCenter.tsx` — admin hub
+- `src/components/admin/FanDubManager.tsx` — fan dub list
+- `src/lib/premiumAccess.ts` — `isPremium(user)`, `canPlay(anime, ep, quality, user)`, `spendCoins()`, `awardCoin()`
+- `src/hooks/usePremium.ts` — reactive user premium state
+
+**Routes:** `/premium-required`, `/premium`, `/free-premium` added to `App.tsx`.
+
+**Guard integration:** hook into `Index.tsx handlePlay` — before opening player, run `canPlay()` gate.
+
+**Design system:** use existing semantic tokens; gold/amber gradient for premium (`--premium: 45 100% 55%`), coin icon = Lucide `Coins`. Glass cards, framer-motion enter animations, professional spacing.
+
+## 5. Delivery Order (single build)
+
+1. Data helpers (`premiumAccess.ts`, `usePremium.ts`) + Firebase paths
+2. Admin Premium Center + series editor buttons + Fan Dub tab
+3. Premium gate page + route guards in player
+4. `/premium` Buy-with-Coins button
+5. `/free-premium` ad grid + 15s timer + coin animation
+6. Profile balance card
+7. Preview test: lock a series, verify gate → earn coins → buy → unlock
+
+সব একসাথে বানাব, প্রতিটা step টেস্ট করে দেখাব। শুরু করি?
