@@ -799,7 +799,7 @@ const Index = () => {
 
   const userCategoryPills = useMemo(() => {
     const byKey = new Map<string, string>();
-    [...categories, ...allAnime.flatMap((item) => splitCategoryLabels(item.category))]
+    [...categories, ...allAnime.flatMap((item) => contentCategoryLabels(item))]
       .map((cat) => String(cat || "").trim())
       .filter(Boolean)
       .forEach((cat) => {
