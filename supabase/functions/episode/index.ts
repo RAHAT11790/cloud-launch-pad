@@ -20,6 +20,7 @@ const json = (data: unknown, status = 200) =>
 const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|cartoon\s*network|nickelodeon|disney|pixar|tintin|tin\s*tin)\b/i;
 const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan|solo\s*leveling)\b/i;
 const blockedCartoonSlug = (slug: string) => CARTOON_BLOCK_RE.test(String(slug || "").replace(/[-_]+/g, " ").toLowerCase()) && !ANIME_ALLOW_RE.test(slug);
+const withCorsJson = (data: unknown, status = 200) => json({ success: false, legacyEpisodeProxy: true, ...((data && typeof data === "object") ? data as Record<string, unknown> : { error: String(data || "unknown") }) }, status);
 
 Deno.serve(async (req) => {
   try {
@@ -41,15 +42,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 12_000);
     const upstream = await fetch(target.toString(), {
       method: "GET",
       headers: { Accept: "application/json,*/*" },
       redirect: "follow",
-    });
+      signal: ac.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!upstream.ok) {
+      let body: any = null;
+      try { body = await upstream.json(); } catch {}
+      return withCorsJson({ retryable: true, status: upstream.status, error: body?.error || `AN API upstream ${upstream.status}` }, 200);
+    }
     const headers = new Headers(cors);
     headers.set("Content-Type", upstream.headers.get("content-type") || "application/json; charset=utf-8");
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
   } catch (e) {
-    return json({ success: false, fallback: true, error: (e as Error)?.message || String(e) }, 200);
+    return withCorsJson({ retryable: true, fallback: true, error: (e as Error)?.name === "AbortError" ? "AN API timeout" : ((e as Error)?.message || String(e)) }, 200);
   }
 });
