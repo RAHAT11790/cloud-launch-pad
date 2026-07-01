@@ -221,6 +221,86 @@ const hasRealCategory = (item: Pick<SavedItem, "category" | "genres">) => {
   return (!!cat && !GENERIC_CATEGORIES.has(cat)) || normalizeGenres(item.genres).length > 0;
 };
 
+const PLAYABLE_CACHE_PREFIX = "rs_an_playable_v1:";
+const PLAYABLE_OK_TTL = 24 * 60 * 60 * 1000;
+const PLAYABLE_FAIL_TTL = 2 * 60 * 60 * 1000;
+const playableCacheKey = (item: Pick<ApiItem, "type" | "slug">) => `${PLAYABLE_CACHE_PREFIX}${item.type}:${item.slug}`;
+
+const readPlayableCache = (item: ApiItem, force = false): boolean | null => {
+  if (force) return null;
+  try {
+    const raw = localStorage.getItem(playableCacheKey(item));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const ttl = parsed?.ok ? PLAYABLE_OK_TTL : PLAYABLE_FAIL_TTL;
+    if (!parsed?.ts || Date.now() - Number(parsed.ts) > ttl) {
+      localStorage.removeItem(playableCacheKey(item));
+      return null;
+    }
+    return parsed.ok === true;
+  } catch { return null; }
+};
+
+const writePlayableCache = (item: ApiItem, ok: boolean) => {
+  try { localStorage.setItem(playableCacheKey(item), JSON.stringify({ ok, ts: Date.now() })); } catch {}
+};
+
+const playbackHasMedia = (payload: any) => {
+  const data = payload?.data || payload;
+  const streams = Array.isArray(data?.streams) ? data.streams : [];
+  const links = Array.isArray(data?.links) ? data.links : [];
+  const embeds = Array.isArray(data?.allEmbeds) ? data.allEmbeds : Array.isArray(data?.embedUrls) ? data.embedUrls : [];
+  const audio = Array.isArray(data?.audio) ? data.audio : [];
+  const sourceAudio = Array.isArray(data?.sources)
+    ? data.sources.flatMap((s: any) => Array.isArray(s?.audio) ? s.audio : [])
+    : [];
+  const hasVideo = streams.length > 0 || links.length > 0 || embeds.length > 0 || !!data?.embedUrl || !!data?.directUrl || !!data?.videoSource || !!data?.securedLink;
+  // If AnimeSalt gives separate audio, keep only when audio is present.  Some
+  // masters are self-contained, so video-only responses without declared audio
+  // are still accepted to avoid false negatives.
+  const hasAudio = audio.length > 0 || sourceAudio.length > 0 || !Array.isArray(data?.audio);
+  return !!hasVideo && !!hasAudio && data?.success !== false;
+};
+
+const verifyAnPlayable = async (item: ApiItem, force = false): Promise<boolean> => {
+  const cached = readPlayableCache(item, force);
+  if (cached !== null) return cached;
+  let ok = false;
+  try {
+    if (item.type === "movies") {
+      const movie = await animeSaltApi.getMovie(item.slug, force);
+      ok = playbackHasMedia(movie?.data || movie);
+    } else {
+      const series = await animeSaltApi.getSeries(item.slug, force);
+      const seasons = series?.data?.seasons || series?.seasons || [];
+      const firstEp = seasons.flatMap((s: any) => Array.isArray(s?.episodes) ? s.episodes : [])[0];
+      const epSlug = String(firstEp?.slug || firstEp?.episodeSlug || "").trim();
+      if (epSlug) {
+        const ep = await animeSaltApi.getEpisode(epSlug, force);
+        ok = playbackHasMedia(ep);
+      }
+    }
+  } catch {
+    ok = false;
+  }
+  writePlayableCache(item, ok);
+  return ok;
+};
+
+const filterPlayableItems = async (items: ApiItem[], force = false): Promise<ApiItem[]> => {
+  const out: ApiItem[] = [];
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
+    while (queue.length) {
+      const item = queue.shift()!;
+      if (await verifyAnPlayable(item, force)) out.push(item);
+    }
+  });
+  await Promise.all(workers);
+  const order = new Map(items.map((item, idx) => [`${item.type}:${item.slug}`, idx]));
+  return out.sort((a, b) => (order.get(`${a.type}:${a.slug}`) || 0) - (order.get(`${b.type}:${b.slug}`) || 0));
+};
+
 export default function AnManager({
   categoryList,
   glassCard,
