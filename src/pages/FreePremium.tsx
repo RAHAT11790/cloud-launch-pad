@@ -88,6 +88,10 @@ export default function FreePremium() {
     };
   }, [settings.dailyAdCap]);
 
+  // Two-tap ad flow: first tap = "This ad is not counted" (social/preview),
+  // second tap = counted with 15s timer.
+  const [confirmedAds, setConfirmedAds] = useState<Set<string>>(new Set());
+
   const startAd = (ad: CoinAd) => {
     if (!uid) {
       toast({ title: "Login required", variant: "destructive" });
@@ -102,9 +106,26 @@ export default function FreePremium() {
       toast({ title: "Daily limit reached", description: `${settings.dailyAdCap} ads/day.` });
       return;
     }
+
+    // First tap → preview only, no coin count
+    if (!confirmedAds.has(ad.id)) {
+      setConfirmedAds((prev) => new Set(prev).add(ad.id));
+      toast({
+        title: "⚠️ This ad is NOT counted",
+        description: "Close the ad tab and tap the button again to start the 15s timer and earn 1 coin.",
+      });
+      window.open(ad.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Second tap → counted, start 15s timer
     const p: PendingAd = { id: ad.id, startedAt: Date.now(), required: settings.adWatchSeconds };
     localStorage.setItem(PENDING_KEY, JSON.stringify(p));
     setPending(p);
+    toast({
+      title: "✅ Ad counted — timer started",
+      description: `Stay on the ad tab for ${settings.adWatchSeconds}s to earn 1 coin.`,
+    });
     window.open(ad.url, "_blank", "noopener,noreferrer");
   };
 
