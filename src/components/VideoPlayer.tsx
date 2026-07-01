@@ -3809,6 +3809,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
+    // Remember user's explicit quality choice so future episodes stay at
+    // the same quality automatically.
+    try { localStorage.setItem("rs_preferred_quality", option.label); } catch {}
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
