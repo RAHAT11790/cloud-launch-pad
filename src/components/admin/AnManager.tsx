@@ -441,52 +441,66 @@ export default function AnManager({
     toast.success("Loaded AN cards cleared");
   };
 
+  const refreshSavedDetails = async (it: SavedItem) => {
+    if (!getTmdbApiKey()) throw new Error("TMDB API key required");
+    const isSeries = (it.type || "series") === "series";
+    const pick = it.tmdbId
+      ? await tmdbFetchById(Number(it.tmdbId), isSeries)
+      : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
+    if (!pick) throw new Error("TMDB match not found");
+    const enriched = await buildEnriched(it as any, pick);
+    const nextCategory = resolveSavedCategory(it.category, enriched.genres, it.category || category || "Anime");
+    await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
+      ...(enriched.tmdbId ? { tmdbId: enriched.tmdbId } : {}),
+      title: enriched.title || it.title,
+      rating: enriched.rating || it.rating || "",
+      overview: enriched.overview || it.overview || "",
+      backdrop: enriched.backdrop || it.backdrop || "",
+      poster: enriched.poster || it.poster,
+      genres: enriched.genres || it.genres || [],
+      category: nextCategory,
+      year: enriched.year || it.year || "",
+      directors: enriched.directors || it.directors || [],
+      cast: enriched.cast || it.cast || [],
+      refreshedAt: Date.now(),
+    });
+  };
+
+  const onRefreshOneDetails = async (it: SavedItem) => {
+    if (!it?.slug) return;
+    if (!getTmdbApiKey()) return toast.error("TMDB API key required — উপরের key box-এ key বসান");
+    setTmdbBusySlug(it.slug);
+    try {
+      await refreshSavedDetails(it);
+      toast.success(`Details refreshed: ${it.title}`);
+    } catch (e: any) {
+      toast.error("Refresh failed: " + (e?.message || "unknown"));
+    } finally {
+      setTmdbBusySlug(null);
+    }
+  };
+
   /**
-   * Bulk TMDB enrichment for every saved AN item.
+   * Bulk TMDB enrichment for saved AN items only.
    * Walks `animesaltSelected/*`, runs `tmdbSearch` + `tmdbDetails`, and writes
-   * back rating, year, overview, poster, backdrop, genres, directors, etc.
-   * Skips items that already have rating + year + overview (idempotent).
+   * back rating, year, overview, poster, backdrop, genres, category, cast, etc.
    */
   const onLoadAllDetails = async () => {
     const entries = Object.values(saved);
     if (entries.length === 0) return toast.error("Nothing saved yet");
     if (!getTmdbApiKey()) return toast.error("TMDB API key required — AN API details fallback is disabled");
-    if (!confirm(`Fetch details for ${entries.length} saved item(s)? Only TMDB থেকে rating/year/description/cast/directors আসবে।`)) return;
+    if (!confirm(`Refresh details for ${entries.length} saved AN item(s) only? Rating/year/category/description/cast update হবে।`)) return;
 
     setBulkBusy(true);
     setBulkProgress({ done: 0, total: entries.length });
-    let ok = 0, skipped = 0, fail = 0;
+    let ok = 0, fail = 0;
     const queue = [...entries];
     const workers = Array.from({ length: 4 }, async () => {
       while (queue.length) {
         const it = queue.shift()!;
         try {
-          // Idempotent skip — already enriched
-          if (it.rating && it.year && it.overview) { skipped++; }
-          else {
-            const isSeries = (it.type || "series") === "series";
-            const pick = it.tmdbId ? await tmdbFetchById(Number(it.tmdbId), isSeries) : (await tmdbSearch(cleanTitleForTmdb(it.title || ""), isSeries))[0] || null;
-            const enriched = pick ? await buildEnriched(it as any, pick) : null;
-            if (enriched && (enriched.overview || enriched.poster || enriched.rating || enriched.year || enriched.tmdbId)) {
-                const nextCategory = resolveSavedCategory(it.category, enriched.genres, it.category || "Anime");
-              await update(ref(db, `${SELECTED_PATH}/${it.slug}`), {
-                ...(enriched.tmdbId ? { tmdbId: enriched.tmdbId } : {}),
-                title: enriched.title || it.title,
-                rating: enriched.rating || it.rating || "",
-                overview: enriched.overview || it.overview || "",
-                backdrop: enriched.backdrop || it.backdrop || "",
-                poster: enriched.poster || it.poster,
-                genres: enriched.genres || it.genres || [],
-                 category: nextCategory,
-                year: enriched.year || it.year || "",
-                ...((enriched as any).directors ? { directors: (enriched as any).directors } : {}),
-                ...((enriched as any).cast ? { cast: (enriched as any).cast } : {}),
-              });
-              ok++;
-            } else {
-              fail++;
-            }
-          }
+          await refreshSavedDetails(it);
+          ok++;
         } catch {
           fail++;
         }
@@ -495,7 +509,7 @@ export default function AnManager({
     });
     await Promise.all(workers);
     setBulkBusy(false);
-    toast.success(`TMDB enrichment done — ${ok} updated, ${skipped} skipped, ${fail} failed`);
+    toast.success(`Details refresh done — ${ok} updated, ${fail} failed`);
   };
 
   const quickFetchTmdbById = async (item: ApiItem) => {
