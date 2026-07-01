@@ -501,6 +501,29 @@ const splitCategoryTokens = (value?: string | null) =>
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 
+const splitCategoryLabels = (value?: string | null) => {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  String(value || "")
+    .split(/[,/|•·]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((label) => {
+      const key = label.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        labels.push(label);
+      }
+    });
+  return labels;
+};
+
+const categoryMatches = (item: AnimeItem, activeCategory: string) => {
+  if (activeCategory === "All") return true;
+  const active = activeCategory.trim().toLowerCase();
+  return splitCategoryTokens(item.category).includes(active);
+};
+
 const normalizeRouteLookup = (value?: string | null) => String(value || "").trim().toLowerCase();
 
 const animeRouteKeys = (item: AnimeItem) => {
@@ -740,6 +763,18 @@ const Index = () => {
   const allMovies = useMemo(() => {
     return mergeAnimeCards(cleanMovies, activeSaltItems.filter((item) => item.type === "movie"));
   }, [cleanMovies, activeSaltItems]);
+
+  const userCategoryPills = useMemo(() => {
+    const byKey = new Map<string, string>();
+    [...categories, ...allAnime.flatMap((item) => splitCategoryLabels(item.category))]
+      .map((cat) => String(cat || "").trim())
+      .filter(Boolean)
+      .forEach((cat) => {
+        const key = cat.toLowerCase();
+        if (!byKey.has(key)) byKey.set(key, cat);
+      });
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
+  }, [allAnime, categories]);
 
   
   // Maintenance mode check
@@ -1466,7 +1501,7 @@ const Index = () => {
   }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
   const filteredAnime = useMemo(() => {
-    if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
+    if (activeCategory !== "All") return allAnime.filter(a => categoryMatches(a, activeCategory));
     return allAnime;
   }, [activeCategory, allAnime]);
 
@@ -1528,7 +1563,7 @@ const Index = () => {
   // Trending Series — strictly popularity-ranked (NOT recency). Items with 0 popularity
   // shuffle randomly so Trending stays fresh and doesn't mirror "New Releases".
   const trendingSeries = useMemo(() => {
-    let list = activeCategory !== "All" ? allSeries.filter(a => a.category === activeCategory) : allSeries;
+    let list = activeCategory !== "All" ? allSeries.filter(a => categoryMatches(a, activeCategory)) : allSeries;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
     // Stable random offset per item, reshuffled by trendingTick
     const seed = trendingTick;
@@ -1546,7 +1581,7 @@ const Index = () => {
 
   // For grids/category pages — keep recency-based ordering
   const filteredSeries = useMemo(() => {
-    let list = activeCategory !== "All" ? allSeries.filter(a => a.category === activeCategory) : allSeries;
+    let list = activeCategory !== "All" ? allSeries.filter(a => categoryMatches(a, activeCategory)) : allSeries;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
     return [...list].sort((a, b) => {
       return ((b as any).updatedAt || (b as any).createdAt || 0) - ((a as any).updatedAt || (a as any).createdAt || 0);
@@ -1554,7 +1589,7 @@ const Index = () => {
   }, [activeCategory, allSeries, dubFilter]);
 
   const filteredMovies = useMemo(() => {
-    let list = activeCategory !== "All" ? allMovies.filter(a => a.category === activeCategory) : allMovies;
+    let list = activeCategory !== "All" ? allMovies.filter(a => categoryMatches(a, activeCategory)) : allMovies;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
     return [...list].sort((a, b) => {
       const diff = getPopularity(b.id) - getPopularity(a.id);
@@ -1584,8 +1619,12 @@ const Index = () => {
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
     filteredAnime.forEach((a) => {
-      if (!groups[a.category]) groups[a.category] = [];
-      groups[a.category].push(a);
+      const labels = splitCategoryLabels(a.category);
+      const targetLabels = labels.length ? labels : [a.category || "Anime"];
+      targetLabels.forEach((label) => {
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(a);
+      });
     });
     return groups;
   }, [filteredAnime]);
@@ -2821,7 +2860,7 @@ const Index = () => {
   const getPageContent_home = () => (
     <>
       <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
-      <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
+      <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={userCategoryPills} />
       {activeCategory !== "All" ? (
         <div className="px-4 pb-6">
           <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
