@@ -391,7 +391,14 @@ export default function AnManager({
     const q = query.trim().toLowerCase();
     const merged = new Map<string, ApiItem | SavedItem>();
     apiItems.forEach((it) => merged.set(it.slug, it));
-    Object.values(saved).forEach((it) => { if (it?.slug) merged.set(it.slug, { ...(merged.get(it.slug) || {}), ...it }); });
+    Object.values(saved).forEach((it) => {
+      if (!it?.slug) return;
+      // Normal AN Manager list stays strictly playability-verified. Saved cards
+      // that are no longer fetchable only appear under the Saved filter so they
+      // can still be deleted/checked without polluting the curation list.
+      if (typeFilter !== "saved" && !merged.has(it.slug)) return;
+      merged.set(it.slug, { ...(merged.get(it.slug) || {}), ...it });
+    });
     return Array.from(merged.values()).filter((it) => {
       if (typeFilter === "series" && it.type !== "series") return false;
       if (typeFilter === "movies" && it.type !== "movies") return false;
