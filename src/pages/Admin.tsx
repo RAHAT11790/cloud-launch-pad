@@ -48,6 +48,7 @@ import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 // AnSeriesManager removed — AN runs purely on API now
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
+import PremiumCenter from "@/components/admin/PremiumCenter";
 import AnManager from "@/components/admin/AnManager";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
 
@@ -2993,7 +2994,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
+  "premium-center": "Premium Center",
   };
+
 
  // ==================== CATEGORIES ====================
  const saveCategory = () => {
@@ -4914,8 +4917,10 @@ ${tgBulkFooter}
  { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
  { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
  { section: "settings", icon: <Settings size={16} />, label: "Settings" },
- { section: "security-center", icon: <Shield size={16} />, label: "Security & Access", group: "Security" },
- ];
+  { section: "security-center", icon: <Shield size={16} />, label: "Security & Access", group: "Security" },
+  { section: "premium-center", icon: <Crown size={16} />, label: "Premium Center", group: "Premium" },
+  ];
+
 
  // ==================== LOADING STATE ====================
  if (pinExists === null) {
