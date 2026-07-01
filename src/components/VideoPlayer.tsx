@@ -1710,6 +1710,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [currentSrc, isEmbedPlayback, onSaveProgress]);
 
+  // Screen Wake Lock — keeps mobile screen awake while the player is mounted.
+  // Re-acquired automatically when the tab returns to the foreground.
+  useEffect(() => {
+    const nav: any = typeof navigator !== "undefined" ? navigator : null;
+    if (!nav?.wakeLock?.request) return;
+    let sentinel: any = null;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        if (cancelled || document.visibilityState !== "visible") return;
+        sentinel = await nav.wakeLock.request("screen");
+        sentinel?.addEventListener?.("release", () => { sentinel = null; });
+      } catch {}
+    };
+    const onVisibility = () => { if (document.visibilityState === "visible" && !sentinel) void acquire(); };
+    void acquire();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      try { sentinel?.release?.(); } catch {}
+      sentinel = null;
+    };
+  }, []);
+
+
   // Restore watch position (per-account)
   useEffect(() => {
     if (!animeId) return;
