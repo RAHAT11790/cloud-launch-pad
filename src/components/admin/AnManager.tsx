@@ -552,6 +552,17 @@ export default function AnManager({
     }
   };
 
+  const setManualCategory = async (slug: string, value: string) => {
+    const next = String(value || "").trim();
+    if (!slug || !next) return;
+    try {
+      await update(ref(db, `${SELECTED_PATH}/${slug}`), { category: next });
+      toast.success("Category updated");
+    } catch (e: any) {
+      toast.error("Category save failed: " + (e?.message || "unknown"));
+    }
+  };
+
   const pickTmdb = async (result: TmdbResult) => {
     if (!tmdbPicker) return;
     try {
@@ -674,6 +685,7 @@ export default function AnManager({
           <span className="flex items-center gap-1"><Tv size={12} /> Series {stats.series}</span>
           <span className="flex items-center gap-1"><Film size={12} /> Movies {stats.movies}</span>
           <span className="text-emerald-300">Saved {stats.saved}</span>
+          <span className={missingCategoryItems.length ? "text-amber-200" : "text-emerald-300"}>Missing category {missingCategoryItems.length}</span>
           <span>Total {stats.total}</span>
         </div>
       </div>
@@ -772,6 +784,43 @@ export default function AnManager({
         </div>
       </div>
 
+      {missingCategoryItems.length > 0 && (
+        <div className={`${glassCard} p-4 space-y-3 border border-amber-500/30 bg-amber-500/5`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-amber-200">Missing IMDB/TMDB category</h3>
+              <p className="text-[10px] text-zinc-400">এই saved AN cards গুলোর genres/category আসেনি — এখান থেকে manual category দিন।</p>
+            </div>
+            <button
+              onClick={onLoadAllDetails}
+              disabled={bulkBusy}
+              className="px-3 py-2 text-xs flex items-center gap-1.5 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+            >
+              {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Refresh Saved Details
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {missingCategoryItems.slice(0, 24).map((item) => (
+              <div key={item.slug} className="rounded-lg border border-white/10 bg-black/20 p-2 flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-semibold line-clamp-1">{item.title}</div>
+                  <div className="text-[9px] text-zinc-500">{item.year || "Year empty"} · ★ {item.rating || "—"}</div>
+                </div>
+                <select
+                  value=""
+                  onChange={(e) => setManualCategory(item.slug, e.target.value)}
+                  className="w-[118px] rounded bg-black/40 border border-amber-400/25 px-2 py-1 text-[10px] outline-none"
+                >
+                  <option value="">Set category</option>
+                  {categoryList.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* === Grid === */}
       <div className={`${glassCard} p-4`}>
         {loading ? (
@@ -863,6 +912,13 @@ export default function AnManager({
                             className="flex-1 text-[10px] py-1 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center gap-1"
                           >
                             <Edit3 size={10} /> Edit
+                          </button>
+                          <button
+                            onClick={() => onRefreshOneDetails(saved[it.slug])}
+                            disabled={tmdbBusySlug === it.slug}
+                            className="flex-1 text-[10px] py-1 rounded bg-amber-500/25 hover:bg-amber-500/40 text-amber-100 flex items-center justify-center gap-1 disabled:opacity-50"
+                          >
+                            {tmdbBusySlug === it.slug ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Details
                           </button>
                           <button
                             onClick={() => onDeleteOne(it.slug)}
