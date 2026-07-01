@@ -272,18 +272,18 @@ async function detail(slug: string, type: string, forceRefresh = false) {
 
   const addEpisode = (epSlug: string, defaultSeason: number, rawTitle = "", strictSeason = false) => {
     const cleanSlug = String(epSlug || "").trim().replace(/^\/+|\/+$/g, "");
-    if (!cleanSlug) return;
+    if (!cleanSlug) return false;
     const sx = cleanSlug.match(/(?:^|[-_])(\d+)x(\d+)$/i) || cleanSlug.match(/s(\d+)e(\d+)$/i);
     const seasonNum = sx ? Number(sx[1]) : defaultSeason;
     const epNum = sx ? Number(sx[2]) : 0;
-    if (!Number.isFinite(seasonNum) || seasonNum <= 0) return;
+    if (!Number.isFinite(seasonNum) || seasonNum <= 0) return false;
     // Strict mode: reject episode slugs whose encoded season differs from the
     // season AnimeSalt is actually serving. Prevents S2/S3/S4 leakage from
     // cross-links on the main page or "related" strips.
-    if (strictSeason && seasonNum !== defaultSeason) return;
+    if (strictSeason && seasonNum !== defaultSeason) return false;
     if (!seasons.has(seasonNum)) seasons.set(seasonNum, { name: `Season ${seasonNum}`, seasonNumber: seasonNum, episodes: [] });
     const bucket = seasons.get(seasonNum)!.episodes;
-    if (bucket.some((e) => e.slug === cleanSlug)) return;
+    if (bucket.some((e) => e.slug === cleanSlug)) return false;
     const number = epNum || bucket.length + 1;
     bucket.push({
       number,
@@ -292,9 +292,11 @@ async function detail(slug: string, type: string, forceRefresh = false) {
       slug: cleanSlug,
       link: `animesalt://${cleanSlug}`,
     });
+    return true;
   };
 
   const harvestEpisodes = (body: string, defaultSeason: number, strictSeason = false) => {
+    let added = 0;
     const hrefRe = /href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/([^"'/?#]+)\/?["']/gi;
     let m: RegExpExecArray | null;
     while ((m = hrefRe.exec(body))) {
@@ -302,10 +304,11 @@ async function detail(slug: string, type: string, forceRefresh = false) {
       const end = Math.min(body.length, m.index + 1200);
       const around = body.slice(start, end);
       const anchor = around.match(/<a\b[^>]*href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/[^"']+["'][^>]*>([\s\S]*?)<\/a>/i);
-      addEpisode(m[1], defaultSeason, anchor?.[1] || "", strictSeason);
+      if (addEpisode(m[1], defaultSeason, anchor?.[1] || "", strictSeason)) added++;
     }
     const urlRe = /(?:https?:)?\\?\/\\?\/animesalt\.(?:ac|top)\\?\/episode\\?\/([a-z0-9-]+)\\?\/?/gi;
-    while ((m = urlRe.exec(body))) addEpisode(m[1], defaultSeason, "", strictSeason);
+    while ((m = urlRe.exec(body))) if (addEpisode(m[1], defaultSeason, "", strictSeason)) added++;
+    return added;
   };
 
   const postId = html.match(/data-post=["'](\d+)["']/)?.[1];
@@ -321,15 +324,26 @@ async function detail(slug: string, type: string, forceRefresh = false) {
   }
 
   if (postId && seasonNums.length) {
-    await Promise.all(seasonNums.map(async (sNum) => {
+    // AnimeSalt marks the exact point where regional dubs (Hindi/Bengali/etc.)
+    // stop with this separator.  For Naruto Shippuden it appears in S16, and
+    // everything after it/S17+ resolves to a black-screen/non-Hindi stream.  We
+    // therefore harvest seasons sequentially and stop as soon as that marker is
+    // seen instead of blindly returning all 22 seasons.
+    const regionalDubStopRe = /below\s+episodes\s+aren['’]?t\s+dubbed\s+in\s+regional\s+languages/i;
+    let stopAfterRegionalDubMarker = false;
+    for (const sNum of seasonNums) {
+      if (stopAfterRegionalDubMarker) break;
       try {
         const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
           headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },
         });
+        const marker = seasonHtml.search(regionalDubStopRe);
+        const harvestHtml = marker >= 0 ? seasonHtml.slice(0, marker) : seasonHtml;
         // Strict: only accept episodes whose slug encodes this exact season.
-        harvestEpisodes(seasonHtml, sNum, true);
+        harvestEpisodes(harvestHtml, sNum, true);
+        if (marker >= 0) stopAfterRegionalDubMarker = true;
       } catch {}
-    }));
+    }
   }
 
   let seasonsArr = Array.from(seasons.values())
@@ -376,9 +390,9 @@ async function verifyEpisodeHindiPlayable(epSlug: string): Promise<boolean> {
     const data: any = await episode(epSlug, "", false);
     const ok = !!data?.success
       && Array.isArray(data.streams) && data.streams.length > 0
-      && Array.isArray(data.audio) && data.audio.some((a: any) =>
+      && (data?.hindiDub === true || (Array.isArray(data.audio) && data.audio.some((a: any) =>
         a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`),
-      );
+      )));
     setCache(key, ok, ok ? 6 * 60 * 60_000 : 30 * 60_000);
     return ok;
   } catch {
