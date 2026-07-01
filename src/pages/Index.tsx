@@ -1955,13 +1955,13 @@ const Index = () => {
           let firstAudio: any[] | undefined;
           if (firstEp && isAnimeSaltSentinel(firstEp.link)) {
             setLoadingDetails((s) => ({ ...s, step: "Loading audio & stream", progress: 75 }));
-            const epData = await resolveAnEpisodePlayback(slugFromSentinel(firstEp.link));
+            const epData = await resolveAnEpisodePlayback(slugFromSentinel(firstEp.link), { seriesSlug: slug });
             if (epData) {
               Object.assign(firstEp, epData);
               firstAudio = epData.audioTracks as any;
             }
           }
-          window.setTimeout(() => warmAnSeriesPlaybackCache(slug, seasons), 350);
+          void warmAnSeriesPlaybackCache(slug, seasons);
           setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 95, completed: [...s.completed, "Audio tracks ready"] }));
           const enriched: AnimeItem = {
             ...playableAnime,
@@ -2054,7 +2054,7 @@ const Index = () => {
       const season = resolvedSeasons[resolvedSeasonIdx];
       const episode = season.episodes[resolvedEpIdx];
       if (isAnimeSaltContent && isAnimeSaltSentinel(episode.link)) {
-        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link));
+        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link), { seriesSlug: anime.anSlug || anime.animeSaltSlug || anime.slug });
         if (resolved) Object.assign(episode, resolved);
       }
       src = getEpisodeSrc(episode);
@@ -2585,7 +2585,7 @@ const Index = () => {
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
       let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
       if (playerState?.anime.source === "animesalt" && isAnimeSaltSentinel(clickedEp.link)) {
-        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(clickedEp.link));
+        const resolved = await resolveAnEpisodePlayback(slugFromSentinel(clickedEp.link), { seriesSlug: playerState!.anime.anSlug || playerState!.anime.animeSaltSlug || playerState!.anime.slug });
         if (resolved) Object.assign(clickedEp, resolved);
       }
       if (playerState?.anime.source === "animesalt") {
@@ -2634,7 +2634,7 @@ const Index = () => {
     let nextSubtitleTracks = (ep as any).subtitleTracks;
     let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
     if (playerState.anime.source === "animesalt" && isAnimeSaltSentinel(ep.link)) {
-      const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link));
+      const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link), { seriesSlug: playerState.anime.anSlug || playerState.anime.animeSaltSlug || playerState.anime.slug });
       if (resolved) Object.assign(ep, resolved);
     }
     if (playerState.anime.source === "animesalt") {
@@ -3085,7 +3085,7 @@ const Index = () => {
                   let preferredLanguage = getSavedAnAudioLanguagePref() || (playerState as any)?.selectedLanguage;
                   if (playerState.anime.source === "animesalt" && isAnimeSaltSentinel(nextEp.link)) {
                     // Resolve fresh HLS URLs for the next episode on-demand.
-                    const resolved = await resolveAnEpisodePlayback(slugFromSentinel(nextEp.link));
+                    const resolved = await resolveAnEpisodePlayback(slugFromSentinel(nextEp.link), { seriesSlug: playerState.anime.anSlug || playerState.anime.animeSaltSlug || playerState.anime.slug });
                     if (resolved) Object.assign(nextEp, resolved);
                   }
                   if (playerState.anime.source === "animesalt") {
@@ -3138,7 +3138,7 @@ const Index = () => {
             let qOpts = getEpisodeQualityOptions(ep);
             let nextAudioTracks = ep.audioTracks || anime.audioTracks;
             if (anime.source === "animesalt" && isAnimeSaltSentinel(ep.link)) {
-              const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link));
+              const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link), { seriesSlug: anime.anSlug || anime.animeSaltSlug || anime.slug });
               if (resolved) Object.assign(ep, resolved);
             }
             if (anime.source === "animesalt") {
