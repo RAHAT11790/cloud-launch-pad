@@ -165,18 +165,124 @@ const streamFields = (streams: ApiStream[]) => {
 
 const pickPayload = (r: any) => r?.data || r;
 
-export async function resolveAnEpisodePlayback(slug: string): Promise<Partial<Episode> | null> {
+// ============================================================================
+// SERIES BUNDLE CACHE
+// ----------------------------------------------------------------------------
+// One Firebase document per series that maps { episodeSlug -> playback }. On
+// series open we load the bundle once (1 RTT), mirror to memory + localStorage,
+// then background-fill any missing episodes with high concurrency. All later
+// episode/season clicks become pure in-memory lookups — zero latency.
+// ============================================================================
+
+type EpisodePlayback = Partial<Episode>;
+type SeriesBundle = { expiresAt: number; episodes: Record<string, EpisodePlayback> };
+const BUNDLE_TTL_MS = 180 * 60 * 1000; // 3h — matches AnimeSalt signed-URL window
+const BUNDLE_FB_ROOT = "anSeriesBundle_v9";
+const bundleMem = new Map<string, SeriesBundle>();
+const bundleLoadInflight = new Map<string, Promise<SeriesBundle>>();
+const bundleLsKey = (slug: string) => `rs_an_bundle_v9:${safeKey(slug)}`;
+const bundleFbPath = (slug: string) => `${BUNDLE_FB_ROOT}/${safeKey(slug)}`;
+
+const pendingBundleSaves = new Set<string>();
+let bundleSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleBundleSave(seriesSlug: string) {
+  pendingBundleSaves.add(seriesSlug);
+  if (bundleSaveTimer) return;
+  bundleSaveTimer = setTimeout(async () => {
+    bundleSaveTimer = null;
+    const slugs = Array.from(pendingBundleSaves);
+    pendingBundleSaves.clear();
+    for (const slug of slugs) {
+      const bundle = bundleMem.get(slug);
+      if (!bundle) continue;
+      try { localStorage.setItem(bundleLsKey(slug), JSON.stringify(bundle)); } catch {}
+      try { await set(ref(db, bundleFbPath(slug)), bundle); } catch {}
+    }
+  }, 1500);
+}
+
+function upsertBundleEpisode(seriesSlug: string, epSlug: string, payload: EpisodePlayback) {
+  if (!seriesSlug || !epSlug || !payload?.link) return;
+  const now = Date.now();
+  const existing = bundleMem.get(seriesSlug);
+  const bundle: SeriesBundle = existing && existing.expiresAt > now
+    ? existing
+    : { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
+  bundle.episodes[epSlug] = payload;
+  bundleMem.set(seriesSlug, bundle);
+  scheduleBundleSave(seriesSlug);
+}
+
+export function getEpisodeFromBundle(seriesSlug: string, epSlug: string): EpisodePlayback | null {
+  if (!seriesSlug || !epSlug) return null;
+  const bundle = bundleMem.get(seriesSlug);
+  if (!bundle || bundle.expiresAt <= Date.now()) return null;
+  const ep = bundle.episodes[epSlug];
+  return ep?.link ? ep : null;
+}
+
+/** Load a series bundle from mem → localStorage → Firebase (1 RTT max). */
+export async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBundle> {
+  const now = Date.now();
+  if (!seriesSlug) return { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
+  const hit = bundleMem.get(seriesSlug);
+  if (hit && hit.expiresAt > now) return hit;
+  const running = bundleLoadInflight.get(seriesSlug);
+  if (running) return running;
+  const task = (async () => {
+    try {
+      const raw = localStorage.getItem(bundleLsKey(seriesSlug));
+      if (raw) {
+        const parsed = JSON.parse(raw) as SeriesBundle;
+        if (parsed?.expiresAt > now) { bundleMem.set(seriesSlug, parsed); return parsed; }
+        localStorage.removeItem(bundleLsKey(seriesSlug));
+      }
+    } catch {}
+    try {
+      const snap = await get(ref(db, bundleFbPath(seriesSlug)));
+      const row = snap.val() as SeriesBundle | null;
+      if (row?.expiresAt && row.expiresAt > now) {
+        bundleMem.set(seriesSlug, row);
+        try { localStorage.setItem(bundleLsKey(seriesSlug), JSON.stringify(row)); } catch {}
+        return row;
+      }
+      if (row) await remove(ref(db, bundleFbPath(seriesSlug))).catch(() => {});
+    } catch {}
+    const empty: SeriesBundle = { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
+    bundleMem.set(seriesSlug, empty);
+    return empty;
+  })().finally(() => { bundleLoadInflight.delete(seriesSlug); });
+  bundleLoadInflight.set(seriesSlug, task);
+  return task;
+}
+
+export async function resolveAnEpisodePlayback(
+  slug: string,
+  opts?: { seriesSlug?: string },
+): Promise<EpisodePlayback | null> {
   if (!slug) return null;
+  const seriesSlug = opts?.seriesSlug || "";
+  // 1) Series bundle — in-memory hit → zero latency.
+  if (seriesSlug) {
+    const fromBundle = getEpisodeFromBundle(seriesSlug, slug);
+    if (fromBundle) return fromBundle;
+  }
   try {
-    const cached = await readPlaybackCache<Partial<Episode>>("episode", slug);
-    if (cached?.link) return cached;
+    // 2) Legacy per-episode cache (mem → LS → Firebase).
+    const cached = await readPlaybackCache<EpisodePlayback>("episode", slug);
+    if (cached?.link) {
+      if (seriesSlug) upsertBundleEpisode(seriesSlug, slug, cached);
+      return cached;
+    }
+    // 3) Live API fetch — last resort.
     const r: any = await animeSaltApi.getEpisode(slug);
     const data = pickPayload(r);
     const streams = collectPlaybackStreams(data);
     if (!streams.length) return null;
     const audio = collectPlaybackAudio(data).map(toAudioTrack);
-    const resolved = { ...streamFields(streams), audioTracks: audio };
+    const resolved: EpisodePlayback = { ...streamFields(streams), audioTracks: audio };
     await writePlaybackCache("episode", slug, resolved);
+    if (seriesSlug) upsertBundleEpisode(seriesSlug, slug, resolved);
     return resolved;
   } catch {
     return null;
@@ -217,6 +323,8 @@ export async function resolveAnMoviePlayback(
 export async function resolveAnSeriesSeasons(slug: string): Promise<Season[]> {
   if (!slug) return [];
   try {
+    // Warm the series bundle in parallel so first-episode click is instant.
+    void loadAnSeriesBundle(slug);
     const cached = await readPlaybackCache<Season[]>("series", slug);
     if (cached?.length) return cached;
     const r: any = await animeSaltApi.getSeries(slug);
@@ -238,17 +346,27 @@ export async function resolveAnSeriesSeasons(slug: string): Promise<Season[]> {
   }
 }
 
-export function warmAnSeriesPlaybackCache(_seriesSlug: string, seasons: Season[]) {
-  const slugs = seasons.flatMap((s) => s.episodes || []).map((ep) => slugFromSentinel(ep.link)).filter((slug): slug is string => Boolean(slug));
+/** Fill the bundle with every episode of a series. Waits for bundle load, then
+ *  parallel-fetches only the missing episodes. Non-blocking — fire and forget. */
+export async function warmAnSeriesPlaybackCache(seriesSlug: string, seasons: Season[]) {
+  if (!seriesSlug || !seasons?.length) return;
+  await loadAnSeriesBundle(seriesSlug);
+  const slugs = seasons
+    .flatMap((s) => s.episodes || [])
+    .map((ep) => slugFromSentinel(ep.link))
+    .filter((slug): slug is string => Boolean(slug));
   const unique = Array.from(new Set(slugs));
+  const missing = unique.filter((s) => !getEpisodeFromBundle(seriesSlug, s));
+  if (!missing.length) return;
+  const CONCURRENCY = 8;
   let cursor = 0;
-  const workers = Array.from({ length: Math.min(3, unique.length) }, async () => {
-    while (cursor < unique.length) {
-      const next = unique[cursor++];
-      await resolveAnEpisodePlayback(next).catch(() => null);
+  const workers = Array.from({ length: Math.min(CONCURRENCY, missing.length) }, async () => {
+    while (cursor < missing.length) {
+      const next = missing[cursor++];
+      await resolveAnEpisodePlayback(next, { seriesSlug }).catch(() => null);
     }
   });
-  Promise.all(workers).catch(() => {});
+  await Promise.all(workers).catch(() => {});
 }
 
 export const isAnimeSaltSentinel = (link?: string | null) =>
@@ -257,17 +375,17 @@ export const isAnimeSaltSentinel = (link?: string | null) =>
 export const slugFromSentinel = (link?: string | null) =>
   String(link || "").replace(/^animesalt:\/\//, "");
 
-/** Resolve playback for a single episode in-place inside a Seasons array.
- *  Returns the (possibly enriched) Episode. */
+/** Resolve playback for a single episode in-place inside a Seasons array. */
 export async function enrichEpisodeInPlace(
   seasons: Season[],
   sIdx: number,
   eIdx: number,
+  seriesSlug?: string,
 ): Promise<Episode | null> {
   const ep = seasons?.[sIdx]?.episodes?.[eIdx];
   if (!ep) return null;
   if (!isAnimeSaltSentinel(ep.link)) return ep;
-  const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link));
+  const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link), { seriesSlug });
   if (!resolved) return null;
   Object.assign(ep, resolved);
   return ep;
