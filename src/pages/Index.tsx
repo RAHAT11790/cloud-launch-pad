@@ -1943,12 +1943,22 @@ const Index = () => {
       return;
     }
 
-    const isAnimeSaltContentEarly = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+  const isAnimeSaltContentEarly = anime.source === "animesalt"
+    || String(anime.id || "").startsWith("as_")
+    || String(anime.id || "").startsWith("an_")
+    || String(anime.id || "").startsWith("an_mv_")
+    || !!anime.anSlug
+    || !!anime.animeSaltSlug;
     if (!freeAccessLoaded && isLoggedIn && !isAnimeSaltContentEarly) {
       return;
     }
 
-    const isAnimeSaltContentEarlyReload = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+    const isAnimeSaltContentEarlyReload = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || String(anime.id || "").startsWith("an_mv_")
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug;
     // Critical: AN card-click resolves fresh playback URLs from the live API
     // before calling handlePlay(). Reloading the old Firebase row here replaces
     // those fresh URLs with stale animesalt:// sentinels, which caused the
@@ -1968,7 +1978,12 @@ const Index = () => {
       navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
 
-    const isAnimeSaltContent = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+    const isAnimeSaltContent = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || String(anime.id || "").startsWith("an_mv_")
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug;
 
     if (!hasFreeAccess() && !saltIsPremium && !isAnimeSaltContent) {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
