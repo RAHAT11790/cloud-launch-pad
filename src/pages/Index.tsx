@@ -1852,12 +1852,18 @@ const Index = () => {
       navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
     }
 
-    const fullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime);
+    const isAnimeSaltCard = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || String(anime.id || "").startsWith("an_mv_")
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug;
+    const fullAnime = isAnimeSaltCard ? null : await loadFullFirebaseAnimeItemWithTimeout(anime);
     const playableAnime = fullAnime || anime;
 
     // AN cards are admin-curated metadata only — playback URLs are resolved
     // LIVE from the AnimeSalt API on click (CDN links expire if stored).
-    if (playableAnime.source === "animesalt") {
+    if (isAnimeSaltCard || playableAnime.source === "animesalt") {
       const slug = playableAnime.anSlug || playableAnime.animeSaltSlug || playableAnime.slug || "";
       if (!slug) {
         toast.error("Missing AnimeSalt slug for this title");
