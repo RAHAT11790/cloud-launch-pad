@@ -6356,8 +6356,9 @@ ${tgBulkFooter}
  else setTgButtons([]);
  } else { setTgButtons([]); }
  } catch {}
- setWsNotifyStep("telegram");
- } catch (err: any) { toast.error("Error: " + err.message); }
+  startTransition(() => setWsNotifyStep("telegram"));
+  } catch (err: any) { toast.error("Error: " + err.message); }
+  finally { setAdminBusyTask(null); }
  }} className="w-full py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-pink-600 to-purple-600 text-white flex items-center justify-center gap-2">
  <Zap size={14} /> Release + Notify
  </button>
