@@ -1,6 +1,6 @@
-# Premium + Ads + RS Player/Download — 4 ধাপে সম্পূর্ণ overhaul
+# Premium Center + Coin Page + RS Player/Download — 4 ধাপে সম্পূর্ণ overhaul
 
-আপনার screenshot-গুলার Monetag ad code দেখেই সঠিক SDK placement করবো (One-Click Popunder, Direct Link/Social Bar, Banner)। নিচে ৪টা ধাপ:
+সংশোধিত scope: existing **Adsterra Manager** এবং video player-এর existing ad behavior untouched থাকবে। নতুন coin/free-premium page আলাদা হবে, আর Premium Center থেকে শুধু premium lock/config control হবে। Monetag ব্যবহার করা হবে না।
 
 ---
 
@@ -21,20 +21,18 @@
 
 ---
 
-## ধাপ ২ — Ad SDK + Coin System + Free Premium Page
+## ধাপ ২ — Adsterra-based Coin System + New Free Premium Page
 
-**Monetag SDK proper integration** (আপনার screenshot-গুলা reference করে)
-- `src/lib/monetagAds.ts` নতুন module:
-  - **One-Click Popunder** — `<script src="//groleegni.net/401/..."></script>` runtime inject with de-dup।
-  - **Direct Link / Social Bar** — URL-based, new tab open।
-  - **Banner Ad** — iframe/script slot rendering with proper container।
-- Admin Premium Center-এর "Ad Sources" tab-এ ৩টা textarea (Popunder script, Direct Link URL, Banner script) — default-এ আপনার screenshot-এর সব code pre-filled থাকবে। Save + Test button।
+**Adsterra ads only — existing Adsterra Manager untouched**
+- Existing Adsterra Manager/video-player ad setup যেভাবে আছে সেভাবেই থাকবে; সেখানে কোনো risky rewrite করা হবে না।
+- Premium Center-এর ভিতরে coin/free-premium page-এর জন্য আলাদা ad slot config/control থাকবে, কিন্তু core Adsterra Manager নষ্ট করা হবে না।
+- নতুন Monetag module/file/schema তৈরি করা হবে না।
 
 **Coin Center in Profile**
 - ProfilePage-এ নতুন section: current coin balance (Coins icon + count animation), today's remaining ad watches, "Get Free Premium" big button।
 - Card animation: coin flip + counter tween।
 
-**Free Premium Page (`/premium/free`)**
+**New Coin / Free Premium Page (`/premium/free`)**
 - Scrollable container (banner ads scroll কাজ করবে) with proper `overflow-y-auto`।
 - Header: "Watch Ads → Earn Coins → Get Premium Free"।
 - ৫টা ad slot card। প্রতিটা ad button-এ two-tap logic:
@@ -77,7 +75,8 @@
 ---
 
 **Technical notes (for reference)**
-- Files touched: `PremiumCenter.tsx`, `Admin.tsx` (series row lock button), `AnimeCard.tsx` (premium overlay), `ProfilePage.tsx` (coin center + Get Free Premium button), `FreePremium.tsx` (2-tap ad logic), `PremiumRequired.tsx` (message redesign), `VideoPlayer.tsx` (time reset + quality persist), `downloadManager.ts` + `DownloadProgressOverlay.tsx` (size probe + lock modal), new `src/lib/monetagAds.ts`.
-- No breaking changes to Firebase schema — only adds `premiumEpisodes`, `qualityLocks`, `settings/monetag`।
+- Files touched: `PremiumCenter.tsx`, `Admin.tsx` (series row lock button), `AnimeCard.tsx` (premium overlay), `ProfilePage.tsx` (coin center + Get Free Premium button), `FreePremium.tsx` (2-tap ad logic), `PremiumRequired.tsx` (message redesign), `VideoPlayer.tsx` (time reset + quality persist), `downloadManager.ts` + `DownloadProgressOverlay.tsx` (size probe + lock modal)।
+- No Monetag files. No existing Adsterra Manager rewrite. No video-player ad behavior change unless explicitly requested.
+- No breaking changes to Firebase schema — only adds premium/coin-related lightweight fields/settings as needed।
 
 Approve করলে ধাপ ১ থেকে একে একে শুরু করবো।
