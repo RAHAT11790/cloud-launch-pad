@@ -800,27 +800,12 @@ export default function AnManager({
 
       {/* === Bulk actions === */}
       <div className={`${glassCard} p-4 space-y-3`}>
-        <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 p-3">
-          <div className="flex flex-col lg:flex-row gap-2 lg:items-end">
-            <div className="flex-1">
-              <label className="text-[10px] text-cyan-200 font-semibold mb-1 block">TMDB API Key</label>
-              <input
-                value={tmdbKeyInput}
-                onChange={(e) => setTmdbKeyInput(e.target.value)}
-                placeholder="VITE_TMDB_API_KEY env না থাকলে এখানে TMDB key বসান"
-                className={inputClass}
-              />
-            </div>
-            <button onClick={saveTmdbKey} className={`${btnPrimary} px-4 py-2 text-xs whitespace-nowrap`}>
-              Save Key
-            </button>
-          </div>
-          <div className={`mt-2 text-[10px] ${hasTmdbKey ? "text-emerald-300" : "text-amber-200"}`}>
-            {hasTmdbKey
-              ? "✅ TMDB key active — Load All Details, TMDB ID fetch, rating/year/description/cast সব কাজ করবে।"
-              : "⚠️ TMDB key required — AN API details fallback disabled. Rating/year/description/cast/directors শুধু TMDB থেকেই আসবে।"}
+        <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3">
+          <div className="text-[11px] text-emerald-200">
+            ✅ TMDB API key is centrally configured in <code className="text-emerald-100">siteConfig.ts</code> — no need to paste it here anymore.
           </div>
         </div>
+
 
         <div className="flex flex-wrap gap-2 items-center">
           <button onClick={selectAllVisible} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
