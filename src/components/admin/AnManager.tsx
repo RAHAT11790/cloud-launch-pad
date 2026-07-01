@@ -923,8 +923,18 @@ export default function AnManager({
       {/* === Grid === */}
       <div className={`${glassCard} p-4`}>
         {loading ? (
-          <div className="text-center py-12 text-[#D1C4E9] flex items-center justify-center gap-2">
-            <Loader2 size={16} className="animate-spin" /> Loading from AN API…
+          <div className="text-center py-12 text-[#D1C4E9] flex flex-col items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 size={16} className="animate-spin" /> Loading and verifying playable AN cards…
+            </div>
+            {verifyProgress.total > 0 && (
+              <div className="w-full max-w-sm text-[11px] text-emerald-300">
+                Playable check: {verifyProgress.done} / {verifyProgress.total}
+                <div className="w-full h-1 bg-white/10 rounded mt-1 overflow-hidden">
+                  <div className="h-full bg-emerald-400 transition-all" style={{ width: `${verifyProgress.total ? (verifyProgress.done / verifyProgress.total) * 100 : 0}%` }} />
+                </div>
+              </div>
+            )}
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-[#D1C4E9]">No items match your filters.</div>
