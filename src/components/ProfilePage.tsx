@@ -1913,6 +1913,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <span className="text-[13px] font-semibold text-amber-300">Get Free Premium 🎁</span>
             <p className="text-[10px] text-muted-foreground">Watch ads, earn coins, unlock premium</p>
           </div>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-400/30 mr-1">
+            <Coins className="w-3 h-3 text-amber-300" />
+            <span className="text-[11px] font-bold text-amber-200 tabular-nums">{coinWallet?.coins ?? 0}</span>
+          </div>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
         <div onClick={() => setActivePanel("settings")}
