@@ -3006,11 +3006,14 @@ const Index = () => {
           {trendingSeries.length > 0 && (
             <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
           )}
+          {filteredMovies.length > 0 && (
+            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
+          )}
           {Object.entries(categoryGroups).map(([cat, items]) => (
             <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
           ))}
-          {allAnime.length > 0 && (
-            <AnimeSection title="All Anime" items={allAnime.slice(0, 10)} onCardClick={handleCardClick} />
+          {allSeries.length > 0 && (
+            <AnimeSection title="All Anime Series" items={allSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
           )}
         </>
       )}
