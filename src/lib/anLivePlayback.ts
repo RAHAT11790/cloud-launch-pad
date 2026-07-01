@@ -16,8 +16,8 @@ let lastPrune = 0;
 
 const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 const localKey = (kind: string, slug: string) => `rs_an_playback_v4_separate_av:${kind}:${safeKey(slug)}`;
-const fbPath = (kind: string, slug: string) => `anPlaybackCache_v4_separate_av/${kind}/${safeKey(slug)}`;
-const FB_CACHE_ROOT =
+const FB_CACHE_ROOT = "anPlaybackCache_v4_separate_av";
+const fbPath = (kind: string, slug: string) => `${FB_CACHE_ROOT}/${kind}/${safeKey(slug)}`;
 
 export async function pruneExpiredPlaybackCache() {
   const now = Date.now();
@@ -25,13 +25,13 @@ export async function pruneExpiredPlaybackCache() {
   lastPrune = now;
   try {
     for (const [key, hit] of Array.from(mem.entries())) if (!hit?.expiresAt || hit.expiresAt <= now) mem.delete(key);
-    const snap = await get(ref(db, "anPlaybackCache"));
+    const snap = await get(ref(db, FB_CACHE_ROOT));
     const tree = snap.val() || {};
     const jobs: Promise<unknown>[] = [];
     for (const kind of ["episode", "movie", "series"] as const) {
       const bucket = tree?.[kind] || {};
       Object.entries(bucket).forEach(([slugKey, row]: [string, any]) => {
-        if (!row?.expiresAt || row.expiresAt <= now) jobs.push(remove(ref(db, `anPlaybackCache/${kind}/${slugKey}`)).catch(() => null));
+        if (!row?.expiresAt || row.expiresAt <= now) jobs.push(remove(ref(db, `${FB_CACHE_ROOT}/${kind}/${slugKey}`)).catch(() => null));
       });
     }
     await Promise.all(jobs);
