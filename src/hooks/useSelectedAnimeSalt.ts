@@ -10,6 +10,7 @@ const SELECTED_PATH = "animesaltSelected";
 const CACHE_KEY = "rs_cache_animesalt_selected_v1";
 const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|cartoon\s*network|nickelodeon|disney|pixar|tintin|tin\s*tin|avatar\s*the\s*last\s*airbender|sponge\s*bob|jurassic\s*world|sausage\s*party|maya\s*and\s*the\s*three|hazbin\s*hotel|captain\s*laserhawk|invincible|zig\s*and\s*sharko|twilight\s*of\s*the\s*gods|arcane|jentry\s*chau|vox\s*machina|dragon\s*prince|castlevania)\b/i;
 const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan)\b/i;
+const GENERIC_CATEGORIES = new Set(["", "anime", "animesalt"]);
 
 type SavedItem = {
   slug: string;
@@ -57,7 +58,10 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
   const id = isMovie ? `an_mv_${slug}` : `an_${slug}`;
   const poster = String(row?.poster || "").trim();
   const genres = normalizeSavedGenres(row?.genres);
-  const category = String(row?.category || genres.join(", ") || "Anime").trim() || "Anime";
+  const rawCategory = String(row?.category || "").trim();
+  const category = rawCategory && !GENERIC_CATEGORIES.has(rawCategory.toLowerCase())
+    ? rawCategory
+    : (genres.join(", ") || rawCategory || "Anime");
   return {
     id,
     title,
