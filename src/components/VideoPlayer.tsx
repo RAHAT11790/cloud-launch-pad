@@ -4949,12 +4949,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {!!infoCast.length && (
                 <div className="space-y-2">
-                  <h5 className="text-[13px] font-semibold">Starring ({anime?.cast?.length || infoCast.length})</h5>
+                  <h5 className="text-[13px] font-semibold">Voice/Cast Artists ({infoCast.length})</h5>
                   <div className="grid grid-cols-4 gap-2.5">
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
                         <div className="aspect-[3/4] overflow-hidden rounded-[8px] bg-white/[0.06]">
-                          {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : null}
+                          {person.photo ? <img src={optimizedImageUrl(person.photo, "poster")} alt={person.name} className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <div className="w-full h-full flex items-center justify-center text-[9px] text-white/35">No photo</div>}
                         </div>
                         <p className="mt-1.5 text-[11px] font-medium text-white line-clamp-2">{person.name}</p>
                         {person.character ? <p className="mt-0.5 text-[10px] leading-4 text-white/55 line-clamp-2">{person.character}</p> : null}
