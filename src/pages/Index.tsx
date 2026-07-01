@@ -2219,6 +2219,11 @@ const Index = () => {
           poster: playerState.anime.poster,
           updatedAt: Date.now(),
         });
+        // Live-update the home rail so the card appears immediately (esp. for guests).
+        setContinueWatching((prev) => {
+          const filtered = Array.isArray(prev) ? prev.filter((x: any) => x?.id !== nextItem.id) : [];
+          return [nextItem, ...filtered].slice(0, 50);
+        });
       } catch {}
     } catch {}
   }, [playerState]);
