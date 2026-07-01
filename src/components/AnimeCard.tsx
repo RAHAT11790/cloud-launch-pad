@@ -182,6 +182,19 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         >
           {sourceBadge}
         </span>
+        {isPremium && (
+          <span
+            className="premium-shine flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider bg-gradient-to-r from-amber-400 to-yellow-500 text-black"
+            style={{ textShadow: "0 1px 1px rgba(255,255,255,0.4)" }}
+          >
+            <Crown className="w-2 h-2" /> PRO
+          </span>
+        )}
+        {!isPremium && lockedEpisodes > 0 && (
+          <span className="px-1.5 py-0.5 rounded text-[7px] font-bold bg-amber-500/85 text-black flex items-center gap-0.5">
+            <Crown className="w-2 h-2" /> {lockedEpisodes}
+          </span>
+        )}
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-2">
         <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>
