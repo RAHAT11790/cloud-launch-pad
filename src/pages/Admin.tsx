@@ -10858,6 +10858,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
  const [userDevices, setUserDevices] = useState<Record<string, any[]>>({});
  const [loadingDevices, setLoadingDevices] = useState<string | null>(null);
  const [searchQuery, setSearchQuery] = useState("");
+ const deferredSearchQuery = useDeferredValue(searchQuery);
  const [editingExpiry, setEditingExpiry] = useState<string | null>(null);
  const [expiryDaysInput, setExpiryDaysInput] = useState("");
 
@@ -10865,30 +10866,32 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
 
  useEffect(() => {
  const pUsers = usersData.filter(u => u.premium?.active && u.premium?.expiresAt > Date.now());
- setPremiumUsers(pUsers);
+ startTransition(() => setPremiumUsers(pUsers));
  }, [usersData]);
 
  // Load appUsers to get names/emails/photos for users whose data might be stored with comma keys
  useEffect(() => {
- const unsub = onValue(ref(db, "appUsers"), (snap) => {
+ const unsub = onValue(query(ref(db, "appUsers"), limitToLast(1000)), (snap) => {
  const data = snap.val() || {};
  const map: Record<string, any> = {};
  Object.values(data).forEach((u: any) => {
  if (u.id) map[u.id] = u;
  });
- setAppUsersMap(map);
+ startTransition(() => setAppUsersMap(map));
  });
  return () => unsub();
  }, []);
 
  const loadDevices = async (userId: string) => {
  if (expandedUser === userId) { setExpandedUser(null); return; }
+ startTransition(() => {
  setExpandedUser(userId);
  setLoadingDevices(userId);
+ });
  try {
  const { getUserDevices } = await import("@/lib/premiumDevice");
  const devices = await getUserDevices(userId);
- setUserDevices(prev => ({ ...prev, [userId]: devices }));
+ startTransition(() => setUserDevices(prev => ({ ...prev, [userId]: devices })));
  } catch {}
  setLoadingDevices(null);
  };
@@ -10956,13 +10959,16 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
  } catch { toast.error("Error updating expiry"); }
  };
 
- const filteredPremiumUsers = searchQuery.trim()
- ? premiumUsers.filter(u =>
- (u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
- (u.email || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
- u.id.toLowerCase().includes(searchQuery.toLowerCase())
- )
- : premiumUsers;
+ const filteredPremiumUsers = useMemo(() => {
+ const q = deferredSearchQuery.trim().toLowerCase();
+ if (!q) return premiumUsers;
+ return premiumUsers.filter(u =>
+ (u.name || "").toLowerCase().includes(q) ||
+ (u.email || "").toLowerCase().includes(q) ||
+ String(u.id || "").toLowerCase().includes(q)
+ );
+ }, [premiumUsers, deferredSearchQuery]);
+ const visiblePremiumUsers = useMemo(() => filteredPremiumUsers.slice(0, 120), [filteredPremiumUsers]);
 
  return (
  <div>
@@ -10992,7 +10998,12 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
  </p>
  ) : (
  <div className="space-y-2.5">
- {filteredPremiumUsers.map(rawUser => {
+ {filteredPremiumUsers.length > visiblePremiumUsers.length && (
+ <div className="mb-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-200">
+ Showing first {visiblePremiumUsers.length} of {filteredPremiumUsers.length}. Search to narrow results.
+ </div>
+ )}
+ {visiblePremiumUsers.map(rawUser => {
  // Merge with appUsers data for better name/email/photo
  const appData = appUsersMap[rawUser.id] || {};
  const user = {
