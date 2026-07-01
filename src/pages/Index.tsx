@@ -2314,9 +2314,15 @@ const Index = () => {
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
     if (!anime) return;
-    anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
+    const isAnimeSaltContinue = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || String(anime.id || "").startsWith("an_mv_")
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug;
+    if (!isAnimeSaltContinue) anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
 
-    if (anime.source === "animesalt") {
+    if (isAnimeSaltContinue || anime.source === "animesalt") {
       // Route AN continue-watching through the live-API click flow so playback
       // URLs are always fresh.
       const sIdx = item.episodeInfo?.seasonIdx ?? (item.episodeInfo ? item.episodeInfo.season - 1 : undefined);
