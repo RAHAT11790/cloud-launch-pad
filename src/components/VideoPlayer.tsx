@@ -5295,6 +5295,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           const startMovieDownload = async (quality: string) => {
             const { toast } = await import("sonner");
+            const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
+            const gate = await checkDownloadAllowed();
+            if (!gate.allowed) {
+              toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
+              try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
+              return;
+            }
             const movieLabel = String(title || subtitle || "video").trim();
             const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
             const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
