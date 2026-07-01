@@ -109,7 +109,7 @@ export default function WeeklyEpisodeManager({
   };
 
 
-  const scheduledIds = Object.keys(schedules);
+  const scheduledIds = useMemo(() => Object.keys(schedules), [schedules]);
   const availableSeries = useMemo(() => {
     const q = deferredPickerSearch.trim().toLowerCase();
     return webseriesData
