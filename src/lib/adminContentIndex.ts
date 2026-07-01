@@ -7,7 +7,7 @@ export type AdminContentKind = "webseries" | "movies";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RECENT_LIMIT = 500;
 
-const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v1`;
+const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v2`;
 const countCacheKeyFor = (path: string) => `rs_admin_count_${path}_v1`;
 const indexPathFor = (kind: AdminContentKind) => `adminContentIndex/${kind}`;
 
