@@ -714,8 +714,14 @@ async function episode(slug: string, type = "", forceRefresh = false) {
   }
   const t = type === "movies" || type === "movie" ? "movies" : "episode";
   const pageUrl = t === "movies" ? `${AN_BASE}/movies/${slug}/` : `${AN_BASE}/episode/${slug}/`;
-  const html = await fetchText(pageUrl);
+  let html = "";
+  try {
+    html = await fetchText(pageUrl);
+  } catch (e) {
+    return { success: false, playable: false, slug, pageUrl, error: (e as Error)?.message || String(e), retryable: true };
+  }
   const embeds = collectEmbedsFromHtml(html);
+  if (!embeds.length) return { success: false, playable: false, slug, pageUrl, allEmbeds: [], error: "No AN embed found" };
   let lastErr = "";
   for (const embed of embeds) {
     try {
@@ -725,7 +731,7 @@ async function episode(slug: string, type = "", forceRefresh = false) {
       lastErr = (e as Error)?.message || String(e);
     }
   }
-  throw new Error(`No playable AN embed found${lastErr ? `: ${lastErr}` : ""}`);
+  return { success: false, playable: false, slug, pageUrl, allEmbeds: embeds, error: `No playable AN embed found${lastErr ? `: ${lastErr}` : ""}` };
 }
 
 const API_ENDPOINTS = {
@@ -826,6 +832,10 @@ Deno.serve(async (req) => {
     }
     return json({ error: "not found", path }, 404);
   } catch (e) {
-    return json({ error: (e as Error).message || String(e) }, 500);
+    // Permanent safety net: AN upstream failures must never surface as a raw
+    // Edge runtime 500/502 that blanks the app.  The frontend treats this JSON
+    // as "skip/unplayable" and can keep the UI alive while retry/cache handles
+    // the next request.
+    return json({ success: false, ok: false, retryable: true, error: (e as Error).message || String(e) }, 200);
   }
 });
