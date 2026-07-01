@@ -499,6 +499,10 @@ function parseMaster(masterUrl: string, body: string) {
       const next = (lines[i + 1] || "").trim();
       if (!next || next.startsWith("#")) continue;
       const attrs = parseHlsAttrs(line);
+      // Strict policy from the player side: only variant playlists that mount a
+      // separate AUDIO group are valid. Single mixed A/V master/media playlists
+      // are intentionally skipped because those AnimeSalt CDN entries black-screen.
+      if (!attrs.AUDIO) continue;
       const res = attrs.RESOLUTION || "";
       const height = res ? Number(res.split("x")[1]) : 0;
       const label = attrs.NAME || (height ? `${height}p` : "Auto");
