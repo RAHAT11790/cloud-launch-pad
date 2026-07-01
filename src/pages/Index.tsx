@@ -446,6 +446,7 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { isLegacyAnEntry } from "@/lib/legacyAn";
+import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -475,6 +476,18 @@ const writeFullFirebaseItemCache = (type: AnimeItem["type"], id: string, data: A
 
 const mergeAnimeCards = (...groups: AnimeItem[][]) => {
   const byKey = new Map<string, AnimeItem>();
+  const mergeRich = (base: AnimeItem, incoming: AnimeItem): AnimeItem => ({
+    ...base,
+    ...incoming,
+    rating: incoming.rating || base.rating,
+    year: incoming.year || base.year,
+    category: incoming.category || base.category,
+    storyline: incoming.storyline || base.storyline,
+    genres: incoming.genres?.length ? incoming.genres : base.genres,
+    directors: incoming.directors?.length ? incoming.directors : base.directors,
+    cast: incoming.cast?.length ? incoming.cast : base.cast,
+    tmdbId: incoming.tmdbId || base.tmdbId,
+  });
   const keyFor = (item: AnimeItem) => {
     const slug = String(item.anSlug || item.animeSaltSlug || item.slug || "").trim().toLowerCase();
     if (slug && (item.source === "animesalt" || item.sourceName === "AnimeSalt")) return `${item.type}:an:${slug}`;
@@ -484,13 +497,22 @@ const mergeAnimeCards = (...groups: AnimeItem[][]) => {
     (item.seasons?.length ? 100 : 0)
     + (item.movieLink ? 100 : 0)
     + (item.id.startsWith("an_") || item.id.startsWith("an_mv_") ? 20 : 0)
+    + (item.rating ? 12 : 0)
+    + (item.year ? 10 : 0)
+    + (item.category ? 10 : 0)
+    + (item.genres?.length ? 10 : 0)
+    + (item.storyline ? 8 : 0)
+    + (item.cast?.length ? 8 : 0)
+    + (item.directors?.length ? 4 : 0)
     + (item.poster ? 2 : 0)
     + (item.backdrop ? 1 : 0);
   groups.flat().forEach((item) => {
     if (!item?.id) return;
     const key = keyFor(item);
     const prev = byKey.get(key);
-    if (!prev || score(item) >= score(prev)) byKey.set(key, item);
+    if (!prev) byKey.set(key, item);
+    else if (score(item) >= score(prev)) byKey.set(key, mergeRich(prev, item));
+    else byKey.set(key, mergeRich(item, prev));
   });
   return Array.from(byKey.values()).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 };
@@ -520,10 +542,7 @@ const splitCategoryLabels = (value?: string | null) => {
 
 const categoryMatches = (item: AnimeItem, activeCategory: string) => {
   if (activeCategory === "All") return true;
-  const active = activeCategory.trim().toLowerCase();
-  const tokens = splitCategoryTokens(item.category);
-  const rawCategory = String(item.category || "").toLowerCase();
-  return tokens.some((token) => token === active || token.includes(active) || active.includes(token)) || rawCategory.includes(active);
+  return contentCategoryLabels(item).some((label) => metadataLabelMatches(label, activeCategory));
 };
 
 const normalizeRouteLookup = (value?: string | null) => String(value || "").trim().toLowerCase();
