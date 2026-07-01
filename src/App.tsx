@@ -8,8 +8,12 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Unlock from "./pages/Unlock";
 import UnlockRequired from "./pages/UnlockRequired";
+import PremiumRequired from "./pages/PremiumRequired";
+import PremiumBuyPage from "./pages/PremiumBuyPage";
+import FreePremium from "./pages/FreePremium";
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
+
 import { installUiGuard } from "@/lib/uiGuard";
 
 const RouteAttrSync = () => {
@@ -61,6 +65,10 @@ const App = () => (
           <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><AnExplorer /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
+          <Route path="/premium-required" element={<PremiumRequired />} />
+          <Route path="/premium-buy" element={<PremiumBuyPage />} />
+          <Route path="/free-premium" element={<FreePremium />} />
+
           {/* Main tab routes — all render Index, which syncs activePage from pathname */}
           <Route path="/" element={<Index />} />
           <Route path="/series" element={<Index />} />
