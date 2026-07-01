@@ -6255,6 +6255,8 @@ ${tgBulkFooter}
 
  try {
  for (const r of rangesToPublish) {
+  setAdminBusyTask("Adding new release…");
+  await yieldAdminFrame();
  const newRelease: any = {
  contentId: ctxSeriesId,
  contentType: "webseries",
@@ -6276,21 +6278,25 @@ ${tgBulkFooter}
  };
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  }
+  setAdminBusyTask(null);
  toast.success(rangesToPublish.length > 1
  ? `✅ ${rangesToPublish.length} new release entries added (multi-range)!`
  : "✅ New Release added!");
  // Clear so a future Save+Notify on the same form starts fresh
- setWsAutoRanges([]);
+  startTransition(() => setWsAutoRanges([]));
  // FCM removed — notifications go through Telegram only.
  // Skip straight to telegram step (no in-app push, no FCM).
  // Auto-fill telegram fields
- setTgTitle(ctxForm.title);
+  startTransition(() => setTgTitle(ctxForm.title));
  const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
- setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+  startTransition(() => setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/')));
  const wsStartEp = String(episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1).padStart(2, '0');
  const wsEndEp = String(episodeEnd?.episodeNumber || episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1).padStart(2, '0');
- setTgSeason(String(parseInt(wsNotifySeason) + 1).padStart(2, '0'));
- setTgNewEpAdded(wsEndEp !== wsStartEp ? `${wsStartEp}-${wsEndEp}` : wsStartEp);
+  startTransition(() => {
+  setTgSeason(String(parseInt(wsNotifySeason) + 1).padStart(2, '0'));
+  setTgNewEpAdded(wsEndEp !== wsStartEp ? `${wsStartEp}-${wsEndEp}` : wsStartEp);
+  });
+  await yieldAdminFrame();
  // Get per-season total episodes from TMDB
  const seasonNum = parseInt(wsNotifySeason) + 1;
  try {
@@ -6309,10 +6315,12 @@ ${tgBulkFooter}
  } catch {
  setTgTotalEpisodes(String(season?.episodes?.length || 0));
  }
- setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
- if (ctxForm.language) setTgLanguages(String(ctxForm.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
- if (ctxForm.category) setTgGenres(ctxForm.category);
- if (ctxForm.rating) setTgRating(String(ctxForm.rating));
+  startTransition(() => {
+  setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
+  if (ctxForm.language) setTgLanguages(String(ctxForm.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
+  if (ctxForm.category) setTgGenres(ctxForm.category);
+  if (ctxForm.rating) setTgRating(String(ctxForm.rating));
+  });
  if (ctxForm.tmdbId) {
  try {
  setTgImdbId(String(ctxForm.tmdbId));
@@ -6323,15 +6331,20 @@ ${tgBulkFooter}
  }
  // Get quality info
  const quals: string[] = [];
- ctxSeasons.forEach((s: any) => s.episodes?.forEach((ep: any) => {
+  let scannedEpisodes = 0;
+  ctxSeasons.some((s: any) => (s.episodes || []).some((ep: any) => {
+  scannedEpisodes += 1;
  if (ep.link480) quals.push("480p");
  if (ep.link720) quals.push("720p");
  if (ep.link1080) quals.push("1080p");
  if (ep.link4k) quals.push("4K");
- }));
- if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
- setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), parseInt(wsNotifyEpisode)));
- setTgSelectedAnimeId(String(ctxSeriesId));
+  return scannedEpisodes > 250 || new Set(quals).size >= 4;
+  }));
+  startTransition(() => {
+  if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
+  setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), parseInt(wsNotifyEpisode)));
+  setTgSelectedAnimeId(String(ctxSeriesId));
+  });
  // Load any saved per-anime custom buttons
  try {
  const safeId = String(ctxSeriesId).replace(/[^a-zA-Z0-9_-]/g, "_");
