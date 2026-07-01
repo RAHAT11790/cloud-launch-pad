@@ -61,13 +61,13 @@ export default function FreePremium() {
         if (res.ok) {
           setCoinAnimTick((t) => t + 1);
           toast({ title: "+1 Coin earned 🎉", description: `Balance: ${res.coins} coins` });
-        } else if (!res.ok && res.reason === "already_watched") {
-          toast({ title: "Already watched today", description: "Try another ad." });
-        } else if (!res.ok && res.reason === "daily_cap") {
-          toast({ title: "Daily limit reached", description: `You can watch ${settings.dailyAdCap} ads/day.` });
-        } else if (!res.ok && res.reason === "no_user") {
-          toast({ title: "Login required", variant: "destructive" });
+        } else {
+          const reason = res.reason;
+          if (reason === "already_watched") toast({ title: "Already watched today", description: "Try another ad." });
+          else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `You can watch ${settings.dailyAdCap} ads/day.` });
+          else if (reason === "no_user") toast({ title: "Login required", variant: "destructive" });
         }
+
 
       } else {
         // returned too early → discard
