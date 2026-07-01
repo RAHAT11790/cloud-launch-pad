@@ -238,7 +238,7 @@ export default function WeeklyEpisodeManager({
                         onClick={() => { setSelectedSeriesId(s.id); setPickerSearch(s.title); }}
                         className="w-full flex items-center gap-2.5 p-2 hover:bg-white/5 transition-colors text-left"
                       >
-                        <img src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]"
+                        <img src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]" loading="lazy" decoding="async"
                           onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                         <span className="text-[12px] text-white truncate flex-1">{s.title}</span>
                       </button>
@@ -247,7 +247,7 @@ export default function WeeklyEpisodeManager({
                 )}
                 {selectedSeriesId && (
                   <div className="mt-2 flex items-center gap-2 bg-indigo-600/15 border border-indigo-500/30 rounded-lg p-2">
-                    <img src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover"
+                    <img src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover" loading="lazy" decoding="async"
                       onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-semibold truncate">{seriesById[selectedSeriesId]?.title}</p>
@@ -360,7 +360,7 @@ export default function WeeklyEpisodeManager({
                   className="bg-[#141422] border border-white/8 rounded-xl p-3 hover:border-indigo-500/40 transition-all">
                   <div className="flex gap-3">
                     <div className="relative flex-shrink-0">
-                      <img src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover"
+                      <img src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover" loading="lazy" decoding="async"
                         onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/64x88/141422/6366f1?text=N"; }} />
                       {isComplete && (
                         <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
