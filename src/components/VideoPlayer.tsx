@@ -5323,6 +5323,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               toast.error("Select at least one episode");
               return;
             }
+            const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
+            const gate = await checkDownloadAllowed();
+            if (!gate.allowed) {
+              toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
+              try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
+              return;
+            }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
             const httpBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
             const hlsBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
