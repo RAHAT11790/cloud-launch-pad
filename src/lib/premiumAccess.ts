@@ -95,6 +95,25 @@ export const isQualityLocked = (
   return false;
 };
 
+/** Check if the current user is allowed to download.
+ *  Returns { allowed: true } if the global download lock is off OR the user has active premium.
+ */
+export const checkDownloadAllowed = async (): Promise<{ allowed: boolean; reason?: "premium_required" | "no_user" }> => {
+  try {
+    const sSnap = await get(ref(db, "settings/premium"));
+    const s = (sSnap.val() || {}) as Partial<PremiumGlobalSettings>;
+    if (s.globalDownloadLock === false) return { allowed: true };
+    const uid = getLocalUserId();
+    if (!uid) return { allowed: false, reason: "no_user" };
+    const pSnap = await get(ref(db, `users/${uid}/premium`));
+    const status = (pSnap.val() || null) as PremiumStatus | null;
+    if (isPremiumActive(status)) return { allowed: true };
+    return { allowed: false, reason: "premium_required" };
+  } catch {
+    return { allowed: true }; // fail-open on network hiccups
+  }
+};
+
 /** Coin ad watch (returns reason for failure) */
 export type AwardCoinResult = { ok: true; coins: number } | { ok: false; reason: "no_user" | "daily_cap" | "already_watched" | "unknown" };
 
