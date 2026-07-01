@@ -79,6 +79,8 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
     category,
     type: isMovie ? "movie" : "webseries",
     storyline: normalizeOverviewFrom(row),
+    overview: normalizeOverviewFrom(row),
+    description: row?.description || row?.overview || row?.storyline || "",
     tmdbId: row?.tmdbId,
     genres: genres.length ? genres : undefined,
     directors: directors.length ? directors : undefined,
