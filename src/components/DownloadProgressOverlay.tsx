@@ -57,7 +57,9 @@ export default function DownloadProgressOverlay() {
     ? `${formatMb(activeItem.loadedMB)} / ${formatMb(activeItem.totalMB)}`
     : activeItem.status === "complete"
       ? "Sent to browser downloads"
-      : "Calculating size...";
+      : activeItem.status === "error"
+        ? "Download failed"
+        : "Opening browser download...";
 
   const onDragEnd = (_: unknown, info: { point: { x: number; y: number } }) => {
     const maxX = Math.max(14, window.innerWidth - 286);

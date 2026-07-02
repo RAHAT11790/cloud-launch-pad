@@ -271,12 +271,13 @@ class DownloadManager {
     this.clearItemTimers(id);
     const current = this.downloads.get(id);
     if (current) {
+      const knownTotal = Math.max(Number(patch.totalMB ?? 0), current.totalMB || 0, current.loadedMB || 0);
       this.downloads.set(id, {
         ...current,
         status,
         percent: status === "complete" ? 100 : current.percent,
-        loadedMB: status === "complete" ? Math.max(current.loadedMB, current.totalMB || 1) : current.loadedMB,
-        totalMB: Math.max(current.totalMB, current.loadedMB, 1),
+        loadedMB: status === "complete" && knownTotal > 0 ? Math.max(current.loadedMB, knownTotal) : current.loadedMB,
+        totalMB: knownTotal,
         ...patch,
       });
     }
@@ -365,11 +366,11 @@ class DownloadManager {
       if (controller.signal.aborted) return;
       const latest = this.downloads.get(id);
       if (!latest) return;
-      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(latest.totalMB, latest.loadedMB, 1);
+      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(latest.totalMB || 0, latest.loadedMB || 0);
       this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
     } catch {
       const latest = this.downloads.get(id);
-      const totalMB = latest?.totalMB && latest.totalMB > 1 ? latest.totalMB : 1;
+      const totalMB = latest?.totalMB && latest.totalMB > 0 ? latest.totalMB : 0;
       this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
     } finally {
       if (this.controllers.get(id) === controller) this.controllers.delete(id);
@@ -391,7 +392,7 @@ class DownloadManager {
       status: "downloading",
       percent: 1,
       loadedMB: 0,
-      totalMB: Math.max(item.totalMB, 1),
+      totalMB: Math.max(item.totalMB || 0, 0),
     });
     this.emit();
 
@@ -499,7 +500,7 @@ class DownloadManager {
       quality: params.quality,
       percent: 0,
       loadedMB: 0,
-      totalMB: 1,
+      totalMB: 0,
       status: "queued",
       sequence: this.sequence,
       queueIndex: 1,
@@ -525,7 +526,7 @@ class DownloadManager {
       quality: params.quality,
       percent: 0,
       loadedMB: 0,
-      totalMB: 1,
+      totalMB: 0,
       status: "queued",
       sequence: this.sequence,
       queueIndex: batchSize,
@@ -556,7 +557,7 @@ class DownloadManager {
         quality: params.quality,
         percent: 0,
         loadedMB: 0,
-        totalMB: 1,
+        totalMB: 0,
         status: "queued",
         sequence: this.sequence,
         queueIndex: idx + 1,
@@ -586,7 +587,7 @@ class DownloadManager {
       quality: params.quality,
       percent: 0,
       loadedMB: 0,
-      totalMB: 1,
+      totalMB: 0,
       status: "queued",
       sequence: this.sequence,
       queueIndex: 1,
