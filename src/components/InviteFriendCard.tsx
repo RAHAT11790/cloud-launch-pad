@@ -117,27 +117,27 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
         {variant === "full" && (
           <>
             {/* How it works */}
-            <div className="mt-4 rounded-2xl bg-black/25 border border-white/10 p-3.5">
+            <div className="mt-4 rounded-2xl bg-black/40 border border-white/10 p-3.5">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-4 h-4 text-fuchsia-300" />
-                <h4 className="text-[12px] font-bold uppercase tracking-wider text-fuchsia-200">How it works</h4>
+                <h4 className="text-[12px] font-black uppercase tracking-wider text-white">How it works</h4>
               </div>
-              <ol className="space-y-2 text-[12px] leading-relaxed">
+              <ol className="space-y-2 text-[12.5px] leading-relaxed">
                 <li className="flex gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/25 text-fuchsia-200 text-[10px] font-black flex-shrink-0 mt-0.5">1</span>
-                  <span className="text-muted-foreground">Copy your unique invite link above and send it to friends on WhatsApp, Telegram, Messenger — anywhere.</span>
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500 text-white text-[10px] font-black flex-shrink-0 mt-0.5">1</span>
+                  <span className="text-white/85">Copy your unique invite link above and send it to friends on WhatsApp, Telegram, Messenger — anywhere.</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/25 text-fuchsia-200 text-[10px] font-black flex-shrink-0 mt-0.5">2</span>
-                  <span className="text-muted-foreground">When a friend opens your link, you instantly earn <b className="text-emerald-300">+1 coin</b> as an entry bonus.</span>
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500 text-white text-[10px] font-black flex-shrink-0 mt-0.5">2</span>
+                  <span className="text-white/85">When a friend opens your link, you instantly earn <b className="text-emerald-300">+1 coin</b> as an entry bonus.</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/25 text-fuchsia-200 text-[10px] font-black flex-shrink-0 mt-0.5">3</span>
-                  <span className="text-muted-foreground">If that friend stays and watches for <b className="text-amber-300">30 minutes</b>, you automatically earn <b className="text-amber-300">+9 extra coins</b> (10 coins total).</span>
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500 text-white text-[10px] font-black flex-shrink-0 mt-0.5">3</span>
+                  <span className="text-white/85">If that friend stays and watches for <b className="text-amber-300">30 minutes</b>, you automatically earn <b className="text-amber-300">+9 extra coins</b> (10 coins total).</span>
                 </li>
                 <li className="flex gap-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500/25 text-fuchsia-200 text-[10px] font-black flex-shrink-0 mt-0.5">4</span>
-                  <span className="text-muted-foreground">Rewards land in your coin wallet in real-time — no waiting, no manual claim.</span>
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-fuchsia-500 text-white text-[10px] font-black flex-shrink-0 mt-0.5">4</span>
+                  <span className="text-white/85">Rewards land in your coin wallet in real-time — no waiting, no manual claim.</span>
                 </li>
               </ol>
             </div>
