@@ -447,6 +447,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
 };
 
 const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatching, onLogout, onLoginClick }: ProfilePageProps) => {
+  const navigate = useNavigate();
   const isGuestUser = (() => {
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
