@@ -2349,7 +2349,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
     } catch {}
   }
-  if (!workingId) return { genres: [] as string[], rating: "" };
+  if (!workingId) return { genres: localCats, rating: "" };
 
   let tmdbData: any = null;
   if (workingId.startsWith("tt")) {
