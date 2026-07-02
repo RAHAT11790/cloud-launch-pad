@@ -2322,10 +2322,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }, []);
 
  // Resolve anime-accurate genres + rating using TMDB ID/IMDB ID, with AniList fallback for anime-specific genres
-  const resolveTelegramGenresAndRating = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
-  const idTrimmed = String(tmdbIdOrImdb || "").trim();
-  const title = String(fallbackTitle || "").trim();
-  if (!idTrimmed && !title) return { genres: [] as string[], rating: "" };
+   const resolveTelegramGenresAndRating = async (tmdbIdOrImdb: string, fallbackTitle?: string, fallbackCategory?: string) => {
+   const idTrimmed = String(tmdbIdOrImdb || "").trim();
+   const title = String(fallbackTitle || "").trim();
+   const localCats = String(fallbackCategory || "").split(/[,/|]+/).map(s => s.trim()).filter(Boolean);
+   if (!idTrimmed && !title) return { genres: localCats, rating: "" };
 
   // No ID → try searching TMDB by title (TV first, then movie).
   let workingId = idTrimmed;
