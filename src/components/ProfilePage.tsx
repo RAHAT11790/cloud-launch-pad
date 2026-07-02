@@ -1724,12 +1724,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         <div className="mb-4">
           <div
             onClick={() => window.location.assign("/free-premium")}
-            className="relative overflow-hidden rounded-2xl p-3.5 cursor-pointer active:scale-[0.99] transition-transform border border-amber-400/25 bg-gradient-to-r from-amber-500/15 via-orange-500/8 to-transparent"
+            className="relative overflow-hidden rounded-xl p-2.5 cursor-pointer active:scale-[0.99] transition-transform border border-amber-400/20 bg-gradient-to-r from-amber-500/12 via-orange-500/6 to-transparent"
           >
             <div className="relative flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0">
-                  <Coins className="w-5 h-5 text-black" />
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0">
+                  <Coins className="w-4 h-4 text-black" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-amber-300">Coins</p>
@@ -1737,10 +1737,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-2xl font-black text-amber-300 tabular-nums leading-none">{coinWallet?.coins ?? 0}</span>
+                <span className="text-xl font-black text-amber-300 tabular-nums leading-none">{coinWallet?.coins ?? 0}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); window.location.assign("/free-premium"); }}
-                  className="h-8 px-3 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-xs hover:brightness-110 active:scale-95 transition"
+                  className="h-7 px-2.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-[11px] hover:brightness-110 active:scale-95 transition"
               >
                 Earn +
               </button>

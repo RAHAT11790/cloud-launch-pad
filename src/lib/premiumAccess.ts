@@ -146,6 +146,9 @@ const recordLocalDeviceCoin = (adId: string) => {
 export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinResult> => {
   const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
+  const localToday = readLocalDeviceCoinDay().entry;
+  if (localToday?.adIds?.[adId]) return { ok: false, reason: "already_watched" };
+  if ((localToday?.count || 0) >= capPerDay) return { ok: false, reason: "daily_cap" };
   const day = todayKey();
   const deviceId = getDeviceId();
   let outcome: AwardCoinResult = { ok: false, reason: "unknown" };

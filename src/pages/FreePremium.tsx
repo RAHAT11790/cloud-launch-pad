@@ -299,7 +299,7 @@ export default function FreePremium() {
             <button
               onClick={handleMainButton}
               disabled={isTimerRunning || remaining <= 0}
-              className="group relative w-full h-14 rounded-xl font-black text-sm tracking-wide overflow-hidden
+              className="group relative w-full h-11 rounded-xl font-black text-xs tracking-wide overflow-hidden
                          bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-black
                          shadow-[0_20px_60px_-12px_rgba(251,146,60,0.5)]
                          hover:shadow-[0_25px_70px_-10px_rgba(251,146,60,0.7)]
@@ -307,7 +307,7 @@ export default function FreePremium() {
                          disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-              <div className="relative flex items-center justify-center gap-3">
+              <div className="relative flex items-center justify-center gap-2">
                 {isTimerRunning ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -315,7 +315,7 @@ export default function FreePremium() {
                   </>
                 ) : (
                   <>
-                    <Play className="w-5 h-5 fill-black" />
+                    <Play className="w-4 h-4 fill-black" />
                     <span>{firstTapDone ? `Watch & Earn +1 Coin` : `Tap to Preview`}</span>
                   </>
                 )}
