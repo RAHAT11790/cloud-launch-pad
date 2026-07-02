@@ -840,13 +840,13 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  // Check if user is logged in (must have email - no guest accounts)
+  // Check if user is logged in/guest (guest accounts also have a profile)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     try {
       const u = localStorage.getItem("rsanime_user");
       if (!u) return false;
       const parsed = JSON.parse(u);
-      return !!(parsed.id && parsed.email);
+      return !!parsed.id;
     } catch { return false; }
   });
 
@@ -855,7 +855,7 @@ const Index = () => {
     const syncLoginState = () => {
       try {
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        setIsLoggedIn(!!(u?.id && u?.email));
+        setIsLoggedIn(!!u?.id);
       } catch {
         setIsLoggedIn(false);
       }
@@ -2787,13 +2787,8 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      if (!isLoggedIn) {
-        setShowProfile(false);
-        setShowLogin(true);
-      } else {
-        setShowLogin(false);
-        setShowProfile(true);
-      }
+      setShowLogin(false);
+      setShowProfile(true);
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
