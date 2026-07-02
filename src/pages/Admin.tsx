@@ -7546,29 +7546,27 @@ ${tgBulkFooter}
  const backdrop = (fullData as any).backdrop || (fullData as any).poster || "";
  setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
  if ((fullData as any).rating) setTgRating(String((fullData as any).rating));
- if ((fullData as any).category) setTgGenres((fullData as any).category);
- if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
- setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
- setTgButtonLink(buildEpisodeShareUrl(r.id));
- setTgSelectedAnimeId(String(r.id));
- try {
- const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
- const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
- const saved = savedSnap.val();
- if (saved && typeof saved === "object") {
- if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
- if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
- else setTgButtons([]);
- } else { setTgButtons([]); }
- } catch {}
- if ((fullData as any).tmdbId) {
- setTgImdbId(String((fullData as any).tmdbId));
- try {
- const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId), r.title || "");
- if (genres.length > 0) setTgGenres(genres.join(", "));
- if (rating) setTgRating(rating);
- } catch {}
- }
+  // Genres from TMDB only — never from local category.
+  if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
+  setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
+  setTgButtonLink(buildEpisodeShareUrl(r.id));
+  setTgSelectedAnimeId(String(r.id));
+  try {
+  const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+  const saved = savedSnap.val();
+  if (saved && typeof saved === "object") {
+  if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
+  if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+  else setTgButtons([]);
+  } else { setTgButtons([]); }
+  } catch {}
+  if ((fullData as any).tmdbId) setTgImdbId(String((fullData as any).tmdbId));
+  try {
+  const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId || ""), r.title || "");
+  if (genres.length > 0) setTgGenres(genres.join(", "));
+  if (rating) setTgRating(rating);
+  } catch {}
  }
  }
  setTgDropdownOpen(false); setTgContentSearch('');
