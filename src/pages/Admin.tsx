@@ -5691,11 +5691,11 @@ ${tgBulkFooter}
  <div className="flex gap-2">
  <button type="button" onClick={() => setSeriesForm({ ...seriesForm, dubType: "official" })}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(seriesForm.dubType || "official") === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- Official Dub
+ {TG_DUB_TAGS.official}
  </button>
  <button type="button" onClick={() => setSeriesForm({ ...seriesForm, dubType: "fandub" })}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${seriesForm.dubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- Fandub
+ {TG_DUB_TAGS.fandub}
  </button>
  </div>
  </div>
@@ -6724,11 +6724,11 @@ ${tgBulkFooter}
  <div className="flex gap-2">
  <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "official" })}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(movieForm.dubType || "official") === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- Official Dub
+ {TG_DUB_TAGS.official}
  </button>
  <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "fandub" })}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.dubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- Fandub
+ {TG_DUB_TAGS.fandub}
  </button>
  </div>
  </div>
@@ -7707,7 +7707,7 @@ ${tgBulkFooter}
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Hashtags</label>
- <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { const clean = normalizeTelegramBaseHashtags(tgHashtags); setTgHashtags(clean); set(ref(db, "admin/tgHashtags",), clean); } catch {} }} className={inputClass} placeholder={DEFAULT_TG_HASHTAGS} />
+ <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { const clean = normalizeTelegramBaseHashtags(tgHashtags); setTgHashtags(clean); set(ref(db, "admin/tgHashtags"), clean); } catch {} }} className={inputClass} placeholder={DEFAULT_TG_HASHTAGS} />
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Poster URL (optional)</label>
@@ -7976,10 +7976,10 @@ ${TG_DIVIDER}`}
  const newEpNum = isSeries && totalEps > 0 ? String(totalEps).padStart(2, "0") : "01";
 
  const rating = item.rating ? String(item.rating) : "N/A";
- const genres = item.category || item.genres || "Animation";
+ const genres = Array.isArray(item.genres) ? item.genres.join(", ") : String(item.genres || tgGenres || "Animation");
  const languages = String(item.language || "Bengali, English").replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", ");
  const dubType = item.dubType === "fandub" ? "fandub" : "official";
- const audioBadge = dubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥";
+ const audioBadge = getTelegramDubTag(dubType);
  const quality = item.quality || "480p,720p,1080p";
  const status = item.status === "complete" ? "complete" : "ongoing";
  const poster = ((item.backdrop || item.poster || "") as string).replace("/original/", "/w1280/").replace("/w780/", "/w1280/");
@@ -7996,12 +7996,12 @@ ${TG_DIVIDER}`}
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${genres}
 │ ✦ <b>Sᴛᴀᴛᴜs :</b> ${status === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${TG_DIVIDER}
 📌 ${formatEpisodeRangeLabel(seasonNum, newEpNum)}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${TG_DIVIDER}
 ${footerLinksHtml}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-#anime`;
+${TG_DIVIDER}
+${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
 
  // Rebuild watch button URL with fresh latest-episode pointer
  const buttonUrl = isSeries
