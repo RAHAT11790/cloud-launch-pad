@@ -33,6 +33,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [vpEnabled, setVpEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
   const [socialLink, setSocialLink] = useState("");
+  const [cooldownSec, setCooldownSec] = useState<number>(50);
   const [savingVp, setSavingVp] = useState(false);
 
   const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
@@ -46,6 +47,8 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setVpEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
       setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
+      const cd = Number(v.refreshIntervalSec);
+      setCooldownSec(Number.isFinite(cd) && cd >= 0 ? cd : 50);
     });
     const u2 = subscribeCoinAds((list) => {
       const map: Record<string, CoinAd> = {};
@@ -66,6 +69,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const saveVideoPlayer = async () => {
     setSavingVp(true);
     try {
+      const cd = Math.max(0, Math.min(3600, Number(cooldownSec) || 0));
       await set(ref(db, "settings/adsterra"), {
         enabled: vpEnabled,
         popunder: popunder.trim(),
@@ -73,8 +77,8 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         socialLink: socialLink.trim(),
         pushNotification: socialLink.trim(),
         socialBar: socialLink.trim(),
-        minGapSec: 0,
-        refreshIntervalSec: 0,
+        minGapSec: cd,
+        refreshIntervalSec: cd,
       });
       toast.success("Video Player ads saved");
     } catch { toast.error("Save failed"); }
