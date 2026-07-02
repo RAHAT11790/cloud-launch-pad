@@ -834,17 +834,19 @@ const Index = () => {
     return mergeAnimeCards(cleanMovies, activeSaltItems.filter((item) => item.type === "movie"));
   }, [cleanMovies, activeSaltItems]);
 
+  // Only admin-defined categories are shown as pills/rails on the homepage.
+  // Auto-derived categories from content metadata are intentionally excluded.
   const userCategoryPills = useMemo(() => {
     const byKey = new Map<string, string>();
-    [...categories, ...allSeries.flatMap((item) => contentCategoryLabels(item))]
+    (categories || [])
       .map((cat) => String(cat || "").trim())
       .filter(Boolean)
       .forEach((cat) => {
         const key = cat.toLowerCase();
         if (!byKey.has(key)) byKey.set(key, cat);
       });
-    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
-  }, [allSeries, categories]);
+    return Array.from(byKey.values());
+  }, [categories]);
 
   
   // Maintenance mode check
