@@ -18,11 +18,12 @@ export interface CoinPlan {
 
 export interface PremiumGlobalSettings {
   globalDownloadLock: boolean;
-  globalQualityLocks: { [k: string]: boolean }; // "480p" | "720p" | "1080p" | "4k"
+  globalQualityLocks: { [k: string]: boolean };
   coinPlan: CoinPlan;
   extraPlans: CoinPlan[];
   dailyAdCap: number;
   adWatchSeconds: number;
+  premiumDeviceLimit: number;
 }
 
 export const DEFAULT_PREMIUM_SETTINGS: PremiumGlobalSettings = {
@@ -32,6 +33,7 @@ export const DEFAULT_PREMIUM_SETTINGS: PremiumGlobalSettings = {
   extraPlans: [],
   dailyAdCap: 5,
   adWatchSeconds: 15,
+  premiumDeviceLimit: 1,
 };
 
 const todayKey = () => {
