@@ -3104,12 +3104,11 @@ const Index = () => {
           {filteredMovies.length > 0 && (
             <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
           )}
-          {Object.entries(categoryGroups).map(([cat, items]) => (
-            <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
-          ))}
-          {allSeries.length > 0 && (
-            <AnimeSection title="All Anime Series" items={allSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
-          )}
+          {Object.entries(categoryGroups)
+            .filter(([, items]) => items.length > 0)
+            .map(([cat, items]) => (
+              <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+            ))}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
