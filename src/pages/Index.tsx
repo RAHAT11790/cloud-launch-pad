@@ -1704,8 +1704,8 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [activePage, filteredSeries.length, filteredMovies.length, tabGridVisibleCount]);
 
-  // Group series ONLY by the admin-defined categories (from Admin Panel).
-  // Preserve admin order and skip any content-metadata-derived categories.
+  // Group series ONLY by admin-defined categories. Each card appears in exactly
+  // ONE rail — the first matching admin category (in admin order). No duplicates.
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
     const adminCats = (categories || [])
@@ -1713,9 +1713,8 @@ const Index = () => {
       .filter(Boolean);
     adminCats.forEach((cat) => { groups[cat] = []; });
     filteredSeries.forEach((a) => {
-      adminCats.forEach((cat) => {
-        if (categoryMatches(a, cat)) groups[cat].push(a);
-      });
+      const match = adminCats.find((cat) => categoryMatches(a, cat));
+      if (match) groups[match].push(a);
     });
     return groups;
   }, [filteredSeries, categories]);
