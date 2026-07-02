@@ -7843,16 +7843,16 @@ ${TG_DIVIDER}`}
 
  <button onClick={sendTelegramPost} disabled={tgSending || !tgTitle.trim()}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
- {tgSending ? (
- <>
- <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
- send in progress...
- </>
- ) : (
- <>
- <Send size={18} /> Telegramে post send
- </>
- )}
+  {tgSending ? (
+  <>
+  <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+  Sending...
+  </>
+  ) : (
+  <>
+  <Send size={18} /> Send Telegram Post
+  </>
+  )}
  </button>
 
  {/* ============= BULK CATALOG BROADCAST ============= */}
