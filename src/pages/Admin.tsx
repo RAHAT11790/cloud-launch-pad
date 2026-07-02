@@ -3295,20 +3295,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  data.sourceName = "AnimeSalt";
  }
  setSeriesSeasonsByLanguage(isAnSeriesSave ? data.seasonsByLanguage : nextMap);
- let saveRef;
- let newId = seriesEditId || "";
- if (seriesEditId) {
- saveRef = ref(db, `webseries/${seriesEditId}`);
- } else {
- saveRef = push(ref(db, "webseries"));
- newId = saveRef.key || "";
- data.createdAt = Date.now();
- }
- lastSavedSeriesIdRef.current = newId;
+  let saveRef;
+  let newId = seriesEditId || "";
+  if (seriesEditId) {
+  saveRef = ref(db, `webseries/${seriesEditId}`);
+  // Preserve original createdAt on edit — `set()` replaces the whole node,
+  // so without this the createdAt would be wiped and the item would lose its
+  // "recent" ranking after refresh.
   try {
-  await set(saveRef, data);
-  upsertAdminContentListItem("webseries", newId, data);
-  await upsertAdminContentIndex("webseries", newId, data).catch(() => {});
+    const priorSnap = await get(ref(db, `webseries/${seriesEditId}/createdAt`));
+    const priorCreatedAt = Number(priorSnap.val() || 0);
+    data.createdAt = priorCreatedAt || Date.now();
+  } catch {
+    data.createdAt = Date.now();
+  }
+  } else {
+  saveRef = push(ref(db, "webseries"));
+  newId = saveRef.key || "";
+  data.createdAt = Date.now();
+  }
+  lastSavedSeriesIdRef.current = newId;
+   try {
+   await set(saveRef, data);
+   upsertAdminContentListItem("webseries", newId, data);
+   await upsertAdminContentIndex("webseries", newId, data).catch(() => {});
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
   startTransition(() => { setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list"); setEpisodeRenderLimits({}); });
