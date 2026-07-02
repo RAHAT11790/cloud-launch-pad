@@ -343,37 +343,30 @@ class DownloadManager {
       return;
     }
 
-    this.update(id, { fileName, percent: 1, loadedMB: 0 });
+    this.update(id, { fileName, percent: 3, loadedMB: 0 });
 
+    // Trigger the real browser download IMMEDIATELY via anchor — this is what
+    // the OS/browser download manager uses. Blob-buffer fetches were failing
+    // silently on CORS and eating RAM. Native anchor always triggers.
+    const triggered = triggerBackgroundVideoDownload(rawUrl, fileName);
+    if (!triggered) {
+      this.settleItem(id, "error", { error: "Download link is invalid" });
+      return;
+    }
+
+    // Probe the total size in parallel purely for UI stats. Don't block the
+    // download on it.
     try {
-      const blob = await this.downloadHttpBlob(rawUrl, fileName, controller.signal, (loadedBytes, totalBytes) => {
-        const latest = this.downloads.get(id);
-        if (!latest || latest.status !== "downloading") return;
-        const percent = totalBytes > 0 ? Math.min(98, Math.max(1, Math.round((loadedBytes / totalBytes) * 98))) : Math.min(95, latest.percent + 1);
-        this.update(id, {
-          percent,
-          loadedMB: bytesToMb(loadedBytes),
-          totalMB: totalBytes > 0 ? bytesToMb(totalBytes) : Math.max(latest.totalMB, bytesToMb(loadedBytes), 1),
-        });
-      });
-
+      const bytes = await this.fetchTotalSize(rawUrl);
       if (controller.signal.aborted) return;
-      saveHttpBlob(blob, fileName);
-      this.writeCachedSize(rawUrl, blob.size);
-      this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
-    } catch (error) {
       const latest = this.downloads.get(id);
-      if (controller.signal.aborted || !latest || latest.status === "paused" || latest.status === "cancelled" || isAbortError(error)) return;
-
-      if (triggerBackgroundVideoDownload(rawUrl, fileName)) {
-        const size = latest.totalMB > 1 ? latest.totalMB : Math.max(latest.loadedMB, 1);
-        this.settleItem(id, "complete", { percent: 100, loadedMB: size, totalMB: size });
-        return;
-      }
-
-      this.settleItem(id, "error", {
-        error: String((error as { message?: string })?.message || "Download failed"),
-      });
+      if (!latest) return;
+      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(latest.totalMB, 1);
+      this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
+    } catch {
+      const latest = this.downloads.get(id);
+      const totalMB = latest?.totalMB && latest.totalMB > 1 ? latest.totalMB : 1;
+      this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
     } finally {
       if (this.controllers.get(id) === controller) this.controllers.delete(id);
     }
