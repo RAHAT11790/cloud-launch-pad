@@ -50,7 +50,7 @@ import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/l
 
 // Heavy admin sections are lazy-loaded so the main Admin shell stays responsive.
 const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
-const PremiumCenter = lazy(() => import("@/components/admin/PremiumCenter"));
+
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
@@ -8725,12 +8725,6 @@ ${footerLinksHtml}
  <SecurityCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
- {/* ==================== PREMIUM CENTER ==================== */}
- {activeSection === "premium-center" && (
-  <Suspense fallback={<AdminSectionLoader label="Loading Premium Center…" />}>
- <PremiumCenter />
-  </Suspense>
- )}
 
 
 
