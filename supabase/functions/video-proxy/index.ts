@@ -23,32 +23,19 @@ const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
 
-const RS_MIRROR_ORIGINS = [
-  "https://rahat1102-video-hosting-bot.hf.space",
-  "http://fi3.bot-hosting.net:22854",
-  "https://rs-stream-bot-12.onrender.com",
-  "https://rs-stream-bot-1.onrender.com",
-];
-
-function isKnownRsMirror(url: URL) {
-  const host = url.host.toLowerCase();
-  return host === "rahat1102-video-hosting-bot.hf.space" ||
-    host === "fi3.bot-hosting.net:22854" ||
-    host === "rs-stream-bot-12.onrender.com" ||
-    host === "rs-stream-bot-1.onrender.com";
-}
+// NOTE: cross-mirror auto-swap removed. Previously this proxy silently rewrote
+// requests between rahat1102-video-hosting-bot.hf.space, fi3.bot-hosting.net,
+// rs-stream-bot-*.onrender.com when one origin was down. That masked outages
+// and — after any admin URL change — kept probing dead origins for seconds
+// before falling back, which made the URL Changer feel "slow" and download/
+// playback appear broken. Now the proxy fetches exactly the URL saved by
+// admin in Firebase. Failover between origins is the admin's job (URL Changer)
+// or the per-server switch in VideoPlayer.tsx (see strict-server-isolation memory).
 
 function buildUpstreamCandidates(target: URL): URL[] {
-  const out: URL[] = [target];
-  if (!isKnownRsMirror(target) || !isDirectMp4Like(target)) return out;
-  for (const origin of RS_MIRROR_ORIGINS) {
-    try {
-      const candidate = new URL(`${origin}${target.pathname}${target.search}${target.hash}`);
-      if (!out.some((u) => u.toString() === candidate.toString())) out.push(candidate);
-    } catch { /* skip */ }
-  }
-  return out;
+  return [target];
 }
+
 
 function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
   if (!range || !isDirectMp4Like(upstreamUrl)) return range;
