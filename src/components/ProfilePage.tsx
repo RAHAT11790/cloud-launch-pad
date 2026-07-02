@@ -1744,42 +1744,29 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       {/* Free / Global Access Timer */}
       <AccessTimer />
 
-      {/* Coin Balance / Free Access box */}
-      <div className="mb-7 grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => navigate("/premium-buy")}
-          className="glass-card rounded-xl p-3 text-left border-yellow-400/25 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 active:scale-[0.98] transition-transform"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-full bg-yellow-400/15 flex items-center justify-center">
-              <Coins className="w-5 h-5 text-yellow-300" />
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Coin Balance</p>
-              <p className="text-xl font-extrabold text-yellow-300 leading-none">{coinWallet.coins || 0}</p>
-            </div>
+      {/* Get Free Coins — daily tasks entry (permanent) */}
+      <button
+        type="button"
+        onClick={() => navigate("/daily-tasks")}
+        className="w-full mb-7 rounded-2xl p-4 text-left border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/5 active:scale-[0.99] transition-transform relative overflow-hidden group"
+      >
+        <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
+        <div className="flex items-center gap-3 relative">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/25">
+            <Coins className="w-6 h-6 text-black" />
           </div>
-          <p className="text-[10px] text-muted-foreground">Daily ads left: {remainingCoinAds}/{dailyCoinCap}</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActivePanel("premium")}
-          className="glass-card rounded-xl p-3 text-left border-primary/25 bg-gradient-to-br from-primary/10 to-cyan-500/5 active:scale-[0.98] transition-transform"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center">
-              <Gift className="w-5 h-5 text-primary" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-black text-amber-200 leading-none">Get Free Coins</p>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 uppercase tracking-wider">Daily</span>
             </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Global / Free</p>
-              <p className="text-sm font-bold text-foreground leading-tight">Access Center</p>
-            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
+              5 daily tasks • Earn coins • Redeem Premium — Balance: <b className="text-amber-300">{coinWallet.coins || 0}</b>
+            </p>
           </div>
-          <p className="text-[10px] text-muted-foreground">Timer, redeem and access status</p>
-        </button>
-      </div>
+          <span className="text-amber-300 text-xl font-black flex-shrink-0">›</span>
+        </div>
+      </button>
 
 
       {/* Watch History */}
