@@ -261,7 +261,7 @@ export interface CoinAd {
 export const DEFAULT_COIN_ADS: CoinAd[] = [
   { id: "adsterra_social_bar", name: "Social Bar / In-Page Push SDK", url: "https://pl29545319.effectivecpmnetwork.com/76/17/9d/76179d54c872b5d668d5a5hd3c60cc20.js", enabled: true, kind: "sdk" },
   { id: "adsterra_popunder", name: "Adsterra Popunder SDK", url: "https://pl29545318.effectivecpmnetwork.com/b5/74/7e/b5747e03c73558e2e6a43cab1723472ce.js", enabled: true, kind: "sdk" },
-  { id: "adsterra_banner_160", name: "Adsterra 160x300 Banner", url: "", enabled: true, kind: "sdk" },
+  { id: "adsterra_banner_160", name: "Adsterra 160x300 Banner", url: `<script type="text/javascript">\n\tatOptions = {\n\t\t'key' : 'a50e44c4616d20c2030541729493757',\n\t\t'format' : 'iframe',\n\t\t'height' : 300,\n\t\t'width' : 160,\n\t\t'params' : {}\n\t};\n</script>\n<script type="text/javascript" src="//www.highperformanceformat.com/a50e44c4616d20c2030541729493757/invoke.js"></script>`, enabled: true, kind: "sdk" },
   { id: "adsterra_native_banner", name: "Adsterra Native Banner SDK", url: "https://pl29872715.effectivecpmnetwork.com/91638987f5610218ba77ea1c44c9fd71/invoke.js", enabled: true, kind: "sdk" },
   { id: "adsterra_smartlink", name: "Adsterra Smartlink", url: "https://www.effectivecpmnetwork.com/zmcs077s5n?key=ada6384dcdd9d2e879977bc3f6637e47", enabled: true, kind: "smartlink" },
 ];
