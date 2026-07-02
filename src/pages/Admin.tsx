@@ -9220,89 +9220,93 @@ ${footerLinksHtml}
  };
 
  // Bulk replace all series or all movies
- const bulkReplace = async () => {
- if (!bulkOldDomain.trim() || !bulkNewDomain.trim()) { toast.error("Old and New Domain দিতে will be!"); return; }
- const targetType = bulkMode === "all-series" ? "webseries" : "movies";
- const items = bulkMode === "all-series" ? webseriesData : moviesData;
- if (!confirm(`${items.length} ${targetType === "webseries" ? "series" : "movie"}-র all link replace ?`)) return;
+  const bulkReplace = async () => {
+  if (!bulkOldDomain.trim() || !bulkNewDomain.trim()) { toast.error("Old and New Domain দিতে will be!"); return; }
+  const targetType = bulkMode === "all-series" ? "webseries" : "movies";
+  const items = bulkMode === "all-series" ? webseriesData : moviesData;
+  if (!confirm(`${items.length} ${targetType === "webseries" ? "series" : "movie"}-র all link replace ?`)) return;
 
- setBulkReplacing(true);
- setBulkResults([]);
- const old = bulkOldDomain.trim();
- const nw = bulkNewDomain.trim();
- const results: typeof bulkResults = [];
- const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
+  setBulkReplacing(true);
+  setBulkResults([]);
+  const old = bulkOldDomain.trim();
+  const nw = bulkNewDomain.trim();
+  const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
+  const t0 = performance.now();
 
- for (const item of items) {
- try {
- const snap = await get(ref(db, `${targetType}/${item.id}`));
- const data = snap.val();
- if (!data) continue;
+  const processItem = async (item: any) => {
+    try {
+      const snap = await get(ref(db, `${targetType}/${item.id}`));
+      const data = snap.val();
+      if (!data) return null;
+      let totalLinks = 0, replacedLinks = 0;
 
- let totalLinks = 0, replacedLinks = 0;
+      if (targetType === "webseries" && data.seasons) {
+        const processEp = (ep: any) => {
+          const u = { ...ep };
+          linkFields.forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].split(old).join(nw); replacedLinks++; } } });
+          if (u.audioTracks) {
+            u.audioTracks = u.audioTracks.map((at: any) => {
+              const a = { ...at };
+              linkFields.forEach(f => { if (a[f]) { totalLinks++; if (a[f].includes(old)) { a[f] = a[f].split(old).join(nw); replacedLinks++; } } });
+              return a;
+            });
+          }
+          return u;
+        };
+        let updatedSeasons: any;
+        if (Array.isArray(data.seasons)) {
+          updatedSeasons = data.seasons.map((s: any) => ({ ...s, episodes: (s.episodes || []).map(processEp) }));
+        } else {
+          updatedSeasons = { ...data.seasons };
+          for (const sk of Object.keys(updatedSeasons)) {
+            const s = updatedSeasons[sk];
+            if (s?.episodes) {
+              if (Array.isArray(s.episodes)) updatedSeasons[sk] = { ...s, episodes: s.episodes.map(processEp) };
+              else {
+                const ue = { ...s.episodes };
+                for (const ek of Object.keys(ue)) ue[ek] = processEp(ue[ek]);
+                updatedSeasons[sk] = { ...s, episodes: ue };
+              }
+            }
+          }
+        }
+        if (replacedLinks > 0) await update(ref(db, `webseries/${item.id}`), { seasons: updatedSeasons });
+      } else if (targetType === "movies") {
+        const updates: Record<string, string> = {};
+        linkFields.forEach(f => {
+          const field = f === "link" ? "movieLink" : `movieLink${f.replace("link", "")}`;
+          const val = data[field] || data[f];
+          if (val && typeof val === "string") {
+            totalLinks++;
+            if (val.includes(old)) { updates[field] = val.split(old).join(nw); replacedLinks++; }
+          }
+        });
+        if (replacedLinks > 0) await update(ref(db, `movies/${item.id}`), updates);
+      }
+      if (replacedLinks > 0) return { title: item.title || item.id, poster: item.poster || "", replaced: replacedLinks, total: totalLinks };
+      return null;
+    } catch (err) { console.error(`Error processing ${item.id}:`, err); return null; }
+  };
 
- if (targetType === "webseries" && data.seasons) {
- const processEp = (ep: any) => {
- const u = { ...ep };
- linkFields.forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
- if (u.audioTracks) {
- u.audioTracks = u.audioTracks.map((at: any) => {
- const a = { ...at };
- linkFields.forEach(f => { if (a[f]) { totalLinks++; if (a[f].includes(old)) { a[f] = a[f].replace(old, nw); replacedLinks++; } } });
- return a;
- });
- }
- return u;
- };
+  // Concurrency pool: 25 parallel workers → cuts N*RTT to (N/25)*RTT.
+  // 200 series → ~1s instead of the earlier ~40s sequential loop.
+  const CONCURRENCY = 25;
+  const results: typeof bulkResults = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      const r = await processItem(items[idx]);
+      if (r) { results.push(r); setBulkResults([...results]); }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
 
- let updatedSeasons: any;
- if (Array.isArray(data.seasons)) {
- updatedSeasons = data.seasons.map((s: any) => ({ ...s, episodes: (s.episodes || []).map(processEp) }));
- } else {
- updatedSeasons = { ...data.seasons };
- for (const sk of Object.keys(updatedSeasons)) {
- const s = updatedSeasons[sk];
- if (s?.episodes) {
- if (Array.isArray(s.episodes)) {
- updatedSeasons[sk] = { ...s, episodes: s.episodes.map(processEp) };
- } else {
- const ue = { ...s.episodes };
- for (const ek of Object.keys(ue)) { ue[ek] = processEp(ue[ek]); }
- updatedSeasons[sk] = { ...s, episodes: ue };
- }
- }
- }
- }
- if (replacedLinks > 0) await update(ref(db, `webseries/${item.id}`), { seasons: updatedSeasons });
- } else if (targetType === "movies") {
- const updates: Record<string, string> = {};
- linkFields.forEach(f => {
- const field = f === "link" ? "movieLink" : `movieLink${f.replace("link", "")}`;
- const val = data[field] || data[f];
- if (val && typeof val === "string") {
- totalLinks++;
- if (val.includes(old)) {
- updates[field] = val.replace(old, nw);
- replacedLinks++;
- }
- }
- });
- if (replacedLinks > 0) await update(ref(db, `movies/${item.id}`), updates);
- }
-
- if (replacedLinks > 0) {
- results.push({ title: item.title || item.id, poster: item.poster || "", replaced: replacedLinks, total: totalLinks });
- setBulkResults([...results]);
- }
- } catch (err) {
- console.error(`Error processing ${item.id}:`, err);
- }
- }
-
- setBulkReplacing(false);
- if (results.length === 0) toast.info("any linkে this domain পা যায়নি — all skip done");
- else toast.success(`✅ ${results.length} ${targetType === "webseries" ? "series" : "movie"}-তে link replaced!`);
- };
+  const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+  setBulkReplacing(false);
+  if (results.length === 0) toast.info(`any linkে this domain পা যায়নি — all skip done (${elapsed}s)`);
+  else toast.success(`✅ ${results.length} ${targetType === "webseries" ? "series" : "movie"}-তে link replaced! (${elapsed}s)`);
+  };
 
  return (
  <div className="space-y-4">
