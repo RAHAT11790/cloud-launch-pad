@@ -5297,7 +5297,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           };
 
           const startMovieDownload = async (quality: string) => {
-            const { toast } = await import("sonner");
             // Premium users must enter the native browser downloader directly
             // from the button gesture. Awaiting Firebase here makes mobile
             // browsers block the download silently. Only non-premium/unknown
