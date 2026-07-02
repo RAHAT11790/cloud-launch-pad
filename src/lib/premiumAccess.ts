@@ -201,14 +201,25 @@ export interface CoinAd {
   name: string;
   url: string;
   enabled: boolean;
+  kind?: "direct" | "sdk" | "smartlink";
 }
+
+export const DEFAULT_COIN_ADS: CoinAd[] = [
+  { id: "adsterra_social_bar", name: "Adsterra Social Bar SDK", url: "https://pl29545319.effectivecpmnetwork.com/76/17/9d/76179d54c872b5d668d5a5hd3c60cc20.js", enabled: true, kind: "sdk" },
+  { id: "adsterra_popunder", name: "Adsterra Popunder SDK", url: "https://pl29545318.effectivecpmnetwork.com/b5/74/7e/b5747e03c73558e2e6a43cab1723472ce.js", enabled: true, kind: "sdk" },
+  { id: "adsterra_native_banner", name: "Adsterra Native Banner SDK", url: "https://pl29872715.effectivecpmnetwork.com/91638987f5610218ba77ea1c44c9fd71/invoke.js", enabled: true, kind: "sdk" },
+  { id: "adsterra_smartlink", name: "Adsterra Smartlink", url: "https://www.effectivecpmnetwork.com/zmcs077s5n?key=ada6384dcdd9d2e879977bc3f6637e47", enabled: true, kind: "smartlink" },
+];
 
 export const subscribeCoinAds = (cb: (ads: CoinAd[]) => void): (() => void) => {
   const u = onValue(ref(db, "settings/premiumCoinAds"), (snap) => {
     const raw = snap.val() || {};
-    const list = Object.entries(raw)
+    const saved = Object.entries(raw)
       .map(([id, v]: any) => ({ id, ...(v || {}) }))
       .filter((a: any) => a.url) as CoinAd[];
+    const byId = new Map(DEFAULT_COIN_ADS.map((ad) => [ad.id, ad]));
+    saved.forEach((ad) => byId.set(ad.id, { ...byId.get(ad.id), ...ad }));
+    const list = Array.from(byId.values()).filter((a: any) => a.url) as CoinAd[];
     cb(list);
   });
   return () => u();
@@ -219,6 +230,7 @@ export const saveCoinAd = async (ad: CoinAd) => {
     name: ad.name,
     url: ad.url,
     enabled: ad.enabled !== false,
+    kind: ad.kind || (ad.url.endsWith(".js") ? "sdk" : "direct"),
   });
 };
 
