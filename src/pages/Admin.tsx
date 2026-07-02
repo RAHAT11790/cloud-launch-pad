@@ -2412,8 +2412,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ? animeGenres
  : (tmdbGenres.length > 0 && !isTooGenericTmdb ? tmdbGenres : tmdbGenres);
 
+ const dedupedGenres = [...new Set(finalGenres)];
+ const genresOut = dedupedGenres.length > 0 ? dedupedGenres : localCats;
+
  return {
- genres: [...new Set(finalGenres)],
+ genres: genresOut,
  rating: tmdbData?.vote_average ? Number(tmdbData.vote_average).toFixed(1) : aniListRating,
  };
  };
