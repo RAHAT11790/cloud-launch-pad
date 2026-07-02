@@ -119,6 +119,30 @@ export const checkDownloadAllowed = async (): Promise<{ allowed: boolean; reason
 /** Coin ad watch (returns reason for failure) */
 export type AwardCoinResult = { ok: true; coins: number } | { ok: false; reason: "no_user" | "daily_cap" | "already_watched" | "unknown" };
 
+const DEVICE_COIN_LOCAL_KEY = "rs_coin_device_daily_v1";
+const readLocalDeviceCoinDay = () => {
+  try {
+    const day = todayKey();
+    const raw = localStorage.getItem(DEVICE_COIN_LOCAL_KEY);
+    const all = raw ? JSON.parse(raw) : {};
+    return { all, day, entry: all[day] || { count: 0, adIds: {} } };
+  } catch {
+    return { all: {}, day: todayKey(), entry: { count: 0, adIds: {} } };
+  }
+};
+
+const recordLocalDeviceCoin = (adId: string) => {
+  try {
+    const { all, day, entry } = readLocalDeviceCoinDay();
+    if (entry.adIds?.[adId]) return;
+    const next = {
+      count: (entry.count || 0) + 1,
+      adIds: { ...(entry.adIds || {}), [adId]: Date.now() },
+    };
+    localStorage.setItem(DEVICE_COIN_LOCAL_KEY, JSON.stringify({ [day]: next }));
+  } catch {}
+};
+
 export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinResult> => {
   const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
@@ -172,6 +196,7 @@ export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinR
       },
     };
   });
+  if (outcome.ok) recordLocalDeviceCoin(adId);
   return outcome;
 };
 
@@ -212,12 +237,13 @@ export const buyPremiumWithCoins = async (plan: CoinPlan): Promise<SpendResult> 
 export const getTodayRemaining = (wallet: any, cap = 5): number => {
   const day = todayKey();
   const today = wallet?.adWatchLog?.[day];
-  return Math.max(0, cap - (today?.count || 0));
+  const localToday = readLocalDeviceCoinDay().entry;
+  return Math.max(0, cap - Math.max(today?.count || 0, localToday?.count || 0));
 };
 
 export const wasAdWatchedToday = (wallet: any, adId: string): boolean => {
   const day = todayKey();
-  return !!wallet?.adWatchLog?.[day]?.adIds?.[adId];
+  return !!wallet?.adWatchLog?.[day]?.adIds?.[adId] || !!readLocalDeviceCoinDay().entry?.adIds?.[adId];
 };
 
 // ============ Coin Ads (admin-managed direct links) ============
