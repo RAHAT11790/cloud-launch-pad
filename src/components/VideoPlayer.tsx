@@ -3214,6 +3214,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         try {
           navigator.mediaSession.metadata = null;
           navigator.mediaSession.playbackState = 'none';
+          ['play', 'pause', 'seekbackward', 'seekforward', 'stop', 'nexttrack', 'previoustrack'].forEach((action) => {
+            try { navigator.mediaSession.setActionHandler(action as MediaSessionAction, null); } catch {}
+          });
         } catch {}
       }
     }, 0);
@@ -3280,8 +3283,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     return () => {
       if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = null;
-        navigator.mediaSession.setActionHandler('stop', null);
+        try {
+          navigator.mediaSession.metadata = null;
+          navigator.mediaSession.playbackState = 'none';
+          ['play', 'pause', 'seekbackward', 'seekforward', 'stop', 'nexttrack', 'previoustrack'].forEach((action) => {
+            try { navigator.mediaSession.setActionHandler(action as MediaSessionAction, null); } catch {}
+          });
+        } catch {}
       }
     };
   }, [title, subtitle, poster, onNextEpisode, stopAndClosePlayer]);
@@ -5246,11 +5254,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               .filter(Boolean)
               .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
 
-            // HLS m3u8 — return the raw URL. downloadManager detects it and
-            // runs the in-browser HLS segment downloader (single .ts output).
-            const hlsCandidate = [u, ...candidates].find((candidate) => isHlsLikeUrl(String(candidate)));
-            if (hlsCandidate) return buildReliableHlsSource(hlsCandidate);
-
             const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download?"));
             if (managedAlready) return managedAlready;
 
@@ -5295,12 +5298,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           const startMovieDownload = async (quality: string) => {
             const { toast } = await import("sonner");
-            const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
-            const gate = await checkDownloadAllowed();
-            if (!gate.allowed) {
-              toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
-              try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
-              return;
+            // Premium users must enter the native browser downloader directly
+            // from the button gesture. Awaiting Firebase here makes mobile
+            // browsers block the download silently. Only non-premium/unknown
+            // users go through the async gate check.
+            if (isPremium !== true) {
+              const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
+              const gate = await checkDownloadAllowed();
+              if (!gate.allowed) {
+                toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
+                try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
+                return;
+              }
             }
             const movieLabel = String(title || subtitle || "video").trim();
             const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
@@ -5323,12 +5332,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               toast.error("Select at least one episode");
               return;
             }
-            const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
-            const gate = await checkDownloadAllowed();
-            if (!gate.allowed) {
-              toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
-              try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
-              return;
+            if (isPremium !== true) {
+              const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
+              const gate = await checkDownloadAllowed();
+              if (!gate.allowed) {
+                toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
+                try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
+                return;
+              }
             }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
             const httpBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
@@ -5502,7 +5513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
                   {(() => {
                     const fmtSize = (bytes: number) => {
-                      if (!bytes || bytes <= 0) return "0 MB";
+                      if (!bytes || bytes <= 0) return "";
                       const mb = bytes / (1024 * 1024);
                       if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
                       return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;

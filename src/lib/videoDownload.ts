@@ -57,6 +57,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   }
 
   const bases = unique([
+    resolveBaseSync(),
     DEFAULT_DOWNLOAD_BASE,
     overrideEnabled && overrideBaseUrl ? overrideBaseUrl : "",
   ]);
@@ -100,9 +101,10 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   const link = document.createElement("a");
   link.href = finalUrl;
   link.rel = "noopener noreferrer";
-  // HTTP file hosts are often blocked as hidden mixed-content downloads. A new
-  // tab keeps it as a user navigation/download, which browsers allow more often.
-  if (/^http:\/\//i.test(finalUrl)) link.target = "_blank";
+  // A visible browser navigation/download is more reliable for cross-origin
+  // file hosts than a hidden async fetch. Keep the target blank so pop-up/file
+  // download handling stays tied to the user's gesture.
+  link.target = "_blank";
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
@@ -142,7 +144,7 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
-  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
+  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || (directUrl?.startsWith("https://") ? directUrl : null));
   if (!finalUrl) {
     toast.error("Download service is unavailable");
     return false;

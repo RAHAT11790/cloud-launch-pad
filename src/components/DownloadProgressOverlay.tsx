@@ -9,7 +9,7 @@ const STORAGE_KEY = "rs_download_overlay_pos";
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const formatMb = (value: number) => {
-  if (!value || value <= 0) return "0 MB";
+  if (!value || value <= 0) return "Unknown size";
   if (value >= 1024) return `${(value / 1024).toFixed(2)} GB`;
   return `${value.toFixed(value >= 100 ? 0 : 1)} MB`;
 };
@@ -52,11 +52,11 @@ export default function DownloadProgressOverlay() {
   if (!activeItem || hidden) return null;
 
   const completed = items.filter((item) => item.status === "complete").length;
-  const hasKnownSize = activeItem.totalMB > 1;
+  const hasKnownSize = activeItem.totalMB > 1 && activeItem.loadedMB > 0;
   const progressLabel = hasKnownSize
     ? `${formatMb(activeItem.loadedMB)} / ${formatMb(activeItem.totalMB)}`
     : activeItem.status === "complete"
-      ? formatMb(activeItem.loadedMB)
+      ? "Sent to browser downloads"
       : "Calculating size...";
 
   const onDragEnd = (_: unknown, info: { point: { x: number; y: number } }) => {
@@ -91,7 +91,7 @@ export default function DownloadProgressOverlay() {
               <div className="min-w-0">
                 <p className="truncate">{activeItem.subtitle || activeItem.title}</p>
                 <p className="text-[10px] font-medium text-muted-foreground">
-                  Episode {Math.min(activeItem.queueIndex, activeItem.totalInBatch)} of {activeItem.totalInBatch}
+                  {activeItem.error || `Episode ${Math.min(activeItem.queueIndex, activeItem.totalInBatch)} of ${activeItem.totalInBatch}`}
                 </p>
               </div>
             </div>

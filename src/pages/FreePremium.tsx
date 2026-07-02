@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Coins, Crown, Loader2, Play, Timer, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useBranding } from "@/hooks/useBranding";
@@ -9,7 +9,6 @@ import {
   CoinAd,
   getTodayRemaining,
   subscribeCoinAds,
-  wasAdWatchedToday,
   ensureGuestUser,
 } from "@/lib/premiumAccess";
 import CoinAnimation from "@/components/CoinAnimation";
@@ -22,6 +21,10 @@ interface PendingSession {
 
 const PENDING_KEY = "rs_pending_coin_ad_v2";
 const CONFIRMED_KEY = "rs_free_premium_first_tap";
+const makeCoinAdSessionId = (slotId: string) => {
+  const day = new Date().toISOString().slice(0, 10);
+  return `${slotId}_${day}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+};
 
 /** Inject an SDK snippet or URL into a background container. Non-blocking; ignores errors. */
 function injectBackgroundSdk(snippet: string, container: HTMLElement) {
@@ -60,7 +63,7 @@ export default function FreePremium() {
   const [pending, setPending] = useState<PendingSession | null>(null);
   const [now, setNow] = useState(Date.now());
   const [coinAnimTick, setCoinAnimTick] = useState(0);
-  const [firstTapDone, setFirstTapDone] = useState<boolean>(() => localStorage.getItem(CONFIRMED_KEY) === "1");
+  const [firstTapDone, setFirstTapDone] = useState<boolean>(() => localStorage.getItem(CONFIRMED_KEY) !== "0");
   const settledRef = useRef<Set<string>>(new Set());
   const bgContainerRef = useRef<HTMLDivElement | null>(null);
   const bannerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -86,9 +89,10 @@ export default function FreePremium() {
   const bannerAd = ads.find((a) => a.id === "adsterra_banner_160" && a.enabled !== false && a.url);
   const nativeBannerAd = ads.find((a) => a.id === "adsterra_native_banner" && a.enabled !== false && a.url);
   const socialBarAd = ads.find((a) => a.id === "adsterra_social_bar" && a.enabled !== false && a.url);
-  // Social Bar is the only true background/push SDK. Native + 160x300 banners
-  // each render inside their OWN dedicated container below.
-  const backgroundAds = socialBarAd ? [socialBarAd] : [];
+  // Popunder/Social Bar SDKs must be preloaded before the user taps; injecting
+  // the popunder script inside the click handler is usually too late for mobile
+  // browsers and popup blockers. Native + 160x300 banners render separately.
+  const backgroundAds = [socialBarAd, popunderAd].filter(Boolean) as CoinAd[];
 
   // Inject background SDKs (once per ad-list change)
   useEffect(() => {
@@ -110,91 +114,82 @@ export default function FreePremium() {
     if (nativeBannerAd?.url) injectBackgroundSdk(nativeBannerAd.url, nativeContainerRef.current);
   }, [nativeBannerAd?.url]);
 
-  // Detect return from ad tab and settle timer
-  useEffect(() => {
-    const onFocus = async () => {
-      const raw = localStorage.getItem(PENDING_KEY);
-      if (!raw) return;
-      let p: PendingSession;
-      try { p = JSON.parse(raw); } catch { return; }
-      if (settledRef.current.has(String(p.startedAt))) return;
-      const elapsed = (Date.now() - p.startedAt) / 1000;
-      if (elapsed >= p.required) {
-        settledRef.current.add(String(p.startedAt));
-        localStorage.removeItem(PENDING_KEY);
-        setPending(null);
-        const res = await awardCoin(p.adId, settings.dailyAdCap);
-        if (res.ok) {
-          setCoinAnimTick((t) => t + 1);
-          toast({ title: "+1 Coin earned 🎉", description: `Balance: ${res.coins} coins` });
-        } else {
-          const reason = (res as any).reason;
-          if (reason === "already_watched") toast({ title: "Already earned from this slot today", description: "Come back tomorrow." });
-          else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day per device.`, variant: "destructive" });
-          else if (reason === "no_user") toast({ title: "Guest ID not ready", description: "Tap once again.", variant: "destructive" });
-        }
-      } else {
-        setPending(p);
+  const settlePendingCoin = useCallback(async (quiet = false) => {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return false;
+    let p: PendingSession;
+    try { p = JSON.parse(raw); } catch { localStorage.removeItem(PENDING_KEY); return false; }
+    if (settledRef.current.has(String(p.startedAt))) return true;
+    const elapsed = (Date.now() - p.startedAt) / 1000;
+    if (elapsed < p.required) {
+      setPending(p);
+      if (!quiet) {
         toast({
           title: "Timer still running",
           description: `Wait ${Math.ceil(p.required - elapsed)}s more, then return to claim the coin.`,
         });
       }
-    };
+      return false;
+    }
+
+    settledRef.current.add(String(p.startedAt));
+    localStorage.removeItem(PENDING_KEY);
+    setPending(null);
+    const res = await awardCoin(p.adId, settings.dailyAdCap);
+    if (res.ok) {
+      setCoinAnimTick((t) => t + 1);
+      toast({ title: "+1 Coin earned 🎉", description: `Balance: ${res.coins} coins` });
+    } else {
+      const reason = (res as any).reason;
+      if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day per device.`, variant: "destructive" });
+      else if (reason === "no_user") toast({ title: "Guest ID not ready", description: "Tap once again.", variant: "destructive" });
+      else toast({ title: "Coin not added", description: "Please open a fresh ad and try again.", variant: "destructive" });
+    }
+    return true;
+  }, [settings.dailyAdCap]);
+
+  // Detect return from ad tab and settle timer. Also settles while the page is
+  // visible, so a finished timer does not require a refresh/focus trick.
+  useEffect(() => {
+    const onFocus = () => { setNow(Date.now()); void settlePendingCoin(false); };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
+    const iv = window.setInterval(() => { void settlePendingCoin(true); }, 1000);
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
+      window.clearInterval(iv);
     };
-  }, [settings.dailyAdCap]);
+  }, [settlePendingCoin]);
 
   const remaining = getTodayRemaining(wallet, settings.dailyAdCap);
   const goal = settings.coinPlan.coins;
   const progress = Math.min(100, (wallet.coins / goal) * 100);
 
-  const handleMainButton = () => {
+  const handleMainButton = async () => {
     if (!uid) ensureGuestUser();
+    if (pending) {
+      const settled = await settlePendingCoin(false);
+      if (settled) return;
+    }
     if (remaining <= 0) {
       toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day. Come back tomorrow.`, variant: "destructive" });
       return;
     }
 
-    // FIRST TAP → open smartlink preview and start the counted timer immediately.
-    if (!firstTapDone) {
-      const url = (smartlinkAd?.url || "").trim();
-      if (!url) {
-        localStorage.setItem(CONFIRMED_KEY, "1");
-        setFirstTapDone(true);
-        toast({ title: "Ready", description: "Tap the button again to start the count timer." });
-        return;
-      }
-      localStorage.setItem(CONFIRMED_KEY, "1");
-      setFirstTapDone(true);
-      const adId = `${smartlinkAd!.id}_${new Date().toISOString().slice(0, 10)}_${Math.floor(now / (60 * 60 * 1000))}`;
-      const p: PendingSession = { startedAt: Date.now(), required: settings.adWatchSeconds, adId };
-      localStorage.setItem(PENDING_KEY, JSON.stringify(p));
-      setPending(p);
-      toast({
-        title: `✅ Timer started — stay ${settings.adWatchSeconds}s`,
-        description: "Close the ad tab after the timer, then return to claim 1 coin.",
-        duration: 6000,
-      });
-      window.open(extractFirstUrl(url), "_blank", "noopener,noreferrer");
+    localStorage.setItem(CONFIRMED_KEY, "1");
+    setFirstTapDone(true);
+
+    // Every tap is one fresh counted slot. Reusing hourly IDs was the reason
+    // users got "already collected" after earning only one coin.
+    const earnAd = popunderAd || smartlinkAd;
+    const earnUrl = (earnAd?.url || "").trim();
+    if (!earnAd || !earnUrl) {
+      toast({ title: "Ad not configured", description: "Admin has not set the earn-coin ad link yet.", variant: "destructive" });
       return;
     }
 
-    // SECOND TAP (and onward) → open popunder direct link + start timer. COUNTED.
-    const popUrl = (popunderAd?.url || "").trim();
-    if (!popUrl) {
-      toast({ title: "Ad not configured", description: "Admin has not set the popunder link yet.", variant: "destructive" });
-      return;
-    }
-    const adId = `${popunderAd!.id}_${new Date().toISOString().slice(0, 10)}_${Math.floor(now / (60 * 60 * 1000))}`;
-    if (wasAdWatchedToday(wallet, adId)) {
-      toast({ title: "Slot already claimed", description: "Wait a bit and try again.", variant: "destructive" });
-      return;
-    }
+    const adId = makeCoinAdSessionId(earnAd.id);
     const p: PendingSession = { startedAt: Date.now(), required: settings.adWatchSeconds, adId };
     localStorage.setItem(PENDING_KEY, JSON.stringify(p));
     setPending(p);
@@ -203,10 +198,10 @@ export default function FreePremium() {
       description: "Come back after the timer completes to earn 1 coin.",
       duration: 5000,
     });
-    if (isScriptPlacement(popUrl)) {
-      injectBackgroundSdk(popUrl, bgContainerRef.current || document.body);
+    if (isScriptPlacement(earnUrl)) {
+      injectBackgroundSdk(earnUrl, bgContainerRef.current || document.body);
     } else {
-      window.open(extractFirstUrl(popUrl), "_blank", "noopener,noreferrer");
+      window.open(extractFirstUrl(earnUrl), "_blank", "noopener,noreferrer");
     }
   };
 

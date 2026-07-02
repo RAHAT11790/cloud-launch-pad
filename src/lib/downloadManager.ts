@@ -65,10 +65,10 @@ export type DownloadParams = {
 
 type Subscriber = (snapshot: DownloadQueueSnapshot) => void;
 
-// Real downloads are blob/HLS based and can be large, so run one item at a
-// time. Select-all still queues everything with one click, but avoids RAM
-// spikes and browser-blocked parallel saves.
-const MAX_CONCURRENT = 1;
+// Downloads now use native browser anchors (no blob buffering), so multiple
+// selected files must be triggered during the original user click. If we queue
+// them one-by-one after timers/promises, mobile browsers silently block them.
+const MAX_CONCURRENT = 12;
 
 const createFileSafeName = (value: string) =>
   value.replace(/[^a-zA-Z0-9\s\-_]/g, "").replace(/\s+/g, " ").trim();
@@ -345,23 +345,27 @@ class DownloadManager {
 
     this.update(id, { fileName, percent: 3, loadedMB: 0 });
 
-    // Trigger the real browser download IMMEDIATELY via anchor — this is what
-    // the OS/browser download manager uses. Blob-buffer fetches were failing
-    // silently on CORS and eating RAM. Native anchor always triggers.
+    // Trigger the real browser download immediately while this call stack is
+    // still tied to the user's tap. Delaying it through queue timers makes
+    // mobile browsers treat the anchor click as non-user-initiated and silently
+    // block the download.
     const triggered = triggerBackgroundVideoDownload(rawUrl, fileName);
     if (!triggered) {
       this.settleItem(id, "error", { error: "Download link is invalid" });
       return;
     }
 
-    // Probe the total size in parallel purely for UI stats. Don't block the
-    // download on it.
+    // Probe size for UI stats only. Never let a blocked HEAD/range probe keep
+    // the queue stuck or make the user think the real native download failed.
     try {
-      const bytes = await this.fetchTotalSize(rawUrl);
+      const bytes = await Promise.race([
+        this.fetchTotalSize(rawUrl),
+        new Promise<number>((resolve) => window.setTimeout(() => resolve(0), 1200)),
+      ]);
       if (controller.signal.aborted) return;
       const latest = this.downloads.get(id);
       if (!latest) return;
-      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(latest.totalMB, 1);
+      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(latest.totalMB, latest.loadedMB, 1);
       this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
     } catch {
       const latest = this.downloads.get(id);
@@ -393,19 +397,10 @@ class DownloadManager {
 
     this.prefetchTotalSize(id, item.url);
 
-    const timers: ItemTimers = {};
-    this.timers.set(id, timers);
     const controller = new AbortController();
     this.controllers.set(id, controller);
 
-    // Stagger trigger slightly per item so the browser registers each
-    // download dialog as a distinct user-initiated download.
-    const offset = (this.activeIds.size - 1) * 140;
-    timers.trigger = window.setTimeout(() => {
-      const latest = this.downloads.get(id);
-      if (!latest || latest.status !== "downloading") return;
-      void this.runItemDownload(id, controller);
-    }, 220 + offset);
+    void this.runItemDownload(id, controller);
   }
 
   private pump() {
