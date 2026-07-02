@@ -52,8 +52,23 @@ function injectBackgroundSdk(snippet: string, container: HTMLElement) {
   });
 }
 
-const extractFirstUrl = (value: string) => value.match(/https?:\/\/[^'"\s<>]+/)?.[0] || value.trim();
+const extractFirstUrl = (value: string) => value.match(/https?:\/\/[^'"\s<>]+/)?.[0]?.replace(/['")]+$/g, "") || value.trim();
 const isScriptPlacement = (value: string) => /<script|\.js(\?|#|$)/i.test(value.trim());
+const openAdFromUserClick = (value: string) => {
+  const url = extractFirstUrl(value);
+  if (!url) return false;
+  const win = window.open(url, "_blank", "noopener,noreferrer");
+  if (!win) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  return true;
+};
 
 export default function FreePremium() {
   const navigate = useNavigate();
@@ -143,6 +158,7 @@ export default function FreePremium() {
       const reason = (res as any).reason;
       if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day per device.`, variant: "destructive" });
       else if (reason === "no_user") toast({ title: "Guest ID not ready", description: "Tap once again.", variant: "destructive" });
+      else if (reason === "already_watched") toast({ title: "Fresh ad needed", description: "That ad session was already counted. Tap again to open a new ad slot.", variant: "destructive" });
       else toast({ title: "Coin not added", description: "Please open a fresh ad and try again.", variant: "destructive" });
     }
     return true;
@@ -198,10 +214,9 @@ export default function FreePremium() {
       description: "Come back after the timer completes to earn 1 coin.",
       duration: 5000,
     });
+    openAdFromUserClick(earnUrl);
     if (isScriptPlacement(earnUrl)) {
       injectBackgroundSdk(earnUrl, bgContainerRef.current || document.body);
-    } else {
-      window.open(extractFirstUrl(earnUrl), "_blank", "noopener,noreferrer");
     }
   };
 
