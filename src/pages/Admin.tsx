@@ -2322,29 +2322,31 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }
   if (!workingId) return { genres: [] as string[], rating: "" };
 
- let tmdbData: any = null;
- const idTrimmed = tmdbIdOrImdb.trim();
- if (idTrimmed.startsWith("tt")) {
- const findRes = await fetch(`${TMDB_BASE_URL}/find/${idTrimmed}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
- const findData = await findRes.json();
- const tvResult = findData.tv_results?.[0];
- const movieResult = findData.movie_results?.[0];
- if (tvResult?.id) {
- const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
- if (detailRes.ok) tmdbData = await detailRes.json();
- } else if (movieResult?.id) {
- const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
- if (detailRes.ok) tmdbData = await detailRes.json();
- }
- } else {
- const tvRes = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
- if (tvRes.ok) {
- tmdbData = await tvRes.json();
- } else {
- const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
- if (movieRes.ok) tmdbData = await movieRes.json();
- }
- }
+  let tmdbData: any = null;
+  if (workingId.startsWith("tt")) {
+  const findRes = await fetch(`${TMDB_BASE_URL}/find/${workingId}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
+  const findData = await findRes.json();
+  const tvResult = findData.tv_results?.[0];
+  const movieResult = findData.movie_results?.[0];
+  if (tvResult?.id) {
+  const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+  if (detailRes.ok) tmdbData = await detailRes.json();
+  } else if (movieResult?.id) {
+  const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+  if (detailRes.ok) tmdbData = await detailRes.json();
+  }
+  } else if (workingKind === "movie") {
+  const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${workingId}?api_key=${TMDB_API_KEY}&language=en-US`);
+  if (movieRes.ok) tmdbData = await movieRes.json();
+  } else {
+  const tvRes = await fetch(`${TMDB_BASE_URL}/tv/${workingId}?api_key=${TMDB_API_KEY}&language=en-US`);
+  if (tvRes.ok) {
+  tmdbData = await tvRes.json();
+  } else {
+  const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${workingId}?api_key=${TMDB_API_KEY}&language=en-US`);
+  if (movieRes.ok) tmdbData = await movieRes.json();
+  }
+  }
 
  const tmdbGenres = Array.isArray(tmdbData?.genres)
  ? tmdbData.genres.map((g: any) => String(g?.name || "").trim()).filter(Boolean)
