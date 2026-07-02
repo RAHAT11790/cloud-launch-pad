@@ -1,19 +1,46 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Coins, CreditCard, KeyRound, Crown, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
 import { buyPremiumWithCoins, CoinPlan, ensureGuestUser } from "@/lib/premiumAccess";
+import { db, ref, get } from "@/lib/firebase";
 
 export default function PremiumBuyPage() {
   const navigate = useNavigate();
   const branding = useBranding();
   const { isPremium, status, wallet, settings, uid } = usePremium();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [lockedCount, setLockedCount] = useState<number>(0);
 
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const [wsSnap, mvSnap] = await Promise.all([
+          get(ref(db, "webseries")),
+          get(ref(db, "movies")),
+        ]);
+        const count = (obj: any) => Object.values(obj || {}).filter((v: any) => v?.premium).length;
+        if (!cancel) setLockedCount(count(wsSnap.val()) + count(mvSnap.val()));
+      } catch {}
+    })();
+    return () => { cancel = true; };
+  }, []);
 
+  const dynamicFeatures = useMemo(() => {
+    const feats: string[] = [];
+    if (lockedCount > 0) feats.push(`Unlock ${lockedCount}+ premium series & movies`);
+    const lockedQ = Object.entries(settings.globalQualityLocks || {})
+      .filter(([, on]) => on)
+      .map(([q]) => q.toUpperCase());
+    if (lockedQ.length) feats.push(`${lockedQ.join(", ")} quality unlocked`);
+    if (settings.globalDownloadLock) feats.push("Video downloads enabled");
+    feats.push("Ad-free playback priority");
+    return feats;
+  }, [lockedCount, settings.globalQualityLocks, settings.globalDownloadLock]);
 
   const plans: CoinPlan[] = [settings.coinPlan, ...(settings.extraPlans || [])];
 
