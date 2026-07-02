@@ -52,7 +52,14 @@ export function usePremium() {
       setStatus((snap.val() as PremiumStatus) || null);
       setLoaded(true);
     });
-    return () => { u1(); };
+    const u2 = onValue(ref(db, `users/${uid}/coinWallet`), (snap) => {
+      const raw = snap.val() || {};
+      setWallet({
+        coins: Math.max(0, Number(raw.coins || 0)),
+        adWatchLog: raw.adWatchLog || {},
+      });
+    });
+    return () => { u1(); u2(); };
   }, [uid]);
 
   return {

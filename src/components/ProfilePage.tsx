@@ -17,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { getTodayRemaining } from "@/lib/premiumAccess";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -181,7 +182,7 @@ const AccessTimer = () => {
         </div>
         <div className="flex-1">
           <p className="text-xs text-muted-foreground">
-            {paused ? "⏸ Timer Paused (Maintenance)" : hasAccess ? "Free Access Remaining" : "No Active Access"}
+            {paused ? "⏸ Timer Paused (Maintenance)" : globalFree?.active ? "Global Free Access Remaining" : hasAccess ? "Free Access Remaining" : "No Active Access"}
           </p>
           {paused && hasAccess ? (
             <p className="text-lg font-bold font-mono text-yellow-400 tracking-wider">{timeLeft} ⏸</p>
@@ -291,8 +292,21 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   const formatSize = (bytes: number) => {
+    if (!bytes || bytes <= 0) return "Size unknown";
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatQueueSize = (loadedMB: number, totalMB: number) => {
+    const fmt = (mb: number) => {
+      if (!mb || mb <= 0) return "";
+      if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+      return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+    };
+    if (loadedMB > 0 && totalMB > 0) return `${fmt(loadedMB)} / ${fmt(totalMB)}`;
+    if (totalMB > 0) return fmt(totalMB);
+    if (loadedMB > 0) return fmt(loadedMB);
+    return "Preparing size...";
   };
 
   return (
@@ -358,6 +372,9 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
                     <p className="text-xs font-semibold text-foreground truncate">{item.subtitle || item.title}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {item.status === "queued" ? `Queued • ${item.queueIndex}/${item.totalInBatch}` : item.status === "downloading" ? `Downloading • ${item.percent}%` : item.status === "paused" ? "Paused" : item.status}
+                    </p>
+                    <p className="text-[10px] text-primary/80 mt-0.5">
+                      {formatQueueSize(item.loadedMB, item.totalMB)}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -456,7 +473,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     } catch { return true; }
   })();
   const brandingCfg = useBranding();
-  const { wallet: coinWallet } = usePremium();
+  const { wallet: coinWallet, settings: premiumSettings } = usePremium();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try {
@@ -550,6 +567,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const userId = getUserId();
   const premiumDaysLeft = premiumExpiry ? Math.max(0, Math.ceil((premiumExpiry - Date.now()) / 86400000)) : 0;
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
+  const dailyCoinCap = Math.max(1, Number(premiumSettings.dailyAdCap || 5));
+  const remainingCoinAds = getTodayRemaining(coinWallet, dailyCoinCap);
 
   useEffect(() => {
     if (!userId) return;
@@ -1724,6 +1743,43 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       {/* Free / Global Access Timer */}
       <AccessTimer />
+
+      {/* Coin Balance / Free Access box */}
+      <div className="mb-7 grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/premium-buy")}
+          className="glass-card rounded-xl p-3 text-left border-yellow-400/25 bg-gradient-to-br from-yellow-500/10 to-orange-500/5 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-9 h-9 rounded-full bg-yellow-400/15 flex items-center justify-center">
+              <Coins className="w-5 h-5 text-yellow-300" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Coin Balance</p>
+              <p className="text-xl font-extrabold text-yellow-300 leading-none">{coinWallet.coins || 0}</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Daily ads left: {remainingCoinAds}/{dailyCoinCap}</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePanel("premium")}
+          className="glass-card rounded-xl p-3 text-left border-primary/25 bg-gradient-to-br from-primary/10 to-cyan-500/5 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center">
+              <Gift className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Global / Free</p>
+              <p className="text-sm font-bold text-foreground leading-tight">Access Center</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Timer, redeem and access status</p>
+        </button>
+      </div>
 
 
       {/* Watch History */}

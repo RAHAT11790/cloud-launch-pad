@@ -5297,19 +5297,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           };
 
           const startMovieDownload = async (quality: string) => {
-            // Premium users must enter the native browser downloader directly
-            // from the button gesture. Awaiting Firebase here makes mobile
-            // browsers block the download silently. Only non-premium/unknown
-            // users go through the async gate check.
-            if (isPremium !== true) {
-              const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
-              const gate = await checkDownloadAllowed();
-              if (!gate.allowed) {
-                toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
-                try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
-                return;
-              }
-            }
+            // Downloads are available for free + premium users. The download
+            // manager handles size/progress and saves the finished MP4 locally.
             const movieLabel = String(title || subtitle || "video").trim();
             const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
             const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
@@ -5330,15 +5319,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             if (!panelSeason || dlSelectedEpisodes.size === 0) {
               toast.error("Select at least one episode");
               return;
-            }
-            if (isPremium !== true) {
-              const { checkDownloadAllowed } = await import("@/lib/premiumAccess");
-              const gate = await checkDownloadAllowed();
-              if (!gate.allowed) {
-                toast.error(gate.reason === "no_user" ? "Login required for downloads" : "Premium required to download");
-                try { window.location.assign(`/premium-required?reason=download&from=${encodeURIComponent(animeId || "")}`); } catch {}
-                return;
-              }
             }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
             const httpBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
