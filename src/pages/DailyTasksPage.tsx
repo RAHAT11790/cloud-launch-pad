@@ -93,8 +93,9 @@ export default function DailyTasksPage() {
     const res = await claimTask(task.id);
     setBusy(null);
     if (!res.ok) {
-      if (res.reason === "already_claimed") toast.info("You already claimed this task today.");
-      else if (res.reason === "not_ready") toast.warning("Finish the task first to claim.");
+      const reason = (res as { reason: string }).reason;
+      if (reason === "already_claimed") toast.info("You already claimed this task today.");
+      else if (reason === "not_ready") toast.warning("Finish the task first to claim.");
       else toast.error("Could not claim right now.");
       return;
     }
