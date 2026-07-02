@@ -171,8 +171,9 @@ const AccessTimer = () => {
     return () => clearInterval(interval);
   }, [globalFree, userFreeExpiry]);
 
+  if (!hasAccess && !paused) return null;
   return (
-    <div className="mb-5">
+    <div className="mb-1">
       <div className={`glass-card p-4 rounded-xl flex items-center gap-3 ${hasAccess ? "border-primary/30 bg-primary/5" : "border-accent/30 bg-accent/5"}`}>
         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasAccess ? "gradient-primary" : "bg-muted"}`}>
           <Clock className={`w-5 h-5 ${hasAccess ? "text-primary-foreground" : "text-muted-foreground"}`} />
