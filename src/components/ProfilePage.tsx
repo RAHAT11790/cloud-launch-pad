@@ -1771,7 +1771,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       {/* Invite Friends — dedicated prominent section */}
       <div className="mb-7">
-        <InviteFriendCard variant="full" siteName={branding.siteName || SITE_NAME} />
+        <InviteFriendCard variant="full" siteName={brandingCfg.siteName || SITE_NAME} />
       </div>
 
 
