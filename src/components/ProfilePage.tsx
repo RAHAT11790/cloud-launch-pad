@@ -2023,6 +2023,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             </p>
           </>
         ) : null}
+
+        {/* Invite Friends — prominent section at the very bottom of profile */}
+        <div className="mt-5">
+          <InviteFriendCard variant="full" siteName={brandingCfg.siteName || SITE_NAME} />
+        </div>
       </div>
     </motion.div>
   );
