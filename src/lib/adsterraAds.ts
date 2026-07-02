@@ -525,10 +525,54 @@ export async function loadAdsterraSlots(): Promise<void> {
     });
   }
 
+  // Admin-configured cool-down between player ad calls.
+  const cooldownMs = Math.max(0, (cfg.refreshIntervalSec || 0) * 1000);
+  const last = window.__adsterraLastLoadAt || 0;
+  if (cooldownMs > 0 && last && Date.now() - last < cooldownMs) return;
+
   if (window.__adsterraMountPromise) {
     return window.__adsterraMountPromise;
   }
 
   window.__adsterraLastConfigJson = json;
   await mountAdCycle(cfg);
+}
+
+/**
+ * Fire a standalone Adsterra pop-under ad (no player scope needed).
+ * Safe for use inside a user-gesture handler (e.g. Claim button).
+ *   • Direct URL → open new tab.
+ *   • <script> snippet → inject script tags so Adsterra's popunder hook
+ *     attaches to this gesture.
+ * Never calls window.open() with a non-URL string.
+ */
+export async function firePopunderAd(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const cfg = await getAdsterraConfig();
+    if (!cfg.enabled) return;
+    const snippet = (cfg.popunder || "").trim();
+    if (!snippet) return;
+
+    if (/^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<")) {
+      window.open(snippet, "_blank", "noopener,noreferrer");
+      try { window.focus(); } catch {}
+      return;
+    }
+
+    const tmp = document.createElement("div");
+    tmp.innerHTML = snippet;
+    Array.from(tmp.childNodes).forEach((node) => {
+      if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
+        const old = node as HTMLScriptElement;
+        const s = document.createElement("script");
+        Array.from(old.attributes).forEach((a) => s.setAttribute(a.name, a.value));
+        if (old.textContent) s.textContent = old.textContent;
+        if (s.src) s.async = true;
+        document.body.appendChild(s);
+      } else {
+        document.body.appendChild(node);
+      }
+    });
+  } catch {}
 }

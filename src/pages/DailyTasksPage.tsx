@@ -14,7 +14,7 @@ import {
 } from "@/lib/dailyTasks";
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
-import { getAdsterraConfig } from "@/lib/adsterraAds";
+import { firePopunderAd } from "@/lib/adsterraAds";
 
 const ICONS: Record<string, any> = {
   login: LogIn, visit30: Clock, visit120: Timer, share: Share2, comment: MessageSquare,
@@ -35,18 +35,13 @@ export default function DailyTasksPage() {
   const [state, setState] = useState<DailyTaskState>({});
   const [tick, setTick] = useState(0);
   const [countdown, setCountdown] = useState(msUntilNextReset());
-  const [popunderUrl, setPopunderUrl] = useState<string>("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Ensure user, mark daily login progress, load pop-under URL
+  // Ensure user + mark daily login progress
   useEffect(() => {
     void (async () => {
       ensureGuestUser();
       await markDailyLogin();
-      try {
-        const cfg = await getAdsterraConfig();
-        if (cfg.popunder) setPopunderUrl(cfg.popunder);
-      } catch {}
     })();
   }, []);
 
@@ -76,13 +71,10 @@ export default function DailyTasksPage() {
   }, []);
 
   const openPopunderIfConfigured = () => {
-    if (!popunderUrl) return;
-    try {
-      // Fired inside the user-gesture handler → treated as a user pop-under.
-      const w = window.open(popunderUrl, "_blank", "noopener,noreferrer");
-      // Focus back to our page so pop stays under.
-      if (w) window.focus();
-    } catch {}
+    // Fires the admin-configured one-click pop-under Adsterra ad on this
+    // user gesture. Never redirects to our own domain — the helper only
+    // opens real http(s) URLs and otherwise injects the ad script.
+    void firePopunderAd();
   };
 
   const handleClaim = async (task: TaskDef) => {
