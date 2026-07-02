@@ -15,6 +15,7 @@ import {
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
 import { firePopunderAd } from "@/lib/adsterraAds";
+import InviteFriendCard from "@/components/InviteFriendCard";
 
 const ICONS: Record<string, any> = {
   login: LogIn, visit30: Clock, visit120: Timer, share: Share2, comment: MessageSquare,
