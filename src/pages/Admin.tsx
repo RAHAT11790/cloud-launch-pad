@@ -61,6 +61,31 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
+const TG_DUB_TAGS = {
+ official: "#ᴏғғɪᴄɪᴀʟ",
+ fandub: "#ғᴀɴᴅᴜʙ",
+} as const;
+const TG_DIVIDER = "━━━━━━━━━━━━━━━━━━";
+const DEFAULT_TG_HASHTAGS = "#CARTOONFUNNY03 #ANIME";
+const DEFAULT_TG_BUTTON_TEXT = "📥 WATCH AND DOWNLOAD 📥";
+const getTelegramDubTag = (dubType: "official" | "fandub") => TG_DUB_TAGS[dubType];
+const normalizeTelegramBaseHashtags = (tags: string) => {
+ const cleaned = String(tags || DEFAULT_TG_HASHTAGS)
+ .split(/\s+/)
+ .map(tag => tag.trim())
+ .filter(Boolean)
+ .filter(tag => !/(official|fandub|ᴏғғɪᴄɪᴀʟ|ғᴀɴᴅᴜʙ|𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥|𝐅𝐚𝐧𝐝𝐮𝐛)/i.test(tag))
+ .join(" ")
+ .trim();
+ return cleaned || DEFAULT_TG_HASHTAGS;
+};
+const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_TG_BUTTON_TEXT)
+ .replace(/𝐖𝐀𝐓𝐂𝐇\s*𝐀𝐍𝐃\s*𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃/g, "WATCH AND DOWNLOAD")
+ .replace(/𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥(?:\s*𝐝𝐮𝐛)?|𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛|Official\s*Dub|Official/gi, TG_DUB_TAGS.official)
+ .replace(/𝐅𝐚𝐧𝐝𝐮𝐛|Fan\s*Dub|Fandub/gi, TG_DUB_TAGS.fandub)
+ .replace(/\s+/g, " ")
+ .trim();
+
 type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
@@ -2192,7 +2217,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgPosterUrl, setTgPosterUrl] = useState("");
  const [tgButtonLink, setTgButtonLink] = useState("");
  const [tgButtons, setTgButtons] = useState<{ name: string; url: string }[]>([]);
- const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
+ const [tgDefaultButtonName, setTgDefaultButtonName] = useState(DEFAULT_TG_BUTTON_TEXT);
  // Currently-selected anime (for per-anime button persistence)
  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
  // Auto-save per-anime telegram custom buttons whenever the admin edits them
@@ -2201,7 +2226,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const safeId = String(tgSelectedAnimeId).replace(/[^a-zA-Z0-9_-]/g, "_");
  const t = setTimeout(() => {
  const cleanedButtons = tgButtons
- .map(b => ({ name: String(b?.name || "").trim(), url: String(b?.url || "").trim() }))
+  .map(b => ({ name: normalizeTelegramButtonText(String(b?.name || "").trim()), url: String(b?.url || "").trim() }))
  .filter(b => b.name && b.url);
  set(ref(db, `telegramPerAnimeButtons/${safeId}`), {
  defaultButtonName: tgDefaultButtonName || "",
@@ -2239,7 +2264,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgSeasonEpLabel, setTgSeasonEpLabel] = useState("#all");
  // Telegram footer links (admin-managed)
  const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
- const [tgHashtags, setTgHashtags] = useState("#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ");
+ const [tgHashtags, setTgHashtags] = useState(DEFAULT_TG_HASHTAGS);
 
  // Auto-derive Ongoing/Complete from total vs latest added episode (live)
  useEffect(() => {
@@ -2288,7 +2313,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }
  });
  const unsub2 = onValue(ref(db, "admin/tgHashtags"), (snap) => {
- if (snap.val()) setTgHashtags(snap.val());
+ if (snap.val()) setTgHashtags(normalizeTelegramBaseHashtags(snap.val()));
  });
  return () => { unsub(); unsub2(); };
  }, []);
