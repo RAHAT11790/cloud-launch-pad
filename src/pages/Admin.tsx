@@ -6343,17 +6343,15 @@ ${tgBulkFooter}
   startTransition(() => {
   setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
   if (ctxForm.language) setTgLanguages(String(ctxForm.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
-  if (ctxForm.category) setTgGenres(ctxForm.category);
-  if (ctxForm.rating) setTgRating(String(ctxForm.rating));
-  });
- if (ctxForm.tmdbId) {
- try {
- setTgImdbId(String(ctxForm.tmdbId));
- const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId), ctxForm.title || "");
- if (genres.length > 0) setTgGenres(genres.join(", "));
- if (rating) setTgRating(rating);
- } catch {}
- }
+   if (ctxForm.rating) setTgRating(String(ctxForm.rating));
+   });
+  // Genres ALWAYS from TMDB (id preferred, else search by title).
+  try {
+  if (ctxForm.tmdbId) setTgImdbId(String(ctxForm.tmdbId));
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId || ""), ctxForm.title || "");
+  if (genres.length > 0) setTgGenres(genres.join(", "));
+  if (rating) setTgRating(rating);
+  } catch {}
  // Get quality info
  const quals: string[] = [];
   let scannedEpisodes = 0;
