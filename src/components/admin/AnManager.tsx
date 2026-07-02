@@ -820,13 +820,6 @@ export default function AnManager({
         <div className="flex flex-wrap gap-2 items-center">
           <button onClick={selectAllVisible} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
             <CheckSquare size={14} /> Select All ({stats.filtered})
-          </div>
-        </div>
-
-
-        <div className="flex flex-wrap gap-2 items-center">
-          <button onClick={selectAllVisible} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
-            <CheckSquare size={14} /> Select All ({stats.filtered})
           </button>
           <button onClick={clearSelection} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
             <Square size={14} /> Clear ({selectedSlugs.size})
