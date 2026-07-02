@@ -1,37 +1,67 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Coins, Crown, Loader2, Play, Check, Timer } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, Coins, Crown, Loader2, Play, Timer, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
-import { awardCoin, CoinAd, getTodayRemaining, subscribeCoinAds, wasAdWatchedToday } from "@/lib/premiumAccess";
+import {
+  awardCoin,
+  CoinAd,
+  getTodayRemaining,
+  subscribeCoinAds,
+  wasAdWatchedToday,
+} from "@/lib/premiumAccess";
 import CoinAnimation from "@/components/CoinAnimation";
 
-interface PendingAd {
-  id: string;
+interface PendingSession {
   startedAt: number;
   required: number;
+  adId: string;
 }
 
-const PENDING_KEY = "rs_pending_coin_ad";
+const PENDING_KEY = "rs_pending_coin_ad_v2";
+const CONFIRMED_KEY = "rs_free_premium_first_tap";
+
+/** Inject an SDK snippet or URL into a background container. Non-blocking; ignores errors. */
+function injectBackgroundSdk(snippet: string, container: HTMLElement) {
+  const s = (snippet || "").trim();
+  if (!s) return;
+  if (/^https?:\/\//i.test(s) && !s.includes("<")) {
+    const script = document.createElement("script");
+    script.src = s; script.async = true;
+    container.appendChild(script);
+    return;
+  }
+  const tmp = document.createElement("div");
+  tmp.innerHTML = s;
+  Array.from(tmp.childNodes).forEach((node) => {
+    if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
+      const old = node as HTMLScriptElement;
+      const ns = document.createElement("script");
+      Array.from(old.attributes).forEach((a) => ns.setAttribute(a.name, a.value));
+      if (old.textContent) ns.textContent = old.textContent;
+      if (ns.src) ns.async = true;
+      container.appendChild(ns);
+    } else {
+      container.appendChild(node);
+    }
+  });
+}
 
 export default function FreePremium() {
   const navigate = useNavigate();
   const branding = useBranding();
   const { uid, wallet, settings } = usePremium();
   const [ads, setAds] = useState<CoinAd[]>([]);
-  const [pending, setPending] = useState<PendingAd | null>(null);
+  const [pending, setPending] = useState<PendingSession | null>(null);
   const [now, setNow] = useState(Date.now());
   const [coinAnimTick, setCoinAnimTick] = useState(0);
+  const [firstTapDone, setFirstTapDone] = useState<boolean>(() => localStorage.getItem(CONFIRMED_KEY) === "1");
   const settledRef = useRef<Set<string>>(new Set());
+  const bgContainerRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const u = subscribeCoinAds(setAds);
-    return u;
-  }, []);
+  useEffect(() => subscribeCoinAds(setAds), []);
 
-  // Load any pending session from localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(PENDING_KEY);
@@ -44,33 +74,48 @@ export default function FreePremium() {
     return () => window.clearInterval(iv);
   }, []);
 
-  // When the tab regains focus, check if a pending ad has crossed the threshold
+  // Resolve slots
+  const popunderAd = ads.find((a) => a.id === "adsterra_popunder");
+  const smartlinkAd = ads.find((a) => a.id === "adsterra_smartlink");
+  const backgroundAds = ads.filter(
+    (a) =>
+      a.enabled !== false &&
+      a.url &&
+      ["adsterra_push_notification", "adsterra_social_bar", "adsterra_native_banner", "adsterra_smartlink"].includes(a.id),
+  );
+
+  // Inject background SDKs (once per ad-list change)
+  useEffect(() => {
+    if (!bgContainerRef.current) return;
+    bgContainerRef.current.innerHTML = "";
+    backgroundAds.forEach((ad) => injectBackgroundSdk(ad.url, bgContainerRef.current!));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundAds.map((a) => a.id + a.url).join("|")]);
+
+  // Detect return from ad tab and settle timer
   useEffect(() => {
     const onFocus = async () => {
       const raw = localStorage.getItem(PENDING_KEY);
       if (!raw) return;
-      let p: PendingAd;
+      let p: PendingSession;
       try { p = JSON.parse(raw); } catch { return; }
+      if (settledRef.current.has(String(p.startedAt))) return;
       const elapsed = (Date.now() - p.startedAt) / 1000;
-      if (settledRef.current.has(p.id)) return;
       if (elapsed >= p.required) {
-        settledRef.current.add(p.id);
+        settledRef.current.add(String(p.startedAt));
         localStorage.removeItem(PENDING_KEY);
         setPending(null);
-        const res = await awardCoin(p.id, settings.dailyAdCap);
+        const res = await awardCoin(p.adId, settings.dailyAdCap);
         if (res.ok) {
           setCoinAnimTick((t) => t + 1);
           toast({ title: "+1 Coin earned 🎉", description: `Balance: ${res.coins} coins` });
         } else {
           const reason = (res as any).reason;
-          if (reason === "already_watched") toast({ title: "Already watched today", description: "Try another ad." });
-          else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `You can watch ${settings.dailyAdCap} ads/day.` });
+          if (reason === "already_watched") toast({ title: "Already earned from this slot today", description: "Come back tomorrow." });
+          else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day per device.`, variant: "destructive" });
           else if (reason === "no_user") toast({ title: "Login required", variant: "destructive" });
         }
-
-
       } else {
-        // returned too early → discard
         localStorage.removeItem(PENDING_KEY);
         setPending(null);
         toast({
@@ -88,61 +133,86 @@ export default function FreePremium() {
     };
   }, [settings.dailyAdCap]);
 
-  // Two-tap ad flow: first tap = "This ad is not counted" (social/preview),
-  // second tap = counted with 15s timer.
-  const [confirmedAds, setConfirmedAds] = useState<Set<string>>(new Set());
-
-  const startAd = (ad: CoinAd) => {
-    if (!uid) {
-      toast({ title: "Login required", variant: "destructive" });
-      return;
-    }
-    if (wasAdWatchedToday(wallet, ad.id)) {
-      toast({ title: "Already watched today", description: "Come back tomorrow!" });
-      return;
-    }
-    const remaining = getTodayRemaining(wallet, settings.dailyAdCap);
-    if (remaining <= 0) {
-      toast({ title: "Daily limit reached", description: `${settings.dailyAdCap} ads/day.` });
-      return;
-    }
-
-    // First tap → preview only, no coin count
-    if (!confirmedAds.has(ad.id)) {
-      setConfirmedAds((prev) => new Set(prev).add(ad.id));
-      toast({
-        title: "⚠️ This ad is NOT counted",
-        description: "Close the ad tab and tap the button again to start the 15s timer and earn 1 coin.",
-      });
-      window.open(ad.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    // Second tap → counted, start 15s timer
-    const p: PendingAd = { id: ad.id, startedAt: Date.now(), required: settings.adWatchSeconds };
-    localStorage.setItem(PENDING_KEY, JSON.stringify(p));
-    setPending(p);
-    toast({
-      title: "✅ Ad counted — timer started",
-      description: `Stay on the ad tab for ${settings.adWatchSeconds}s to earn 1 coin.`,
-    });
-    window.open(ad.url, "_blank", "noopener,noreferrer");
-  };
-
   const remaining = getTodayRemaining(wallet, settings.dailyAdCap);
   const goal = settings.coinPlan.coins;
   const progress = Math.min(100, (wallet.coins / goal) * 100);
 
+  const handleMainButton = () => {
+    if (!uid) {
+      toast({ title: "Session required", description: "Please continue as guest or log in first.", variant: "destructive" });
+      return;
+    }
+    if (remaining <= 0) {
+      toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day. Come back tomorrow.`, variant: "destructive" });
+      return;
+    }
+
+    // FIRST TAP → open smartlink (stream link) preview. NOT COUNTED.
+    if (!firstTapDone) {
+      const url = (smartlinkAd?.url || "").trim();
+      if (!url) {
+        // No smartlink configured → skip to counted flow immediately.
+        localStorage.setItem(CONFIRMED_KEY, "1");
+        setFirstTapDone(true);
+        toast({ title: "Ready", description: "Tap the button again to start the count timer." });
+        return;
+      }
+      localStorage.setItem(CONFIRMED_KEY, "1");
+      setFirstTapDone(true);
+      toast({
+        title: "⚠️ This ad is NOT counted",
+        description: "Close the tab and tap the button again to start the count timer.",
+        duration: 6000,
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // SECOND TAP (and onward) → open popunder direct link + start timer. COUNTED.
+    const popUrl = (popunderAd?.url || "").trim();
+    if (!popUrl) {
+      toast({ title: "Ad not configured", description: "Admin has not set the popunder link yet.", variant: "destructive" });
+      return;
+    }
+    const adId = `${popunderAd!.id}_${new Date().toISOString().slice(0, 10)}_${Math.floor(now / (60 * 60 * 1000))}`;
+    if (wasAdWatchedToday(wallet, adId)) {
+      toast({ title: "Slot already claimed", description: "Wait a bit and try again.", variant: "destructive" });
+      return;
+    }
+    const p: PendingSession = { startedAt: Date.now(), required: settings.adWatchSeconds, adId };
+    localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+    setPending(p);
+    toast({
+      title: `✅ Timer started — stay ${settings.adWatchSeconds}s`,
+      description: "Come back after the timer completes to earn 1 coin.",
+      duration: 5000,
+    });
+    // Extract direct URL if snippet contains one
+    let openUrl = popUrl;
+    if (popUrl.includes("<")) {
+      const m = popUrl.match(/https?:\/\/[^'"\s<>]+/);
+      if (m) openUrl = m[0];
+    }
+    window.open(openUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const elapsed = pending ? (now - pending.startedAt) / 1000 : 0;
+  const pct = pending ? Math.min(100, (elapsed / pending.required) * 100) : 0;
+  const isTimerRunning = !!pending && elapsed < pending.required;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <CoinAnimation trigger={coinAnimTick} />
-      <div className="max-w-3xl mx-auto px-5 pt-6 pb-24">
+      {/* Invisible container where background Adsterra SDKs live */}
+      <div ref={bgContainerRef} aria-hidden style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", left: -9999, top: -9999 }} />
+
+      <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
         {/* Hero */}
-        <div className="mt-6 rounded-3xl overflow-hidden border border-amber-400/20 bg-gradient-to-br from-amber-500/15 via-orange-500/5 to-transparent p-6">
+        <div className="mt-6 rounded-3xl overflow-hidden border border-amber-400/25 bg-gradient-to-br from-amber-500/20 via-orange-500/8 to-transparent p-6">
           <div className="flex items-center gap-4">
             {branding.logoUrl ? (
               <img src={branding.logoUrl} alt="logo" className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400/40" />
@@ -153,11 +223,10 @@ export default function FreePremium() {
             )}
             <div>
               <h1 className="text-2xl font-bold">Free Premium</h1>
-              <p className="text-sm text-muted-foreground">Watch ads → earn coins → unlock premium</p>
+              <p className="text-sm text-muted-foreground">Tap the button → earn coins → unlock premium</p>
             </div>
           </div>
 
-          {/* Coin balance + progress */}
           <div className="mt-6 rounded-2xl bg-black/40 border border-white/5 p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Your Balance</span>
@@ -166,82 +235,106 @@ export default function FreePremium() {
               </span>
             </div>
             <div className="mt-3 h-2 rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-all"
-                style={{ width: `${progress}%` }}
-              />
+              <div className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-all" style={{ width: `${progress}%` }} />
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
               <span>{Math.max(0, goal - wallet.coins)} more coins to unlock {settings.coinPlan.days} days of Premium</span>
               {wallet.coins >= goal && (
-                <Button size="sm" className="h-7 bg-amber-500 text-black hover:bg-amber-400" onClick={() => navigate("/premium-buy")}>
+                <button className="h-7 px-3 rounded-full text-xs font-bold bg-amber-500 text-black hover:bg-amber-400 inline-flex items-center gap-1" onClick={() => navigate("/premium-buy")}>
                   <Crown className="w-3.5 h-3.5" /> Redeem
-                </Button>
+                </button>
               )}
             </div>
           </div>
 
           <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
             <Timer className="w-3.5 h-3.5" />
-            {remaining} of {settings.dailyAdCap} daily ads remaining • Stay at least {settings.adWatchSeconds}s to earn
+            {remaining} of {settings.dailyAdCap} daily coins remaining • Stay {settings.adWatchSeconds}s on ad tab to earn
           </div>
         </div>
 
-        {/* Ads grid */}
-        <h2 className="mt-8 text-lg font-semibold">Available Ads</h2>
-        {ads.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] p-8 text-center text-muted-foreground">
-            No ads configured yet. Check back soon!
-          </div>
-        ) : (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {ads.filter(a => a.enabled !== false).map((ad, idx) => {
-              const watched = wasAdWatchedToday(wallet, ad.id);
-              const isPending = pending?.id === ad.id;
-              const elapsed = isPending ? (now - pending!.startedAt) / 1000 : 0;
-              const pct = isPending ? Math.min(100, (elapsed / pending!.required) * 100) : 0;
-              return (
-                <div
-                  key={ad.id}
-                  className={`rounded-2xl border p-4 transition ${
-                    watched ? "border-emerald-400/30 bg-emerald-500/5 opacity-80" : "border-white/10 bg-white/[0.02] hover:border-amber-400/30"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${watched ? "bg-emerald-500/20" : "bg-amber-500/15"}`}>
-                      {watched ? <Check className="w-5 h-5 text-emerald-400" /> : <Play className="w-5 h-5 text-amber-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">{ad.name || `Ad #${idx + 1}`}</div>
-                      <div className="text-xs text-muted-foreground">+1 coin • {settings.adWatchSeconds}s</div>
-                    </div>
-                    <Button
-                      size="sm"
-                      disabled={watched || remaining <= 0}
-                      onClick={() => startAd(ad)}
-                      className={watched ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500 text-black hover:bg-amber-400"}
-                    >
-                      {watched ? "Done" : isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Watch"}
-                    </Button>
-                  </div>
-                  {isPending && !watched && (
-                    <div className="mt-3">
-                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                        <div className="h-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        Waiting for your return... {Math.floor(elapsed)}s / {pending!.required}s
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* THE ONE professional earn button */}
+        <div className="mt-8">
+          <div className="relative rounded-3xl overflow-hidden border border-amber-400/30 bg-gradient-to-br from-neutral-950 via-neutral-900 to-black p-8">
+            {/* status layer */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${firstTapDone ? "bg-emerald-400" : "bg-amber-400"} animate-pulse`} />
+                <span className="text-[11px] uppercase tracking-widest font-bold text-white/70">
+                  {isTimerRunning ? "Timer Running" : firstTapDone ? "Ready — Counted" : "Preview Layer"}
+                </span>
+              </div>
+              <div className="text-[11px] text-white/50 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                Real click only
+              </div>
+            </div>
 
-        <p className="mt-6 text-xs text-muted-foreground text-center">
-          Rule: click an ad, stay on the ad page for at least {settings.adWatchSeconds} seconds, then come back. Coins are awarded on return.
+            {/* Sub-layer explanation */}
+            <div className="mb-5 rounded-2xl bg-white/5 border border-white/10 p-3 text-[12px] text-white/70 leading-relaxed">
+              {!firstTapDone ? (
+                <>
+                  <b className="text-amber-300">Step 1:</b> First tap opens a preview link. A notice will appear —{" "}
+                  <i>"This ad was not counted"</i>. Close the tab and tap the button again to start the {settings.adWatchSeconds}-second count timer.
+                </>
+              ) : isTimerRunning ? (
+                <>
+                  <b className="text-emerald-300">Counting…</b> Stay on the ad tab for at least{" "}
+                  <b>{Math.max(0, Math.ceil(pending!.required - elapsed))}s</b> more, then return here to receive 1 coin.
+                </>
+              ) : (
+                <>
+                  <b className="text-emerald-300">Ready to earn:</b> Tap the button below. The counted {settings.adWatchSeconds}-second timer will start automatically.
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={handleMainButton}
+              disabled={isTimerRunning || remaining <= 0}
+              className="group relative w-full h-20 rounded-2xl font-black text-lg tracking-wide overflow-hidden
+                         bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-black
+                         shadow-[0_20px_60px_-12px_rgba(251,146,60,0.5)]
+                         hover:shadow-[0_25px_70px_-10px_rgba(251,146,60,0.7)]
+                         active:scale-[0.98] transition-all
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              <div className="relative flex items-center justify-center gap-3">
+                {isTimerRunning ? (
+                  <>
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>Waiting for return… {Math.floor(elapsed)}s / {pending!.required}s</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-7 h-7 fill-black" />
+                    <span>{firstTapDone ? `Watch & Earn +1 Coin` : `Tap to Preview`}</span>
+                  </>
+                )}
+              </div>
+            </button>
+
+            {isTimerRunning && (
+              <div className="mt-4">
+                <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+
+            {remaining <= 0 && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-400/30 p-3 text-xs text-red-200">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                Daily coin cap reached for this device. Come back tomorrow to earn more.
+              </div>
+            )}
+          </div>
+        </div>
+
+        <p className="mt-6 text-[11px] text-muted-foreground text-center leading-relaxed">
+          Every click must be a real user click. No ads auto-open on this page.<br />
+          Push notifications and background banners may appear — those are informational only.
         </p>
       </div>
     </div>
