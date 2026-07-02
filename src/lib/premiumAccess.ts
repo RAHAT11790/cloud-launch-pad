@@ -203,6 +203,10 @@ export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinR
   return outcome;
 };
 
+export const clearStaleCoinSession = () => {
+  try { localStorage.removeItem("rs_pending_coin_ad_v2"); } catch {}
+};
+
 /** Buy premium with coins — deducts coins, activates premium */
 export type SpendResult = { ok: true; expiresAt: number } | { ok: false; reason: "no_user" | "insufficient" | "unknown" };
 

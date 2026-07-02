@@ -114,12 +114,7 @@ const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
-const isAllowedRequest = (req: Request) => {
-  const origin = req.headers.get("origin");
-  const referer = req.headers.get("referer");
-  if (!origin && !referer) return true;
-  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
-};
+const isAllowedRequest = (_req: Request) => true;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
