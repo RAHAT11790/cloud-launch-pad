@@ -30,7 +30,7 @@ const fmtCountdown = (ms: number) => {
 export default function DailyTasksPage() {
   const navigate = useNavigate();
   const branding = useBranding();
-  const { coinWallet } = usePremium();
+  const { wallet: coinWallet } = usePremium();
 
   const [state, setState] = useState<DailyTaskState>({});
   const [tick, setTick] = useState(0);
