@@ -64,6 +64,7 @@ export default function FreePremium() {
   const settledRef = useRef<Set<string>>(new Set());
   const bgContainerRef = useRef<HTMLDivElement | null>(null);
   const bannerContainerRef = useRef<HTMLDivElement | null>(null);
+  const nativeContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => subscribeCoinAds(setAds), []);
 
