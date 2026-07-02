@@ -92,15 +92,13 @@ export default function DailyTasksPage() {
     setBusy(task.id);
     const res = await claimTask(task.id);
     setBusy(null);
-    if (res.ok) {
-      toast.success(`+${res.coins} coin${res.coins > 1 ? "s" : ""} claimed! Balance: ${res.total}`);
-    } else if (res.reason === "already_claimed") {
-      toast.info("You already claimed this task today.");
-    } else if (res.reason === "not_ready") {
-      toast.warning("Finish the task first to claim.");
-    } else {
-      toast.error("Could not claim right now.");
+    if (!res.ok) {
+      if (res.reason === "already_claimed") toast.info("You already claimed this task today.");
+      else if (res.reason === "not_ready") toast.warning("Finish the task first to claim.");
+      else toast.error("Could not claim right now.");
+      return;
     }
+    toast.success(`+${res.coins} coin${res.coins > 1 ? "s" : ""} claimed! Balance: ${res.total}`);
   };
 
   const handleShareClick = async () => {
