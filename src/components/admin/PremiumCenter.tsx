@@ -244,9 +244,9 @@ export default function PremiumCenter() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-1"><Filter className="w-3 h-3" />Filter</div>
               <FilterGroup value={sourceFilter} onChange={setSourceFilter as any} options={[
-                { v: "all", label: "All Sources" },
-                { v: "RS", label: "RS Only" },
-                { v: "AN", label: "AN Only" },
+                { v: "all", label: `All (${rsSeries.length + anSeries.length})` },
+                { v: "RS", label: `RS (${rsSeries.length})` },
+                { v: "AN", label: `AN (${anSeries.length})` },
               ]} />
               <FilterGroup value={dubFilter} onChange={setDubFilter as any} options={[
                 { v: "all", label: "Any Dub" },
