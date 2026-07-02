@@ -489,9 +489,19 @@ function EpisodeLockModal({ row, onClose }: { row: SeriesRow; onClose: () => voi
   const [seasons, setSeasons] = useState<any[]>([]);
   const [locks, setLocks] = useState<Record<string, boolean>>(row.premiumEpisodes || {});
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [openSeason, setOpenSeason] = useState(0);
 
   useEffect(() => {
+    if (row.path === "animesaltSelected") {
+      // AN series have no seasons stored in Firebase — resolve from the AN API.
+      setLoading(true);
+      resolveAnSeriesSeasons(row.id)
+        .then((s) => setSeasons(Array.isArray(s) ? s : []))
+        .catch(() => setSeasons([]))
+        .finally(() => setLoading(false));
+      return;
+    }
     const u = onValue(ref(db, `${row.path}/${row.id}/seasons`), (snap) => {
       setSeasons(snap.val() || []);
     });
