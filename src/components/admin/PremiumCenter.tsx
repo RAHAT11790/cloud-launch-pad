@@ -456,11 +456,9 @@ function SeriesListRow({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) 
         <button onClick={() => onSetDub("official")} className={`text-[10px] px-2 py-1 rounded ${(row.dubType || "official") === "official" ? "bg-indigo-500/25 text-indigo-200" : "bg-white/5 text-zinc-500"}`}>Off</button>
         <button onClick={() => onSetDub("fandub")} className={`text-[10px] px-2 py-1 rounded ${row.dubType === "fandub" ? "bg-pink-500/25 text-pink-200" : "bg-white/5 text-zinc-500"}`}>Fan</button>
       </div>
-      {(row.seasonsCount || row.path === "animesaltSelected") ? (
-        <Button size="sm" variant="outline" onClick={onOpenEpisodes} className="border-white/10 text-xs">
-          Episodes
-        </Button>
-      ) : null}
+      <Button size="sm" variant="outline" onClick={onOpenEpisodes} className="border-white/10 text-xs">
+        Episodes
+      </Button>
       <Button
         size="sm"
         onClick={onTogglePremium}
