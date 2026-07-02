@@ -80,8 +80,8 @@ export default function FreePremium() {
   }, []);
 
   // Resolve slots
-  const popunderAd = ads.find((a) => a.id === "adsterra_popunder");
-  const smartlinkAd = ads.find((a) => a.id === "adsterra_smartlink");
+  const popunderAd = ads.find((a) => a.id === "adsterra_popunder" && a.enabled !== false);
+  const smartlinkAd = ads.find((a) => a.id === "adsterra_smartlink" && a.enabled !== false);
   const bannerAd = ads.find((a) => a.id === "adsterra_banner_160" && a.enabled !== false && a.url);
   const backgroundAds = ads.filter(
     (a) =>

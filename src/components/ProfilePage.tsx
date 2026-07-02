@@ -449,7 +449,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const isGuestUser = (() => {
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      return !(u?.id && u?.email);
+      const email = String(u?.email || "");
+      return !u?.id || u?.guest || email === "guest@rsanime.com" || email.endsWith("@guest.local");
     } catch { return true; }
   })();
   const brandingCfg = useBranding();
