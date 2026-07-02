@@ -274,7 +274,7 @@ export default function FreePremium() {
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${firstTapDone ? "bg-emerald-400" : "bg-amber-400"} animate-pulse`} />
                 <span className="text-[11px] uppercase tracking-widest font-bold text-white/70">
-                  {isTimerRunning ? "Timer Running" : firstTapDone ? "Ready — Counted" : "Preview Layer"}
+                  {isTimerRunning ? "Timer Running" : firstTapDone ? "Ready to Earn" : "Sponsor · Step 1"}
                 </span>
               </div>
               <div className="text-[11px] text-white/50 flex items-center gap-1">
