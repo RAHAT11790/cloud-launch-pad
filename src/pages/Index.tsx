@@ -752,7 +752,9 @@ const Index = () => {
   // Always show the original splash on a fresh website entry/reload, then
   // release after the first visible assets are warm. Route/page navigation does
   // not remount this component, so the splash still won't interrupt browsing.
-  const [splashHold, setSplashHold] = useState<boolean>(true);
+  const [splashHold, setSplashHold] = useState<boolean>(() => {
+    try { return sessionStorage.getItem("rs_splash_shown") !== "1"; } catch { return true; }
+  });
   const splashAssetTargetsRef = useRef<string[]>([]);
   useEffect(() => {
     if (!splashHold) return;
@@ -760,6 +762,7 @@ const Index = () => {
     const release = () => {
       if (cancelled) return;
       cancelled = true;
+      try { sessionStorage.setItem("rs_splash_shown", "1"); } catch {}
       setSplashHold(false);
     };
     const cap = window.setTimeout(release, 4000);
@@ -774,6 +777,7 @@ const Index = () => {
     return () => { cancelled = true; window.clearTimeout(cap); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   // --- In-player suggestion switch ---
   // When the user picks a suggestion from within the running player, we want
