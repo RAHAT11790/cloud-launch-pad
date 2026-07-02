@@ -79,7 +79,7 @@ export default function PremiumCenter() {
           episodesCount,
         };
       });
-    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries(mapRows(snap.val(), "webseries")));
+    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "webseries"), ...mapRows(snap.val(), "webseries")])));
     const uMovies = onValue(ref(db, "movies"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "movies"), ...mapRows(snap.val(), "movies")]));
     const u2 = onValue(ref(db, "animesaltSelected"), (snap) =>
       setAnSeries(mapRows(snap.val(), "animesaltSelected")),
@@ -258,7 +258,7 @@ export default function PremiumCenter() {
               <FilterGroup value={dubFilter} onChange={setDubFilter as any} options={[
                 { v: "all", label: "Any Dub" },
                 { v: "official", label: "Official" },
-                { v: "fan", label: "Fan Dub" },
+                { v: "fandub", label: "Fan Dub" },
               ]} />
               <FilterGroup value={premiumFilter} onChange={setPremiumFilter as any} options={[
                 { v: "all", label: "All" },
@@ -367,7 +367,7 @@ function SeriesCard({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) {
           <img src={row.poster} alt={row.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-700">
-            {row.path === "series" ? <Tv className="w-10 h-10" /> : <Film className="w-10 h-10" />}
+            {row.path !== "animesaltSelected" ? <Tv className="w-10 h-10" /> : <Film className="w-10 h-10" />}
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -375,9 +375,9 @@ function SeriesCard({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) {
         {/* Top badges */}
         <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
-            row.path === "series" ? "bg-blue-500/90 text-white" : "bg-emerald-500/90 text-white"
+            row.path !== "animesaltSelected" ? "bg-blue-500/90 text-white" : "bg-emerald-500/90 text-white"
           }`}>
-            {row.path === "series" ? "RS" : "AN"}
+            {row.path !== "animesaltSelected" ? "RS" : "AN"}
           </span>
           {row.premium && (
             <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-400 to-yellow-600 text-black">
@@ -426,15 +426,15 @@ function SeriesCard({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) {
             Official
           </button>
           <button
-            onClick={() => onSetDub("fan")}
+            onClick={() => onSetDub("fandub")}
             className={`text-[9px] px-1.5 py-1 rounded font-semibold ${
-              row.dubType === "fan" ? "bg-pink-500/30 text-pink-200" : "bg-white/5 text-zinc-500"
+              row.dubType === "fandub" ? "bg-pink-500/30 text-pink-200" : "bg-white/5 text-zinc-500"
             }`}
           >
             Fan Dub
           </button>
         </div>
-        {row.seasonsCount ? (
+        {(row.seasonsCount || row.path === "animesaltSelected") ? (
           <button
             onClick={onOpenEpisodes}
             className="w-full inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-white/5"
@@ -453,8 +453,8 @@ function SeriesListRow({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) 
       <div className="w-11 h-16 rounded-md overflow-hidden bg-zinc-900 shrink-0">
         {row.poster ? <img src={row.poster} className="w-full h-full object-cover" loading="lazy" /> : null}
       </div>
-      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${row.path === "series" ? "bg-blue-500/20 text-blue-300" : "bg-emerald-500/20 text-emerald-300"}`}>
-        {row.path === "series" ? "RS" : "AN"}
+      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${row.path !== "animesaltSelected" ? "bg-blue-500/20 text-blue-300" : "bg-emerald-500/20 text-emerald-300"}`}>
+        {row.path !== "animesaltSelected" ? "RS" : "AN"}
       </span>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold truncate">{row.title}</div>
@@ -464,9 +464,9 @@ function SeriesListRow({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) 
       </div>
       <div className="flex gap-1">
         <button onClick={() => onSetDub("official")} className={`text-[10px] px-2 py-1 rounded ${(row.dubType || "official") === "official" ? "bg-indigo-500/25 text-indigo-200" : "bg-white/5 text-zinc-500"}`}>Off</button>
-        <button onClick={() => onSetDub("fan")} className={`text-[10px] px-2 py-1 rounded ${row.dubType === "fan" ? "bg-pink-500/25 text-pink-200" : "bg-white/5 text-zinc-500"}`}>Fan</button>
+        <button onClick={() => onSetDub("fandub")} className={`text-[10px] px-2 py-1 rounded ${row.dubType === "fandub" ? "bg-pink-500/25 text-pink-200" : "bg-white/5 text-zinc-500"}`}>Fan</button>
       </div>
-      {row.seasonsCount ? (
+      {(row.seasonsCount || row.path === "animesaltSelected") ? (
         <Button size="sm" variant="outline" onClick={onOpenEpisodes} className="border-white/10 text-xs">
           Episodes
         </Button>
