@@ -16,7 +16,16 @@ import {
 } from "@/lib/premiumAccess";
 import { resolveAnSeriesSeasons } from "@/lib/anLivePlayback";
 
-type Tab = "overview" | "series" | "quality" | "download" | "plans";
+type Tab = "overview" | "series" | "eplocks" | "quality" | "download" | "plans";
+
+const CACHE_RS = "rs_premium_center_rs_v1";
+const CACHE_AN = "rs_premium_center_an_v1";
+const readCache = (k: string): SeriesRow[] => {
+  try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : []; } catch { return []; }
+};
+const writeCache = (k: string, v: SeriesRow[]) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+};
 
 interface SeriesRow {
   id: string;
