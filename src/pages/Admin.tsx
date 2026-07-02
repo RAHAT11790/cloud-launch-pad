@@ -7771,7 +7771,7 @@ ${tgBulkFooter}
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`}
+{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}`}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
