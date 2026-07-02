@@ -4589,7 +4589,7 @@ ${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${getTelegramDubTag(tgDubType)}
  }
  tgButtons.forEach(btn => {
  if (btn.name.trim() && btn.url.trim()) {
- inlineButtons.push({ text: btn.name.trim(), url: btn.url.trim() });
+ inlineButtons.push({ text: normalizeTelegramButtonText(btn.name.trim()), url: btn.url.trim() });
  }
  });
 
@@ -4928,11 +4928,11 @@ ${tgBulkFooter}
  const saved = savedSnap.val();
  if (saved && typeof saved === "object") {
  if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) {
- setTgDefaultButtonName(saved.defaultButtonName);
+ setTgDefaultButtonName(normalizeTelegramButtonText(saved.defaultButtonName));
  }
  if (Array.isArray(saved.buttons)) {
  setTgButtons(saved.buttons.filter((b: any) => b && typeof b === "object").map((b: any) => ({
- name: String(b.name || ""),
+ name: normalizeTelegramButtonText(String(b.name || "")),
  url: String(b.url || ""),
  })));
  } else {
@@ -6400,8 +6400,8 @@ ${tgBulkFooter}
  const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
  const saved = savedSnap.val();
  if (saved && typeof saved === "object") {
- if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
- if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+ if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(normalizeTelegramButtonText(saved.defaultButtonName));
+ if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: normalizeTelegramButtonText(String(b?.name || "")), url: String(b?.url || "") })));
  else setTgButtons([]);
  } else { setTgButtons([]); }
  } catch {}
@@ -6486,8 +6486,8 @@ ${tgBulkFooter}
  const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
  const saved = savedSnap.val();
  if (saved && typeof saved === "object") {
- if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
- if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+ if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(normalizeTelegramButtonText(saved.defaultButtonName));
+ if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: normalizeTelegramButtonText(String(b?.name || "")), url: String(b?.url || "") })));
  else setTgButtons([]);
  } else { setTgButtons([]); }
  } catch {}
@@ -7582,8 +7582,8 @@ ${tgBulkFooter}
   const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
   const saved = savedSnap.val();
   if (saved && typeof saved === "object") {
-  if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
-  if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+   if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(normalizeTelegramButtonText(saved.defaultButtonName));
+   if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: normalizeTelegramButtonText(String(b?.name || "")), url: String(b?.url || "") })));
   else setTgButtons([]);
   } else { setTgButtons([]); }
   } catch {}
