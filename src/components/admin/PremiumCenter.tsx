@@ -89,6 +89,10 @@ export default function PremiumCenter() {
     return () => { u1(); uMovies(); u2(); };
   }, []);
 
+  // Persist snapshots so returning to Premium Center never shows an empty list.
+  useEffect(() => { writeCache(CACHE_RS, rsSeries); }, [rsSeries]);
+  useEffect(() => { writeCache(CACHE_AN, anSeries); }, [anSeries]);
+
   useEffect(() => {
     const u = onValue(ref(db, "users"), (snap) => {
       const raw = snap.val() || {};
