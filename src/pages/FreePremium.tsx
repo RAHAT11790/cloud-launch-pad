@@ -30,9 +30,10 @@ const makeCoinAdSessionId = (slotId: string) => {
 function injectBackgroundSdk(snippet: string, container: HTMLElement) {
   const s = (snippet || "").trim();
   if (!s) return;
-  if (/^https?:\/\//i.test(s) && !s.includes("<")) {
+  const normalized = s.startsWith("//") ? `https:${s}` : s;
+  if (/^(https?:)?\/\//i.test(s) && !s.includes("<")) {
     const script = document.createElement("script");
-    script.src = s; script.async = true;
+    script.src = normalized; script.async = true;
     container.appendChild(script);
     return;
   }
@@ -52,7 +53,10 @@ function injectBackgroundSdk(snippet: string, container: HTMLElement) {
   });
 }
 
-const extractFirstUrl = (value: string) => value.match(/https?:\/\/[^'"\s<>]+/)?.[0]?.replace(/['")]+$/g, "") || value.trim();
+const extractFirstUrl = (value: string) => {
+  const hit = value.match(/(?:https?:)?\/\/[^'"\s<>]+/)?.[0]?.replace(/['")]+$/g, "") || value.trim();
+  return hit.startsWith("//") ? `https:${hit}` : hit;
+};
 const isScriptPlacement = (value: string) => /<script|\.js(\?|#|$)/i.test(value.trim());
 const openAdFromUserClick = (value: string) => {
   const url = extractFirstUrl(value);
@@ -214,9 +218,14 @@ export default function FreePremium() {
       description: "Come back after the timer completes to earn 1 coin.",
       duration: 5000,
     });
-    openAdFromUserClick(earnUrl);
     if (isScriptPlacement(earnUrl)) {
+      // Popunder/Social-Bar scripts are preloaded, so this real button tap can
+      // trigger them. If a direct smartlink is configured, open it too as a
+      // visible fallback so the timer never runs without an ad destination.
       injectBackgroundSdk(earnUrl, bgContainerRef.current || document.body);
+      if (smartlinkAd?.url && !isScriptPlacement(smartlinkAd.url)) openAdFromUserClick(smartlinkAd.url);
+    } else {
+      openAdFromUserClick(earnUrl);
     }
   };
 
