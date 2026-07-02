@@ -15,11 +15,6 @@ export default function PremiumBuyPage() {
   const guest = isGuestUser();
 
 
-export default function PremiumBuyPage() {
-  const navigate = useNavigate();
-  const branding = useBranding();
-  const { isPremium, status, wallet, settings, uid } = usePremium();
-  const [busyPlan, setBusyPlan] = useState<string | null>(null);
 
   const plans: CoinPlan[] = [settings.coinPlan, ...(settings.extraPlans || [])];
 
