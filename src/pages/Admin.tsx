@@ -70,7 +70,10 @@ const DEFAULT_TG_HASHTAGS = "#CARTOONFUNNY03 #ANIME";
 const DEFAULT_TG_BUTTON_TEXT = "📥 WATCH AND DOWNLOAD 📥";
 const getTelegramDubTag = (dubType: "official" | "fandub") => TG_DUB_TAGS[dubType];
 const normalizeTelegramBaseHashtags = (tags: string) => {
- const cleaned = String(tags || DEFAULT_TG_HASHTAGS)
+ const normalized = String(tags || DEFAULT_TG_HASHTAGS)
+ .replace(/#ɪᴄғᴀɴɪᴍᴇ/gi, "#CARTOONFUNNY03")
+ .replace(/#ᴀɴɪᴍᴇ|#anime/gi, "#ANIME");
+ const cleaned = normalized
  .split(/\s+/)
  .map(tag => tag.trim())
  .filter(Boolean)
