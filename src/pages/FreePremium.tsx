@@ -104,6 +104,12 @@ export default function FreePremium() {
     if (bannerAd?.url) injectBackgroundSdk(bannerAd.url, bannerContainerRef.current);
   }, [bannerAd?.url]);
 
+  useEffect(() => {
+    if (!nativeContainerRef.current) return;
+    nativeContainerRef.current.innerHTML = "";
+    if (nativeBannerAd?.url) injectBackgroundSdk(nativeBannerAd.url, nativeContainerRef.current);
+  }, [nativeBannerAd?.url]);
+
   // Detect return from ad tab and settle timer
   useEffect(() => {
     const onFocus = async () => {
