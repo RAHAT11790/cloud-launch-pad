@@ -817,9 +817,9 @@ export default function AnManager({
 
       {/* === Bulk actions === */}
       <div className={`${glassCard} p-4 space-y-3`}>
-        <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3">
-          <div className="text-[11px] text-emerald-200">
-            ✅ TMDB API key is centrally configured in <code className="text-emerald-100">siteConfig.ts</code> — no need to paste it here anymore.
+        <div className="flex flex-wrap gap-2 items-center">
+          <button onClick={selectAllVisible} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
+            <CheckSquare size={14} /> Select All ({stats.filtered})
           </div>
         </div>
 
