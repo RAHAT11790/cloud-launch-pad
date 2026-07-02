@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db, ref, onValue, set, update, get } from "@/lib/firebase";
+import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
   DEFAULT_COIN_ADS,
@@ -8,27 +8,34 @@ import {
   CoinAd,
   DEFAULT_PREMIUM_SETTINGS,
 } from "@/lib/premiumAccess";
+import { Zap, Radio, LayoutGrid, Sparkles, Link2, Clock, Shield, Save } from "lucide-react";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 
-// Fixed slot definitions for Free Premium background SDKs
-const FREE_PREMIUM_SLOTS: { id: string; name: string; kind: CoinAd["kind"]; help: string }[] = [
-  { id: "adsterra_popunder", name: "One Click Popunder", kind: "sdk", help: "Counted earn-coin click. Paste the one-click/popunder script or direct URL." },
-  { id: "adsterra_social_bar", name: "Social Bar / In-Page Push", kind: "sdk", help: "This is the push/social placement. Paste the Social Bar script here — no separate push box." },
-  { id: "adsterra_banner_160", name: "160x300 Banner", kind: "sdk", help: "Paste the 160x300 banner code/snippet. It renders on the Free Premium page." },
-  { id: "adsterra_native_banner", name: "Native Banner", kind: "sdk", help: "Native banner invoke.js SDK/snippet." },
-  { id: "adsterra_smartlink", name: "Smartlink (Stream Link)", kind: "smartlink", help: "Direct smartlink URL — used for the first-tap 'not counted' preview." },
+type SlotDef = {
+  id: string;
+  name: string;
+  kind: CoinAd["kind"];
+  help: string;
+  icon: JSX.Element;
+  accent: string;
+};
+
+const FREE_PREMIUM_SLOTS: SlotDef[] = [
+  { id: "adsterra_popunder",     name: "One Click Popunder",   kind: "sdk",       accent: "from-amber-500/20 to-orange-500/5",   icon: <Zap className="w-3.5 h-3.5 text-amber-300" />,     help: "Counted earn-coin click. Direct URL or popunder script." },
+  { id: "adsterra_social_bar",   name: "Social Bar (Push)",    kind: "sdk",       accent: "from-fuchsia-500/20 to-purple-500/5", icon: <Radio className="w-3.5 h-3.5 text-fuchsia-300" />, help: "Adsterra Push/In-Page notifications come from Social Bar — no separate push slot." },
+  { id: "adsterra_banner_160",   name: "160×300 Banner",       kind: "sdk",       accent: "from-sky-500/20 to-blue-500/5",       icon: <LayoutGrid className="w-3.5 h-3.5 text-sky-300" />, help: "Renders on the Free Premium page." },
+  { id: "adsterra_native_banner",name: "Native Banner",        kind: "sdk",       accent: "from-emerald-500/20 to-teal-500/5",   icon: <Sparkles className="w-3.5 h-3.5 text-emerald-300" />, help: "Native banner invoke.js snippet." },
+  { id: "adsterra_smartlink",    name: "Smartlink (Preview)",  kind: "smartlink", accent: "from-pink-500/20 to-rose-500/5",      icon: <Link2 className="w-3.5 h-3.5 text-pink-300" />,    help: "Direct smartlink URL — first tap 'not counted' preview." },
 ];
 
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
-  // ---- Video Player Ads (settings/adsterra) ----
   const [vpEnabled, setVpEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
   const [socialLink, setSocialLink] = useState("");
   const [vpMinGapSec, setVpMinGapSec] = useState<number>(25);
   const [savingVp, setSavingVp] = useState(false);
 
-  // ---- Free Premium Ads (settings/premiumCoinAds + settings/premium.adWatchSeconds) ----
   const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
   const [adWatchSeconds, setAdWatchSeconds] = useState<number>(15);
   const [dailyAdCap, setDailyAdCap] = useState<number>(5);
@@ -67,7 +74,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         popunder: popunder.trim(),
         streamLink: socialLink.trim(),
         socialLink: socialLink.trim(),
-        pushNotification: "", // Adsterra push is handled by Social Bar/In-Page Push.
+        pushNotification: "",
         socialBar: socialLink.trim(),
         minGapSec: Math.max(20, Math.min(120, Number(vpMinGapSec) || 25)),
       });
@@ -102,95 +109,138 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setCoinAds((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } as CoinAd }));
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Video Player Ads */}
-      <div className={glassCard + " space-y-4"}>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="text-base font-bold text-white">🎬 Video Player Ads</h3>
-            <p className="text-[11px] text-white/60 mt-1 max-w-full break-words">Only user-click gated ads run inside the video player — Popunder and Social Link/In-Page Push.</p>
-          </div>
-          <label className="inline-flex items-center gap-2 text-xs text-white/80 flex-shrink-0">
-            <input type="checkbox" checked={vpEnabled} onChange={(e) => setVpEnabled(e.target.checked)} />
-            {vpEnabled ? "Enabled" : "Disabled"}
-          </label>
-        </div>
+  const codeArea =
+    "w-full min-w-0 rounded-lg bg-black/60 border border-white/10 px-2.5 py-2 " +
+    "font-mono text-[11px] leading-relaxed text-emerald-100/90 " +
+    "placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-fuchsia-400/40 " +
+    "resize-y break-all whitespace-pre-wrap overflow-auto";
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-white/80 block">One Click Popunder <span className="text-white/40">(user-click gated)</span></label>
+  return (
+    <div className="space-y-5 min-w-0">
+      {/* Video Player Ads */}
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a0f2e]/70 to-black/40 p-4 space-y-4 min-w-0 overflow-hidden">
+        <header className="flex items-start justify-between gap-3 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-fuchsia-500/15 border border-fuchsia-400/25 flex items-center justify-center">🎬</span>
+              <h3 className="text-sm font-bold text-white truncate">Video Player Ads</h3>
+            </div>
+            <p className="text-[11px] text-white/50 mt-1">Only user-click gated — Popunder + Social/Push.</p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-[11px] text-white/80 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+            <input type="checkbox" className="accent-fuchsia-500" checked={vpEnabled} onChange={(e) => setVpEnabled(e.target.checked)} />
+            {vpEnabled ? "Enabled" : "Off"}
+          </label>
+        </header>
+
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-amber-300" />
+            <span className="text-[11px] font-semibold text-white/85">One-Click Popunder</span>
+            <span className="text-[10px] text-white/40">click-gated</span>
+          </div>
           <textarea value={popunder} onChange={(e) => setPopunder(e.target.value)} rows={3}
-            className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
+            className={codeArea}
             placeholder='https://... or <script src="https://.../popunder.js"></script>' />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-white/80 block">Social Link / In-Page Push</label>
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <Radio className="w-3.5 h-3.5 text-fuchsia-300" />
+            <span className="text-[11px] font-semibold text-white/85">Social Bar / In-Page Push</span>
+          </div>
           <textarea value={socialLink} onChange={(e) => setSocialLink(e.target.value)} rows={3}
-            className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
-            placeholder='https://... social link or <script src="https://.../social-bar.js"></script>' />
-          <p className="text-[10px] text-white/50 max-w-full break-words">Adsterra push/social notifications come from the Social Bar / Social Link placement, so this replaces the old wrong standalone push box.</p>
+            className={codeArea}
+            placeholder='https://... or <script src="https://.../social-bar.js"></script>' />
+          <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-white/80 block">Popunder minimum gap (seconds)</label>
-          <input type="number" min={20} max={120} value={vpMinGapSec}
-            onChange={(e) => setVpMinGapSec(Number(e.target.value))}
-            className={inputClass + " w-full"} placeholder="25" />
-          <p className="text-[10px] text-white/50 max-w-full break-words">Between 20–120s. Popunder fires only if this much time has passed since the last one.</p>
+          <div className="flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5 text-sky-300" />
+            <span className="text-[11px] font-semibold text-white/85">Popunder minimum gap</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={20} max={120} value={vpMinGapSec}
+              onChange={(e) => setVpMinGapSec(Number(e.target.value))}
+              className={inputClass + " w-24"} />
+            <span className="text-[11px] text-white/50">seconds (20–120)</span>
+          </div>
         </div>
 
-        <button onClick={saveVideoPlayer} disabled={savingVp} className={btnPrimary + " w-full"}>
+        <button onClick={saveVideoPlayer} disabled={savingVp}
+          className={btnPrimary + " w-full inline-flex items-center justify-center gap-1.5"}>
+          <Save className="w-3.5 h-3.5" />
           {savingVp ? "Saving..." : "Save Video Player Ads"}
         </button>
-      </div>
+      </section>
 
       {/* Free Premium Ads */}
-      <div className={glassCard + " space-y-4"}>
-        <div>
-          <h3 className="text-base font-bold text-white">🎁 Free Premium Ads</h3>
-          <p className="text-[11px] text-white/60 mt-1 max-w-full break-words">All Free Premium ad links live here only. Popunder + Smartlink drive the 2-tap earn button; Social Bar is the push/social placement; 160x300 banner renders on the page.</p>
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0f1f2e]/70 to-black/40 p-4 space-y-4 min-w-0 overflow-hidden">
+        <header className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-400/25 flex items-center justify-center">🎁</span>
+            <h3 className="text-sm font-bold text-white truncate">Free Premium Ads</h3>
+          </div>
+          <p className="text-[11px] text-white/50 mt-1">Popunder + Smartlink drive the 2-tap flow. Social Bar = push. 160×300 renders on page.</p>
+        </header>
+
+        <div className="grid gap-3">
+          {FREE_PREMIUM_SLOTS.map((slot) => {
+            const cur = coinAds[slot.id] || ({ id: slot.id, name: slot.name, url: "", enabled: true, kind: slot.kind } as CoinAd);
+            const on = cur.enabled !== false;
+            return (
+              <div key={slot.id}
+                className={`rounded-xl border border-white/10 bg-gradient-to-br ${slot.accent} p-3 space-y-2 min-w-0 overflow-hidden`}>
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-6 h-6 rounded-md bg-black/40 border border-white/10 flex items-center justify-center shrink-0">
+                      {slot.icon}
+                    </span>
+                    <span className="text-[12px] font-semibold text-white truncate">{slot.name}</span>
+                  </div>
+                  <button
+                    onClick={() => updateSlot(slot.id, { enabled: !on })}
+                    className={`shrink-0 h-6 w-11 rounded-full relative transition-colors ${on ? "bg-emerald-500/70" : "bg-white/15"}`}
+                    aria-label="toggle"
+                  >
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+                  </button>
+                </div>
+                <textarea value={cur.url} onChange={(e) => updateSlot(slot.id, { url: e.target.value })} rows={2}
+                  className={codeArea}
+                  placeholder="https://... or <script src=...></script>" />
+                <p className="text-[10px] text-white/45 leading-relaxed">{slot.help}</p>
+              </div>
+            );
+          })}
         </div>
 
-        {FREE_PREMIUM_SLOTS.map((slot) => {
-          const cur = coinAds[slot.id] || ({ id: slot.id, name: slot.name, url: "", enabled: true, kind: slot.kind } as CoinAd);
-          return (
-            <div key={slot.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2 overflow-hidden">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/90 min-w-0 break-words">{slot.name}</span>
-                <label className="inline-flex items-center gap-1.5 text-[11px] text-white/70">
-                  <input type="checkbox" checked={cur.enabled !== false}
-                    onChange={(e) => updateSlot(slot.id, { enabled: e.target.checked })} />
-                  On
-                </label>
-              </div>
-              <textarea value={cur.url} onChange={(e) => updateSlot(slot.id, { url: e.target.value })} rows={2}
-                className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
-                placeholder="https://... or <script src=...></script>" />
-              <p className="text-[10px] text-white/50 max-w-full break-words leading-relaxed">{slot.help}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/85">
+              <Clock className="w-3.5 h-3.5 text-amber-300" /> Count timer
             </div>
-          );
-        })}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-white/80 block">Count timer (sec)</label>
             <input type="number" min={5} max={120} value={adWatchSeconds}
               onChange={(e) => setAdWatchSeconds(Number(e.target.value))} className={inputClass + " w-full"} />
-            <p className="text-[10px] text-white/50">Time user must stay on ad tab to earn 1 coin.</p>
+            <p className="text-[10px] text-white/45">Seconds to earn 1 coin.</p>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-white/80 block">Daily cap / device</label>
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/85">
+              <Shield className="w-3.5 h-3.5 text-emerald-300" /> Daily cap
+            </div>
             <input type="number" min={1} max={50} value={dailyAdCap}
               onChange={(e) => setDailyAdCap(Number(e.target.value))} className={inputClass + " w-full"} />
-            <p className="text-[10px] text-white/50">Max coins per device per day.</p>
+            <p className="text-[10px] text-white/45">Coins per device / day.</p>
           </div>
         </div>
 
-        <button onClick={saveFreePremium} disabled={savingFp} className={btnPrimary + " w-full"}>
+        <button onClick={saveFreePremium} disabled={savingFp}
+          className={btnPrimary + " w-full inline-flex items-center justify-center gap-1.5"}>
+          <Save className="w-3.5 h-3.5" />
           {savingFp ? "Saving..." : "Save Free Premium Ads"}
         </button>
-      </div>
+      </section>
     </div>
   );
 };
