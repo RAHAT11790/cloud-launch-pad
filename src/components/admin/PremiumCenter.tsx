@@ -81,10 +81,21 @@ export default function PremiumCenter() {
           episodesCount,
         };
       });
-    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "webseries"), ...mapRows(snap.val(), "webseries")]));
-    const uMovies = onValue(ref(db, "movies"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "movies"), ...mapRows(snap.val(), "movies")]));
+    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries((prev) => {
+      const rows = mapRows(snap.val(), "webseries");
+      if (!rows.length && prev.some((r) => r.path === "webseries")) return prev;
+      return [...prev.filter((r) => r.path !== "webseries"), ...rows];
+    }));
+    const uMovies = onValue(ref(db, "movies"), (snap) => setRsSeries((prev) => {
+      const rows = mapRows(snap.val(), "movies");
+      if (!rows.length && prev.some((r) => r.path === "movies")) return prev;
+      return [...prev.filter((r) => r.path !== "movies"), ...rows];
+    }));
     const u2 = onValue(ref(db, "animesaltSelected"), (snap) =>
-      setAnSeries(mapRows(snap.val(), "animesaltSelected")),
+      setAnSeries((prev) => {
+        const rows = mapRows(snap.val(), "animesaltSelected");
+        return !rows.length && prev.length ? prev : rows;
+      }),
     );
     return () => { u1(); uMovies(); u2(); };
   }, []);

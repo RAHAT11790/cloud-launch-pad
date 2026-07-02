@@ -254,6 +254,23 @@ const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | 
   return request;
 };
 
+const loadAnimeSaltPremiumMeta = async (anime: AnimeItem): Promise<Partial<AnimeItem> | null> => {
+  const slug = anime.anSlug || anime.animeSaltSlug || anime.slug || String(anime.id || "").replace(/^an_mv_|^an_|^as_mv_|^as_/, "");
+  if (!slug) return null;
+  try {
+    const snap = await get(ref(db, `animesaltSelected/${slug}`));
+    const row = snap.val();
+    if (!row) return null;
+    return {
+      premium: !!row.premium,
+      premiumEpisodes: row.premiumEpisodes || {},
+      dubType: row.dubType || anime.dubType,
+    } as Partial<AnimeItem>;
+  } catch {
+    return null;
+  }
+};
+
 const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400): Promise<AnimeItem | null> => {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
@@ -1022,6 +1039,16 @@ const Index = () => {
 
   const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
+    const sIdx = seasonIdx ?? 0;
+    const eIdx = epIdx ?? 0;
+    const lockMeta = anime?.source === "animesalt" || String(anime?.id || "").startsWith("an_") || String(anime?.id || "").startsWith("as_")
+      ? { ...(anime || {}), ...((anime ? await loadAnimeSaltPremiumMeta(anime) : null) || {}) }
+      : anime;
+    if (lockMeta && (isSeriesLocked(lockMeta as any) || isEpisodeLocked(lockMeta as any, sIdx, eIdx)) && !userIsPremium) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
+      return false;
+    }
+
     // Guest playback is allowed. Account-level unlock gating applies only to logged-in users.
     if (!isLoggedIn) return true;
 
@@ -1052,7 +1079,7 @@ const Index = () => {
       redirectToUnlockRequired(anime, seasonIdx, epIdx);
     }
     return false;
-  }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess, redirectToUnlockRequired]);
+  }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess, redirectToUnlockRequired, userIsPremium, navigate]);
 
   const [activePage, setActivePage] = useState<MainPage>(() => {
     // Priority: URL path → sessionStorage → "home". This makes /series, /movies,
@@ -2003,23 +2030,29 @@ const Index = () => {
       return;
     }
 
+    const isAnimeSaltContentEarly = anime.source === "animesalt"
+      || String(anime.id || "").startsWith("as_")
+      || String(anime.id || "").startsWith("an_")
+      || String(anime.id || "").startsWith("an_mv_")
+      || !!anime.anSlug
+      || !!anime.animeSaltSlug;
+
+    const latestPremiumMeta = isAnimeSaltContentEarly ? await loadAnimeSaltPremiumMeta(anime) : null;
+    if (latestPremiumMeta) anime = { ...anime, ...latestPremiumMeta };
+
+    const fallbackTarget = getDefaultWatchTarget(anime);
+    const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
+    const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
+
     // Premium gate — series-level or per-episode lock
     const seriesLike = anime as any;
-    const sIdx = seasonIdx ?? 0;
-    const eIdx = epIdx ?? 0;
+    const sIdx = resolvedSeasonIdx ?? 0;
+    const eIdx = resolvedEpIdx ?? 0;
     const locked = isSeriesLocked(seriesLike) || isEpisodeLocked(seriesLike, sIdx, eIdx);
     if (locked && !userIsPremium) {
       navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
       return;
     }
-
-
-  const isAnimeSaltContentEarly = anime.source === "animesalt"
-    || String(anime.id || "").startsWith("as_")
-    || String(anime.id || "").startsWith("an_")
-    || String(anime.id || "").startsWith("an_mv_")
-    || !!anime.anSlug
-    || !!anime.animeSaltSlug;
     if (!freeAccessLoaded && isLoggedIn && !isAnimeSaltContentEarly) {
       return;
     }
@@ -2037,10 +2070,6 @@ const Index = () => {
     if (!isAnimeSaltContentEarlyReload) {
       anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
     }
-
-    const fallbackTarget = getDefaultWatchTarget(anime);
-    const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
-    const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
 
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
@@ -2653,7 +2682,7 @@ const Index = () => {
     const season = playerState.anime.seasons[newSeasonIdx];
     if (!season?.episodes?.length) return;
     const ep = season.episodes[0];
-    const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
+      const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
     if (!hasAccess) return;
     let nextSrc = getEpisodeSrc(ep);
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
@@ -3370,7 +3399,14 @@ const Index = () => {
       {/* VideoPlayer is rendered via early-return above when playerState is active —
           this guarantees the home tree is fully unmounted while playing. */}
 
-      {/* Pre-player Loading Details overlay disabled — the compact top loader is enough. */}
+      <LoadingDetailsOverlay
+        open={loadingDetails.open}
+        title={loadingDetails.title}
+        poster={loadingDetails.poster}
+        progress={loadingDetails.progress}
+        step={loadingDetails.step}
+        completed={loadingDetails.completed}
+      />
 
       {/* Live Support Chat */}
       <LiveSupportChat

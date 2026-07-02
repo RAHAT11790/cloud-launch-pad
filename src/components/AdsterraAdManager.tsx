@@ -20,10 +20,9 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     setAdsterraPremium(!!isPremium);
     stopAdGuard();
     if (isPremium) return;
-    // First ad call is delayed 45s after the player opens — no ads at all
-    // during the first 45 seconds. After that adsterraAds.ts handles its
-    // own 45–60s cycle between Stream Link and Popunder.
-    const t = window.setTimeout(() => { loadAdsterraSlots(); }, 45_000);
+    // Show the first player ad quickly; adsterraAds.ts handles the normal
+    // refresh/cycle after this initial mount.
+    const t = window.setTimeout(() => { loadAdsterraSlots(); }, 2_000);
     return () => window.clearTimeout(t);
   }, [isPremium, videoEl]);
 

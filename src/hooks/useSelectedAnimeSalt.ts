@@ -37,6 +37,8 @@ type SavedItem = {
   cast?: { name: string; character?: string; photo?: string }[] | Record<string, { name: string; character?: string; photo?: string }>;
   category?: string;
   savedAt?: number;
+  premium?: boolean;
+  premiumEpisodes?: Record<string, boolean>;
 };
 
 const readCache = (): AnimeItem[] | null => {
@@ -91,6 +93,8 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
     animeSaltSlug: slug,
     slug,
     seasons: [],
+    premium: !!row?.premium,
+    premiumEpisodes: row?.premiumEpisodes || {},
     createdAt: Number(row?.savedAt || Date.now()),
     updatedAt: Number(row?.savedAt || Date.now()),
   } as AnimeItem;

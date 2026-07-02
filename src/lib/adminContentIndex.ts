@@ -62,6 +62,8 @@ export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminCon
   sourceName: String(item?.sourceName || ""),
   displayAs: String(item?.displayAs || ""),
   dubType: String(item?.dubType || "official"),
+  premium: !!item?.premium,
+  premiumEpisodes: item?.premiumEpisodes || {},
   seasonCount: kind === "webseries" ? countSeasons(item) : 0,
   episodeCount: kind === "webseries" ? countEpisodes(item) : 0,
   createdAt: Number(item?.createdAt || 0),

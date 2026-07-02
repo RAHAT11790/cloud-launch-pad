@@ -378,7 +378,13 @@ export default function AnManager({
       }
     } catch {}
     (async () => {
-      if (apiItems.length === 0) setLoading(true);
+      const hadCachedCards = (() => {
+        try {
+          const parsed = JSON.parse(localStorage.getItem("rs_an_manager_cards_v1") || "[]");
+          return Array.isArray(parsed) && parsed.length > 0;
+        } catch { return false; }
+      })();
+      if (!hadCachedCards) setLoading(true);
       await loadFromApi(false);
       setLoading(false);
     })();
