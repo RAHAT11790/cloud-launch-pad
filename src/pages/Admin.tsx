@@ -7675,11 +7675,11 @@ ${tgBulkFooter}
  <div className="flex gap-2">
  <button type="button" onClick={() => setTgDubType("official")}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- 𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛
+ {TG_DUB_TAGS.official}
  </button>
  <button type="button" onClick={() => setTgDubType("fandub")}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
- 𝐅𝐚𝐧𝐝𝐮𝐛
+ {TG_DUB_TAGS.fandub}
  </button>
  </div>
  </div>
@@ -7707,20 +7707,20 @@ ${tgBulkFooter}
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Hashtags</label>
- <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { set(ref(db, "admin/tgHashtags"), tgHashtags); } catch {} }} className={inputClass} placeholder="#anime #official" />
+ <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { const clean = normalizeTelegramBaseHashtags(tgHashtags); setTgHashtags(clean); set(ref(db, "admin/tgHashtags",), clean); } catch {} }} className={inputClass} placeholder={DEFAULT_TG_HASHTAGS} />
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Poster URL (optional)</label>
  <input value={tgPosterUrl} onChange={e => setTgPosterUrl(e.target.value)} className={inputClass} placeholder="https://image.tmdb.org/..." />
  </div>
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">download/চ link (optional)</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Watch / Download link (optional)</label>
  <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={SITE_URL} />
  </div>
  {tgButtonLink && (
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">default button name</label>
- <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" />
+ <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} onBlur={() => setTgDefaultButtonName(normalizeTelegramButtonText(tgDefaultButtonName))} className={inputClass} placeholder={DEFAULT_TG_BUTTON_TEXT} />
  </div>
  )}
  {/* Extra buttons */}
@@ -7735,7 +7735,7 @@ ${tgBulkFooter}
  {tgButtons.map((btn, i) => (
  <div key={i} className="flex gap-2 mb-2 items-start">
  <div className="flex-1 space-y-1.5">
- <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }}
+ <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }} onBlur={() => { const nb = [...tgButtons]; nb[i].name = normalizeTelegramButtonText(nb[i].name); setTgButtons(nb); }}
  className={inputClass} placeholder="button name" />
  <input value={btn.url} onChange={e => { const nb = [...tgButtons]; nb[i].url = e.target.value; setTgButtons(nb); }}
  className={inputClass} placeholder="https://..." />
@@ -7813,21 +7813,21 @@ ${tgBulkFooter}
 ┌──────────────────
 │ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
 │ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
-│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥"}
+│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
 │ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
 │ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
 │ ✦ Sᴛᴀᴛᴜs : ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${TG_DIVIDER}
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
+${TG_DIVIDER}`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}`}
+{`\n${TG_DIVIDER}\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${getTelegramDubTag(tgDubType)}`}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
- {tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥"}
+ {normalizeTelegramButtonText(tgDefaultButtonName)}
  </div>
  )}
  {tgButtons.filter(b => b.name.trim()).map((btn, i) => (
