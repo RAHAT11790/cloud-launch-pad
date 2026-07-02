@@ -322,7 +322,7 @@ export default function FreePremium() {
                 ) : (
                   <>
                     <Play className="w-4 h-4 fill-black" />
-                    <span>{firstTapDone ? `Watch & Earn +1 Coin` : `Tap to Preview`}</span>
+                    <span>{firstTapDone ? `Watch Ad & Earn +1 Coin` : `Open Sponsor · Step 1 of 2`}</span>
                   </>
                 )}
               </div>
