@@ -84,12 +84,11 @@ export default function FreePremium() {
   const popunderAd = ads.find((a) => a.id === "adsterra_popunder" && a.enabled !== false);
   const smartlinkAd = ads.find((a) => a.id === "adsterra_smartlink" && a.enabled !== false);
   const bannerAd = ads.find((a) => a.id === "adsterra_banner_160" && a.enabled !== false && a.url);
-  const backgroundAds = ads.filter(
-    (a) =>
-      a.enabled !== false &&
-      a.url &&
-      ["adsterra_social_bar", "adsterra_native_banner"].includes(a.id),
-  );
+  const nativeBannerAd = ads.find((a) => a.id === "adsterra_native_banner" && a.enabled !== false && a.url);
+  const socialBarAd = ads.find((a) => a.id === "adsterra_social_bar" && a.enabled !== false && a.url);
+  // Social Bar is the only true background/push SDK. Native + 160x300 banners
+  // each render inside their OWN dedicated container below.
+  const backgroundAds = socialBarAd ? [socialBarAd] : [];
 
   // Inject background SDKs (once per ad-list change)
   useEffect(() => {
