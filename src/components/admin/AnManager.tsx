@@ -446,8 +446,8 @@ export default function AnManager({
 
   // Save one (with TMDB auto-pick if exactly 1 result; otherwise opens picker)
   const saveOne = async (item: ApiItem, opts: { skipPicker?: boolean } = {}) => {
-    const playable = await verifyAnPlayable(item, true);
-    if (!playable) throw new Error("AN playback/audio/video unavailable — skipped");
+    // No playability probe here — admin only stores the card. Real HLS URLs are
+    // resolved by the user panel on click via the AN playback API.
     if (!getTmdbApiKey()) throw new Error("TMDB API key required — AN details fallback is disabled");
     const cleaned = cleanTitleForTmdb(item.title);
     const isSeries = item.type === "series";
