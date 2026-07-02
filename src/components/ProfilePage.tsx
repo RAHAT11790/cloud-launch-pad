@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Bell, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
 import { motion, AnimatePresence } from "framer-motion";
