@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
+import { transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -194,6 +195,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           }, gEmail);
         } catch (e) {}
 
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(gName, uid);
@@ -247,7 +249,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         }, gEmail);
       } catch (e) {}
 
-      localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
+      try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       writeDisplayName(gName, uid);
       if (gPhoto) writeProfilePhoto(gPhoto, uid);
@@ -487,6 +490,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           lastSeen: Date.now(),
           authProvider: "email",
         }, formEmail);
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== userId) { const r = await transferGuestCoinsToUser(prev.id, userId); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: formName, email: formEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(formName, userId);
@@ -513,6 +517,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         }
         const displayName = finalUserData.name || input;
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(displayName, uid);
