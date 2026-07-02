@@ -702,6 +702,7 @@ function QualityTab({ settings }: { settings: PremiumGlobalSettings }) {
 }
 
 function DownloadTab({ settings }: { settings: PremiumGlobalSettings }) {
+  const on = !!settings.globalDownloadLock;
   return (
     <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-rose-500/5 to-transparent p-6">
       <div className="flex items-start gap-4">
@@ -710,23 +711,120 @@ function DownloadTab({ settings }: { settings: PremiumGlobalSettings }) {
         </div>
         <div className="flex-1">
           <div className="text-lg font-bold">Premium-only Downloads</div>
-          <div className="text-sm text-zinc-400 mt-1">When enabled, only premium users can download videos for offline viewing.</div>
-        </div>
-        <label className="cursor-pointer">
-          <input
-            type="checkbox"
-            className="sr-only peer"
-            checked={settings.globalDownloadLock}
-            onChange={(e) => savePremiumSettings({ globalDownloadLock: e.target.checked })}
-          />
-          <div className="w-14 h-7 bg-white/10 peer-checked:bg-gradient-to-r peer-checked:from-amber-400 peer-checked:to-yellow-600 rounded-full transition relative">
-            <div className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full peer-checked:translate-x-7 transition-transform shadow-lg" />
+          <div className="text-sm text-zinc-400 mt-1">When enabled, only premium users see the download button in the player.</div>
+          <div className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full border ${on ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-300" : "bg-white/5 border-white/10 text-zinc-400"}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${on ? "bg-emerald-400 animate-pulse" : "bg-zinc-500"}`} /> {on ? "LOCKED · Premium only" : "OPEN · Everyone"}
           </div>
-        </label>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          onClick={() => savePremiumSettings({ globalDownloadLock: !on })}
+          className={`relative w-14 h-7 rounded-full transition-colors duration-300 ease-out shrink-0 ${on ? "bg-gradient-to-r from-amber-400 to-yellow-600" : "bg-white/10"}`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-lg transition-transform duration-300 ease-out ${on ? "translate-x-7" : "translate-x-0"}`}
+          />
+        </button>
       </div>
     </div>
   );
 }
+
+function EpisodeLockTab({
+  rsSeries,
+  onOpen,
+  onToggleSeries,
+}: {
+  rsSeries: SeriesRow[];
+  onOpen: (row: SeriesRow) => void;
+  onToggleSeries: (row: SeriesRow) => void;
+}) {
+  const [q, setQ] = useState("");
+  const list = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return rsSeries
+      .filter((r) => (term ? r.title.toLowerCase().includes(term) : true))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [rsSeries, q]);
+
+  const totalLocked = rsSeries.reduce(
+    (n, r) => n + Object.values(r.premiumEpisodes || {}).filter(Boolean).length,
+    0,
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-purple-400/30 bg-gradient-to-br from-purple-500/10 via-fuchsia-500/5 to-transparent p-5">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-400 to-fuchsia-600 flex items-center justify-center">
+            <Lock className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <div className="text-base font-black">RS Episode Lock</div>
+            <div className="text-xs text-zinc-400">Pick an RS series → lock full anime, or individual episodes one-by-one. AN uses full-series lock only.</div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-black text-purple-300 tabular-nums">{totalLocked}</div>
+            <div className="text-[10px] text-zinc-500">episodes locked</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+        <input
+          className={`${inputCls} pl-10`}
+          placeholder={`Search ${rsSeries.length} RS series...`}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+
+      {rsSeries.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-black/20 py-14 text-center text-zinc-500 text-sm">
+          RS series list is loading in the background. Cached data will appear here on next open.
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-black/20 divide-y divide-white/5 max-h-none">
+          {list.slice(0, 400).map((row) => {
+            const lockedEps = Object.values(row.premiumEpisodes || {}).filter(Boolean).length;
+            return (
+              <div key={`${row.path}-${row.id}`} className="flex items-center gap-3 p-3 hover:bg-white/[0.02]">
+                <div className="w-10 h-14 rounded-md overflow-hidden bg-zinc-900 shrink-0">
+                  {row.poster ? <img src={row.poster} className="w-full h-full object-cover" loading="lazy" /> : null}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate">{row.title}</div>
+                  <div className="text-[10px] text-zinc-500">
+                    RS • {row.seasonsCount || 0}S • {row.episodesCount || 0}E {lockedEps > 0 && <span className="text-purple-300 font-bold">· {lockedEps} locked</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onToggleSeries(row)}
+                  className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg ${row.premium ? "bg-gradient-to-r from-amber-400 to-yellow-600 text-black" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}
+                >
+                  {row.premium ? "Full Locked" : "Lock Full"}
+                </button>
+                <button
+                  onClick={() => onOpen(row)}
+                  className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-purple-500/20 text-purple-200 hover:bg-purple-500/30 inline-flex items-center gap-1"
+                >
+                  <Lock className="w-3 h-3" /> Episodes
+                </button>
+              </div>
+            );
+          })}
+          {list.length === 0 && (
+            <div className="py-10 text-center text-zinc-500 text-sm">No RS series match "{q}".</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function PlansEditor({ settings }: { settings: PremiumGlobalSettings }) {
   const [defPlan, setDefPlan] = useState<CoinPlan>(settings.coinPlan);
