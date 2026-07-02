@@ -3027,7 +3027,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
-  "premium-center": "Premium Center",
+  
   };
 
 
@@ -4971,7 +4971,7 @@ ${tgBulkFooter}
  { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
  { section: "settings", icon: <Settings size={16} />, label: "Settings" },
   { section: "security-center", icon: <Shield size={16} />, label: "Security & Access", group: "Security" },
-  { section: "premium-center", icon: <Crown size={16} />, label: "Premium Center", group: "Premium" },
+  
   ];
 
 

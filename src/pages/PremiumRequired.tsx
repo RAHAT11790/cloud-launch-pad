@@ -58,14 +58,6 @@ export default function PremiumRequired() {
               <Crown className="w-5 h-5" /> Buy Premium
             </Button>
 
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate("/free-premium")}
-              className="h-14 border-amber-400/30 hover:bg-amber-500/10 text-foreground font-semibold text-base"
-            >
-              <Coins className="w-5 h-5 text-amber-400" /> Get Free Premium (Earn Coins)
-            </Button>
           </div>
 
           <div className="mt-10 grid grid-cols-3 gap-3 w-full max-w-md text-left">

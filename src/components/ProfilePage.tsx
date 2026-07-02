@@ -1721,36 +1721,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         </p>
       </div>
 
-      {/* Compact coin card */}
-      {!isPremium && (
-        <div className="mb-4">
-          <div
-            onClick={() => navigate("/free-premium")}
-            className="relative overflow-hidden rounded-xl p-2.5 cursor-pointer active:scale-[0.99] transition-transform border border-amber-400/20 bg-gradient-to-r from-amber-500/12 via-orange-500/6 to-transparent"
-          >
-            <div className="relative flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0">
-                  <Coins className="w-4 h-4 text-black" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-amber-300">Coins</p>
-                  <p className="text-[10px] text-muted-foreground truncate">Guest users can earn too</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xl font-black text-amber-300 tabular-nums leading-none">{coinWallet?.coins ?? 0}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); navigate("/free-premium"); }}
-                  className="h-7 px-2.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-[11px] hover:brightness-110 active:scale-95 transition"
-              >
-                Earn +
-              </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
 
       {/* Watch History */}
@@ -1940,21 +1910,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <p className={`text-[10px] ${isPremiumExpiringSoon ? "text-destructive" : "text-muted-foreground"}`}>Expires: {new Date(premiumExpiry).toLocaleDateString()} • {premiumDeviceCount}/{premiumMaxDevices} devices • {premiumDaysLeft} day{premiumDaysLeft === 1 ? "" : "s"} left</p>
             )}
             {!isPremium && <p className="text-[10px] text-muted-foreground">Buy premium with bKash</p>}
-          </div>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
-        <div
-          onClick={() => { onClose(); navigate("/free-premium"); }}
-          className="flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/8 to-transparent hover:border-amber-400/60"
-        >
-          <Gift className="w-5 h-5" style={{ color: "hsl(45,90%,55%)" }} />
-          <div className="flex-1">
-            <span className="text-[13px] font-semibold text-amber-300">Get Free Premium 🎁</span>
-            <p className="text-[10px] text-muted-foreground">Watch ads, earn coins, unlock premium</p>
-          </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-400/30 mr-1">
-            <Coins className="w-3 h-3 text-amber-300" />
-            <span className="text-[11px] font-bold text-amber-200 tabular-nums">{coinWallet?.coins ?? 0}</span>
           </div>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
