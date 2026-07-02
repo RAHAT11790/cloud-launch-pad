@@ -1704,18 +1704,21 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [activePage, filteredSeries.length, filteredMovies.length, tabGridVisibleCount]);
 
+  // Group series ONLY by the admin-defined categories (from Admin Panel).
+  // Preserve admin order and skip any content-metadata-derived categories.
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
+    const adminCats = (categories || [])
+      .map((c) => String(c || "").trim())
+      .filter(Boolean);
+    adminCats.forEach((cat) => { groups[cat] = []; });
     filteredSeries.forEach((a) => {
-      const labels = splitCategoryLabels(a.category);
-      const targetLabels = labels.length ? labels : [a.category || "Anime"];
-      targetLabels.forEach((label) => {
-        if (!groups[label]) groups[label] = [];
-        groups[label].push(a);
+      adminCats.forEach((cat) => {
+        if (categoryMatches(a, cat)) groups[cat].push(a);
       });
     });
     return groups;
-  }, [filteredSeries]);
+  }, [filteredSeries, categories]);
 
   // Hero slides: randomized mix from all anime with backdrop
   const [heroRotation, setHeroRotation] = useState(0);
