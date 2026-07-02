@@ -72,6 +72,7 @@ const App = () => (
           <Route path="/unlock-required" element={<UnlockRequired />} />
           <Route path="/premium-required" element={<PremiumRequired />} />
           <Route path="/premium-buy" element={<PremiumBuyPage />} />
+          <Route path="/daily-tasks" element={<DailyTasksPage />} />
           
 
           {/* Main tab routes — all render Index, which syncs activePage from pathname */}
