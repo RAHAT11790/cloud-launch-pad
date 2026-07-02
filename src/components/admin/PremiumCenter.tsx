@@ -309,6 +309,13 @@ export default function PremiumCenter() {
         </div>
       )}
 
+      {tab === "eplocks" && (
+        <EpisodeLockTab
+          rsSeries={rsSeries}
+          onOpen={(row) => setEpisodeModal(row)}
+          onToggleSeries={(row) => togglePremium(row)}
+        />
+      )}
       {tab === "quality" && <QualityTab settings={settings} />}
       {tab === "download" && <DownloadTab settings={settings} />}
       {tab === "plans" && <PlansEditor settings={settings} />}
