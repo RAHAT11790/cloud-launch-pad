@@ -426,14 +426,12 @@ function SeriesCard({ row, onTogglePremium, onSetDub, onOpenEpisodes }: any) {
             Fan Dub
           </button>
         </div>
-        {(row.seasonsCount || row.path === "animesaltSelected") ? (
-          <button
-            onClick={onOpenEpisodes}
-            className="w-full inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-white/5"
-          >
-            Episode Locks <ChevronRight className="w-3 h-3" />
-          </button>
-        ) : null}
+        <button
+          onClick={onOpenEpisodes}
+          className="w-full inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1 text-[10px] text-zinc-400 hover:text-amber-300 hover:bg-white/5"
+        >
+          Episode Locks <ChevronRight className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );
