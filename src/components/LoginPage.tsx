@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
-import { transferGuestCoinsToUser } from "@/lib/premiumAccess";
+import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -978,7 +978,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 {/* Continue as Guest */}
                 <motion.button
                   type="button"
-                  onClick={() => onGuest?.()}
+                  onClick={() => { ensureGuestUser(); onGuest?.(); }}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full mt-3 py-3 rounded-xl bg-transparent border border-dashed border-foreground/20 text-foreground/80 font-medium text-sm flex items-center justify-center gap-2 hover:bg-foreground/5 hover:text-foreground transition-all relative z-10"

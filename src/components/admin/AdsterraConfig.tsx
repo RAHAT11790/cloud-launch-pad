@@ -13,10 +13,10 @@ interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 
 // Fixed slot definitions for Free Premium background SDKs
 const FREE_PREMIUM_SLOTS: { id: string; name: string; kind: CoinAd["kind"]; help: string }[] = [
-  { id: "adsterra_popunder", name: "One Click Popunder", kind: "sdk", help: "SDK script or direct URL — used for the main earn-coin click." },
-  { id: "adsterra_push_notification", name: "Push Notification", kind: "sdk", help: "Push notification SDK — auto-registers on page." },
-  { id: "adsterra_social_bar", name: "Social Bar", kind: "sdk", help: "Social bar SDK — floats at bottom." },
-  { id: "adsterra_native_banner", name: "Native Banner", kind: "sdk", help: "Native banner invoke.js SDK." },
+  { id: "adsterra_popunder", name: "One Click Popunder", kind: "sdk", help: "Counted earn-coin click. Paste the one-click/popunder script or direct URL." },
+  { id: "adsterra_social_bar", name: "Social Bar / In-Page Push", kind: "sdk", help: "This is the push/social placement. Paste the Social Bar script here — no separate push box." },
+  { id: "adsterra_banner_160", name: "160x300 Banner", kind: "sdk", help: "Paste the 160x300 banner code/snippet. It renders on the Free Premium page." },
+  { id: "adsterra_native_banner", name: "Native Banner", kind: "sdk", help: "Native banner invoke.js SDK/snippet." },
   { id: "adsterra_smartlink", name: "Smartlink (Stream Link)", kind: "smartlink", help: "Direct smartlink URL — used for the first-tap 'not counted' preview." },
 ];
 
@@ -24,7 +24,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   // ---- Video Player Ads (settings/adsterra) ----
   const [vpEnabled, setVpEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
-  const [pushNotification, setPushNotification] = useState("");
+  const [socialLink, setSocialLink] = useState("");
   const [vpMinGapSec, setVpMinGapSec] = useState<number>(25);
   const [savingVp, setSavingVp] = useState(false);
 
@@ -39,7 +39,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       const v = snap.val() || {};
       setVpEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
-      setPushNotification(v.pushNotification || "");
+      setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
       const n = Number(v.minGapSec);
       setVpMinGapSec(Number.isFinite(n) && n >= 20 ? Math.min(n, 120) : 25);
     });
@@ -65,9 +65,10 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       await set(ref(db, "settings/adsterra"), {
         enabled: vpEnabled,
         popunder: popunder.trim(),
-        pushNotification: pushNotification.trim(),
-        streamLink: "", // removed
-        socialBar: null,
+        streamLink: socialLink.trim(),
+        socialLink: socialLink.trim(),
+        pushNotification: "", // Adsterra push is handled by Social Bar/In-Page Push.
+        socialBar: socialLink.trim(),
         minGapSec: Math.max(20, Math.min(120, Number(vpMinGapSec) || 25)),
       });
       toast.success("Video Player ads saved");
@@ -108,7 +109,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h3 className="text-base font-bold text-white">🎬 Video Player Ads</h3>
-            <p className="text-[11px] text-white/60 mt-1">Only 2 ad types run inside the video player. Fires only on user click/skip — never auto-open.</p>
+            <p className="text-[11px] text-white/60 mt-1 max-w-full break-words">Only user-click gated ads run inside the video player — Popunder and Social Link/In-Page Push.</p>
           </div>
           <label className="inline-flex items-center gap-2 text-xs text-white/80 flex-shrink-0">
             <input type="checkbox" checked={vpEnabled} onChange={(e) => setVpEnabled(e.target.checked)} />
@@ -119,16 +120,16 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-white/80 block">One Click Popunder <span className="text-white/40">(user-click gated)</span></label>
           <textarea value={popunder} onChange={(e) => setPopunder(e.target.value)} rows={3}
-            className={inputClass + " w-full font-mono text-[11px] break-all"}
+            className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
             placeholder='https://... or <script src="https://.../popunder.js"></script>' />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-white/80 block">Push Notification SDK</label>
-          <textarea value={pushNotification} onChange={(e) => setPushNotification(e.target.value)} rows={3}
-            className={inputClass + " w-full font-mono text-[11px] break-all"}
-            placeholder='<script src="https://.../push.js"></script>' />
-          <p className="text-[10px] text-white/50">Loads once when the player opens. Handles its own push registration.</p>
+          <label className="text-xs font-semibold text-white/80 block">Social Link / In-Page Push</label>
+          <textarea value={socialLink} onChange={(e) => setSocialLink(e.target.value)} rows={3}
+            className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
+            placeholder='https://... social link or <script src="https://.../social-bar.js"></script>' />
+          <p className="text-[10px] text-white/50 max-w-full break-words">Adsterra push/social notifications come from the Social Bar / Social Link placement, so this replaces the old wrong standalone push box.</p>
         </div>
 
         <div className="space-y-1.5">
@@ -136,7 +137,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           <input type="number" min={20} max={120} value={vpMinGapSec}
             onChange={(e) => setVpMinGapSec(Number(e.target.value))}
             className={inputClass + " w-full"} placeholder="25" />
-          <p className="text-[10px] text-white/50">Between 20–120s. Popunder fires only if this much time has passed since the last one.</p>
+          <p className="text-[10px] text-white/50 max-w-full break-words">Between 20–120s. Popunder fires only if this much time has passed since the last one.</p>
         </div>
 
         <button onClick={saveVideoPlayer} disabled={savingVp} className={btnPrimary + " w-full"}>
@@ -148,15 +149,15 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       <div className={glassCard + " space-y-4"}>
         <div>
           <h3 className="text-base font-bold text-white">🎁 Free Premium Ads</h3>
-          <p className="text-[11px] text-white/60 mt-1">SDK slots used on the Free Premium page. Popunder + Smartlink drive the 2-tap earn-coin button. Others run in the background.</p>
+          <p className="text-[11px] text-white/60 mt-1 max-w-full break-words">All Free Premium ad links live here only. Popunder + Smartlink drive the 2-tap earn button; Social Bar is the push/social placement; 160x300 banner renders on the page.</p>
         </div>
 
         {FREE_PREMIUM_SLOTS.map((slot) => {
           const cur = coinAds[slot.id] || ({ id: slot.id, name: slot.name, url: "", enabled: true, kind: slot.kind } as CoinAd);
           return (
-            <div key={slot.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+            <div key={slot.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2 overflow-hidden">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-white/90">{slot.name}</span>
+                <span className="text-xs font-semibold text-white/90 min-w-0 break-words">{slot.name}</span>
                 <label className="inline-flex items-center gap-1.5 text-[11px] text-white/70">
                   <input type="checkbox" checked={cur.enabled !== false}
                     onChange={(e) => updateSlot(slot.id, { enabled: e.target.checked })} />
@@ -164,14 +165,14 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
                 </label>
               </div>
               <textarea value={cur.url} onChange={(e) => updateSlot(slot.id, { url: e.target.value })} rows={2}
-                className={inputClass + " w-full font-mono text-[11px] break-all"}
+                className={inputClass + " w-full max-w-full font-mono text-[11px] break-all whitespace-pre-wrap overflow-x-auto"}
                 placeholder="https://... or <script src=...></script>" />
-              <p className="text-[10px] text-white/50">{slot.help}</p>
+              <p className="text-[10px] text-white/50 max-w-full break-words leading-relaxed">{slot.help}</p>
             </div>
           );
         })}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-white/80 block">Count timer (sec)</label>
             <input type="number" min={5} max={120} value={adWatchSeconds}

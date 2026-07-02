@@ -7,6 +7,7 @@ import {
   PremiumGlobalSettings,
   PremiumStatus,
   subscribePremiumSettings,
+  ensureGuestUser,
 } from "@/lib/premiumAccess";
 
 export interface CoinWallet {
@@ -17,18 +18,20 @@ export interface CoinWallet {
 const EMPTY_WALLET: CoinWallet = { coins: 0, adWatchLog: {} };
 
 export function usePremium() {
-  const [uid, setUid] = useState<string | null>(() => getLocalUserId());
+  const [uid, setUid] = useState<string | null>(() => ensureGuestUser());
   const [status, setStatus] = useState<PremiumStatus | null>(null);
   const [wallet, setWallet] = useState<CoinWallet>(EMPTY_WALLET);
   const [settings, setSettings] = useState<PremiumGlobalSettings>(DEFAULT_PREMIUM_SETTINGS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const check = () => setUid(getLocalUserId());
+    const check = () => setUid(getLocalUserId() || ensureGuestUser());
     window.addEventListener("storage", check);
+    window.addEventListener("rs_auth_changed", check);
     const iv = window.setInterval(check, 2500);
     return () => {
       window.removeEventListener("storage", check);
+      window.removeEventListener("rs_auth_changed", check);
       window.clearInterval(iv);
     };
   }, []);

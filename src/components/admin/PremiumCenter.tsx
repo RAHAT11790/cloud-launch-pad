@@ -9,19 +9,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import {
   DEFAULT_PREMIUM_SETTINGS,
-  DEFAULT_COIN_ADS,
   PremiumGlobalSettings,
   savePremiumSettings,
   subscribePremiumSettings,
-  subscribeCoinAds,
-  saveCoinAd,
-  deleteCoinAd,
-  CoinAd,
   CoinPlan,
 } from "@/lib/premiumAccess";
 import { resolveAnSeriesSeasons } from "@/lib/anLivePlayback";
 
-type Tab = "overview" | "series" | "quality" | "download" | "plans" | "ads";
+type Tab = "overview" | "series" | "quality" | "download" | "plans";
 
 interface SeriesRow {
   id: string;
@@ -42,7 +37,6 @@ const inputCls =
 export default function PremiumCenter() {
   const [tab, setTab] = useState<Tab>("overview");
   const [settings, setSettings] = useState<PremiumGlobalSettings>(DEFAULT_PREMIUM_SETTINGS);
-  const [ads, setAds] = useState<CoinAd[]>([]);
   const [rsSeries, setRsSeries] = useState<SeriesRow[]>([]);
   const [anSeries, setAnSeries] = useState<SeriesRow[]>([]);
   const [q, setQ] = useState("");
@@ -55,7 +49,6 @@ export default function PremiumCenter() {
   const [coinCirculation, setCoinCirculation] = useState(0);
 
   useEffect(() => subscribePremiumSettings(setSettings), []);
-  useEffect(() => subscribeCoinAds(setAds), []);
 
   useEffect(() => {
     const normalizeDub = (value: any): "official" | "fandub" => /fan|fandub/i.test(String(value || "")) ? "fandub" : "official";
@@ -147,7 +140,6 @@ export default function PremiumCenter() {
     { id: "quality", label: "Quality", icon: Star },
     { id: "download", label: "Downloads", icon: Download },
     { id: "plans", label: "Coin Plans", icon: Crown },
-    { id: "ads", label: "Ad Sources", icon: Coins },
   ];
 
   return (
@@ -173,7 +165,7 @@ export default function PremiumCenter() {
               </span>
             </div>
             <p className="text-sm text-zinc-400 mt-1">
-              Monetization command center — content locks, coin economy, ad sources and premium plans.
+              Monetization command center — content locks, coin economy and premium plans.
             </p>
           </div>
         </div>
@@ -207,7 +199,7 @@ export default function PremiumCenter() {
         })}
       </div>
 
-      {tab === "overview" && <OverviewTab stats={stats} settings={settings} ads={ads} premiumUsers={premiumUsers} coinCirculation={coinCirculation} onNav={setTab} />}
+      {tab === "overview" && <OverviewTab stats={stats} settings={settings} premiumUsers={premiumUsers} coinCirculation={coinCirculation} onNav={setTab} />}
 
       {tab === "series" && (
         <div className="space-y-4">
@@ -305,7 +297,6 @@ export default function PremiumCenter() {
       {tab === "quality" && <QualityTab settings={settings} />}
       {tab === "download" && <DownloadTab settings={settings} />}
       {tab === "plans" && <PlansEditor settings={settings} />}
-      {tab === "ads" && <CoinAdsEditor ads={ads} />}
 
       {episodeModal && (
         <EpisodeLockModal
@@ -601,7 +592,7 @@ function EpisodeLockModal({ row, onClose }: { row: SeriesRow; onClose: () => voi
   );
 }
 
-function OverviewTab({ stats, settings, ads, premiumUsers, coinCirculation, onNav }: any) {
+function OverviewTab({ stats, settings, premiumUsers, coinCirculation, onNav }: any) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-amber-500/5 to-transparent p-5">
@@ -613,10 +604,9 @@ function OverviewTab({ stats, settings, ads, premiumUsers, coinCirculation, onNa
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/5 to-transparent p-5">
         <div className="flex items-center gap-2 text-emerald-300 font-bold mb-3"><ShieldCheck className="w-4 h-4" /> Health Check</div>
         <ul className="text-sm space-y-2">
-          <li className="flex justify-between"><span className="text-zinc-400">Ad sources</span> <span className="font-bold">{ads.filter((a: CoinAd) => a.enabled !== false).length}/5</span></li>
           <li className="flex justify-between"><span className="text-zinc-400">Quality locks</span> <span className="font-bold">{stats.qualityLocks}/4</span></li>
           <li className="flex justify-between"><span className="text-zinc-400">Download lock</span> <span className="font-bold">{settings.globalDownloadLock ? "ON" : "OFF"}</span></li>
-          <li className="flex justify-between"><span className="text-zinc-400">Ad cap / day</span> <span className="font-bold">{settings.dailyAdCap} coins</span></li>
+          <li className="flex justify-between"><span className="text-zinc-400">Coin plans</span> <span className="font-bold">{(settings.extraPlans || []).length + 1}</span></li>
         </ul>
       </div>
       <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/20 p-5">
@@ -626,7 +616,7 @@ function OverviewTab({ stats, settings, ads, premiumUsers, coinCirculation, onNa
             { l: "Lock Content", i: Lock, t: "series" },
             { l: "Quality Locks", i: Star, t: "quality" },
             { l: "Coin Plans", i: Crown, t: "plans" },
-            { l: "Ad Sources", i: Coins, t: "ads" },
+            { l: "Download Lock", i: Download, t: "download" },
           ].map((q) => (
             <button key={q.t} onClick={() => onNav(q.t)} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 hover:border-amber-400/30 hover:bg-amber-500/5 transition text-left">
               <q.i className="w-4 h-4 text-amber-300 mb-2" />
@@ -712,20 +702,14 @@ function DownloadTab({ settings }: { settings: PremiumGlobalSettings }) {
 function PlansEditor({ settings }: { settings: PremiumGlobalSettings }) {
   const [defPlan, setDefPlan] = useState<CoinPlan>(settings.coinPlan);
   const [extras, setExtras] = useState<CoinPlan[]>(settings.extraPlans || []);
-  const [dailyCap, setDailyCap] = useState(settings.dailyAdCap);
-  const [watchSecs, setWatchSecs] = useState(settings.adWatchSeconds);
 
   useEffect(() => setDefPlan(settings.coinPlan), [settings.coinPlan]);
   useEffect(() => setExtras(settings.extraPlans || []), [settings.extraPlans]);
-  useEffect(() => setDailyCap(settings.dailyAdCap), [settings.dailyAdCap]);
-  useEffect(() => setWatchSecs(settings.adWatchSeconds), [settings.adWatchSeconds]);
 
   const save = async () => {
     await savePremiumSettings({
       coinPlan: { ...defPlan, id: "default", featured: true },
       extraPlans: extras,
-      dailyAdCap: Math.max(1, dailyCap),
-      adWatchSeconds: Math.max(5, watchSecs),
     });
     toast({ title: "Plans saved" });
   };
@@ -764,54 +748,7 @@ function PlansEditor({ settings }: { settings: PremiumGlobalSettings }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-5 grid sm:grid-cols-2 gap-3">
-        <label className="text-xs">Daily ad cap (coins/user/day)
-          <input className={`${inputCls} mt-1`} type="number" value={dailyCap} onChange={(e) => setDailyCap(Number(e.target.value))} />
-        </label>
-        <label className="text-xs">Required ad-watch seconds
-          <input className={`${inputCls} mt-1`} type="number" value={watchSecs} onChange={(e) => setWatchSecs(Number(e.target.value))} />
-        </label>
-      </div>
-
       <Button onClick={save} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-bold hover:brightness-110"><Save className="w-4 h-4" /> Save All Plans</Button>
-    </div>
-  );
-}
-
-function CoinAdsEditor({ ads }: { ads: CoinAd[] }) {
-  const [items, setItems] = useState<CoinAd[]>(ads);
-  useEffect(() => setItems(ads), [ads]);
-
-  const add = () => setItems([...items, { id: `ad_${Date.now()}`, name: `Ad ${items.length + 1}`, url: "", enabled: true }]);
-  const saveAll = async () => { for (const it of items) await saveCoinAd(it); toast({ title: "Ads saved" }); };
-  const remove = async (id: string) => { await deleteCoinAd(id); setItems(items.filter((i) => i.id !== id)); };
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-5">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <div className="text-sm font-bold">Adsterra Direct-Link Ads</div>
-            <div className="text-[11px] text-zinc-500">Rotating pool — max 5 sources. Each watch = 1 coin.</div>
-          </div>
-          <Button size="sm" onClick={add} disabled={items.length >= 5} className="bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/30"><Plus className="w-3.5 h-3.5" /> Add Ad</Button>
-        </div>
-        <div className="space-y-2">
-          {items.map((ad, i) => (
-            <div key={ad.id} className="grid grid-cols-[140px_1fr_60px_auto] gap-2 items-center bg-white/[0.02] rounded-xl p-2 border border-white/5">
-              <input className={inputCls} value={ad.name} onChange={(e) => { const c = [...items]; c[i] = { ...ad, name: e.target.value }; setItems(c); }} placeholder="Name" />
-              <input className={inputCls} value={ad.url} onChange={(e) => { const c = [...items]; c[i] = { ...ad, url: e.target.value }; setItems(c); }} placeholder="https://adsterra-direct-link..." />
-              <label className="text-[10px] flex items-center gap-1 justify-center bg-black/40 rounded-lg py-2 border border-white/5">
-                <input type="checkbox" checked={ad.enabled !== false} onChange={(e) => { const c = [...items]; c[i] = { ...ad, enabled: e.target.checked }; setItems(c); }} className="accent-amber-400" />
-                On
-              </label>
-              <Button size="sm" variant="destructive" onClick={() => remove(ad.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-            </div>
-          ))}
-          {items.length === 0 && <div className="text-xs text-zinc-500 text-center py-6">No ads yet. Add up to 5 Adsterra direct links.</div>}
-        </div>
-      </div>
-      <Button onClick={saveAll} className="w-full bg-gradient-to-r from-amber-400 to-yellow-600 text-black font-bold hover:brightness-110"><Save className="w-4 h-4" /> Save All Ads</Button>
     </div>
   );
 }

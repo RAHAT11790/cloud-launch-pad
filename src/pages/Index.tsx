@@ -864,10 +864,12 @@ const Index = () => {
     syncLoginState();
     const timer = setInterval(syncLoginState, 1500);
     window.addEventListener("storage", syncLoginState);
+    window.addEventListener("rs_auth_changed", syncLoginState);
 
     return () => {
       clearInterval(timer);
       window.removeEventListener("storage", syncLoginState);
+      window.removeEventListener("rs_auth_changed", syncLoginState);
     };
   }, []);
 

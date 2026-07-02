@@ -10,6 +10,7 @@ import {
   getTodayRemaining,
   subscribeCoinAds,
   wasAdWatchedToday,
+  ensureGuestUser,
 } from "@/lib/premiumAccess";
 import CoinAnimation from "@/components/CoinAnimation";
 
@@ -48,6 +49,9 @@ function injectBackgroundSdk(snippet: string, container: HTMLElement) {
   });
 }
 
+const extractFirstUrl = (value: string) => value.match(/https?:\/\/[^'"\s<>]+/)?.[0] || value.trim();
+const isScriptPlacement = (value: string) => /<script|\.js(\?|#|$)/i.test(value.trim());
+
 export default function FreePremium() {
   const navigate = useNavigate();
   const branding = useBranding();
@@ -59,6 +63,7 @@ export default function FreePremium() {
   const [firstTapDone, setFirstTapDone] = useState<boolean>(() => localStorage.getItem(CONFIRMED_KEY) === "1");
   const settledRef = useRef<Set<string>>(new Set());
   const bgContainerRef = useRef<HTMLDivElement | null>(null);
+  const bannerContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => subscribeCoinAds(setAds), []);
 
@@ -77,11 +82,12 @@ export default function FreePremium() {
   // Resolve slots
   const popunderAd = ads.find((a) => a.id === "adsterra_popunder");
   const smartlinkAd = ads.find((a) => a.id === "adsterra_smartlink");
+  const bannerAd = ads.find((a) => a.id === "adsterra_banner_160" && a.enabled !== false && a.url);
   const backgroundAds = ads.filter(
     (a) =>
       a.enabled !== false &&
       a.url &&
-      ["adsterra_push_notification", "adsterra_social_bar", "adsterra_native_banner", "adsterra_smartlink"].includes(a.id),
+      ["adsterra_social_bar", "adsterra_native_banner"].includes(a.id),
   );
 
   // Inject background SDKs (once per ad-list change)
@@ -91,6 +97,12 @@ export default function FreePremium() {
     backgroundAds.forEach((ad) => injectBackgroundSdk(ad.url, bgContainerRef.current!));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundAds.map((a) => a.id + a.url).join("|")]);
+
+  useEffect(() => {
+    if (!bannerContainerRef.current) return;
+    bannerContainerRef.current.innerHTML = "";
+    if (bannerAd?.url) injectBackgroundSdk(bannerAd.url, bannerContainerRef.current);
+  }, [bannerAd?.url]);
 
   // Detect return from ad tab and settle timer
   useEffect(() => {
@@ -113,7 +125,7 @@ export default function FreePremium() {
           const reason = (res as any).reason;
           if (reason === "already_watched") toast({ title: "Already earned from this slot today", description: "Come back tomorrow." });
           else if (reason === "daily_cap") toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day per device.`, variant: "destructive" });
-          else if (reason === "no_user") toast({ title: "Login required", variant: "destructive" });
+          else if (reason === "no_user") toast({ title: "Guest ID not ready", description: "Tap once again.", variant: "destructive" });
         }
       } else {
         localStorage.removeItem(PENDING_KEY);
@@ -138,10 +150,7 @@ export default function FreePremium() {
   const progress = Math.min(100, (wallet.coins / goal) * 100);
 
   const handleMainButton = () => {
-    if (!uid) {
-      toast({ title: "Session required", description: "Please continue as guest or log in first.", variant: "destructive" });
-      return;
-    }
+    if (!uid) ensureGuestUser();
     if (remaining <= 0) {
       toast({ title: "Daily limit reached", description: `Max ${settings.dailyAdCap} coins/day. Come back tomorrow.`, variant: "destructive" });
       return;
@@ -164,7 +173,7 @@ export default function FreePremium() {
         description: "Close the tab and tap the button again to start the count timer.",
         duration: 6000,
       });
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(extractFirstUrl(url), "_blank", "noopener,noreferrer");
       return;
     }
 
@@ -187,13 +196,11 @@ export default function FreePremium() {
       description: "Come back after the timer completes to earn 1 coin.",
       duration: 5000,
     });
-    // Extract direct URL if snippet contains one
-    let openUrl = popUrl;
-    if (popUrl.includes("<")) {
-      const m = popUrl.match(/https?:\/\/[^'"\s<>]+/);
-      if (m) openUrl = m[0];
+    if (isScriptPlacement(popUrl)) {
+      injectBackgroundSdk(popUrl, bgContainerRef.current || document.body);
+    } else {
+      window.open(extractFirstUrl(popUrl), "_blank", "noopener,noreferrer");
     }
-    window.open(openUrl, "_blank", "noopener,noreferrer");
   };
 
   const elapsed = pending ? (now - pending.startedAt) / 1000 : 0;
@@ -206,13 +213,13 @@ export default function FreePremium() {
       {/* Invisible container where background Adsterra SDKs live */}
       <div ref={bgContainerRef} aria-hidden style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", left: -9999, top: -9999 }} />
 
-      <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <div className="max-w-2xl mx-auto px-4 pt-5 pb-20">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
         {/* Hero */}
-        <div className="mt-6 rounded-3xl overflow-hidden border border-amber-400/25 bg-gradient-to-br from-amber-500/20 via-orange-500/8 to-transparent p-6">
+        <div className="mt-5 rounded-2xl overflow-hidden border border-amber-400/25 bg-gradient-to-br from-amber-500/20 via-orange-500/8 to-transparent p-4">
           <div className="flex items-center gap-4">
             {branding.logoUrl ? (
               <img src={branding.logoUrl} alt="logo" className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400/40" />
@@ -222,12 +229,12 @@ export default function FreePremium() {
               </div>
             )}
             <div>
-              <h1 className="text-2xl font-bold">Free Premium</h1>
+              <h1 className="text-xl font-bold">Free Premium</h1>
               <p className="text-sm text-muted-foreground">Tap the button → earn coins → unlock premium</p>
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl bg-black/40 border border-white/5 p-4">
+          <div className="mt-4 rounded-xl bg-black/40 border border-white/5 p-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Your Balance</span>
               <span className="text-amber-300 font-bold text-lg flex items-center gap-1">
@@ -254,8 +261,8 @@ export default function FreePremium() {
         </div>
 
         {/* THE ONE professional earn button */}
-        <div className="mt-8">
-          <div className="relative rounded-3xl overflow-hidden border border-amber-400/30 bg-gradient-to-br from-neutral-950 via-neutral-900 to-black p-8">
+        <div className="mt-5">
+          <div className="relative rounded-2xl overflow-hidden border border-amber-400/30 bg-gradient-to-br from-neutral-950 via-neutral-900 to-black p-4">
             {/* status layer */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -271,7 +278,7 @@ export default function FreePremium() {
             </div>
 
             {/* Sub-layer explanation */}
-            <div className="mb-5 rounded-2xl bg-white/5 border border-white/10 p-3 text-[12px] text-white/70 leading-relaxed">
+            <div className="mb-4 rounded-xl bg-white/5 border border-white/10 p-3 text-[11px] text-white/70 leading-relaxed">
               {!firstTapDone ? (
                 <>
                   <b className="text-amber-300">Step 1:</b> First tap opens a preview link. A notice will appear —{" "}
@@ -292,7 +299,7 @@ export default function FreePremium() {
             <button
               onClick={handleMainButton}
               disabled={isTimerRunning || remaining <= 0}
-              className="group relative w-full h-20 rounded-2xl font-black text-lg tracking-wide overflow-hidden
+              className="group relative w-full h-14 rounded-xl font-black text-sm tracking-wide overflow-hidden
                          bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-black
                          shadow-[0_20px_60px_-12px_rgba(251,146,60,0.5)]
                          hover:shadow-[0_25px_70px_-10px_rgba(251,146,60,0.7)]
@@ -303,12 +310,12 @@ export default function FreePremium() {
               <div className="relative flex items-center justify-center gap-3">
                 {isTimerRunning ? (
                   <>
-                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Waiting for return… {Math.floor(elapsed)}s / {pending!.required}s</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-7 h-7 fill-black" />
+                    <Play className="w-5 h-5 fill-black" />
                     <span>{firstTapDone ? `Watch & Earn +1 Coin` : `Tap to Preview`}</span>
                   </>
                 )}
@@ -332,9 +339,15 @@ export default function FreePremium() {
           </div>
         </div>
 
-        <p className="mt-6 text-[11px] text-muted-foreground text-center leading-relaxed">
+        {bannerAd?.url && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-2 min-h-[120px] overflow-hidden flex items-center justify-center">
+            <div ref={bannerContainerRef} className="w-full max-w-[320px] min-h-[100px] overflow-hidden" />
+          </div>
+        )}
+
+        <p className="mt-4 text-[10px] text-muted-foreground text-center leading-relaxed">
           Every click must be a real user click. No ads auto-open on this page.<br />
-          Push notifications and background banners may appear — those are informational only.
+          Social Bar/In-Page Push and banner placements run from the Adsterra settings only.
         </p>
       </div>
     </div>

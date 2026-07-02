@@ -1708,50 +1708,43 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </span>
         )}
         <p className="text-sm text-secondary-foreground">
-          {(() => { try { const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}"); return u.email || "guest@rsanime.com"; } catch { return "guest@rsanime.com"; } })()}
+          {(() => {
+            try {
+              const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+              const email = String(u.email || "");
+              return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
+            } catch { return "Guest Profile"; }
+          })()}
         </p>
       </div>
 
-      {/* Premium Coin Card (replaces old Free Access timer) */}
+      {/* Compact coin card */}
       {!isPremium && (
-        <div className="mb-5">
+        <div className="mb-4">
           <div
             onClick={() => window.location.assign("/free-premium")}
-            className="relative overflow-hidden rounded-3xl p-6 cursor-pointer active:scale-[0.99] transition-transform border border-amber-400/30 bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-neutral-950 shadow-[0_15px_50px_-15px_rgba(251,146,60,0.4)]"
+            className="relative overflow-hidden rounded-2xl p-3.5 cursor-pointer active:scale-[0.99] transition-transform border border-amber-400/25 bg-gradient-to-r from-amber-500/15 via-orange-500/8 to-transparent"
           >
-            <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-amber-400/20 blur-3xl pointer-events-none" />
-            <div className="relative flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shadow-lg">
-                  <Coins className="w-6 h-6 text-black" />
+            <div className="relative flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center shrink-0">
+                  <Coins className="w-5 h-5 text-black" />
                 </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-widest font-bold text-amber-300/80">Coin Balance</p>
-                  <p className="text-[10px] text-white/60">Tap to earn more</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-amber-300">Coins</p>
+                  <p className="text-[10px] text-muted-foreground truncate">Guest users can earn too</p>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/30 text-[10px] font-bold text-amber-300 uppercase tracking-wider">
-                Premium Coins
-              </span>
-            </div>
-            <div className="relative mt-4 flex items-end justify-between">
-              <div>
-                <p className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-200 via-yellow-300 to-orange-400 tabular-nums leading-none">
-                  {coinWallet?.coins ?? 0}
-                </p>
-                <p className="mt-1 text-xs text-white/60">available coins</p>
-              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-2xl font-black text-amber-300 tabular-nums leading-none">{coinWallet?.coins ?? 0}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); window.location.assign("/free-premium"); }}
-                className="h-10 px-5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm shadow-lg hover:brightness-110 active:scale-95 transition"
+                  className="h-8 px-3 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-xs hover:brightness-110 active:scale-95 transition"
               >
                 Earn +
               </button>
+              </div>
             </div>
-          </div>
-          {/* Free access sub-card, only when active */}
-          <div className="mt-3">
-            <AccessTimer />
           </div>
         </div>
       )}

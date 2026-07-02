@@ -120,10 +120,33 @@ export const checkDownloadAllowed = async (): Promise<{ allowed: boolean; reason
 export type AwardCoinResult = { ok: true; coins: number } | { ok: false; reason: "no_user" | "daily_cap" | "already_watched" | "unknown" };
 
 export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinResult> => {
-  const uid = getLocalUserId();
+  const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
   const day = todayKey();
+  const deviceId = getDeviceId();
   let outcome: AwardCoinResult = { ok: false, reason: "unknown" };
+
+  // Hard daily cap is per-device, not per account. A user cannot switch from
+  // guest → new login and farm extra coins on the same phone/browser.
+  await runTransaction(ref(db, `coinDeviceDaily/${deviceId}/${day}`), (cur: any) => {
+    const entry = cur || { count: 0, adIds: {} };
+    if (entry.adIds?.[adId]) {
+      outcome = { ok: false, reason: "already_watched" };
+      return cur;
+    }
+    if ((entry.count || 0) >= capPerDay) {
+      outcome = { ok: false, reason: "daily_cap" };
+      return cur;
+    }
+    return {
+      ...entry,
+      count: (entry.count || 0) + 1,
+      adIds: { ...(entry.adIds || {}), [adId]: Date.now() },
+      updatedAt: Date.now(),
+    };
+  });
+  if (!outcome.ok && outcome.reason !== "unknown") return outcome;
+
   await runTransaction(ref(db, `users/${uid}/coinWallet`), (cur: any) => {
     const wallet = cur || { coins: 0, adWatchLog: {} };
     const today = wallet.adWatchLog?.[day] || { count: 0, adIds: {} };
@@ -156,7 +179,7 @@ export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinR
 export type SpendResult = { ok: true; expiresAt: number } | { ok: false; reason: "no_user" | "insufficient" | "unknown" };
 
 export const buyPremiumWithCoins = async (plan: CoinPlan): Promise<SpendResult> => {
-  const uid = getLocalUserId();
+  const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
   let out: SpendResult = { ok: false, reason: "unknown" };
   await runTransaction(ref(db, `users/${uid}/coinWallet`), (cur: any) => {
@@ -207,11 +230,31 @@ export interface CoinAd {
 }
 
 export const DEFAULT_COIN_ADS: CoinAd[] = [
-  { id: "adsterra_social_bar", name: "Adsterra Social Bar SDK", url: "https://pl29545319.effectivecpmnetwork.com/76/17/9d/76179d54c872b5d668d5a5hd3c60cc20.js", enabled: true, kind: "sdk" },
+  { id: "adsterra_social_bar", name: "Social Bar / In-Page Push SDK", url: "https://pl29545319.effectivecpmnetwork.com/76/17/9d/76179d54c872b5d668d5a5hd3c60cc20.js", enabled: true, kind: "sdk" },
   { id: "adsterra_popunder", name: "Adsterra Popunder SDK", url: "https://pl29545318.effectivecpmnetwork.com/b5/74/7e/b5747e03c73558e2e6a43cab1723472ce.js", enabled: true, kind: "sdk" },
+  { id: "adsterra_banner_160", name: "Adsterra 160x300 Banner", url: "", enabled: true, kind: "sdk" },
   { id: "adsterra_native_banner", name: "Adsterra Native Banner SDK", url: "https://pl29872715.effectivecpmnetwork.com/91638987f5610218ba77ea1c44c9fd71/invoke.js", enabled: true, kind: "sdk" },
   { id: "adsterra_smartlink", name: "Adsterra Smartlink", url: "https://www.effectivecpmnetwork.com/zmcs077s5n?key=ada6384dcdd9d2e879977bc3f6637e47", enabled: true, kind: "smartlink" },
 ];
+
+export const ensureGuestUser = (): string => {
+  try {
+    const raw = localStorage.getItem("rsanime_user");
+    const existing = raw ? JSON.parse(raw) : null;
+    if (existing?.id) return existing.id;
+    const uid = `guest_${getDeviceId()}_${Date.now().toString(36)}`;
+    localStorage.setItem("rsanime_user", JSON.stringify({
+      id: uid,
+      name: "Guest User",
+      email: "guest@rsanime.com",
+      guest: true,
+    }));
+    try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
+    return uid;
+  } catch {
+    return getDeviceId();
+  }
+};
 
 export const subscribeCoinAds = (cb: (ads: CoinAd[]) => void): (() => void) => {
   const u = onValue(ref(db, "settings/premiumCoinAds"), (snap) => {
