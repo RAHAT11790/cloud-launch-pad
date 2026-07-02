@@ -346,8 +346,20 @@ export default function FreePremium() {
         </div>
 
         {bannerAd?.url && (
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-2 min-h-[120px] overflow-hidden flex items-center justify-center">
-            <div ref={bannerContainerRef} className="w-full max-w-[320px] min-h-[100px] overflow-hidden" />
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5">Sponsored · 160×300</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 min-h-[120px] overflow-hidden flex items-center justify-center">
+              <div ref={bannerContainerRef} className="w-full max-w-[320px] min-h-[100px] overflow-hidden" />
+            </div>
+          </div>
+        )}
+
+        {nativeBannerAd?.url && (
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-widest text-white/40 mb-1.5">Sponsored · Native</div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2 min-h-[140px] overflow-hidden">
+              <div ref={nativeContainerRef} className="w-full min-h-[120px] overflow-hidden" />
+            </div>
           </div>
         )}
 
