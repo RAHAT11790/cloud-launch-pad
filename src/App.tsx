@@ -10,6 +10,8 @@ import Unlock from "./pages/Unlock";
 import UnlockRequired from "./pages/UnlockRequired";
 import PremiumRequired from "./pages/PremiumRequired";
 import PremiumBuyPage from "./pages/PremiumBuyPage";
+import DailyTasksPage from "./pages/DailyTasksPage";
+import { startVisitTracker, captureReferralFromUrl } from "@/lib/dailyTasks";
 
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
