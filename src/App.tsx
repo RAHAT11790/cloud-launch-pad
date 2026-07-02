@@ -31,6 +31,11 @@ installUiGuard();
 // Boot daily-task systems (visit-time tracker + referral capture).
 startVisitTracker();
 captureReferralFromUrl();
+// Poll every 60s — as soon as visitor crosses 30 min today, referrer gets +9 coins.
+if (typeof window !== "undefined") {
+  setInterval(() => { void checkReferralUpgrade(); }, 60_000);
+  setTimeout(() => { void checkReferralUpgrade(); }, 5_000);
+}
 
 
 
