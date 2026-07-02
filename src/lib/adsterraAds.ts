@@ -53,6 +53,7 @@ export type AdsterraConfig = {
   enabled: boolean;
   popunder: string;
   streamLink: string;
+  pushNotification: string;
   refreshIntervalSec: number; // 0 = no refresh
 };
 
@@ -60,6 +61,7 @@ const DEFAULT: AdsterraConfig = {
   enabled: true,
   popunder: "",
   streamLink: "",
+  pushNotification: "",
   refreshIntervalSec: 50,
 };
 
