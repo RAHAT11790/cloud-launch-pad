@@ -339,6 +339,11 @@ export default function DailyTasksPage() {
           })}
         </div>
 
+        {/* Invite Friends — hero reward section */}
+        <div className="mt-6">
+          <InviteFriendCard variant="full" siteName={branding.siteName || "our platform"} />
+        </div>
+
         {/* Redeem CTA */}
         <div className="mt-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 to-transparent p-5">
           <div className="flex items-center gap-3">
