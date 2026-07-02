@@ -542,7 +542,8 @@ function EpisodeLockModal({ row, onClose }: { row: SeriesRow; onClose: () => voi
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
-          {seasons.length === 0 && <div className="text-center py-10 text-zinc-500 text-sm">No seasons found for this series.</div>}
+          {loading && <div className="text-center py-10 text-amber-300 text-sm">Loading seasons from AN API…</div>}
+          {!loading && seasons.length === 0 && <div className="text-center py-10 text-zinc-500 text-sm">No seasons found for this series.</div>}
           {seasons.map((s, sIdx) => {
             const isOpen = openSeason === sIdx;
             const eps = s?.episodes || [];
