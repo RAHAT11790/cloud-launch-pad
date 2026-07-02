@@ -138,9 +138,10 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   }
   const fileName = buildSafeFileName(rawFileName);
   const unwrapped = unwrapManagedVideoUrl(trimmedUrl);
-  // On an HTTPS app, raw http:// downloads are mixed-content and get blocked.
-  // Use the admin video-download function first; direct is only a last fallback.
-  const preferDirect = false;
+  // HTTPS file hosts are most reliable when the browser downloads them directly
+  // from the user's own IP/session. Only route http:// or already-proxied links
+  // through the download proxy to avoid mixed-content blocks.
+  const preferDirect = unwrapped.startsWith("https://");
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
@@ -164,7 +165,7 @@ export function triggerBulkBackgroundDownloads(
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
       const unwrapped = unwrapManagedVideoUrl(u);
-      const preferDirect = false;
+      const preferDirect = unwrapped.startsWith("https://");
       const direct = buildDirectDownloadUrl(u);
       const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
       const final = preferDirect ? (direct || proxied) : (proxied || direct);
