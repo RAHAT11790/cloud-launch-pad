@@ -4518,7 +4518,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`;
+${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}`.trim()}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
