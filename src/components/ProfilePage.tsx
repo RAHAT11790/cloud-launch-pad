@@ -1722,6 +1722,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       </div>
 
 
+      {/* Free / Global Access Timer */}
+      <AccessTimer />
+
 
       {/* Watch History */}
       <div className="mb-7">
