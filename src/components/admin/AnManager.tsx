@@ -846,7 +846,7 @@ export default function AnManager({
             title="Fetch rating, year, overview, genres, directors from TMDB for every saved item"
           >
             {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Load All Details
+            TMDB Details Load
           </button>
         </div>
 
