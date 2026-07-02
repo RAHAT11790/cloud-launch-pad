@@ -143,28 +143,135 @@ export const recordDailyComment = async () => {
   });
 };
 
+/* ================== Referral system (IP-tracked, anti-fraud) ==================
+   Rules:
+   - Visitor arriving via ?ref=UID → referrer gets +1 coin instantly (entry bonus).
+   - If the same visitor stays 30+ minutes on the site (measured by visit tracker),
+     referrer earns an additional +9 coins (total 10 per real invite).
+   - IP-based dedupe: same public IP against the same referrer counts only once.
+     Multiple accounts/devices on the same Wi-Fi = still 1 credit only.
+   - Self-referrals blocked. Localstorage guard prevents same-browser replays.
+*/
+
+const REFERRED_BY_KEY = "rs_referred_by";
+const REFERRAL_UPGRADED_KEY = "rs_referral_upgraded";
+const REFERRAL_ENTRY_AWARDED_KEY = "rs_referral_entry_awarded";
+
+const fetchPublicIp = async (): Promise<string | null> => {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 3500);
+    const r = await fetch("https://api.ipify.org?format=json", { signal: ctl.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j?.ip === "string" ? j.ip : null;
+  } catch { return null; }
+};
+
+const hashIp = (ip: string): string => {
+  // Small stable hash — used only as a firebase key, not for security.
+  let h = 5381;
+  for (let i = 0; i < ip.length; i++) h = ((h << 5) + h + ip.charCodeAt(i)) | 0;
+  return "ip_" + (h >>> 0).toString(36);
+};
+
+const awardCoins = async (uid: string, amount: number, note: string) => {
+  if (!uid || amount <= 0) return;
+  await runTransaction(ref(db, `users/${uid}/coinWallet`), (cur: any) => {
+    const wallet = cur || { coins: 0, adWatchLog: {} };
+    return { ...wallet, coins: (wallet.coins || 0) + amount };
+  });
+  try {
+    await set(ref(db, `users/${uid}/referralEarnings/${Date.now()}`), { amount, note });
+  } catch {}
+};
+
+/** Capture ?ref=UID once per visitor. Awards +1 coin now, IP-dedupe enforced. */
+export const captureReferralFromUrl = () => {
+  if (typeof window === "undefined") return;
+  void (async () => {
+    try {
+      const url = new URL(window.location.href);
+      const refUid = url.searchParams.get("ref");
+      if (!refUid) return;
+
+      const me = getLocalUserId() || ensureGuestUser();
+      if (!me || me === refUid) return;
+
+      // Persist referrer for future 30-min upgrade check.
+      try {
+        if (!localStorage.getItem(REFERRED_BY_KEY)) {
+          localStorage.setItem(REFERRED_BY_KEY, refUid);
+        }
+      } catch {}
+
+      // Already entry-awarded on this browser?
+      if (localStorage.getItem(REFERRAL_ENTRY_AWARDED_KEY) === refUid) return;
+
+      const ip = await fetchPublicIp();
+      const ipKey = ip ? hashIp(ip) : `noip_${me}`;
+
+      // IP-dedupe: if this IP already credited this referrer with a DIFFERENT visitor, block.
+      const ipRef = ref(db, `referrals/${refUid}/ipMap/${ipKey}`);
+      const snap = await get(ipRef);
+      const owner = snap.val();
+      if (owner && owner !== me) {
+        // Same network already claimed by another visitor — fraud guard.
+        localStorage.setItem(REFERRAL_ENTRY_AWARDED_KEY, refUid); // don't retry
+        return;
+      }
+      if (!owner) await set(ipRef, me);
+
+      // Record visitor + award +1 entry coin.
+      await set(ref(db, `referrals/${refUid}/visitors/${me}`), {
+        ip: ipKey,
+        startedAt: Date.now(),
+        upgraded: false,
+      });
+      // Also feed the daily "share" task progress (visible progress bar).
+      await runTransaction(ref(db, `users/${refUid}/dailyTasks/${todayKey()}/share`), (cur: any) => {
+        const c = cur || {};
+        return { ...c, progress: (c.progress || 0) + 1 };
+      });
+      await awardCoins(refUid, 1, "referral_entry");
+      localStorage.setItem(REFERRAL_ENTRY_AWARDED_KEY, refUid);
+    } catch {}
+  })();
+};
+
+/** Called periodically; when visitor has 30+ min today, credits referrer +9. */
+export const checkReferralUpgrade = async () => {
+  if (typeof window === "undefined") return;
+  try {
+    const refUid = localStorage.getItem(REFERRED_BY_KEY);
+    if (!refUid) return;
+    if (localStorage.getItem(REFERRAL_UPGRADED_KEY) === refUid) return;
+    const minutes = Math.floor(getVisitSecondsToday() / 60);
+    if (minutes < 30) return;
+    const me = getLocalUserId() || ensureGuestUser();
+    if (!me) return;
+    // Server-side guard so double-upgrade can't happen from two devices.
+    const vRef = ref(db, `referrals/${refUid}/visitors/${me}`);
+    let didUpgrade = false;
+    await runTransaction(vRef, (cur: any) => {
+      const c = cur || { startedAt: Date.now() };
+      if (c.upgraded) return c;
+      didUpgrade = true;
+      return { ...c, upgraded: true, upgradedAt: Date.now() };
+    });
+    if (didUpgrade) await awardCoins(refUid, 9, "referral_30min");
+    localStorage.setItem(REFERRAL_UPGRADED_KEY, refUid);
+  } catch {}
+};
+
+/** Kept for backward compatibility; new callers should use captureReferralFromUrl. */
 export const recordShareReferral = async (refUid: string) => {
   if (!refUid) return;
   await runTransaction(ref(db, `users/${refUid}/dailyTasks/${todayKey()}/share`), (cur: any) => {
     const c = cur || {};
     return { ...c, progress: (c.progress || 0) + 1 };
   });
-};
-
-/** Capture ?ref=UID once per visitor per referrer per day (client-side dedupe). */
-export const captureReferralFromUrl = () => {
-  if (typeof window === "undefined") return;
-  try {
-    const url = new URL(window.location.href);
-    const ref = url.searchParams.get("ref");
-    if (!ref) return;
-    const me = getLocalUserId() || ensureGuestUser();
-    if (me && me === ref) return; // no self-referrals
-    const key = `rs_ref_seen_${ref}_${todayKey()}`;
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, "1");
-    void recordShareReferral(ref);
-  } catch {}
 };
 
 /* ================== Progress helpers ================== */
