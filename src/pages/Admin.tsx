@@ -6444,7 +6444,12 @@ ${tgBulkFooter}
  const backdrop = ws.backdrop || ws.poster || "";
  setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
  if (ws.rating) setTgRating(String(ws.rating));
- if (ws.category) setTgGenres(ws.category);
+  // Genres from TMDB only — never from local category.
+  (async () => { try {
+    const { genres, rating } = await resolveTelegramGenresAndRating(String((ws as any).tmdbId || ""), ws.title || "");
+    if (genres.length > 0) setTgGenres(genres.join(", "));
+    if (rating) setTgRating(rating);
+  } catch {} })();
  if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
  setTgButtonLink(buildEpisodeShareUrl(seriesId));
