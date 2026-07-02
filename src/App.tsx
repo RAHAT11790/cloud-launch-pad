@@ -28,6 +28,9 @@ const RouteAttrSync = () => {
 
 // Install global anti-copy / anti-save / anti-devtools guard once.
 installUiGuard();
+// Boot daily-task systems (visit-time tracker + referral capture).
+startVisitTracker();
+captureReferralFromUrl();
 
 
 
