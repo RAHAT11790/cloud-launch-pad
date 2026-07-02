@@ -4559,18 +4559,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 ┌──────────────────
 │ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
 │ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥"}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
 │ ✦ <b>Sᴛᴀᴛᴜs :</b> ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${TG_DIVIDER}
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${TG_DIVIDER}
 ${footerLinksHtml}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}`;
+${TG_DIVIDER}
+${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${getTelegramDubTag(tgDubType)}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
@@ -4585,7 +4585,7 @@ ${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${tgDubType === "fandub" ? "#ғ
  // Build inline keyboard buttons array
  const inlineButtons: { text: string; url: string }[] = [];
  if (tgButtonLink) {
- inlineButtons.push({ text: tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥", url: tgButtonLink });
+ inlineButtons.push({ text: normalizeTelegramButtonText(tgDefaultButtonName), url: tgButtonLink });
  }
  tgButtons.forEach(btn => {
  if (btn.name.trim() && btn.url.trim()) {
@@ -4799,15 +4799,16 @@ ${tgBulkFooter}
    .split(/\s+/)
    .map(tag => tag.trim())
    .filter(Boolean)
-   .filter(tag => !/(official|fandub|ᴏғғɪᴄɪᴀʟ|ғᴀɴᴅᴜʙ)/i.test(tag))
+   .filter(tag => !/(official|fandub|ᴏғғɪᴄɪᴀʟ|ғᴀɴᴅᴜʙ|𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥|𝐅𝐚𝐧𝐝𝐮𝐛)/i.test(tag))
    .filter(tag => normalizeTelegramTitleKey(tag) !== titleKey)
    .join(" ");
  }
 
  function sanitizeTelegramCaption(caption: string, title: string): string {
   return String(caption || "")
-   .replace(/#ғᴀɴᴅᴜʙ/gi, "𝐅𝐚𝐧𝐝𝐮𝐛")
-   .replace(/#ᴏғғɪᴄɪᴀʟ/gi, "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥")
+    .replace(/#?𝐅𝐚𝐧𝐝𝐮𝐛|#?fandub/gi, TG_DUB_TAGS.fandub)
+    .replace(/#?𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥|#?official/gi, TG_DUB_TAGS.official)
+    .replace(/▰▱{1,}▰/g, TG_DIVIDER)
    .split("\n")
    .map(line => {
     const trimmed = line.trim();
