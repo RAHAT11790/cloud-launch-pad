@@ -4924,28 +4924,26 @@ ${tgBulkFooter}
  // Auto-set language from content
  if (ws?.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  // Auto-fetch exact genres/rating from TMDB/AniList if tmdbId available
- if (ws?.tmdbId) {
- setTgImdbId(String(ws.tmdbId));
- const { genres, rating } = await resolveTelegramGenresAndRating(String(ws.tmdbId), ws.title || release.title || "");
- if (genres.length > 0) setTgGenres(genres.join(", "));
- if (rating) setTgRating(rating);
- } else {
- if (ws?.category) setTgGenres(ws.category);
- if (ws?.rating) setTgRating(String(ws.rating));
- }
- } else if (cType === "movie") {
- const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
- setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
- if (mv?.language) setTgLanguages(String(mv.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
- if (mv?.tmdbId) {
- setTgImdbId(String(mv.tmdbId));
- const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId), mv.title || release.title || "");
- if (genres.length > 0) setTgGenres(genres.join(", "));
- if (rating) setTgRating(rating);
- } else {
- if (mv?.category) setTgGenres(mv.category);
- if (mv?.rating) setTgRating(String(mv.rating));
- }
+  // Genres are ALWAYS fetched from TMDB (never from local category).
+  // If no tmdbId is stored, the resolver falls back to TMDB search-by-title.
+  if (ws?.tmdbId) setTgImdbId(String(ws.tmdbId));
+  {
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(ws?.tmdbId || ""), ws?.title || release.title || "");
+  if (genres.length > 0) setTgGenres(genres.join(", "));
+  if (rating) setTgRating(rating);
+  else if (ws?.rating) setTgRating(String(ws.rating));
+  }
+  } else if (cType === "movie") {
+  const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
+  setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
+  if (mv?.language) setTgLanguages(String(mv.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
+  if (mv?.tmdbId) setTgImdbId(String(mv.tmdbId));
+  {
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(mv?.tmdbId || ""), mv?.title || release.title || "");
+  if (genres.length > 0) setTgGenres(genres.join(", "));
+  if (rating) setTgRating(rating);
+  else if (mv?.rating) setTgRating(String(mv.rating));
+  }
  } else if (cType === "animesalt") {
  setTgDubType("official");
  }
