@@ -123,6 +123,70 @@ export default function PremiumBuyPage() {
             </div>
           </Button>
         </div>
+
+        {/* Buy with Coins */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Coins className="w-5 h-5 text-amber-300" /> Buy with Coins
+            </h2>
+            <button
+              type="button"
+              onClick={() => navigate("/daily-tasks")}
+              className="text-[11px] font-semibold text-amber-300 hover:underline"
+            >
+              Earn coins →
+            </button>
+          </div>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Your wallet: <b className="text-amber-300">{wallet.coins || 0}</b> coins • Instant activation, no code needed.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {COIN_PLANS.map((plan) => {
+              const enough = (wallet.coins || 0) >= plan.coins;
+              const isBuying = buying === plan.id;
+              return (
+                <button
+                  key={plan.id}
+                  type="button"
+                  disabled={!enough || !!buying}
+                  onClick={async () => {
+                    setBuying(plan.id);
+                    const res = await buyPremiumWithCoins(plan);
+                    setBuying(null);
+                    if (res.ok) {
+                      toast.success(`Premium active — ${plan.days} days added!`);
+                    } else if ((res as any).reason === "insufficient") {
+                      toast.error("Not enough coins. Complete daily tasks to earn more.");
+                    } else {
+                      toast.error("Could not activate. Try again.");
+                    }
+                  }}
+                  className={[
+                    "relative rounded-2xl p-4 text-left border transition-transform active:scale-[0.98]",
+                    plan.featured
+                      ? "border-amber-400/40 bg-gradient-to-br from-amber-500/15 to-yellow-500/5"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]",
+                    !enough ? "opacity-60" : "",
+                  ].join(" ")}
+                >
+                  {plan.featured && (
+                    <span className="absolute top-2 right-2 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400 text-black inline-flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> BEST
+                    </span>
+                  )}
+                  <div className="text-2xl font-black text-foreground leading-none">{plan.days}<span className="text-sm font-semibold text-muted-foreground"> days</span></div>
+                  <div className="mt-2 flex items-center gap-1.5 text-amber-300 font-bold text-sm">
+                    <Coins className="w-4 h-4" /> {plan.coins} coins
+                  </div>
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    {isBuying ? "Activating…" : enough ? "Tap to redeem" : `Need ${plan.coins - (wallet.coins || 0)} more`}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
