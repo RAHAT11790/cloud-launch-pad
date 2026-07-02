@@ -9233,57 +9233,39 @@ ${footerLinksHtml}
   const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
   const t0 = performance.now();
 
+  // Deep-walk any value and replace `old` with `nw` inside every string.
+  // This catches ALL nested link locations: link/link480/qualityLinks.p480/
+  // audioTracks[].link/directUrl/movieLink*/downloadLink/etc — no field allowlist to miss.
+  const deepReplace = (val: any, oldStr: string, newStr: string, counter: { total: number; replaced: number }): any => {
+    if (val == null) return val;
+    if (typeof val === "string") {
+      counter.total++;
+      if (val.includes(oldStr)) {
+        counter.replaced++;
+        return val.split(oldStr).join(newStr);
+      }
+      return val;
+    }
+    if (Array.isArray(val)) return val.map(v => deepReplace(v, oldStr, newStr, counter));
+    if (typeof val === "object") {
+      const out: any = {};
+      for (const k of Object.keys(val)) out[k] = deepReplace(val[k], oldStr, newStr, counter);
+      return out;
+    }
+    return val;
+  };
+
   const processItem = async (item: any) => {
     try {
       const snap = await get(ref(db, `${targetType}/${item.id}`));
       const data = snap.val();
       if (!data) return null;
-      let totalLinks = 0, replacedLinks = 0;
-
-      if (targetType === "webseries" && data.seasons) {
-        const processEp = (ep: any) => {
-          const u = { ...ep };
-          linkFields.forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].split(old).join(nw); replacedLinks++; } } });
-          if (u.audioTracks) {
-            u.audioTracks = u.audioTracks.map((at: any) => {
-              const a = { ...at };
-              linkFields.forEach(f => { if (a[f]) { totalLinks++; if (a[f].includes(old)) { a[f] = a[f].split(old).join(nw); replacedLinks++; } } });
-              return a;
-            });
-          }
-          return u;
-        };
-        let updatedSeasons: any;
-        if (Array.isArray(data.seasons)) {
-          updatedSeasons = data.seasons.map((s: any) => ({ ...s, episodes: (s.episodes || []).map(processEp) }));
-        } else {
-          updatedSeasons = { ...data.seasons };
-          for (const sk of Object.keys(updatedSeasons)) {
-            const s = updatedSeasons[sk];
-            if (s?.episodes) {
-              if (Array.isArray(s.episodes)) updatedSeasons[sk] = { ...s, episodes: s.episodes.map(processEp) };
-              else {
-                const ue = { ...s.episodes };
-                for (const ek of Object.keys(ue)) ue[ek] = processEp(ue[ek]);
-                updatedSeasons[sk] = { ...s, episodes: ue };
-              }
-            }
-          }
-        }
-        if (replacedLinks > 0) await update(ref(db, `webseries/${item.id}`), { seasons: updatedSeasons });
-      } else if (targetType === "movies") {
-        const updates: Record<string, string> = {};
-        linkFields.forEach(f => {
-          const field = f === "link" ? "movieLink" : `movieLink${f.replace("link", "")}`;
-          const val = data[field] || data[f];
-          if (val && typeof val === "string") {
-            totalLinks++;
-            if (val.includes(old)) { updates[field] = val.split(old).join(nw); replacedLinks++; }
-          }
-        });
-        if (replacedLinks > 0) await update(ref(db, `movies/${item.id}`), updates);
+      const counter = { total: 0, replaced: 0 };
+      const updated = deepReplace(data, old, nw, counter);
+      if (counter.replaced > 0) {
+        await set(ref(db, `${targetType}/${item.id}`), updated);
+        return { title: item.title || item.id, poster: item.poster || "", replaced: counter.replaced, total: counter.total };
       }
-      if (replacedLinks > 0) return { title: item.title || item.id, poster: item.poster || "", replaced: replacedLinks, total: totalLinks };
       return null;
     } catch (err) { console.error(`Error processing ${item.id}:`, err); return null; }
   };
