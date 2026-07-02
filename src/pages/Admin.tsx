@@ -3497,15 +3497,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  : null,
  updatedAt: Date.now(),
  };
- let saveRef;
- let newMovieId = movieEditId || "";
- if (movieEditId) {
- saveRef = ref(db, `movies/${movieEditId}`);
- } else {
- saveRef = push(ref(db, "movies"));
-  newMovieId = saveRef.key || "";
- data.createdAt = Date.now();
- }
+  let saveRef;
+  let newMovieId = movieEditId || "";
+  if (movieEditId) {
+  saveRef = ref(db, `movies/${movieEditId}`);
+  // Preserve original createdAt on edit (see saveSeries for rationale).
+  try {
+    const priorSnap = await get(ref(db, `movies/${movieEditId}/createdAt`));
+    const priorCreatedAt = Number(priorSnap.val() || 0);
+    data.createdAt = priorCreatedAt || Date.now();
+  } catch {
+    data.createdAt = Date.now();
+  }
+  } else {
+  saveRef = push(ref(db, "movies"));
+   newMovieId = saveRef.key || "";
+  data.createdAt = Date.now();
+  }
   try {
   await set(saveRef, data);
   upsertAdminContentListItem("movies", newMovieId, data);
