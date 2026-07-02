@@ -4573,7 +4573,7 @@ ${TG_DIVIDER}
 ${TG_DIVIDER}
 ${footerLinksHtml}
 ${TG_DIVIDER}
-${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${getTelegramDubTag(tgDubType)}`;
+${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
@@ -7826,7 +7826,7 @@ ${TG_DIVIDER}
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
 ${TG_DIVIDER}`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n${TG_DIVIDER}\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)} ${getTelegramDubTag(tgDubType)}`}
+{`\n${TG_DIVIDER}\n${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
