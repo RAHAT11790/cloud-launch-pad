@@ -52,14 +52,14 @@ export default function DownloadProgressOverlay() {
   if (!activeItem || hidden) return null;
 
   const completed = items.filter((item) => item.status === "complete").length;
-  const hasKnownSize = activeItem.totalMB > 1 && activeItem.loadedMB > 0;
+  const hasKnownSize = activeItem.totalMB > 0 && activeItem.loadedMB > 0;
   const progressLabel = hasKnownSize
     ? `${formatMb(activeItem.loadedMB)} / ${formatMb(activeItem.totalMB)}`
     : activeItem.status === "complete"
-      ? "Sent to browser downloads"
+      ? "Saved to Downloads"
       : activeItem.status === "error"
         ? "Download failed"
-        : "Opening browser download...";
+        : "Preparing download size...";
 
   const onDragEnd = (_: unknown, info: { point: { x: number; y: number } }) => {
     const maxX = Math.max(14, window.innerWidth - 286);
