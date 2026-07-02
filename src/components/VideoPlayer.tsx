@@ -4738,7 +4738,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <Share2 className="w-3 h-3 flex-shrink-0" />
                 <span>Share</span>
               </button>
-              {!isAnimeSaltContent && (
+              {!isAnimeSaltContent && isPremium === true && (
                 <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                   <Download className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Download</span>
