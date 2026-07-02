@@ -3838,7 +3838,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const recentContent = useMemo(() => [
  ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
  ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
- ].sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0)).slice(0, 3), [webseriesData, moviesData]);
+ ].sort((a, b) => (Number(b.updatedAt) || Number(b.createdAt) || 0) - (Number(a.updatedAt) || Number(a.createdAt) || 0)).slice(0, 3), [webseriesData, moviesData]);
 
  // Weekly schedule (for dashboard preview)
  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
