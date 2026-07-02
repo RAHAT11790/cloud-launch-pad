@@ -46,8 +46,8 @@ const inputCls =
 export default function PremiumCenter() {
   const [tab, setTab] = useState<Tab>("overview");
   const [settings, setSettings] = useState<PremiumGlobalSettings>(DEFAULT_PREMIUM_SETTINGS);
-  const [rsSeries, setRsSeries] = useState<SeriesRow[]>([]);
-  const [anSeries, setAnSeries] = useState<SeriesRow[]>([]);
+  const [rsSeries, setRsSeries] = useState<SeriesRow[]>(() => readCache(CACHE_RS));
+  const [anSeries, setAnSeries] = useState<SeriesRow[]>(() => readCache(CACHE_AN));
   const [q, setQ] = useState("");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "RS" | "AN">("all");
