@@ -83,6 +83,24 @@ export default function PremiumBuyPage() {
           </div>
         </div>
 
+        {guest && (
+          <div className="mt-5 rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-500/10 to-red-500/5 p-4 flex gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="text-xs leading-relaxed text-amber-100/90">
+              <b className="text-amber-300 block mb-1">You are using a Guest ID</b>
+              Your guest ID can be lost anytime (clearing browser data, switching devices) — and your premium will disappear with it.
+              Please log in with a real account to protect your coins and subscription. When you log in from this device, your guest coins will automatically transfer to your account.
+              <div className="mt-2 text-[11px] text-amber-100/70">
+                If you continue as a guest, we are not responsible for any lost subscription or coins.
+              </div>
+              <Button size="sm" className="mt-3 h-8 bg-amber-400 text-black hover:bg-amber-300"
+                onClick={() => navigate("/login")}>
+                <UserPlus className="w-3.5 h-3.5" /> Login / Sign Up
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Coin plans */}
         <h2 className="mt-8 text-lg font-semibold flex items-center gap-2">
           <Coins className="w-5 h-5 text-amber-400" /> Buy with Coins
