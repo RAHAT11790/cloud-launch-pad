@@ -65,8 +65,8 @@ const DEFAULT: AdsterraConfig = {
 
 // Minimum gap (ms) between cross-origin window.open() popunder triggers.
 const POPUNDER_MIN_GAP_MS = 20_000;
-const AD_MIN_DELAY_MS = 45_000;
-const AD_MAX_DELAY_MS = 60_000;
+const AD_MIN_DELAY_MS = 20_000;
+const AD_MAX_DELAY_MS = 45_000;
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
