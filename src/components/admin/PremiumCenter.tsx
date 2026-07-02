@@ -179,25 +179,26 @@ export default function PremiumCenter() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex overflow-x-auto gap-2 pb-1 -mx-1 px-1 scrollbar-hide">
+      {/* Tabs — wrap on mobile so nothing gets clipped/blocked from scroll */}
+      <div className="flex flex-wrap gap-2">
         {tabs.map((t) => {
           const active = tab === t.id;
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`shrink-0 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold border transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold border transition-all ${
                 active
                   ? "border-amber-400/50 bg-gradient-to-r from-amber-500/20 to-yellow-500/10 text-amber-200 shadow-[0_4px_20px_-4px_rgba(251,191,36,0.4)]"
                   : "border-white/10 bg-white/[0.02] text-zinc-400 hover:text-zinc-100 hover:border-white/20"
               }`}
             >
-              <t.icon className="w-4 h-4" /> {t.label}
+              <t.icon className="w-3.5 h-3.5" /> {t.label}
             </button>
           );
         })}
       </div>
+
 
       {tab === "overview" && <OverviewTab stats={stats} settings={settings} premiumUsers={premiumUsers} coinCirculation={coinCirculation} onNav={setTab} />}
 
