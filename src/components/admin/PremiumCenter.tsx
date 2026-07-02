@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import {
   DEFAULT_PREMIUM_SETTINGS,
+  DEFAULT_COIN_ADS,
   PremiumGlobalSettings,
   savePremiumSettings,
   subscribePremiumSettings,
@@ -18,17 +19,18 @@ import {
   CoinAd,
   CoinPlan,
 } from "@/lib/premiumAccess";
+import { resolveAnSeriesSeasons } from "@/lib/anLivePlayback";
 
 type Tab = "overview" | "series" | "quality" | "download" | "plans" | "ads";
 
 interface SeriesRow {
   id: string;
-  path: "series" | "animesaltSelected";
+  path: "webseries" | "movies" | "animesaltSelected";
   title: string;
   poster?: string;
   year?: string | number;
   premium: boolean;
-  dubType?: "official" | "fan";
+  dubType?: "official" | "fandub";
   premiumEpisodes?: Record<string, boolean>;
   seasonsCount?: number;
   episodesCount?: number;
@@ -44,7 +46,7 @@ export default function PremiumCenter() {
   const [rsSeries, setRsSeries] = useState<SeriesRow[]>([]);
   const [anSeries, setAnSeries] = useState<SeriesRow[]>([]);
   const [q, setQ] = useState("");
-  const [dubFilter, setDubFilter] = useState<"all" | "official" | "fan">("all");
+  const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [sourceFilter, setSourceFilter] = useState<"all" | "RS" | "AN">("all");
   const [premiumFilter, setPremiumFilter] = useState<"all" | "premium" | "free">("all");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -56,7 +58,8 @@ export default function PremiumCenter() {
   useEffect(() => subscribeCoinAds(setAds), []);
 
   useEffect(() => {
-    const mapRows = (raw: any, path: "series" | "animesaltSelected"): SeriesRow[] =>
+    const normalizeDub = (value: any): "official" | "fandub" => /fan|fandub/i.test(String(value || "")) ? "fandub" : "official";
+    const mapRows = (raw: any, path: "webseries" | "movies" | "animesaltSelected"): SeriesRow[] =>
       Object.entries(raw || {}).map(([id, v]: any) => {
         const seasons = Array.isArray(v?.seasons) ? v.seasons : [];
         const episodesCount = seasons.reduce(
@@ -70,17 +73,18 @@ export default function PremiumCenter() {
           poster: v?.poster || v?.image || v?.thumbnail || "",
           year: v?.year || v?.releaseYear,
           premium: !!v?.premium,
-          dubType: v?.dubType,
+          dubType: normalizeDub(v?.dubType || v?.dub || v?.languageType),
           premiumEpisodes: v?.premiumEpisodes || {},
           seasonsCount: seasons.length,
           episodesCount,
         };
       });
-    const u1 = onValue(ref(db, "series"), (snap) => setRsSeries(mapRows(snap.val(), "series")));
+    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries(mapRows(snap.val(), "webseries")));
+    const uMovies = onValue(ref(db, "movies"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "movies"), ...mapRows(snap.val(), "movies")]));
     const u2 = onValue(ref(db, "animesaltSelected"), (snap) =>
       setAnSeries(mapRows(snap.val(), "animesaltSelected")),
     );
-    return () => { u1(); u2(); };
+    return () => { u1(); uMovies(); u2(); };
   }, []);
 
   useEffect(() => {
@@ -101,7 +105,7 @@ export default function PremiumCenter() {
   const allSeries = useMemo(() => [...rsSeries, ...anSeries], [rsSeries, anSeries]);
   const filtered = useMemo(() => {
     return allSeries.filter((s) => {
-      if (sourceFilter === "RS" && s.path !== "series") return false;
+      if (sourceFilter === "RS" && s.path === "animesaltSelected") return false;
       if (sourceFilter === "AN" && s.path !== "animesaltSelected") return false;
       if (dubFilter !== "all" && (s.dubType || "official") !== dubFilter) return false;
       if (premiumFilter === "premium" && !s.premium) return false;
@@ -133,7 +137,7 @@ export default function PremiumCenter() {
     });
   };
 
-  const setDub = async (row: SeriesRow, dub: "official" | "fan") => {
+  const setDub = async (row: SeriesRow, dub: "official" | "fandub") => {
     await update(ref(db, `${row.path}/${row.id}`), { dubType: dub });
   };
 
