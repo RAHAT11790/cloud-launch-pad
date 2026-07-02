@@ -5700,12 +5700,36 @@ ${tgBulkFooter}
  ))}
  </select>
  </div>
- <div className="mb-4">
+  <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Category</label>
- <select value={seriesForm.category || ""} onChange={e => setSeriesForm({ ...seriesForm, category: e.target.value })} className={selectClass}>
- <option value="">Select Category</option>
- {categoryList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
- </select>
+ {(() => {
+   const known = new Set(categoryList.map(c => c.name));
+   const cur = seriesForm.category || "";
+   const isCustom = !!cur && !known.has(cur);
+   const selVal = isCustom ? "__custom__" : cur;
+   return (
+     <>
+       <select value={selVal} onChange={e => {
+         const v = e.target.value;
+         if (v === "__custom__") {
+           const typed = window.prompt("Type custom category (comma-separated allowed):", isCustom ? cur : "")?.trim();
+           if (typed) setSeriesForm({ ...seriesForm, category: typed });
+         } else {
+           setSeriesForm({ ...seriesForm, category: v });
+         }
+       }} className={selectClass}>
+         <option value="">Select Category</option>
+         {categoryList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+         <option value="__custom__">✏️ Customize (Type your own)…</option>
+       </select>
+       {isCustom && (
+         <input value={cur} onChange={e => setSeriesForm({ ...seriesForm, category: e.target.value })}
+           placeholder="Custom category (e.g. Action, Adventure, Fantasy)"
+           className={inputClass + " mt-2"} />
+       )}
+     </>
+   );
+ })()}
  </div>
  <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Dub Type</label>
