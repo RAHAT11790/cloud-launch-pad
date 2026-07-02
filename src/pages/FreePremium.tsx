@@ -134,12 +134,10 @@ export default function FreePremium() {
           else if (reason === "no_user") toast({ title: "Guest ID not ready", description: "Tap once again.", variant: "destructive" });
         }
       } else {
-        localStorage.removeItem(PENDING_KEY);
-        setPending(null);
+        setPending(p);
         toast({
-          title: "Not counted",
-          description: `You returned after ${Math.floor(elapsed)}s. Stay at least ${p.required}s to earn a coin.`,
-          variant: "destructive",
+          title: "Timer still running",
+          description: `Wait ${Math.ceil(p.required - elapsed)}s more, then return to claim the coin.`,
         });
       }
     };
@@ -162,11 +160,10 @@ export default function FreePremium() {
       return;
     }
 
-    // FIRST TAP → open smartlink (stream link) preview. NOT COUNTED.
+    // FIRST TAP → open smartlink preview and start the counted timer immediately.
     if (!firstTapDone) {
       const url = (smartlinkAd?.url || "").trim();
       if (!url) {
-        // No smartlink configured → skip to counted flow immediately.
         localStorage.setItem(CONFIRMED_KEY, "1");
         setFirstTapDone(true);
         toast({ title: "Ready", description: "Tap the button again to start the count timer." });
@@ -174,9 +171,13 @@ export default function FreePremium() {
       }
       localStorage.setItem(CONFIRMED_KEY, "1");
       setFirstTapDone(true);
+      const adId = `${smartlinkAd!.id}_${new Date().toISOString().slice(0, 10)}_${Math.floor(now / (60 * 60 * 1000))}`;
+      const p: PendingSession = { startedAt: Date.now(), required: settings.adWatchSeconds, adId };
+      localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+      setPending(p);
       toast({
-        title: "⚠️ This ad is NOT counted",
-        description: "Close the tab and tap the button again to start the count timer.",
+        title: `✅ Timer started — stay ${settings.adWatchSeconds}s`,
+        description: "Close the ad tab after the timer, then return to claim 1 coin.",
         duration: 6000,
       });
       window.open(extractFirstUrl(url), "_blank", "noopener,noreferrer");
@@ -217,7 +218,7 @@ export default function FreePremium() {
     <div className="min-h-screen bg-background text-foreground">
       <CoinAnimation trigger={coinAnimTick} />
       {/* Invisible container where background Adsterra SDKs live */}
-      <div ref={bgContainerRef} aria-hidden style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", left: -9999, top: -9999 }} />
+      <div ref={bgContainerRef} aria-hidden style={{ position: "fixed", inset: 0, width: "100vw", height: "100vh", overflow: "hidden", pointerEvents: "none", zIndex: 2147483000 }} />
 
       <div className="max-w-2xl mx-auto px-4 pt-5 pb-20">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">

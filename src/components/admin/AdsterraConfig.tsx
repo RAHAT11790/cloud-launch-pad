@@ -47,7 +47,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setVpEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
       setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
-      const n = Number(v.minGapSec);
+      const n = Number(v.refreshIntervalSec ?? v.minGapSec);
       setVpMinGapSec(Number.isFinite(n) && n >= 20 ? Math.min(n, 120) : 25);
     });
     const u2 = subscribeCoinAds((list) => {

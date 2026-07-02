@@ -118,7 +118,7 @@ function hasSnippets(cfg: AdsterraConfig) {
 
 function nextDelayMs(cfg: AdsterraConfig) {
   if (cfg.refreshIntervalSec > 0) {
-    const configured = Math.min(Math.max(cfg.refreshIntervalSec, 45), 60) * 1000;
+    const configured = Math.min(Math.max(cfg.refreshIntervalSec, 5), 60) * 1000;
     const jitter = Math.round((Math.random() - 0.5) * 8_000);
     return Math.min(AD_MAX_DELAY_MS, Math.max(AD_MIN_DELAY_MS, configured + jitter));
   }
@@ -221,7 +221,7 @@ function ensureContainer(): HTMLDivElement {
   const div = document.createElement("div");
   div.setAttribute("data-adsterra-root", "true");
   div.dataset.adsterraOwned = "true";
-  div.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;left:-9999px;top:-9999px";
+  div.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;pointer-events:none;z-index:2147483000";
   document.body.appendChild(div);
   window.__adsterraContainer = div;
   return div;

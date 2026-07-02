@@ -1918,11 +1918,6 @@ const Index = () => {
       ...(sIdx !== undefined ? { seasonIdx: sIdx } : {}),
       ...(eIdx !== undefined ? { epIdx: eIdx } : {}),
     };
-    const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
-    if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
-      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
-      navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
-    }
 
     const isAnimeSaltCard = anime.source === "animesalt"
       || String(anime.id || "").startsWith("as_")
@@ -1930,8 +1925,30 @@ const Index = () => {
       || String(anime.id || "").startsWith("an_mv_")
       || !!anime.anSlug
       || !!anime.animeSaltSlug;
-    const fullAnime = isAnimeSaltCard ? null : await loadFullFirebaseAnimeItemWithTimeout(anime);
-    const playableAnime = fullAnime || anime;
+
+    let preflightFullAnime: AnimeItem | null = null;
+    let preflightAnime: AnimeItem = anime;
+    if (isAnimeSaltCard) {
+      const meta = await loadAnimeSaltPremiumMeta(anime);
+      if (meta) preflightAnime = { ...anime, ...meta };
+    } else if (anime.premium === undefined && !anime.premiumEpisodes) {
+      preflightFullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime);
+      if (preflightFullAnime) preflightAnime = preflightFullAnime;
+    }
+
+    if ((isSeriesLocked(preflightAnime as any) || isEpisodeLocked(preflightAnime as any, routeTarget.seasonIdx ?? 0, routeTarget.epIdx ?? 0)) && !userIsPremium) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+      return;
+    }
+
+    const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
+    if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
+      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+      navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
+    }
+
+    const fullAnime = isAnimeSaltCard ? null : (preflightFullAnime || await loadFullFirebaseAnimeItemWithTimeout(preflightAnime));
+    const playableAnime = fullAnime || preflightAnime;
 
     // AN cards are admin-curated metadata only — playback URLs are resolved
     // LIVE from the AnimeSalt API on click (CDN links expire if stored).
