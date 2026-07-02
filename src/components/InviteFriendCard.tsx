@@ -83,7 +83,7 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
 
         {/* Link box */}
         <div className="mt-4 rounded-2xl bg-black/40 border border-white/10 p-3 flex items-center gap-2">
-          <div className="flex-1 min-w-0 font-mono text-[11.5px] sm:text-[12.5px] text-fuchsia-100/90 truncate">
+          <div className="flex-1 min-w-0 font-mono text-[11.5px] sm:text-[12.5px] text-white/95 truncate">
             {inviteUrl}
           </div>
           <button
