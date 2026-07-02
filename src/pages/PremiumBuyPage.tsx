@@ -137,9 +137,9 @@ export default function PremiumBuyPage() {
                   <span className="text-sm text-muted-foreground">→ {plan.days} days</span>
                 </div>
                 <ul className="mt-3 space-y-1.5 text-sm">
-                  <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-400" /> All premium series</li>
-                  <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-400" /> 4K & all qualities</li>
-                  <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-400" /> Video downloads</li>
+                  {dynamicFeatures.map((f) => (
+                    <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-emerald-400 flex-shrink-0" /> <span>{f}</span></li>
+                  ))}
                 </ul>
                 <Button
                   onClick={() => handleBuyWithCoins(plan)}
