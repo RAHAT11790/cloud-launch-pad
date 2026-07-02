@@ -1,82 +1,53 @@
-# Premium Center + Coin Page + RS Player/Download — 4 ধাপে সম্পূর্ণ overhaul
+## Premium System সম্পূর্ণ Remove Plan
 
-সংশোধিত scope: existing **Adsterra Manager** এবং video player-এর existing ad behavior untouched থাকবে। নতুন coin/free-premium page আলাদা হবে, আর Premium Center থেকে শুধু premium lock/config control হবে। Monetag ব্যবহার করা হবে না।
+Premium Center কাজ করতেছে না তাই পুরা Premium logic A-to-Z remove করবো। সব content auto-unlock হয়ে যাবে, কেউ আর premium দেখাবে না।
 
----
+### 1. Pages & Routes Remove (App.tsx থেকে)
+- `PremiumRequired.tsx` — delete
+- `PremiumBuyPage.tsx` — delete
+- `FreePremium.tsx` (coin ad-flow page) — delete
+- `Unlock.tsx` / `UnlockRequired.tsx` — delete
+- App.tsx থেকে সব premium/unlock/free-premium routes সরানো
 
-## ধাপ ১ — Premium Center সম্পূর্ণ ঠিক করা
+### 2. Admin Panel থেকে Remove
+- `src/components/admin/PremiumCenter.tsx` — delete
+- Admin.tsx এর `premium-center` section, sidebar entry, lazy import — সরানো
+- Episode Lock Tab (RS lock UI) — সরানো
+- Premium Device Limits section — সরানো
+- bKash payment auto-activate premium logic — সরানো (payment request থাকলে থাকবে, কিন্তু premium activate করবে না)
+- Server URL locked/premium toggle button — সরানো
 
-**Series Lock (Full)**
-- Premium Center-এর search bar আসলে কাজ করবে (deferred filter + prefix/fuzzy match RS + AN dataset-এ)।
-- প্রতিটা series card-এ একটা golden "Lock/Unlock" toggle button — click করলে সাথে সাথে `series.premium = true` Firebase-এ save হবে।
-- Admin dashboard-এর series row-এ (Edit / Delete button-এর পাশে) নতুন **"Premium Lock"** button — এক click-এ series full lock/unlock।
+### 3. Profile Page থেকে Remove
+- `usePremium` hook usage
+- Premium tab / panel পুরাটা
+- Premium expiry, coin wallet, device count UI
+- "Pause/Restore premium" button
+- Premium status listener (`users/{uid}/premium` subscribe)
 
-**Episode Lock (Partial)**
-- Premium Center-এ নতুন **"Episode Lock"** tab। Series select → সব season+episode accordion-এ show → tap করে individual episode toggle → `premiumEpisodes["s1e5"] = true`।
-- User-side card grid-এ locked episode-এ ছোট gold crown icon overlay।
-- Locked episode-এ click করলে সুন্দর professional message modal: "🔒 এই episode শুধু Premium members-এর জন্য" + "Get Premium" button।
+### 4. Library Files Delete
+- `src/lib/premiumAccess.ts`
+- `src/lib/premiumDevice.ts`
+- `src/lib/unlockAccess.ts`
+- `src/lib/freeAccessDevice.ts`
+- `src/hooks/usePremium.ts`
 
-**Card Premium Animation**
-- Locked series card-এ ultra-professional gold shimmer border, corner "PRO" ribbon, subtle glow pulse — একদম দেখেই প্রিমিয়াম বোঝা যাবে (framer-motion + CSS gradient border animation)।
+### 5. Content Playback (Auto-Unlock)
+- `useSelectedAnimeSalt.ts` — `premium` / `premiumEpisodes` fields ignore
+- `Index.tsx` — premium/unlock gate check বাদ, সরাসরি play
+- `VideoPlayer.tsx` — premium download restriction বাদ, সবাই download করতে পারবে
+- `AnimeCard.tsx` / poster cards — Premium badge/lock icon সরানো
 
----
+### 6. Mapper & Data Layer
+- `firebaseAnimeMapper.ts` / `adminContentIndex.ts` — premium metadata preserve logic সরানো (harmless কিন্তু cleanup)
+- `animeData.ts` — premium flags সরানো
 
-## ধাপ ২ — Adsterra-based Coin System + New Free Premium Page
+### 7. Ads & Support
+- `AdsterraAdManager.tsx` / `adsterraAds.ts` — coin-collection related ad flow সরানো (Adsterra config admin এ থাকলে থাকতে পারে, শুধু premium tie-in বাদ)
+- LiveSupportChat, About, Privacy pages এ premium mention সরানো
 
-**Adsterra ads only — existing Adsterra Manager untouched**
-- Existing Adsterra Manager/video-player ad setup যেভাবে আছে সেভাবেই থাকবে; সেখানে কোনো risky rewrite করা হবে না।
-- Premium Center-এর ভিতরে coin/free-premium page-এর জন্য আলাদা ad slot config/control থাকবে, কিন্তু core Adsterra Manager নষ্ট করা হবে না।
-- নতুন Monetag module/file/schema তৈরি করা হবে না।
+### 8. Verify
+- Build check করে ensure হবে কোন import error নাই
+- `/`, `/admin`, `/profile` routes load হয় কিনা test
 
-**Coin Center in Profile**
-- ProfilePage-এ নতুন section: current coin balance (Coins icon + count animation), today's remaining ad watches, "Get Free Premium" big button।
-- Card animation: coin flip + counter tween।
-
-**New Coin / Free Premium Page (`/premium/free`)**
-- Scrollable container (banner ads scroll কাজ করবে) with proper `overflow-y-auto`।
-- Header: "Watch Ads → Earn Coins → Get Premium Free"।
-- ৫টা ad slot card। প্রতিটা ad button-এ two-tap logic:
-  - **1st tap** → Social bar/Direct link open + top toast: "⚠️ This ad is not counted. Come back and tap again." → **কোনো counter start হবে না**।
-  - **2nd tap (same ad, after return)** → Direct link ad open + top toast: "✅ Ad counted! Watch for 15 seconds." → background 15s timer start → user back এলে +1 coin animation।
-- Daily cap enforcement, per-ad de-dup।
-- ২০ coin জমলে auto-notify "You can now redeem Premium!"।
-
-**Card click → Premium Required Page redesign**
-- Locked series card click করলে `/premium-required?series=xxx` route open — professional message, series poster blur backdrop, "If you want Premium free, tap here" bell button → `/premium/free`।
-
----
-
-## ধাপ ৩ — RS Player Time Reset + Quality Persist + Download Manager Fix
-
-**RS Player**
-- **Time reset bug**: Episode switch করলে `video.currentTime = 0` reset হবে (episode change handler-এ resumeAt clear করা)। Continue-watching resume শুধু same episode reopen-এ কাজ করবে।
-- **Quality persistence**: `localStorage["rs_preferred_quality"]` — user 4K/1080p/720p যা select করবে, next episode-ও ওই quality-তেই start হবে (available থাকলে)। না থাকলে nearest quality fallback।
-
-**RS Download Manager**
-- Size probe fix: HEAD → GET Range 0-0 fallback → filename-based estimate — zero size আর show করবে না।
-- Browser download route: proper `<a download>` blob/direct link redirect যাতে browser default downloader-এ চলে যায়।
-- Select-all bulk download queue ঠিকভাবে কাজ করবে।
-- **Premium lock message**: download locked হলে সুন্দর card modal:
-  > 🔒 **Premium Only Download**
-  > "This RS video is available for download only to Premium members. Upgrade to unlock unlimited downloads across all quality tiers."
-  > [ Get Premium → ] button — click করলে `/premium/buy` open হবে।
-- Unlock mode-এ সব user download পাবে normally।
-
----
-
-## ধাপ ৪ — Full Testing & Verification
-
-- TypeScript check + vitest run।
-- Playwright smoke: Admin Premium Center → search "Naruto" → lock toggle → verify Firebase write। User side card locked animation visible → click → premium-required page → Free Premium page → 2-tap ad flow → coin +1।
-- RS episode switch time reset verify (screenshot proof)।
-- Download unlock/lock message verify।
-- UI polish pass — spacing, gradient border, message box padding, emoji alignment।
-
----
-
-**Technical notes (for reference)**
-- Files touched: `PremiumCenter.tsx`, `Admin.tsx` (series row lock button), `AnimeCard.tsx` (premium overlay), `ProfilePage.tsx` (coin center + Get Free Premium button), `FreePremium.tsx` (2-tap ad logic), `PremiumRequired.tsx` (message redesign), `VideoPlayer.tsx` (time reset + quality persist), `downloadManager.ts` + `DownloadProgressOverlay.tsx` (size probe + lock modal)।
-- No Monetag files. No existing Adsterra Manager rewrite. No video-player ad behavior change unless explicitly requested.
-- No breaking changes to Firebase schema — only adds premium/coin-related lightweight fields/settings as needed।
-
-Approve করলে ধাপ ১ থেকে একে একে শুরু করবো।
+### Result
+সব anime/movie/episode সবার জন্য free, download button সবার জন্য visible, কোনো coin/ad-gate নাই, Admin panel থেকে Premium tab পুরাটা গায়েব।
