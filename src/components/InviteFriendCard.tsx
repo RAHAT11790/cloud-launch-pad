@@ -167,33 +167,33 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
             </div>
 
             {/* Anti-fraud warning */}
-            <div className="mt-3 rounded-2xl bg-red-500/8 border border-red-400/25 p-3.5">
+            <div className="mt-3 rounded-2xl bg-red-950/40 border border-red-400/40 p-3.5">
               <div className="flex items-center gap-2 mb-1.5">
                 <ShieldCheck className="w-4 h-4 text-red-300" />
-                <h4 className="text-[12px] font-bold uppercase tracking-wider text-red-200">
-                  Anti-Fraud • IP Address Tracking Active
+                <h4 className="text-[12px] font-black uppercase tracking-wider text-white">
+                  Anti-Fraud • IP Tracking Active
                 </h4>
               </div>
-              <p className="text-[11.5px] text-muted-foreground leading-relaxed">
-                Every invite is verified by <b className="text-red-200">network IP address</b> —
+              <p className="text-[12px] text-white/85 leading-relaxed">
+                Every invite is verified by <b className="text-red-300">network IP address</b> —
                 the same system used by major ad networks. Only genuine, real invites are counted.
               </p>
-              <ul className="mt-2 space-y-1 text-[11.5px] text-muted-foreground">
+              <ul className="mt-2 space-y-1.5 text-[12px] text-white/85">
                 <li className="flex gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-red-300 flex-shrink-0 mt-0.5" />
-                  <span>One Wi-Fi / mobile network = <b className="text-red-200">only one invite</b> counts, no matter how many devices or accounts you use.</span>
+                  <span>One Wi-Fi / mobile network = <b className="text-red-300">only one invite</b> counts, no matter how many devices or accounts you use.</span>
                 </li>
                 <li className="flex gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-red-300 flex-shrink-0 mt-0.5" />
-                  <span>Creating multiple accounts on the same phone will <b className="text-red-200">NOT</b> earn extra coins — the system detects it instantly.</span>
+                  <span>Creating multiple accounts on the same phone will <b className="text-red-300">NOT</b> earn extra coins — the system detects it instantly.</span>
                 </li>
                 <li className="flex gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-red-300 flex-shrink-0 mt-0.5" />
-                  <span>Fake / self-referrals are <b className="text-red-200">blocked and logged</b>. Abuse may lead to a permanent coin-earning ban.</span>
+                  <span>Fake / self-referrals are <b className="text-red-300">blocked and logged</b>. Abuse may lead to a permanent coin-earning ban.</span>
                 </li>
               </ul>
-              <p className="mt-2 text-[11px] font-semibold text-emerald-200">
-                ✓ Share with real friends → real coins → real Premium. It's that simple.
+              <p className="mt-2 text-[12px] font-bold text-emerald-300">
+                ✓ Share with real friends → real coins → real Premium.
               </p>
             </div>
           </>
