@@ -150,6 +150,7 @@ export default function PremiumCenter() {
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: "overview", label: "Overview", icon: TrendingUp },
     { id: "series", label: "Content Locks", icon: Lock },
+    { id: "eplocks", label: "Episode Lock (RS)", icon: Film },
     { id: "quality", label: "Quality", icon: Star },
     { id: "download", label: "Downloads", icon: Download },
     { id: "plans", label: "Coin Plans", icon: Crown },
