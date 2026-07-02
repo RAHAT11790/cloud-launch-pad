@@ -679,8 +679,8 @@ function QualityTab({ settings }: { settings: PremiumGlobalSettings }) {
                 <div className="text-lg font-black">{q.label}</div>
                 <div className="text-xs text-zinc-500">{q.desc}</div>
               </div>
-              <div className={`w-12 h-6 rounded-full transition relative ${locked ? "bg-amber-500" : "bg-white/10"}`}>
-                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${locked ? "left-6" : "left-0.5"}`} />
+              <div className={`w-12 h-6 rounded-full transition-colors duration-300 relative ${locked ? "bg-amber-500" : "bg-white/10"}`}>
+                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ease-out ${locked ? "translate-x-[26px]" : "translate-x-0.5"}`} />
               </div>
             </div>
             <input
