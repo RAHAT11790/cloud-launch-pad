@@ -2294,8 +2294,33 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }, []);
 
  // Resolve anime-accurate genres + rating using TMDB ID/IMDB ID, with AniList fallback for anime-specific genres
- const resolveTelegramGenresAndRating = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
- if (!tmdbIdOrImdb.trim()) return { genres: [] as string[], rating: "" };
+  const resolveTelegramGenresAndRating = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
+  const idTrimmed = String(tmdbIdOrImdb || "").trim();
+  const title = String(fallbackTitle || "").trim();
+  if (!idTrimmed && !title) return { genres: [] as string[], rating: "" };
+
+  // No ID → try searching TMDB by title (TV first, then movie).
+  let workingId = idTrimmed;
+  let workingKind: "tv" | "movie" | "" = "";
+  if (!workingId && title) {
+    try {
+      const q = encodeURIComponent(title);
+      const tvSearch = await fetch(`${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&language=en-US&query=${q}`);
+      const tvJson = tvSearch.ok ? await tvSearch.json() : null;
+      if (tvJson?.results?.[0]?.id) {
+        workingId = String(tvJson.results[0].id);
+        workingKind = "tv";
+      } else {
+        const mvSearch = await fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&language=en-US&query=${q}`);
+        const mvJson = mvSearch.ok ? await mvSearch.json() : null;
+        if (mvJson?.results?.[0]?.id) {
+          workingId = String(mvJson.results[0].id);
+          workingKind = "movie";
+        }
+      }
+    } catch {}
+  }
+  if (!workingId) return { genres: [] as string[], rating: "" };
 
  let tmdbData: any = null;
  const idTrimmed = tmdbIdOrImdb.trim();
