@@ -293,21 +293,11 @@ const verifyAnPlayable = async (item: ApiItem, force = false): Promise<boolean> 
   return ok;
 };
 
-const filterPlayableItems = async (items: ApiItem[], force = false, onProgress?: (done: number, total: number) => void): Promise<ApiItem[]> => {
-  const out: ApiItem[] = [];
-  const queue = [...items];
-  let done = 0;
-  const workers = Array.from({ length: Math.min(6, queue.length) }, async () => {
-    while (queue.length) {
-      const item = queue.shift()!;
-      if (await verifyAnPlayable(item, force)) out.push(item);
-      done += 1;
-      onProgress?.(done, items.length);
-    }
-  });
-  await Promise.all(workers);
-  const order = new Map(items.map((item, idx) => [`${item.type}:${item.slug}`, idx]));
-  return out.sort((a, b) => (order.get(`${a.type}:${a.slug}`) || 0) - (order.get(`${b.type}:${b.slug}`) || 0));
+// Admin AN Manager only fetches the anime card list — no playability probe.
+// Playback URLs are resolved on-demand from the user panel when a card is opened.
+const filterPlayableItems = async (items: ApiItem[], _force = false, onProgress?: (done: number, total: number) => void): Promise<ApiItem[]> => {
+  onProgress?.(items.length, items.length);
+  return items;
 };
 
 export default function AnManager({
