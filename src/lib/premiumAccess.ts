@@ -239,3 +239,92 @@ export const saveCoinAd = async (ad: CoinAd) => {
 export const deleteCoinAd = async (id: string) => {
   await set(ref(db, `settings/premiumCoinAds/${id}`), null);
 };
+
+// ============ Device fingerprint (stable per browser) ============
+const DEVICE_ID_KEY = "rs_device_id_v1";
+export const getDeviceId = (): string => {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return "dev_unknown";
+  }
+};
+
+// ============ Guest → Real user coin transfer ============
+// Runs on login. Same device can only transfer ONCE (prevents farming).
+export const transferGuestCoinsToUser = async (guestId: string, targetUid: string): Promise<{ transferred: number }> => {
+  if (!guestId || !targetUid || guestId === targetUid) return { transferred: 0 };
+  const deviceId = getDeviceId();
+  try {
+    // Guard: only one transfer per device — ever.
+    const claimSnap = await get(ref(db, `deviceTransferClaims/${deviceId}`));
+    if (claimSnap.exists()) return { transferred: 0 };
+
+    const gSnap = await get(ref(db, `users/${guestId}/coinWallet`));
+    const guestWallet = gSnap.val() || {};
+    const coins = Number(guestWallet.coins || 0);
+    if (coins <= 0) {
+      await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), guestId, targetUid, coins: 0 });
+      return { transferred: 0 };
+    }
+
+    // Add to real user atomically
+    await runTransaction(ref(db, `users/${targetUid}/coinWallet`), (cur: any) => {
+      const w = cur || { coins: 0, adWatchLog: {} };
+      return { ...w, coins: (w.coins || 0) + coins };
+    });
+    // Zero out guest wallet & lock it
+    await set(ref(db, `users/${guestId}/coinWallet`), {
+      coins: 0,
+      adWatchLog: guestWallet.adWatchLog || {},
+      transferredTo: targetUid,
+      transferredAt: Date.now(),
+    });
+    await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), guestId, targetUid, coins });
+    return { transferred: coins };
+  } catch {
+    return { transferred: 0 };
+  }
+};
+
+// ============ Premium device limit ============
+// When a user activates premium (or logs in with active premium), claim a device slot.
+// Returns false if another device already holds the slot.
+export type DeviceClaimResult = { ok: true } | { ok: false; reason: "device_limit"; activeDevice: string };
+export const claimPremiumDevice = async (uid: string): Promise<DeviceClaimResult> => {
+  const deviceId = getDeviceId();
+  const path = `users/${uid}/premiumDevices`;
+  const snap = await get(ref(db, path));
+  const devices = (snap.val() || {}) as Record<string, { at: number }>;
+  const sSnap = await get(ref(db, "settings/premium"));
+  const limit = Math.max(1, Number((sSnap.val() || {}).premiumDeviceLimit) || 1);
+
+  if (devices[deviceId]) {
+    await update(ref(db, `${path}/${deviceId}`), { at: Date.now() });
+    return { ok: true };
+  }
+  const count = Object.keys(devices).length;
+  if (count >= limit) {
+    return { ok: false, reason: "device_limit", activeDevice: Object.keys(devices)[0] };
+  }
+  await set(ref(db, `${path}/${deviceId}`), { at: Date.now() });
+  return { ok: true };
+};
+
+export const releasePremiumDevice = async (uid: string) => {
+  try { await set(ref(db, `users/${uid}/premiumDevices/${getDeviceId()}`), null); } catch {}
+};
+
+// ============ Guest user detection ============
+export const isGuestUser = (): boolean => {
+  try {
+    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+    return !!u.id && (!u.email || u.email.endsWith("@guest.local") || u.email === "guest@rsanime.com");
+  } catch { return true; }
+};
+
