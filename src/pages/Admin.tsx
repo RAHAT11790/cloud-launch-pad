@@ -4979,7 +4979,7 @@ ${tgBulkFooter}
   // If no tmdbId is stored, the resolver falls back to TMDB search-by-title.
   if (ws?.tmdbId) setTgImdbId(String(ws.tmdbId));
   {
-  const { genres, rating } = await resolveTelegramGenresAndRating(String(ws?.tmdbId || ""), ws?.title || release.title || "");
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(ws?.tmdbId || ""), ws?.title || release.title || "", ws?.category || "");
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   else if (ws?.rating) setTgRating(String(ws.rating));
@@ -4990,7 +4990,7 @@ ${tgBulkFooter}
   if (mv?.language) setTgLanguages(String(mv.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
   if (mv?.tmdbId) setTgImdbId(String(mv.tmdbId));
   {
-  const { genres, rating } = await resolveTelegramGenresAndRating(String(mv?.tmdbId || ""), mv?.title || release.title || "");
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(mv?.tmdbId || ""), mv?.title || release.title || "", mv?.category || "");
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   else if (mv?.rating) setTgRating(String(mv.rating));
@@ -6423,7 +6423,7 @@ ${tgBulkFooter}
   // Genres ALWAYS from TMDB (id preferred, else search by title).
   try {
   if (ctxForm.tmdbId) setTgImdbId(String(ctxForm.tmdbId));
-  const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId || ""), ctxForm.title || "");
+  const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId || ""), ctxForm.title || "", ctxForm.category || "");
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   } catch {}
@@ -6521,7 +6521,7 @@ ${tgBulkFooter}
  if (ws.rating) setTgRating(String(ws.rating));
   // Genres from TMDB only — never from local category.
   (async () => { try {
-    const { genres, rating } = await resolveTelegramGenresAndRating(String((ws as any).tmdbId || ""), ws.title || "");
+    const { genres, rating } = await resolveTelegramGenresAndRating(String((ws as any).tmdbId || ""), ws.title || "", (ws as any).category || "");
     if (genres.length > 0) setTgGenres(genres.join(", "));
     if (rating) setTgRating(rating);
   } catch {} })();
@@ -7662,7 +7662,7 @@ ${tgBulkFooter}
   } catch {}
   if ((fullData as any).tmdbId) setTgImdbId(String((fullData as any).tmdbId));
   try {
-  const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId || ""), r.title || "");
+  const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId || ""), r.title || "", (fullData as any).category || "");
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   } catch {}
