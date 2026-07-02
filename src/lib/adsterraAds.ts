@@ -79,6 +79,7 @@ function normalize(v: any): AdsterraConfig {
     enabled: v?.enabled !== false,
     popunder: typeof v?.popunder === "string" ? v.popunder : "",
     streamLink: typeof v?.streamLink === "string" ? v.streamLink : "",
+    pushNotification: typeof v?.pushNotification === "string" ? v.pushNotification : "",
     refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 50,
   };
 }
