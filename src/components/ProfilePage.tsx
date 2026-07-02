@@ -20,6 +20,7 @@ import { optimizedImageUrl } from "@/lib/imageCache";
 import { getTodayRemaining } from "@/lib/premiumAccess";
 
 import VideoPlayer from "@/components/VideoPlayer";
+import InviteFriendCard from "@/components/InviteFriendCard";
 
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
