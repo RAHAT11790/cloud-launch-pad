@@ -279,7 +279,7 @@ export default function PremiumCenter() {
               {filtered.length === 0 && <EmptyState />}
             </div>
           ) : (
-            <div className="rounded-2xl border border-white/10 bg-black/20 divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+            <div className="rounded-2xl border border-white/10 bg-black/20 divide-y divide-white/5">
               {filtered.slice(0, 300).map((row) => (
                 <SeriesListRow
                   key={`${row.path}-${row.id}`}
