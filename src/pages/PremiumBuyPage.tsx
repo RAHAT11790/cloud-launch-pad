@@ -1,18 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Coins, CreditCard, KeyRound, Crown, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, CreditCard, KeyRound, Crown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
 import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
-import { buyPremiumWithCoins, CoinPlan, ensureGuestUser } from "@/lib/premiumAccess";
 import { db, ref, get } from "@/lib/firebase";
 
 export default function PremiumBuyPage() {
   const navigate = useNavigate();
   const branding = useBranding();
-  const { isPremium, status, wallet, settings, uid } = usePremium();
-  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const { isPremium, status, settings } = usePremium();
   const [lockedCount, setLockedCount] = useState<number>(0);
 
   useEffect(() => {
@@ -41,27 +38,6 @@ export default function PremiumBuyPage() {
     feats.push("Ad-free playback priority");
     return feats;
   }, [lockedCount, settings.globalQualityLocks, settings.globalDownloadLock]);
-
-  const plans: CoinPlan[] = [settings.coinPlan, ...(settings.extraPlans || [])];
-
-  const handleBuyWithCoins = async (plan: CoinPlan) => {
-    if (!uid) {
-      ensureGuestUser();
-    }
-    if (wallet.coins < plan.coins) {
-      toast({ title: "Not enough coins", description: `You need ${plan.coins} coins. Earn more from Free Premium.`, variant: "destructive" });
-      navigate("/free-premium");
-      return;
-    }
-    setBusyPlan(plan.id);
-    const res = await buyPremiumWithCoins(plan);
-    setBusyPlan(null);
-    if (res.ok) {
-      toast({ title: "Premium Activated 🎉", description: `Enjoy ${plan.days} days of premium!` });
-    } else {
-      toast({ title: "Purchase failed", description: (res as any).reason, variant: "destructive" });
-    }
-  };
 
   const daysLeft = status && isPremium ? Math.max(0, Math.ceil((status.expiresAt - Date.now()) / 86400000)) : 0;
 
@@ -92,105 +68,49 @@ export default function PremiumBuyPage() {
             </div>
           </div>
 
-          {/* Status strip */}
-          <div className="mt-5 flex flex-wrap gap-3">
-            <div className="rounded-2xl bg-black/40 border border-white/5 px-4 py-2.5 flex items-center gap-2">
-              <Coins className="w-4 h-4 text-amber-400" />
-              <span className="text-sm text-muted-foreground">Balance</span>
-              <span className="text-base font-bold text-amber-300">{wallet.coins}</span>
+          {isPremium && (
+            <div className="mt-5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 px-4 py-2.5 inline-flex items-center gap-2">
+              <Crown className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-emerald-200">Active — {daysLeft} days left</span>
             </div>
-            {isPremium && (
-              <div className="rounded-2xl bg-emerald-500/10 border border-emerald-400/30 px-4 py-2.5 flex items-center gap-2">
-                <Crown className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm text-emerald-200">Active — {daysLeft} days left</span>
-              </div>
-            )}
+          )}
+        </div>
+
+        {/* Features */}
+        {dynamicFeatures.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <h2 className="text-sm font-semibold mb-3">What you get</h2>
+            <ul className="space-y-2 text-sm">
+              {dynamicFeatures.map((f) => (
+                <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-emerald-400 flex-shrink-0" /> <span>{f}</span></li>
+              ))}
+            </ul>
           </div>
-        </div>
+        )}
 
-        {/* Coin plans */}
-        <h2 className="mt-8 text-lg font-semibold flex items-center gap-2">
-          <Coins className="w-5 h-5 text-amber-400" /> Buy with Coins
-        </h2>
+        {/* Payment options */}
+        <h2 className="mt-8 text-lg font-semibold">Buy Premium</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {plans.map((plan) => {
-            const canAfford = wallet.coins >= plan.coins;
-            const busy = busyPlan === plan.id;
-            return (
-              <div
-                key={plan.id}
-                className={`relative rounded-2xl border p-5 transition ${
-                  plan.featured
-                    ? "border-amber-400/40 bg-gradient-to-br from-amber-500/10 to-yellow-500/5"
-                    : "border-white/10 bg-white/[0.02]"
-                }`}
-              >
-                {plan.featured && (
-                  <span className="absolute -top-2.5 right-4 text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-black px-2 py-0.5 rounded-full">
-                    Recommended
-                  </span>
-                )}
-                <div className="text-sm text-muted-foreground">{plan.name}</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-amber-300">{plan.coins}</span>
-                  <Coins className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm text-muted-foreground">→ {plan.days} days</span>
-                </div>
-                <ul className="mt-3 space-y-1.5 text-sm">
-                  {dynamicFeatures.map((f) => (
-                    <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-emerald-400 flex-shrink-0" /> <span>{f}</span></li>
-                  ))}
-                </ul>
-                <Button
-                  onClick={() => handleBuyWithCoins(plan)}
-                  disabled={busy}
-                  className={`mt-4 w-full h-10 text-sm ${
-                    canAfford
-                      ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:from-amber-400 hover:to-yellow-400"
-                      : "bg-white/5 text-muted-foreground hover:bg-white/10"
-                  }`}
-                >
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : canAfford ? "Buy Now" : `Need ${plan.coins - wallet.coins} more`}
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Other options */}
-        <h2 className="mt-8 text-lg font-semibold">Other Options</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <Button
             variant="outline"
-            className="h-11 justify-start border-white/10 hover:bg-white/5"
-            onClick={() => navigate("/free-premium")}
-          >
-            <Coins className="w-4 h-4 text-amber-400" />
-            <div className="text-left">
-              <div className="text-xs font-semibold">Free Premium</div>
-              <div className="text-[10px] text-muted-foreground">Earn coins</div>
-            </div>
-          </Button>
-          <Button
-            variant="outline"
-            className="h-11 justify-start border-white/10 hover:bg-white/5"
+            className="h-14 justify-start border-white/10 hover:bg-white/5"
             onClick={() => navigate("/premium?tab=bkash")}
           >
-            <CreditCard className="w-4 h-4 text-pink-400" />
+            <CreditCard className="w-5 h-5 text-pink-400" />
             <div className="text-left">
-              <div className="text-xs font-semibold">bKash</div>
-              <div className="text-[10px] text-muted-foreground">Pay manually</div>
+              <div className="text-sm font-semibold">bKash</div>
+              <div className="text-[11px] text-muted-foreground">Pay manually</div>
             </div>
           </Button>
           <Button
             variant="outline"
-            className="h-11 justify-start border-white/10 hover:bg-white/5"
+            className="h-14 justify-start border-white/10 hover:bg-white/5"
             onClick={() => navigate("/premium?tab=redeem")}
           >
-            <KeyRound className="w-4 h-4 text-indigo-400" />
+            <KeyRound className="w-5 h-5 text-indigo-400" />
             <div className="text-left">
-              <div className="text-xs font-semibold">Redeem Code</div>
-              <div className="text-[10px] text-muted-foreground">Use gift code</div>
+              <div className="text-sm font-semibold">Redeem Code</div>
+              <div className="text-[11px] text-muted-foreground">Use gift code</div>
             </div>
           </Button>
         </div>
