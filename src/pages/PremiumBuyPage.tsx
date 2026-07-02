@@ -1,11 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { ArrowLeft, Coins, CreditCard, KeyRound, Crown, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Coins, CreditCard, KeyRound, Crown, Check, Loader2, UserPlus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
-import { buyPremiumWithCoins, CoinPlan } from "@/lib/premiumAccess";
+import { buyPremiumWithCoins, CoinPlan, isGuestUser } from "@/lib/premiumAccess";
+
+export default function PremiumBuyPage() {
+  const navigate = useNavigate();
+  const branding = useBranding();
+  const { isPremium, status, wallet, settings, uid } = usePremium();
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const guest = isGuestUser();
+
 
 export default function PremiumBuyPage() {
   const navigate = useNavigate();
