@@ -157,6 +157,21 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
         </div>
 
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-white/85">Cool-down (seconds)</span>
+            <span className="text-[10px] text-white/40">between player ad calls · 0 = no cool-down</span>
+          </div>
+          <input
+            type="number" min={0} max={3600}
+            value={cooldownSec}
+            onChange={(e) => setCooldownSec(Number(e.target.value))}
+            className={inputClass + " w-full"}
+            placeholder="e.g. 50"
+          />
+          <p className="text-[10px] text-white/45">Adsterra can be spammy — keep 30-90s to protect the user experience.</p>
+        </div>
+
         <button onClick={saveVideoPlayer} disabled={savingVp}
           className={btnPrimary + " w-full inline-flex items-center justify-center gap-1.5"}>
           <Save className="w-3.5 h-3.5" />
