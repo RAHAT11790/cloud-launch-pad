@@ -117,7 +117,7 @@ export default function PremiumBuyPage() {
                 <Button
                   onClick={() => handleBuyWithCoins(plan)}
                   disabled={busy}
-                  className={`mt-4 w-full ${
+                  className={`mt-4 w-full h-10 text-sm ${
                     canAfford
                       ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:from-amber-400 hover:to-yellow-400"
                       : "bg-white/5 text-muted-foreground hover:bg-white/10"
@@ -135,35 +135,35 @@ export default function PremiumBuyPage() {
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <Button
             variant="outline"
-            className="h-14 justify-start border-white/10 hover:bg-white/5"
+            className="h-11 justify-start border-white/10 hover:bg-white/5"
             onClick={() => navigate("/free-premium")}
           >
-            <Coins className="w-5 h-5 text-amber-400" />
+            <Coins className="w-4 h-4 text-amber-400" />
             <div className="text-left">
-              <div className="text-sm font-semibold">Free Premium</div>
-              <div className="text-xs text-muted-foreground">Earn coins by watching ads</div>
+              <div className="text-xs font-semibold">Free Premium</div>
+              <div className="text-[10px] text-muted-foreground">Earn coins</div>
             </div>
           </Button>
           <Button
             variant="outline"
-            className="h-14 justify-start border-white/10 hover:bg-white/5"
+            className="h-11 justify-start border-white/10 hover:bg-white/5"
             onClick={() => navigate("/premium?tab=bkash")}
           >
-            <CreditCard className="w-5 h-5 text-pink-400" />
+            <CreditCard className="w-4 h-4 text-pink-400" />
             <div className="text-left">
-              <div className="text-sm font-semibold">bKash</div>
-              <div className="text-xs text-muted-foreground">Pay via bKash</div>
+              <div className="text-xs font-semibold">bKash</div>
+              <div className="text-[10px] text-muted-foreground">Pay manually</div>
             </div>
           </Button>
           <Button
             variant="outline"
-            className="h-14 justify-start border-white/10 hover:bg-white/5"
+            className="h-11 justify-start border-white/10 hover:bg-white/5"
             onClick={() => navigate("/premium?tab=redeem")}
           >
-            <KeyRound className="w-5 h-5 text-indigo-400" />
+            <KeyRound className="w-4 h-4 text-indigo-400" />
             <div className="text-left">
-              <div className="text-sm font-semibold">Redeem Code</div>
-              <div className="text-xs text-muted-foreground">Use gift code</div>
+              <div className="text-xs font-semibold">Redeem Code</div>
+              <div className="text-[10px] text-muted-foreground">Use gift code</div>
             </div>
           </Button>
         </div>
