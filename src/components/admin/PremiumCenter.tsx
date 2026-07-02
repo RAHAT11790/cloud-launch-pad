@@ -79,7 +79,7 @@ export default function PremiumCenter() {
           episodesCount,
         };
       });
-    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "webseries"), ...mapRows(snap.val(), "webseries")])));
+    const u1 = onValue(ref(db, "webseries"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "webseries"), ...mapRows(snap.val(), "webseries")]));
     const uMovies = onValue(ref(db, "movies"), (snap) => setRsSeries((prev) => [...prev.filter((r) => r.path !== "movies"), ...mapRows(snap.val(), "movies")]));
     const u2 = onValue(ref(db, "animesaltSelected"), (snap) =>
       setAnSeries(mapRows(snap.val(), "animesaltSelected")),
