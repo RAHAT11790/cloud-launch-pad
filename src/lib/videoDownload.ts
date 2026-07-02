@@ -18,6 +18,8 @@ const buildSafeFileName = (rawName: string) => {
 
 let overrideBaseUrl = "";
 let overrideEnabled = false;
+let playbackProxyBaseUrl = "";
+let playbackProxyEnabled = false;
 try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
@@ -25,11 +27,17 @@ try {
       overrideBaseUrl = String(v.customUrl || "").trim();
       overrideEnabled = v.enabled === true;
     });
+    onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
+      const v = snap.val() || {};
+      playbackProxyBaseUrl = String(v.customUrl || v.url || "").trim();
+      playbackProxyEnabled = v.enabled === true;
+    });
   }
 } catch {}
 
 const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || "";
 const DEFAULT_DOWNLOAD_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-download` : "";
+const DEFAULT_PLAYBACK_PROXY_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-proxy` : "";
 
 const resolveBaseSync = (): string => {
   if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
@@ -43,6 +51,12 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   if (!trimmedBase) return "";
   const fileName = buildSafeFileName(rawFileName);
   return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(rawUrl)}`;
+};
+
+const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
+  const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
+  if (!trimmedBase) return "";
+  return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
 };
 
 export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string): string[] {
@@ -62,6 +76,23 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     overrideEnabled && overrideBaseUrl ? overrideBaseUrl : "",
   ]);
   return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
+}
+
+export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
+  const trimmedUrl = String(rawUrl || "").trim();
+  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
+  if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
+  if (isManagedVideoDownloadUrl(trimmedUrl)) {
+    try {
+      const inner = new URL(trimmedUrl).searchParams.get("url");
+      if (inner) return buildVideoProxyUrlCandidates(inner);
+    } catch {}
+  }
+  const bases = unique([
+    playbackProxyEnabled && playbackProxyBaseUrl ? playbackProxyBaseUrl : "",
+    DEFAULT_PLAYBACK_PROXY_BASE,
+  ]);
+  return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
 }
 
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {

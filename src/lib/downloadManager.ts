@@ -1,4 +1,4 @@
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
@@ -124,8 +124,17 @@ class DownloadManager {
   private async fetchContentLength(url: string, init?: RequestInit): Promise<number> {
     try {
       const response = await fetch(url, init);
+      if (!response.ok && response.status !== 206) {
+        try { await response.body?.cancel(); } catch {}
+        return 0;
+      }
+      const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+      if (/json|text\/html/.test(contentType)) {
+        try { await response.body?.cancel(); } catch {}
+        return 0;
+      }
       const len = response.headers.get("content-length");
-      if (len && Number(len) > 0) {
+      if (len && Number(len) > 512 * 1024) {
         try { await response.body?.cancel(); } catch {}
         return Number(len);
       }
@@ -146,7 +155,7 @@ class DownloadManager {
     try {
       const cache = JSON.parse(localStorage.getItem(SIZE_CACHE_KEY) || "{}");
       const bytes = Number(cache?.[url] || 0);
-      return Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+      return Number.isFinite(bytes) && bytes > 512 * 1024 ? bytes : 0;
     } catch {
       return 0;
     }
@@ -175,6 +184,7 @@ class DownloadManager {
     const direct = unwrapManagedVideoUrl(raw) || raw;
     return Array.from(new Set([
       ...buildVideoDownloadUrlCandidates(raw, fileName),
+      ...buildVideoProxyUrlCandidates(raw),
       buildVideoDownloadUrl(raw, fileName) || "",
       direct.startsWith("https://") ? direct : "",
     ].filter(Boolean)));

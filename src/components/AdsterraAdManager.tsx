@@ -20,10 +20,15 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     setAdsterraPremium(!!isPremium);
     stopAdGuard();
     if (isPremium) return;
-    // Show the first player ad quickly; adsterraAds.ts handles the normal
-    // refresh/cycle after this initial mount.
-    const t = window.setTimeout(() => { loadAdsterraSlots(); }, 2_000);
-    return () => window.clearTimeout(t);
+    // No player-ad cooldown: every user click while the player is open can ask
+    // Adsterra for the configured Popunder + Social/Push placements.
+    const onClick = () => { loadAdsterraSlots().catch(() => {}); };
+    document.addEventListener("click", onClick, { capture: true });
+    const t = window.setTimeout(onClick, 900);
+    return () => {
+      document.removeEventListener("click", onClick, { capture: true } as EventListenerOptions);
+      window.clearTimeout(t);
+    };
   }, [isPremium, videoEl]);
 
   return null;

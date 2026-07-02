@@ -8,7 +8,7 @@ import {
   CoinAd,
   DEFAULT_PREMIUM_SETTINGS,
 } from "@/lib/premiumAccess";
-import { Zap, Radio, LayoutGrid, Sparkles, Link2, Clock, Shield, Save } from "lucide-react";
+import { Zap, Radio, LayoutGrid, Sparkles, Link2, Save } from "lucide-react";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 
@@ -33,7 +33,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [vpEnabled, setVpEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
   const [socialLink, setSocialLink] = useState("");
-  const [vpMinGapSec, setVpMinGapSec] = useState<number>(25);
   const [savingVp, setSavingVp] = useState(false);
 
   const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
@@ -47,8 +46,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setVpEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
       setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
-      const n = Number(v.refreshIntervalSec ?? v.minGapSec);
-      setVpMinGapSec(Number.isFinite(n) && n >= 20 ? Math.min(n, 120) : 25);
     });
     const u2 = subscribeCoinAds((list) => {
       const map: Record<string, CoinAd> = {};
@@ -74,9 +71,10 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         popunder: popunder.trim(),
         streamLink: socialLink.trim(),
         socialLink: socialLink.trim(),
-        pushNotification: "",
+        pushNotification: socialLink.trim(),
         socialBar: socialLink.trim(),
-        minGapSec: Math.max(20, Math.min(120, Number(vpMinGapSec) || 25)),
+        minGapSec: 0,
+        refreshIntervalSec: 0,
       });
       toast.success("Video Player ads saved");
     } catch { toast.error("Save failed"); }
@@ -153,19 +151,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
             className={codeArea}
             placeholder='https://... or <script src="https://.../social-bar.js"></script>' />
           <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5 text-sky-300" />
-            <span className="text-[11px] font-semibold text-white/85">Popunder minimum gap</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="number" min={20} max={120} value={vpMinGapSec}
-              onChange={(e) => setVpMinGapSec(Number(e.target.value))}
-              className={inputClass + " w-24"} />
-            <span className="text-[11px] text-white/50">seconds (20–120)</span>
-          </div>
         </div>
 
         <button onClick={saveVideoPlayer} disabled={savingVp}

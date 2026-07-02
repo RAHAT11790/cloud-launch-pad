@@ -44,7 +44,7 @@ interface VideoServerOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates } from "@/lib/videoDownload";
+import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -372,6 +372,15 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
+const normalizeDownloadQualityKey = (label: string) => {
+  const value = String(label || "").trim().toLowerCase();
+  if (/4k|2160|uhd/.test(value)) return "4k";
+  if (/1080|fhd/.test(value)) return "1080p";
+  if (/720|hd/.test(value)) return "720p";
+  if (/480|sd/.test(value)) return "480p";
+  return value || "default";
+};
+
 const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
@@ -491,6 +500,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.locked ? "1" : "0"}`).join("|"),
     [effectiveVideoServers],
   );
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const origins = new Set<string>();
+    const addOrigin = (value?: string) => {
+      try {
+        const u = new URL(String(value || ""));
+        if (u.protocol === "http:" || u.protocol === "https:") origins.add(u.origin);
+      } catch {}
+    };
+    addOrigin(src);
+    effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
+    document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
+    origins.forEach((origin) => {
+      const preconnect = document.createElement("link");
+      preconnect.rel = "preconnect";
+      preconnect.href = origin;
+      preconnect.crossOrigin = "anonymous";
+      preconnect.dataset.rsVideoPreconnect = "true";
+      document.head.appendChild(preconnect);
+      const dns = document.createElement("link");
+      dns.rel = "dns-prefetch";
+      dns.href = origin;
+      dns.dataset.rsVideoPreconnect = "true";
+      document.head.appendChild(dns);
+    });
+    return () => {
+      document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
+    };
+  }, [effectiveVideoServers, src]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -644,7 +683,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Safety: for HTTP sources we wait for the admin proxy setting so we
     // never inject a raw http:// URL into <video>. For https we can play
     // direct very quickly even if Firebase is slow.
-    const safetyMs = httpSrc ? 6000 : 1200;
+    const safetyMs = httpSrc ? 2500 : 250;
     const safety = window.setTimeout(() => {
       if (httpSrc) {
         gotProxy = true;
@@ -736,9 +775,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
     try {
       const raw = localStorage.getItem("rs_dl_size_cache_v1");
-      return raw ? JSON.parse(raw) : {};
+      const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      const filtered: Record<string, number> = {};
+      Object.entries(parsed).forEach(([key, value]) => {
+        const n = Number(value || 0);
+        if (Number.isFinite(n) && n > 512 * 1024) filtered[key] = n;
+      });
+      return filtered;
     } catch { return {}; }
   });
+  const getCachedDownloadSize = useCallback((url?: string) => {
+    const n = Number(url ? downloadSizeCache[url] || 0 : 0);
+    return Number.isFinite(n) && n > 512 * 1024 ? n : 0;
+  }, [downloadSizeCache]);
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -1050,11 +1099,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
   }, [currentDownloadLanguageLabel, downloadPanelSeasonIdx, getEpisodeDownloadLinksForLanguage, seasons]);
 
+  const selectedSeasonHas480p = useMemo(() => {
+    const season = seasons?.[downloadPanelSeasonIdx];
+    if (!season?.episodes?.length) return availableDownloadQualities.some((q) => normalizeDownloadQualityKey(q) === "480p");
+    return season.episodes.some((ep: any) => {
+      const links = getEpisodeDownloadLinksForLanguage(ep, currentDownloadLanguageLabel);
+      return Object.keys(links).some((q) => normalizeDownloadQualityKey(q) === "480p" && String(links[q] || "").trim());
+    });
+  }, [availableDownloadQualities, currentDownloadLanguageLabel, downloadPanelSeasonIdx, getEpisodeDownloadLinksForLanguage, seasons]);
+
   const preferredDownloadQuality = useMemo(() => {
-    return ["Default", "480P", "720P", "1080P", "4K"].find((quality) => availableDownloadQualities.includes(quality))
+    const ordered = ["480P", "Default", "720P", "1080P", "4K"];
+    if (!isPremium) {
+      const freePreferred = selectedSeasonHas480p
+        ? availableDownloadQualities.find((q) => normalizeDownloadQualityKey(q) === "480p")
+        : availableDownloadQualities.find((q) => normalizeDownloadQualityKey(q) !== "480p");
+      if (freePreferred) return freePreferred;
+    }
+    return ordered.find((quality) => availableDownloadQualities.includes(quality))
       || availableDownloadQualities[0]
       || "";
-  }, [availableDownloadQualities]);
+  }, [availableDownloadQualities, isPremium, selectedSeasonHas480p]);
+
+  const isDownloadAllowedForFree = useCallback((quality: string, episodeIndex?: number) => {
+    if (isPremium) return true;
+    const key = normalizeDownloadQualityKey(quality);
+    if (key === "480p") return true;
+    if (typeof episodeIndex !== "number") return false;
+    return !selectedSeasonHas480p && episodeIndex < 2;
+  }, [isPremium, selectedSeasonHas480p]);
 
   const shareSeason = useMemo(() => {
     return seasons?.[sharePanelSeasonIdx] || null;
@@ -1183,10 +1256,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadQuality("");
       return;
     }
-    if (!selectedDownloadQuality || !availableDownloadQualities.includes(selectedDownloadQuality)) {
+    const selectedBlocked = !!selectedDownloadQuality && !isPremium && normalizeDownloadQualityKey(selectedDownloadQuality) !== "480p" && selectedSeasonHas480p;
+    if (!selectedDownloadQuality || !availableDownloadQualities.includes(selectedDownloadQuality) || selectedBlocked) {
       setSelectedDownloadQuality(preferredDownloadQuality);
+      setDlSelectedEpisodes(new Set());
     }
-  }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
+  }, [availableDownloadQualities, isPremium, preferredDownloadQuality, selectedDownloadQuality, selectedSeasonHas480p]);
 
   // Probe file sizes for download picker — parallel HEAD with localStorage persistence
   useEffect(() => {
@@ -1196,42 +1271,55 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const urls: string[] = [];
     downloadEpisodes.forEach((ep) => {
       const u = ep.qualityLinks[quality];
-      if (u && !downloadSizeCache[u]) urls.push(u);
+      if (u && !getCachedDownloadSize(u)) urls.push(u);
     });
     if (!urls.length) return;
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
       if (isHlsLikeUrl(u)) return null;
-      const proxiedCandidates = buildVideoDownloadUrlCandidates(u, "probe.mp4");
+      const isValidSizeResponse = (r: Response) => {
+        if (!r.ok && r.status !== 206) return false;
+        const ct = String(r.headers.get("content-type") || "").toLowerCase();
+        return !/json|text\/html/.test(ct);
+      };
+      const acceptBytes = (n: number) => Number.isFinite(n) && n > 512 * 1024;
+      const proxiedCandidates = [
+        ...buildVideoDownloadUrlCandidates(u, "probe.mp4"),
+        ...buildVideoProxyUrlCandidates(u),
+      ];
       for (const proxied of proxiedCandidates) {
         try {
           const r = await fetch(proxied, { method: "HEAD" });
+          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
           const len = Number(r.headers.get("content-length") || 0);
           try { await r.body?.cancel(); } catch {}
-          if (len > 0) return [u, len];
+          if (acceptBytes(len)) return [u, len];
         } catch {}
         try {
           const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
+          if (!isValidSizeResponse(r2)) { try { await r2.body?.cancel(); } catch {}; continue; }
           const cr = r2.headers.get("content-range");
           if (cr) {
             const m = /\/(\d+)\s*$/.exec(cr);
             if (m) {
               try { await r2.body?.cancel(); } catch {}
-              return [u, Number(m[1])];
+              const total = Number(m[1]);
+              if (acceptBytes(total)) return [u, total];
             }
           }
           const len = Number(r2.headers.get("content-length") || 0);
           try { await r2.body?.cancel(); } catch {}
-          if (len > 0) return [u, len];
+          if (acceptBytes(len)) return [u, len];
         } catch {}
       }
       try {
         const direct = buildDirectDownloadUrl(u);
         if (!direct || !direct.startsWith("https://")) return null;
         const r3 = await fetch(direct, { method: "HEAD" });
+        if (!isValidSizeResponse(r3)) { try { await r3.body?.cancel(); } catch {}; return null; }
         const len = Number(r3.headers.get("content-length") || 0);
         try { await r3.body?.cancel(); } catch {}
-        if (len > 0) return [u, len];
+        if (acceptBytes(len)) return [u, len];
       } catch {}
       return null;
     };
@@ -1253,7 +1341,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, downloadSizeCache, buildReliableHlsSource]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, getCachedDownloadSize, buildReliableHlsSource]);
 
 
   useEffect(() => {
@@ -1922,7 +2010,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           switchServer(nextIdx, false);
         }
       }
-    }, 5000);
+    }, 1800);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
@@ -5277,6 +5365,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const panelEpisodes = downloadEpisodes;
 
           const toggleEpisode = (idx: number) => {
+            if (activeQuality && !isDownloadAllowedForFree(activeQuality, idx)) {
+              toast.error("Free users can download this quality only for Episode 1–2 when 480P is missing.");
+              return;
+            }
             setDlSelectedEpisodes((prev) => {
               const next = new Set(prev);
               if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -5286,8 +5378,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           const toggleAll = () => {
             setDlSelectedEpisodes((prev) => {
-              if (prev.size === panelEpisodes.length) return new Set();
-              return new Set(panelEpisodes.map((episode) => episode.index));
+              const allowedEpisodes = panelEpisodes.filter((episode) => !activeQuality || isDownloadAllowedForFree(activeQuality, episode.index));
+              if (allowedEpisodes.length === 0) return new Set();
+              if (allowedEpisodes.every((episode) => prev.has(episode.index))) return new Set();
+              return new Set(allowedEpisodes.map((episode) => episode.index));
             });
           };
 
@@ -5299,6 +5393,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const startMovieDownload = async (quality: string) => {
             // Downloads are available for free + premium users. The download
             // manager handles size/progress and saves the finished MP4 locally.
+            if (!isDownloadAllowedForFree(quality)) {
+              toast.error("Free downloads are limited to 480P. Buy premium for higher quality.");
+              return;
+            }
             const movieLabel = String(title || subtitle || "video").trim();
             const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
             const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
@@ -5326,6 +5424,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) continue;
+              if (!isDownloadAllowedForFree(quality, ep.index)) continue;
               const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
               const episodeLabel = buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber);
               const epUrl = getDownloadUrl(
@@ -5356,7 +5455,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const combined = [...httpBatch, ...hlsBatch];
             if (combined.length) downloadManager.enqueueBatch(combined);
             closePanel();
-            if (combined.length === 0) toast.error("No downloadable links found");
+            if (combined.length === 0) toast.error("No free downloadable links found for this selection");
             else toast.success(`Started ${combined.length} download${combined.length > 1 ? "s" : ""}`);
           };
 
@@ -5432,22 +5531,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           {qualityChoices.map((label) => {
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
+                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && (selectedSeasonHas480p || !hasMultiEpisodes);
+                            const lockedQuality = locked4K || lockedByFreeRule;
                             const isActive = label === activeQuality;
                             return (
                               <button
                                 key={label}
-                                disabled={locked4K}
+                                disabled={lockedQuality}
                                 onClick={() => {
-                                  if (locked4K) return;
+                                  if (lockedQuality) return;
                                   setSelectedDownloadQuality(label);
+                                  setDlSelectedEpisodes(new Set());
                                 }}
-                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${lockedQuality ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
                               >
-                                {label}
+                                <span className="inline-flex items-center justify-center gap-1">{lockedQuality && <Lock className="w-3 h-3" />}{label}</span>
                               </button>
                             );
                           }).slice(0, 4)}
                         </div>
+                        {!isPremium && (
+                          <p className="mt-2 text-[10px] leading-snug text-white/45">
+                            Free: all 480P episodes. If 480P is missing, only Episode 1–2 can be downloaded in higher quality.
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -5464,19 +5571,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             {panelEpisodes.map((ep) => {
                               const selected = dlSelectedEpisodes.has(ep.index);
                               const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
-                              const sizeBytes = qualityUrl ? downloadSizeCache[qualityUrl] || 0 : 0;
+                              const lockedByRule = !!qualityUrl && activeQuality ? !isDownloadAllowedForFree(activeQuality, ep.index) : false;
+                              const sizeBytes = getCachedDownloadSize(qualityUrl);
                               const sizeLabel = fmtSize(sizeBytes);
                               return (
-                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-2.5 text-left">
-                                  <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
-                                    <Check className="w-3 h-3" />
+                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
+                                  <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${lockedByRule ? 'border-amber-400/50 text-amber-300' : selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                    {lockedByRule ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
                                   </span>
                                   <span className="min-w-0 flex-1">
                                     <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                    <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
+                                    <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {qualityUrl ? (sizeLabel || <span className="text-white/35 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel || <span className="text-white/35 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
                                   </span>
                                 </button>
                               );
@@ -5498,18 +5606,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
                     };
                     const selectedList = hasMultiEpisodes
-                      ? panelEpisodes.filter((ep) => dlSelectedEpisodes.has(ep.index))
+                      ? panelEpisodes.filter((ep) => dlSelectedEpisodes.has(ep.index) && (!activeQuality || isDownloadAllowedForFree(activeQuality, ep.index)))
                       : [];
                     const totalBytes = selectedList.reduce((sum, ep) => {
                       const u = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
-                      return sum + (u ? (downloadSizeCache[u] || 0) : 0);
+                      return sum + getCachedDownloadSize(u);
                     }, 0);
                     const totalLabel = hasMultiEpisodes && selectedList.length > 0 ? fmtSize(totalBytes) : "";
+                    const allowedForActive = panelEpisodes.filter((ep) => !activeQuality || isDownloadAllowedForFree(activeQuality, ep.index));
+                    const allAllowedSelected = allowedForActive.length > 0 && allowedForActive.every((ep) => dlSelectedEpisodes.has(ep.index));
                     return (
                       <div className="p-3 border-t border-white/10 bg-black">
                         <div className="flex items-center gap-2.5">
-                          <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
-                            <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
+                          <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${allAllowedSelected ? 'text-white' : 'text-white/55'}`}>
+                            <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allAllowedSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
                             <span>All</span>
                           </button>
                           <button
