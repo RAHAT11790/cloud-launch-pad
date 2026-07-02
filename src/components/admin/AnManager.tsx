@@ -365,13 +365,30 @@ export default function AnManager({
     }
   };
 
+  // Instant paint from localStorage snapshot, then background refresh.
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem("rs_an_manager_cards_v1");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length) {
+          setApiItems(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
     (async () => {
-      setLoading(true);
+      if (apiItems.length === 0) setLoading(true);
       await loadFromApi(false);
       setLoading(false);
     })();
   }, []);
+
+  // Persist snapshot for next visit — zero-latency reopen.
+  useEffect(() => {
+    if (!apiItems.length) return;
+    try { localStorage.setItem("rs_an_manager_cards_v1", JSON.stringify(apiItems)); } catch {}
+  }, [apiItems]);
 
   // Saved listener
   useEffect(() => {
