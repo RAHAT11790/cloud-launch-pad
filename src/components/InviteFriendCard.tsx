@@ -53,9 +53,9 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
   };
 
   return (
-    <div className="rounded-3xl overflow-hidden border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/15 via-purple-500/10 to-indigo-500/5 relative">
+    <div className="rounded-3xl overflow-hidden border border-fuchsia-400/40 bg-gradient-to-br from-[#1a0d24] via-[#170a2a] to-[#0d0a24] relative">
       {/* Decorative glow */}
-      <div className="absolute -top-16 -right-14 w-56 h-56 rounded-full bg-fuchsia-400/15 blur-3xl pointer-events-none" />
+      <div className="absolute -top-16 -right-14 w-56 h-56 rounded-full bg-fuchsia-500/20 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-20 -left-16 w-56 h-56 rounded-full bg-indigo-500/15 blur-3xl pointer-events-none" />
 
       <div className="relative p-5 sm:p-6">
@@ -66,17 +66,17 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base sm:text-lg font-black bg-gradient-to-r from-fuchsia-200 to-purple-200 bg-clip-text text-transparent leading-tight">
-                Invite Friends — Earn up to 10 Coins each
+              <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                Invite Friends — Earn up to 10 Coins
               </h3>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-400/20 text-fuchsia-200 uppercase tracking-wider">
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-500 text-white uppercase tracking-wider">
                 Top reward
               </span>
             </div>
-            <p className="mt-1 text-[12px] text-muted-foreground leading-snug">
+            <p className="mt-1.5 text-[12.5px] text-white/80 leading-snug">
               Share your personal link. When a friend joins and watches for 30 minutes,
-              you earn <b className="text-fuchsia-200">+10 coins</b>. Quick visits still
-              give you <b className="text-fuchsia-200">+1 coin</b>.
+              you earn <b className="text-amber-300">+10 coins</b>. Quick visits still
+              give you <b className="text-emerald-300">+1 coin</b>.
             </p>
           </div>
         </div>
