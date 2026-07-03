@@ -1849,15 +1849,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!changed) return;
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
     if (hasExplicitResume) return;
+    // Zero EVERY resume source. Otherwise repairUnexpectedReset() will pull
+    // the previous episode's 22-min mark from mediaRecoverySeekRef /
+    // lastPlaybackPositionRef and seek the new episode there.
     pendingSeek.current = 0;
+    mediaRecoverySeekRef.current = 0;
+    lastPlaybackPositionRef.current = 0;
+    try {
+      const prevKey = playbackCheckpointKeyRef.current;
+      if (prevKey) sessionStorage.removeItem(prevKey);
+    } catch {}
     const v = videoRef.current;
     if (v) { try { v.currentTime = 0; } catch {} }
   }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
 
   // Per-anime isolation: when switching to a DIFFERENT anime, reset the
-  // server / quality / manual-selection state so preferences from the
-  // previous anime don't leak in (e.g. picking 4K on anime A then
-  // switching to anime B was starting B at 4K too).
+  // quality / manual-selection state so preferences from the previous anime
+  // don't leak in (e.g. picking 4K on anime A then switching to anime B was
+  // starting B at 4K too). We do NOT force server back to index 0 — instead
+  // we clear the manual flag so premium users auto-land on the premium server
+  // and free users fall through to the default (server 1).
   const prevAnimeIdRef = useRef<string | undefined>(animeId);
   useEffect(() => {
     if (prevAnimeIdRef.current === animeId) return;
@@ -1869,10 +1880,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setManualServerSelected(false);
     preferredServerIndexRef.current = null;
     premiumServerApplied.current = false;
-    setActiveServerIndex(0);
     failedSrcsRef.current = new Set();
     pendingSeek.current = 0;
-    
+    mediaRecoverySeekRef.current = 0;
+    lastPlaybackPositionRef.current = 0;
   }, [animeId]);
 
 
