@@ -1850,7 +1850,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
     if (hasExplicitResume) return;
     pendingSeek.current = 0;
-    lastKnownTimeRef.current = 0;
     const v = videoRef.current;
     if (v) { try { v.currentTime = 0; } catch {} }
   }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
