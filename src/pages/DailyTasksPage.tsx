@@ -11,6 +11,7 @@ import {
   DAILY_TASKS, TaskDef, DailyTaskState, subscribeDailyTasks,
   getTaskProgress, isTaskReady, isTaskClaimed, claimTask,
   markDailyLogin, getVisitSecondsToday, msUntilNextReset,
+  subscribeDailyTaskOverrides, resolveDailyTasks, DailyTaskOverrides,
 } from "@/lib/dailyTasks";
 import {
   CustomTask, CustomTaskClaim, subscribeCustomTasks, subscribeMyCustomClaims,
@@ -43,9 +44,13 @@ export default function DailyTasksPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [customTasks, setCustomTasks] = useState<CustomTask[]>([]);
   const [customClaims, setCustomClaims] = useState<Record<string, CustomTaskClaim>>({});
+  const [rewardOverrides, setRewardOverrides] = useState<DailyTaskOverrides>({});
 
   useEffect(() => subscribeCustomTasks(setCustomTasks), []);
   useEffect(() => subscribeMyCustomClaims(setCustomClaims), []);
+  useEffect(() => subscribeDailyTaskOverrides(setRewardOverrides), []);
+
+  const resolvedTasks = useMemo(() => resolveDailyTasks(rewardOverrides), [rewardOverrides]);
 
   // Ensure user + mark daily login progress
   useEffect(() => {
@@ -122,9 +127,9 @@ export default function DailyTasksPage() {
     }
   };
 
-  const totalReward = DAILY_TASKS.reduce((s, t) => s + t.reward, 0);
-  const claimedCount = DAILY_TASKS.filter((t) => isTaskClaimed(t, state)).length;
-  const totalToday = DAILY_TASKS.filter((t) => isTaskClaimed(t, state))
+  const totalReward = resolvedTasks.reduce((s, t) => s + t.reward, 0);
+  const claimedCount = resolvedTasks.filter((t) => isTaskClaimed(t, state)).length;
+  const totalToday = resolvedTasks.filter((t) => isTaskClaimed(t, state))
     .reduce((s, t) => s + t.reward, 0);
 
   return (
@@ -227,7 +232,7 @@ export default function DailyTasksPage() {
 
         {/* Task cards */}
         <div className="mt-5 space-y-3">
-          {DAILY_TASKS.map((task) => {
+          {resolvedTasks.map((task) => {
             const Icon = ICONS[task.id] || Zap;
             const progress = getTaskProgress(task, state);
             const ready = isTaskReady(task, state);
