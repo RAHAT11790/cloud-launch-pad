@@ -351,8 +351,15 @@ export const claimTask = async (taskId: TaskId): Promise<ClaimResult> => {
   const baseTask = DAILY_TASKS.find((t) => t.id === taskId);
   if (!baseTask) return { ok: false, reason: "unknown" };
 
+  // Respect admin's disable flag.
+  try {
+    const dSnap = await get(ref(db, `${OVERRIDES_PATH}/${taskId}/disabled`));
+    if (dSnap.val() === true) return { ok: false, reason: "unknown" };
+  } catch {}
+
   const override = await fetchOverrideReward(taskId);
   const task: TaskDef = override !== null ? { ...baseTask, reward: override } : baseTask;
+
 
   // Latest server state (avoid double-claim races)
   const snap = await get(ref(db, `users/${uid}/dailyTasks/${todayKey()}`));
