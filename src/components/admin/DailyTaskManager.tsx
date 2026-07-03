@@ -9,6 +9,9 @@ import { db, ref, get, onValue, remove, runTransaction, update } from "@/lib/fir
 import {
   CustomTask, CustomTaskKind, subscribeCustomTasks, saveCustomTask, deleteCustomTask,
 } from "@/lib/customTasks";
+import {
+  DAILY_TASKS, TaskDef, subscribeDailyTaskOverrides, setDailyTaskReward, DailyTaskOverrides,
+} from "@/lib/dailyTasks";
 
 interface Props {
   glassCard: string;
@@ -112,10 +115,10 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
             <Sparkles className="w-6 h-6 text-black" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-amber-200 to-yellow-300 bg-clip-text text-transparent leading-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-amber-100 leading-tight drop-shadow">
               Daily Task Manager
             </h2>
-            <p className="mt-1 text-[13px] text-white/60">
+            <p className="mt-1 text-[13px] text-white/80">
               Control tasks, coins, users, promotions, and referral analytics — one place.
             </p>
           </div>
