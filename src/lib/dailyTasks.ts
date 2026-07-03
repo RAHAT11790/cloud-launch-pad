@@ -1,6 +1,6 @@
 // Daily Tasks — permanent 5-task coin economy
 // Rewards & rules are HARD-CODED here on purpose (no admin config needed).
-import { db, ref, get, set, onValue, runTransaction } from "@/lib/firebase";
+import { db, ref, get, set, onValue, runTransaction, update } from "@/lib/firebase";
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
 
@@ -99,6 +99,39 @@ export const startVisitTracker = () => {
       localStorage.setItem(k, String(cur + step));
     } catch {}
   }, step * 1000);
+};
+
+/* ================== Admin-editable reward overrides ==================
+   Path: settings/dailyTaskOverrides/{taskId} = { reward: number }
+   Lets admin change built-in task rewards without redeploy.
+*/
+const OVERRIDES_PATH = "settings/dailyTaskOverrides";
+export type DailyTaskOverrides = Partial<Record<TaskId, { reward?: number }>>;
+
+export const subscribeDailyTaskOverrides = (
+  cb: (o: DailyTaskOverrides) => void,
+): (() => void) => {
+  return onValue(ref(db, OVERRIDES_PATH), (snap) => {
+    cb((snap.val() as DailyTaskOverrides) || {});
+  });
+};
+
+export const setDailyTaskReward = async (id: TaskId, reward: number) => {
+  await update(ref(db, `${OVERRIDES_PATH}/${id}`), { reward: Math.max(0, Number(reward) || 0) });
+};
+
+export const resolveDailyTasks = (overrides: DailyTaskOverrides): TaskDef[] =>
+  DAILY_TASKS.map((t) => {
+    const o = overrides[t.id];
+    return o && typeof o.reward === "number" ? { ...t, reward: o.reward } : t;
+  });
+
+const fetchOverrideReward = async (id: TaskId): Promise<number | null> => {
+  try {
+    const snap = await get(ref(db, `${OVERRIDES_PATH}/${id}/reward`));
+    const v = snap.val();
+    return typeof v === "number" ? v : null;
+  } catch { return null; }
 };
 
 /* ================== Firebase state ================== */
