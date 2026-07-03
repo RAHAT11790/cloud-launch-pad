@@ -1,28 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Cloud, Copy, Loader2, Plus, RefreshCw, Rocket, Trash2, X, FileCode2, KeyRound,
-  Link as LinkIcon, ExternalLink, Settings, CheckCircle2, AlertCircle, Download,
-  Library, Eye, EyeOff, ShieldCheck, Terminal,
+  Cloud, Copy, Loader2, RefreshCw, Rocket, Trash2, X, KeyRound, FileCode2,
+  Link as LinkIcon, ExternalLink, CheckCircle2, AlertCircle, Download,
+  Library, Eye, EyeOff, ShieldCheck, Terminal, Plus, Save, LogOut, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
 import { CF_WORKER_LIBRARY, CF_MANAGER_WORKER_CODE, type CfLibraryEntry } from "@/lib/cloudflareWorkerLibrary";
 
 // ============================================================
-// CLOUDFLARE MANAGER
-// ============================================================
-// 1. User deploys `cf-manager-worker.js` to their Cloudflare account,
-//    sets CF_API_TOKEN, CF_ACCOUNT_ID, ADMIN_AUTH_TOKEN secrets, and
-//    pastes the resulting workers.dev URL + ADMIN_AUTH_TOKEN below.
-// 2. From then on this panel lists / deploys / edits / deletes / secrets /
-//    tails Workers on that account — same UX as EGD Manager for Supabase.
-//
-// Firebase storage: cfManager/config = { managerUrl, adminToken }
-// URL & token are NEVER hardcoded — user can change any time.
+// CLOUDFLARE MANAGER — professional rebuild
+// Vertical flow (top → bottom):
+//   1. Code Library (buttons only)
+//   2. Script name
+//   3. Code editor
+//   4. Env values (secrets)
+//   5. Logs
+//   6. Deployed scripts list
 // ============================================================
 
-type WorkerRow = { id: string; created_on?: string; modified_on?: string; etag?: string };
-type SecretRow = { name: string; type?: string };
+type WorkerRow  = { id: string; created_on?: string; modified_on?: string };
+type SecretRow  = { name: string; type?: string };
+type LogsStatus = "idle" | "connecting" | "live" | "error" | "closed";
 
 const STARTER = `// New Cloudflare Worker (Module syntax)
 export default {
@@ -46,6 +45,28 @@ export default {
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
+// Old cf-manager (v1.0.0) returned raw multipart body as `code`. Strip it here
+// so users don't have to redeploy the manager for the "select shows garbage" bug.
+function cleanMultipart(raw: string): string {
+  if (!raw) return "";
+  if (!raw.includes("Content-Disposition: form-data")) return raw;
+  // Boundary = first line
+  const firstNl = raw.indexOf("\n");
+  const boundary = raw.slice(0, firstNl).trim();
+  if (!boundary.startsWith("--")) return raw;
+  const parts = raw.split(boundary);
+  for (const p of parts) {
+    const m = p.match(/Content-Disposition: form-data;[^\n]*name="([^"]+)"[^\n]*\r?\n(?:[^\n]*\r?\n)*\r?\n([\s\S]*?)\r?\n?--?$/);
+    if (!m) continue;
+    const filename = m[1];
+    if (/\.(m?js)$/i.test(filename) || filename === "worker.js") {
+      return m[2].replace(/\r\n/g, "\n").trimEnd();
+    }
+  }
+  // Fallback: take biggest chunk after the last blank line inside any part
+  return raw;
+}
+
 type Props = {
   glassCard: string;
   inputClass: string;
@@ -63,10 +84,9 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
   const [showSetup, setShowSetup] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [health, setHealth] = useState<any>(null);
-  const [checkingHealth, setCheckingHealth] = useState(false);
   const [subdomain, setSubdomain] = useState("");
 
-  // ---- Workflow state ----
+  // ---- Editor state ----
   const [list, setList] = useState<WorkerRow[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [selected, setSelected] = useState("");
@@ -75,17 +95,21 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
   const [deploying, setDeploying] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState("");
-  const [errorLog, setErrorLog] = useState("");
+
+  // Secrets
   const [secrets, setSecrets] = useState<SecretRow[]>([]);
   const [loadingSecrets, setLoadingSecrets] = useState(false);
   const [secretDraftKey, setSecretDraftKey] = useState("");
   const [secretDraftValue, setSecretDraftValue] = useState("");
   const [savingSecret, setSavingSecret] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
-  const [logsWorker, setLogsWorker] = useState<string | null>(null);
+
+  // Logs
   const [logLines, setLogLines] = useState<string[]>([]);
-  const [logsStatus, setLogsStatus] = useState<"idle" | "connecting" | "live" | "error" | "closed">("idle");
+  const [logsStatus, setLogsStatus] = useState<LogsStatus>("idle");
   const logsWsRef = useRef<WebSocket | null>(null);
+
+  // List filter
+  const [filter, setFilter] = useState("");
 
   // ---- Load config ----
   useEffect(() => {
@@ -99,9 +123,6 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
       setShowSetup(!(v.managerUrl && v.adminToken));
     });
   }, []);
-
-  const appendError = (msg: string) =>
-    setErrorLog((prev) => `[${new Date().toLocaleTimeString()}] ${msg}\n` + prev);
 
   const call = async (action: string, body: any = {}) => {
     if (!savedUrl || !savedToken) throw new Error("Manager URL / Admin Token not configured");
@@ -123,21 +144,18 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     if (!t) { toast.error("Admin token required"); return; }
     setSavingCfg(true);
     try {
-      // Probe health first
       const h = await fetch(`${u}/health`).then((r) => r.json()).catch(() => null);
-      if (!h?.ok) { toast.error("Health check failed — is the manager deployed?"); setSavingCfg(false); return; }
+      if (!h?.ok) { toast.error("Health check failed"); setSavingCfg(false); return; }
       await set(ref(db, "cfManager/config"), { managerUrl: u, adminToken: t });
       setSavedUrl(u); setSavedToken(t);
-      toast.success("Cloudflare manager connected ✔");
+      toast.success("Cloudflare connected");
       setShowSetup(false);
-      setTimeout(() => { loadList(); loadHealth(); }, 200);
-    } catch (e: any) {
-      toast.error("Save failed: " + (e?.message || String(e)));
-    } finally { setSavingCfg(false); }
+    } catch (e: any) { toast.error("Save failed: " + (e?.message || String(e))); }
+    finally { setSavingCfg(false); }
   };
 
   const disconnect = async () => {
-    if (!confirm("Disconnect Cloudflare manager? URL & token will be cleared.")) return;
+    if (!confirm("Disconnect Cloudflare manager?")) return;
     await set(ref(db, "cfManager/config"), null);
     setSavedUrl(""); setSavedToken(""); setManagerUrl(""); setAdminToken("");
     setList([]); setSelected(""); setSecrets([]); setHealth(null);
@@ -147,7 +165,6 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
 
   const loadHealth = async () => {
     if (!savedUrl) return;
-    setCheckingHealth(true);
     try {
       const h = await fetch(`${savedUrl.replace(/\/+$/, "")}/health`).then((r) => r.json());
       setHealth(h);
@@ -155,9 +172,7 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
         const s = await call("subdomain");
         if (s.ok) setSubdomain(s.subdomain || "");
       }
-    } catch (e: any) {
-      setHealth({ ok: false, error: e?.message });
-    } finally { setCheckingHealth(false); }
+    } catch (e: any) { setHealth({ ok: false, error: e?.message }); }
   };
 
   const loadList = async () => {
@@ -165,56 +180,57 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     setLoadingList(true);
     try {
       const r = await call("list");
-      if (!r.ok) { appendError("list: " + JSON.stringify(r.error || r)); toast.error("Failed to load workers"); return; }
-      setList((r.scripts || []).sort((a: any, b: any) => (b.modified_on || "").localeCompare(a.modified_on || "")));
-    } catch (e: any) { appendError("list: " + e.message); }
-    finally { setLoadingList(false); }
+      if (!r.ok) { toast.error("Failed to load workers"); return; }
+      setList((r.scripts || []).sort((a: any, b: any) =>
+        (b.modified_on || "").localeCompare(a.modified_on || "")));
+    } finally { setLoadingList(false); }
   };
 
   useEffect(() => { if (savedUrl && savedToken) { loadList(); loadHealth(); } /* eslint-disable-next-line */ }, [savedUrl, savedToken]);
 
   const openWorker = async (name: string) => {
-    setSelected(name); setSlug(name); setCode("// loading…"); setSecrets([]); setResultUrl("");
+    setSelected(name); setSlug(name); setCode("// loading…"); setSecrets([]);
+    setResultUrl(subdomain ? `https://${name}.${subdomain}.workers.dev` : "");
+    stopLogs();
     try {
       const r = await call("get", { name });
-      if (r.ok) setCode(r.code || STARTER);
-      else { setCode(STARTER); appendError("get: " + JSON.stringify(r.error || r)); }
+      if (r.ok) setCode(cleanMultipart(r.code || "") || STARTER);
+      else { setCode(STARTER); toast.error("Failed to load code"); }
       loadSecrets(name);
-      if (subdomain) setResultUrl(`https://${name}.${subdomain}.workers.dev`);
-    } catch (e: any) { appendError("get: " + e.message); }
+    } catch (e: any) { toast.error(e.message); }
   };
 
-  const newWorker = () => {
-    setSelected(""); setSlug(""); setCode(STARTER); setSecrets([]); setResultUrl(""); setErrorLog("");
+  const newBlank = () => {
+    setSelected(""); setSlug(""); setCode(STARTER); setSecrets([]); setResultUrl("");
+    stopLogs();
   };
 
   const deploy = async () => {
     const name = slugify(slug);
-    if (!name) { toast.error("Worker name required"); return; }
+    if (!name) { toast.error("Script name required"); return; }
     if (!code.trim()) { toast.error("Code is empty"); return; }
     setDeploying(true);
     try {
       const r = await call("deploy", { name, code });
-      if (!r.ok) { appendError("deploy: " + JSON.stringify(r.error || r)); toast.error("Deploy failed"); return; }
-      toast.success(`Deployed: ${name} ✔`);
+      if (!r.ok) { toast.error("Deploy failed: " + JSON.stringify(r.error || r)); return; }
+      toast.success(`Deployed: ${name}`);
       setResultUrl(r.url || "");
       setSelected(name);
       loadList();
-    } catch (e: any) { appendError("deploy: " + e.message); toast.error(e.message); }
+    } catch (e: any) { toast.error(e.message); }
     finally { setDeploying(false); }
   };
 
   const removeWorker = async (name: string) => {
-    if (!confirm(`Delete worker "${name}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete worker "${name}"?`)) return;
     setDeleting(name);
     try {
       const r = await call("delete", { name });
-      if (!r.ok) { toast.error("Delete failed"); appendError("delete: " + JSON.stringify(r.error || r)); return; }
+      if (!r.ok) { toast.error("Delete failed"); return; }
       toast.success("Deleted");
-      if (selected === name) newWorker();
+      if (selected === name) newBlank();
       loadList();
-    } catch (e: any) { appendError("delete: " + e.message); }
-    finally { setDeleting(null); }
+    } finally { setDeleting(null); }
   };
 
   const loadSecrets = async (name: string) => {
@@ -223,62 +239,65 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     try {
       const r = await call("secrets-list", { name });
       if (r.ok) setSecrets(r.secrets || []);
-      else appendError("secrets: " + JSON.stringify(r.error || r));
-    } catch (e: any) { appendError("secrets: " + e.message); }
-    finally { setLoadingSecrets(false); }
+    } finally { setLoadingSecrets(false); }
   };
 
   const saveSecret = async () => {
-    if (!selected) { toast.error("Select or deploy a worker first"); return; }
+    if (!selected) { toast.error("Deploy or select a script first"); return; }
     const key = secretDraftKey.trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) { toast.error("Secret name: letters, digits, underscore only"); return; }
+    if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) { toast.error("Name: letters/digits/_ only"); return; }
     if (!secretDraftValue) { toast.error("Value required"); return; }
     setSavingSecret(true);
     try {
       const r = await call("secret-put", { name: selected, key, value: secretDraftValue });
-      if (!r.ok) { toast.error("Save failed"); appendError("secret-put: " + JSON.stringify(r.error || r)); return; }
-      toast.success(`Secret ${key} saved ✔`);
+      if (!r.ok) { toast.error("Save failed"); return; }
+      toast.success(`Secret ${key} saved`);
       setSecretDraftKey(""); setSecretDraftValue("");
       loadSecrets(selected);
-    } catch (e: any) { appendError("secret-put: " + e.message); }
-    finally { setSavingSecret(false); }
+    } finally { setSavingSecret(false); }
   };
 
   const deleteSecret = async (key: string) => {
     if (!selected) return;
-    if (!confirm(`Delete secret "${key}" from ${selected}?`)) return;
-    try {
-      const r = await call("secret-delete", { name: selected, key });
-      if (!r.ok) { toast.error("Delete failed"); return; }
-      toast.success("Secret deleted");
-      loadSecrets(selected);
-    } catch (e: any) { toast.error(e.message); }
+    if (!confirm(`Delete secret "${key}"?`)) return;
+    const r = await call("secret-delete", { name: selected, key });
+    if (!r.ok) { toast.error("Delete failed"); return; }
+    toast.success("Secret deleted");
+    loadSecrets(selected);
   };
 
+  // ── Library ──
   const useLibrary = (entry: CfLibraryEntry) => {
     setSelected(""); setSlug(entry.slug); setCode(entry.source);
-    setShowLibrary(false); setResultUrl(""); setErrorLog("");
-    toast.success(`Loaded template: ${entry.label}`);
+    setResultUrl("");
+    toast.success(`Template loaded: ${entry.label}`);
+    // scroll to name field
+    setTimeout(() => document.getElementById("cf-name-input")?.focus(), 60);
   };
 
-  const openLogs = async (name: string) => {
-    setLogsWorker(name);
-    setLogLines([`[${new Date().toLocaleTimeString()}] Requesting tail session for ${name}…`]);
+  // ── Logs ──
+  const startLogs = async () => {
+    if (!selected) { toast.error("Select a deployed script first"); return; }
+    stopLogs();
+    setLogLines([`[${new Date().toLocaleTimeString()}] Requesting tail for ${selected}…`]);
     setLogsStatus("connecting");
     try {
-      const r = await call("logs", { name });
+      const r = await call("logs", { name: selected });
       if (!r.ok || !r.tail?.url) {
-        setLogLines((l) => [...l, `❌ Failed to open tail: ${JSON.stringify(r.error || r)}`]);
-        setLogsStatus("error");
-        return;
+        setLogLines((l) => [...l, `Failed: ${JSON.stringify(r.error || r)}`]);
+        setLogsStatus("error"); return;
       }
       const wsUrl = r.tail.url.replace(/^http/, "ws");
-      setLogLines((l) => [...l, `→ Connecting to ${wsUrl.split("?")[0]}…`]);
-      const ws = new WebSocket(wsUrl);
+      setLogLines((l) => [...l, `Connecting to ${wsUrl.split("?")[0]}…`]);
+      // Cloudflare tail requires the trace-v1 subprotocol
+      const ws = new WebSocket(wsUrl, "trace-v1");
       logsWsRef.current = ws;
-      ws.onopen = () => { setLogsStatus("live"); setLogLines((l) => [...l, `✔ Live tail connected. Waiting for requests…`]); };
+      ws.onopen = () => {
+        setLogsStatus("live");
+        setLogLines((l) => [...l, `✔ Live. Waiting for requests…`]);
+      };
       ws.onmessage = (ev) => {
-        let msg = ev.data;
+        let msg = String(ev.data);
         try {
           const j = JSON.parse(ev.data);
           const outcome = j.outcome ? `[${j.outcome}]` : "";
@@ -287,23 +306,21 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
           const errs = (j.exceptions || []).map((x: any) => `  ⚠ ${x.name}: ${x.message}`).join("\n");
           msg = [`${new Date().toLocaleTimeString()} ${outcome} ${req}`, logs, errs].filter(Boolean).join("\n");
         } catch {}
-        setLogLines((l) => [...l.slice(-500), String(msg)]);
+        setLogLines((l) => [...l.slice(-500), msg]);
       };
-      ws.onerror = () => { setLogsStatus("error"); setLogLines((l) => [...l, "❌ WebSocket error"]); };
+      ws.onerror = () => { setLogsStatus("error"); setLogLines((l) => [...l, "WebSocket error"]); };
       ws.onclose = () => { setLogsStatus("closed"); setLogLines((l) => [...l, "— Tail closed —"]); };
     } catch (e: any) {
       setLogsStatus("error");
-      setLogLines((l) => [...l, `❌ ${e?.message || e}`]);
+      setLogLines((l) => [...l, `Error: ${e?.message || e}`]);
     }
   };
-
-  const closeLogs = () => {
+  const stopLogs = () => {
     try { logsWsRef.current?.close(); } catch {}
     logsWsRef.current = null;
-    setLogsWorker(null);
-    setLogLines([]);
-    setLogsStatus("idle");
+    if (logsStatus !== "idle") setLogsStatus("idle");
   };
+  useEffect(() => () => stopLogs(), []); // eslint-disable-line
 
   const copy = (t: string, l = "Copied") => navigator.clipboard.writeText(t).then(() => toast.success(l));
   const downloadManagerCode = () => {
@@ -314,45 +331,40 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
   };
 
   const healthOk = health?.ok && health?.hasToken && health?.hasAccount && health?.hasAdmin;
+  const filtered = useMemo(
+    () => list.filter((w) => !filter || w.id.toLowerCase().includes(filter.toLowerCase())),
+    [list, filter],
+  );
 
-  const badgeTone = (t?: string) =>
-    t === "cyan" ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
-    : t === "amber" ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-
-  // ─────────── SETUP SCREEN ───────────
+  // ═══════════════════════════════════════════
+  // SETUP SCREEN
+  // ═══════════════════════════════════════════
   if (showSetup) {
     return (
       <div className={`${glassCard} p-5 space-y-4`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/25">
             <Cloud size={22} className="text-white" />
           </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-bold text-white">Cloudflare Manager Setup</h3>
-            <p className="text-[11px] text-zinc-400">Deploy one Manager Worker to Cloudflare, then connect it here — unlimited-bandwidth deployment for every widget function.</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-white">Connect Cloudflare</h3>
+            <p className="text-[11px] text-zinc-400">Deploy one Manager Worker → paste URL + token below.</p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm text-orange-300 font-semibold">
-            <FileCode2 size={16} /> Step 1 — Deploy the Manager Worker
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div className="text-sm text-orange-300 font-semibold flex items-center gap-2">
+            <FileCode2 size={16} /> Step 1 — Deploy manager
           </div>
           <ol className="text-[12px] text-zinc-300 space-y-1 pl-5 list-decimal">
-            <li>Open Cloudflare Dashboard → <b>Workers &amp; Pages → Create → Worker</b> → name it e.g. <code className="text-orange-300">cf-manager</code>.</li>
-            <li>Click <b>Edit code</b>, paste the manager code below, then <b>Deploy</b>.</li>
-            <li>Open <b>Settings → Variables and Secrets</b> and add these <b>3 secrets</b> (type: Secret):
-              <div className="mt-1 space-y-1 font-mono text-[11px] text-orange-200">
-                <div>CF_API_TOKEN &nbsp;&nbsp; = your Cloudflare API token (Workers Scripts:Edit permission)</div>
-                <div>CF_ACCOUNT_ID &nbsp;= your Cloudflare account id</div>
-                <div>ADMIN_AUTH_TOKEN = a long random string you choose (25+ chars)</div>
-              </div>
-            </li>
-            <li>Click <b>Deploy</b> again after adding secrets. Open the Worker URL + <code>/health</code> — every value should be <code className="text-emerald-300">true</code>.</li>
+            <li>Cloudflare → <b>Workers &amp; Pages → Create → Worker</b> (e.g. <code className="text-orange-300">cf-manager</code>).</li>
+            <li>Paste the code below, click <b>Deploy</b>.</li>
+            <li><b>Settings → Variables and Secrets</b>, add: <code>CF_API_TOKEN</code>, <code>CF_ACCOUNT_ID</code>, <code>ADMIN_AUTH_TOKEN</code>.</li>
+            <li>Click <b>Deploy</b> again. Open <code>/health</code> — all values must be <span className="text-emerald-300">true</span>.</li>
           </ol>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => copy(CF_MANAGER_WORKER_CODE, "Manager code copied")} className={btnSecondary + " gap-2"}>
-              <Copy size={14} /> Copy Manager Code
+              <Copy size={14} /> Copy code
             </button>
             <button onClick={downloadManagerCode} className={btnSecondary + " gap-2"}>
               <Download size={14} /> Download .js
@@ -360,22 +372,22 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm text-orange-300 font-semibold">
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div className="text-sm text-orange-300 font-semibold flex items-center gap-2">
             <LinkIcon size={16} /> Step 2 — Connect
           </div>
           <div>
-            <label className="text-[11px] text-zinc-400">Manager Worker URL</label>
+            <label className="text-[11px] text-zinc-400">Manager URL</label>
             <input value={managerUrl} onChange={(e) => setManagerUrl(e.target.value)}
               placeholder="https://cf-manager.<sub>.workers.dev"
               className={inputClass + " font-mono text-[12px]"} />
           </div>
           <div>
-            <label className="text-[11px] text-zinc-400">Admin Auth Token</label>
+            <label className="text-[11px] text-zinc-400">Admin token</label>
             <div className="relative">
               <input value={adminToken} onChange={(e) => setAdminToken(e.target.value)}
                 type={showToken ? "text" : "password"}
-                placeholder="the ADMIN_AUTH_TOKEN you set as a Worker secret"
+                placeholder="ADMIN_AUTH_TOKEN"
                 className={inputClass + " font-mono text-[12px] pr-10"} />
               <button type="button" onClick={() => setShowToken((s) => !s)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white">
@@ -392,271 +404,273 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     );
   }
 
-  // ─────────── MAIN DASHBOARD ───────────
+  // ═══════════════════════════════════════════
+  // MAIN — vertical flow, requested order
+  // ═══════════════════════════════════════════
   return (
     <div className="space-y-4">
-      {/* Header / status */}
-      <div className={`${glassCard} p-4 flex flex-wrap items-center gap-3`}>
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shrink-0">
-          <Cloud size={20} className="text-white" />
+      {/* ── Top status strip ── */}
+      <div className={`${glassCard} px-4 py-3 flex items-center gap-3 flex-wrap`}>
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center">
+          <Cloud size={18} className="text-white" />
         </div>
-        <div className="flex-1 min-w-[200px]">
-          <div className="text-sm font-bold text-white flex items-center gap-2">
-            Cloudflare Manager
-            {healthOk ? (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                <CheckCircle2 size={10} /> Connected
-              </span>
-            ) : (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                <AlertCircle size={10} /> {checkingHealth ? "Checking…" : "Check failed"}
-              </span>
-            )}
-          </div>
-          <div className="text-[10px] text-zinc-400 font-mono truncate">{savedUrl}</div>
-          {subdomain && <div className="text-[10px] text-zinc-500">Subdomain: <span className="text-orange-300">*.{subdomain}.workers.dev</span></div>}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-white leading-tight">Cloudflare Manager</div>
+          <div className="text-[10px] text-zinc-500 font-mono truncate">{savedUrl}</div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={loadHealth} disabled={checkingHealth} className={btnSecondary + " gap-1"}>
-            <RefreshCw size={12} className={checkingHealth ? "animate-spin" : ""} /> Health
-          </button>
-          <button onClick={() => setShowSetup(true)} className={btnSecondary + " gap-1"}>
-            <Settings size={12} /> Reconfigure
-          </button>
-          <button onClick={disconnect} className={btnSecondary + " gap-1 !text-red-300 hover:!bg-red-500/10"}>
-            <X size={12} /> Disconnect
-          </button>
+        <div className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border flex items-center gap-1 ${
+          healthOk ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                   : "bg-rose-500/10 text-rose-300 border-rose-500/30"}`}>
+          {healthOk ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
+          {healthOk ? "Live" : "Down"}
         </div>
+        <button onClick={loadList} disabled={loadingList} title="Refresh"
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+          <RefreshCw size={14} className={loadingList ? "animate-spin" : ""} />
+        </button>
+        <button onClick={disconnect} title="Disconnect"
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+          <LogOut size={14} />
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
-        {/* LEFT — worker list + library */}
-        <div className={`${glassCard} p-3 space-y-3 self-start`}>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 text-xs font-semibold text-zinc-300 flex items-center gap-1">
-              <Rocket size={12} className="text-orange-300" /> Deployed Workers ({list.length})
-            </div>
-            <button onClick={loadList} disabled={loadingList} className="p-1.5 rounded hover:bg-white/5 text-zinc-400" title="Refresh">
-              <RefreshCw size={12} className={loadingList ? "animate-spin" : ""} />
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={newWorker} className={btnPrimary + " gap-1 flex-1 !py-1.5 text-xs"}>
-              <Plus size={12} /> New
-            </button>
-            <button onClick={() => setShowLibrary(true)} className={btnSecondary + " gap-1 flex-1 !py-1.5 text-xs"}>
-              <Library size={12} /> Library
-            </button>
-          </div>
-          <div className="max-h-[420px] overflow-y-auto space-y-1 -mx-1 px-1">
-            {list.length === 0 && (
-              <div className="text-[11px] text-zinc-500 italic text-center py-4">No workers yet — deploy one from the Library.</div>
-            )}
-            {list.map((w) => (
-              <div key={w.id}
-                className={`group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
-                  selected === w.id ? "bg-orange-500/10 border border-orange-500/30" : "hover:bg-white/5 border border-transparent"
-                }`}>
-                <button onClick={() => openWorker(w.id)} className="flex-1 text-left min-w-0">
-                  <div className="text-[12px] text-white font-medium truncate">{w.id}</div>
-                  {w.modified_on && <div className="text-[9px] text-zinc-500 truncate">{new Date(w.modified_on).toLocaleString()}</div>}
-                </button>
-                {subdomain && (
-                  <a href={`https://${w.id}.${subdomain}.workers.dev`} target="_blank" rel="noreferrer"
-                    className="p-1 rounded text-zinc-500 hover:text-orange-300 opacity-0 group-hover:opacity-100" title="Open">
-                    <ExternalLink size={11} />
-                  </a>
-                )}
-                <button onClick={() => openLogs(w.id)}
-                  className="p-1 rounded text-zinc-500 hover:text-cyan-300 opacity-0 group-hover:opacity-100" title="Live logs">
-                  <Terminal size={11} />
-                </button>
-                <button onClick={() => removeWorker(w.id)} disabled={deleting === w.id}
-                  className="p-1 rounded text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100" title="Delete">
-                  {deleting === w.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                </button>
-              </div>
-            ))}
-          </div>
+      {/* ─────────── 1. CODE LIBRARY ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Library size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Code Library</h4>
+          <span className="text-[10px] text-zinc-500">tap to load into editor</span>
         </div>
-
-        {/* RIGHT — editor + secrets */}
-        <div className="space-y-3">
-          <div className={`${glassCard} p-4 space-y-3`}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <FileCode2 size={14} className="text-orange-300 shrink-0" />
-              <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))}
-                placeholder="worker-name (lowercase, dashes)"
-                className={inputClass + " font-mono text-[12px] flex-1 min-w-[160px]"} />
-              {selected && (
-                <button onClick={() => openLogs(selected)} className={btnSecondary + " gap-1 !py-1.5 !text-[11px]"} title="Live tail logs">
-                  <Terminal size={12} /> Logs
-                </button>
-              )}
-              <button onClick={deploy} disabled={deploying || !slug || !code.trim()}
-                className={btnPrimary + " gap-1 !py-1.5"}>
-                {deploying ? <Loader2 size={12} className="animate-spin" /> : <Rocket size={12} />}
-                {deploying ? "Deploying…" : selected === slug ? "Update" : "Deploy"}
-              </button>
-            </div>
-
-            <textarea value={code} onChange={(e) => setCode(e.target.value)}
-              spellCheck={false}
-              className="w-full h-[420px] bg-black/40 border border-white/10 rounded-lg p-3 text-[11px] font-mono text-zinc-100 focus:outline-none focus:border-orange-500/50 resize-y" />
-
-            {resultUrl && (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px]">
-                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
-                <span className="text-emerald-300">Live at</span>
-                <a href={resultUrl} target="_blank" rel="noreferrer"
-                  className="font-mono text-orange-300 hover:underline truncate flex-1">{resultUrl}</a>
-                <button onClick={() => copy(resultUrl, "URL copied")} className="p-1 rounded hover:bg-white/5 text-zinc-400">
-                  <Copy size={11} />
-                </button>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {CF_WORKER_LIBRARY.map((e) => (
+            <button key={e.slug} onClick={() => useLibrary(e)}
+              className="group text-left rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] hover:border-orange-500/40 transition-all p-3 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[12px] font-bold text-white truncate">{e.label}</div>
+                {e.isNew && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">NEW</span>}
               </div>
-            )}
-          </div>
+              <div className="text-[10px] text-zinc-400 line-clamp-2 leading-tight">{e.description}</div>
+              <div className="text-[9px] text-orange-300/80 font-mono">{e.slug}</div>
+            </button>
+          ))}
+        </div>
+      </section>
 
-          {/* Secrets */}
-          <div className={`${glassCard} p-4 space-y-3`}>
-            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
-              <KeyRound size={12} className="text-amber-300" />
-              Secrets {selected ? <span className="text-zinc-500 font-mono">→ {selected}</span> : <span className="text-zinc-500">(select a worker first)</span>}
-              <button onClick={() => selected && loadSecrets(selected)} disabled={!selected || loadingSecrets}
-                className="ml-auto p-1 rounded hover:bg-white/5 text-zinc-400">
-                <RefreshCw size={11} className={loadingSecrets ? "animate-spin" : ""} />
+      {/* ─────────── 2. SCRIPT NAME ─────────── */}
+      <section className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2">
+          <FileCode2 size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Script Name</h4>
+          {selected && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 font-mono">editing: {selected}</span>}
+          <button onClick={newBlank} className="ml-auto text-[10px] text-zinc-400 hover:text-white flex items-center gap-1">
+            <Plus size={11} /> new blank
+          </button>
+        </div>
+        <input id="cf-name-input" value={slug} onChange={(e) => setSlug(e.target.value)}
+          placeholder="my-worker-name"
+          className={inputClass + " font-mono text-[13px]"} />
+        <div className="text-[10px] text-zinc-500">
+          URL: {slug ? (
+            <span className="font-mono text-orange-300">https://{slugify(slug) || "…"}.{subdomain || "<sub>"}.workers.dev</span>
+          ) : "—"}
+        </div>
+      </section>
+
+      {/* ─────────── 3. CODE EDITOR ─────────── */}
+      <section className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2">
+          <FileCode2 size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Worker Code</h4>
+          <span className="text-[10px] text-zinc-500 ml-auto">{code.length.toLocaleString()} chars</span>
+          <button onClick={() => copy(code, "Code copied")} className="text-zinc-400 hover:text-white">
+            <Copy size={13} />
+          </button>
+        </div>
+        <textarea value={code} onChange={(e) => setCode(e.target.value)}
+          spellCheck={false} autoCorrect="off" autoCapitalize="off"
+          className="w-full h-[420px] rounded-xl border border-white/10 bg-[#0a0a0f] text-emerald-100
+                     font-mono text-[12px] leading-[1.55] p-3 resize-y
+                     focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30"
+          style={{ tabSize: 2 }} />
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={deploy} disabled={deploying}
+            className={btnPrimary + " gap-2 flex-1 min-w-[160px]"}>
+            {deploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+            {deploying ? "Deploying…" : selected ? "Redeploy" : "Deploy"}
+          </button>
+          {resultUrl && (
+            <>
+              <button onClick={() => copy(resultUrl, "URL copied")} className={btnSecondary + " gap-2"}>
+                <Copy size={13} /> URL
               </button>
-            </div>
-            {selected && (
-              <>
-                <div className="space-y-1">
-                  {secrets.length === 0 && <div className="text-[11px] text-zinc-500 italic">No secrets yet.</div>}
-                  {secrets.map((s) => (
-                    <div key={s.name} className="flex items-center gap-2 px-2 py-1 rounded bg-white/[0.03] border border-white/5">
-                      <KeyRound size={10} className="text-amber-400 shrink-0" />
-                      <span className="text-[11px] font-mono text-zinc-200 flex-1 truncate">{s.name}</span>
-                      <button onClick={() => deleteSecret(s.name)} className="p-1 rounded text-zinc-500 hover:text-red-400">
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-[1fr_1.5fr_auto] gap-2">
-                  <input value={secretDraftKey} onChange={(e) => setSecretDraftKey(e.target.value.toUpperCase())}
-                    placeholder="SECRET_NAME" className={inputClass + " font-mono text-[11px] !py-1.5"} />
-                  <input value={secretDraftValue} onChange={(e) => setSecretDraftValue(e.target.value)}
-                    type="password" placeholder="value" className={inputClass + " font-mono text-[11px] !py-1.5"} />
-                  <button onClick={saveSecret} disabled={savingSecret}
-                    className={btnPrimary + " gap-1 !py-1.5 text-[11px]"}>
-                    {savingSecret ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />} Save
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {errorLog && (
-            <div className={`${glassCard} p-3`}>
-              <div className="flex items-center gap-2 text-xs font-semibold text-red-300 mb-2">
-                <AlertCircle size={12} /> Error log
-                <button onClick={() => setErrorLog("")} className="ml-auto text-zinc-500 hover:text-white">
-                  <X size={12} />
-                </button>
-              </div>
-              <pre className="text-[10px] text-red-200 font-mono max-h-32 overflow-y-auto whitespace-pre-wrap">{errorLog}</pre>
-            </div>
+              <a href={resultUrl} target="_blank" rel="noopener noreferrer" className={btnSecondary + " gap-2"}>
+                <ExternalLink size={13} /> Open
+              </a>
+            </>
           )}
         </div>
-      </div>
+        {resultUrl && (
+          <div className="text-[11px] font-mono text-emerald-300 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2 truncate">
+            {resultUrl}
+          </div>
+        )}
+      </section>
 
-      {/* LIBRARY MODAL */}
-      {showLibrary && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setShowLibrary(false)}>
-          <div className={`${glassCard} !bg-zinc-900 w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col`}
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 p-4 border-b border-white/10">
-              <Library size={18} className="text-orange-300" />
-              <div className="flex-1">
-                <div className="text-sm font-bold text-white">Cloudflare Worker Library</div>
-                <div className="text-[11px] text-zinc-400">Pre-built widget functions ported for Cloudflare. Load a template, then Deploy.</div>
-              </div>
-              <button onClick={() => setShowLibrary(false)} className="p-1.5 rounded hover:bg-white/5 text-zinc-400">
-                <X size={16} />
+      {/* ─────────── 4. ENV VALUES (SECRETS) ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <KeyRound size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Env Values</h4>
+          <span className="text-[10px] text-zinc-500 ml-auto">
+            {selected ? `for ${selected}` : "select a deployed script"}
+          </span>
+        </div>
+
+        {selected ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+              <input value={secretDraftKey} onChange={(e) => setSecretDraftKey(e.target.value.toUpperCase())}
+                placeholder="KEY_NAME" className={inputClass + " font-mono text-[12px]"} />
+              <input value={secretDraftValue} onChange={(e) => setSecretDraftValue(e.target.value)}
+                placeholder="value" type="password"
+                className={inputClass + " font-mono text-[12px]"} />
+              <button onClick={saveSecret} disabled={savingSecret} className={btnPrimary + " gap-2"}>
+                {savingSecret ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save
               </button>
             </div>
-            <div className="p-4 overflow-y-auto space-y-2">
-              {CF_WORKER_LIBRARY.map((e) => (
-                <div key={e.slug}
-                  className="rounded-lg border border-white/10 bg-white/[0.02] p-3 hover:border-orange-500/40 transition-colors">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-sm font-semibold text-white">{e.label}</div>
-                        <code className="text-[10px] text-zinc-500 font-mono">{e.slug}</code>
-                        {(e.badgeText || e.isNew) && (
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeTone(e.badgeTone)}`}>
-                            {e.badgeText || "NEW"}
-                          </span>
-                        )}
+
+            <div className="rounded-xl border border-white/10 bg-black/20 divide-y divide-white/5">
+              {loadingSecrets ? (
+                <div className="p-3 text-[11px] text-zinc-500 flex items-center gap-2">
+                  <Loader2 size={12} className="animate-spin" /> Loading…
+                </div>
+              ) : secrets.length === 0 ? (
+                <div className="p-3 text-[11px] text-zinc-500">No env values set.</div>
+              ) : secrets.map((s) => (
+                <div key={s.name} className="px-3 py-2 flex items-center gap-2">
+                  <KeyRound size={11} className="text-orange-300/70" />
+                  <span className="font-mono text-[12px] text-white flex-1 truncate">{s.name}</span>
+                  <span className="text-[9px] text-zinc-500 uppercase">{s.type || "secret"}</span>
+                  <button onClick={() => deleteSecret(s.name)}
+                    className="text-rose-400 hover:text-rose-300 p-1">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="text-[11px] text-zinc-500 py-4 text-center border border-dashed border-white/10 rounded-xl">
+            Deploy first, or select a script from the list below.
+          </div>
+        )}
+      </section>
+
+      {/* ─────────── 5. LOGS ─────────── */}
+      <section className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2">
+          <Terminal size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Live Logs</h4>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+            logsStatus === "live" ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+            : logsStatus === "connecting" ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+            : logsStatus === "error" ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+            : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+          }`}>{logsStatus}</span>
+          <div className="ml-auto flex gap-2">
+            {logsStatus === "idle" || logsStatus === "closed" || logsStatus === "error" ? (
+              <button onClick={startLogs} disabled={!selected} className={btnSecondary + " gap-1.5 text-[11px] py-1.5 px-3"}>
+                <Terminal size={12} /> Start
+              </button>
+            ) : (
+              <button onClick={stopLogs} className={btnSecondary + " gap-1.5 text-[11px] py-1.5 px-3"}>
+                <X size={12} /> Stop
+              </button>
+            )}
+            {logLines.length > 0 && (
+              <button onClick={() => setLogLines([])} className="text-[11px] text-zinc-400 hover:text-white">
+                clear
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-[#050508] p-3 h-[220px] overflow-auto
+                        font-mono text-[11px] leading-[1.5] text-emerald-200/90 whitespace-pre-wrap">
+          {logLines.length === 0
+            ? <span className="text-zinc-600">{selected ? "Press Start to tail live requests…" : "Select a deployed script to view logs."}</span>
+            : logLines.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      </section>
+
+      {/* ─────────── 6. DEPLOYED SCRIPTS ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Cloud size={16} className="text-orange-300" />
+          <h4 className="text-sm font-bold text-white">Deployed Scripts</h4>
+          <span className="text-[10px] text-zinc-500">{list.length}</span>
+          <div className="ml-auto relative flex-1 max-w-[200px]">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input value={filter} onChange={(e) => setFilter(e.target.value)}
+              placeholder="filter…"
+              className={inputClass + " pl-7 text-[11px] py-1.5 h-auto"} />
+          </div>
+        </div>
+
+        {loadingList ? (
+          <div className="text-[11px] text-zinc-500 flex items-center gap-2 p-3">
+            <Loader2 size={12} className="animate-spin" /> Loading…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-[11px] text-zinc-500 py-6 text-center border border-dashed border-white/10 rounded-xl">
+            No scripts yet. Deploy one from the library above.
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {filtered.map((w) => {
+              const active = selected === w.id;
+              const url = subdomain ? `https://${w.id}.${subdomain}.workers.dev` : "";
+              return (
+                <div key={w.id}
+                  className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${
+                    active ? "border-orange-500/50 bg-orange-500/[0.06]"
+                           : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"}`}>
+                  <button onClick={() => openWorker(w.id)} className="flex-1 min-w-0 text-left">
+                    <div className="text-[13px] font-bold text-white truncate">{w.id}</div>
+                    {w.modified_on && (
+                      <div className="text-[10px] text-zinc-500">
+                        modified {new Date(w.modified_on).toLocaleString()}
                       </div>
-                      <div className="text-[11px] text-zinc-400 mt-1">{e.description}</div>
-                      {e.secrets.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {e.secrets.map((s) => (
-                            <span key={s} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                              <KeyRound size={8} className="inline mr-1" />{s}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={() => useLibrary(e)} className={btnPrimary + " gap-1 !py-1.5 text-[11px] shrink-0"}>
-                      <Rocket size={11} /> Load
+                    )}
+                    {url && <div className="text-[10px] font-mono text-orange-300/80 truncate">{url}</div>}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {url && (
+                      <>
+                        <button onClick={() => copy(url, "URL copied")}
+                          title="Copy URL"
+                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+                          <Copy size={12} />
+                        </button>
+                        <a href={url} target="_blank" rel="noopener noreferrer"
+                          title="Open"
+                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+                          <ExternalLink size={12} />
+                        </a>
+                      </>
+                    )}
+                    <button onClick={() => removeWorker(w.id)} disabled={deleting === w.id}
+                      title="Delete"
+                      className="w-7 h-7 rounded-md bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-300">
+                      {deleting === w.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        </div>
-      )}
-
-      {/* LOGS MODAL */}
-      {logsWorker && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={closeLogs}>
-          <div className={`${glassCard} !bg-zinc-950 w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 p-4 border-b border-white/10">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                <Terminal size={16} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-white flex items-center gap-2">
-                  Live Tail
-                  <code className="text-[11px] font-mono text-cyan-300">{logsWorker}</code>
-                </div>
-                <div className="text-[10px] flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${logsStatus === "live" ? "bg-emerald-400 animate-pulse" : logsStatus === "connecting" ? "bg-amber-400 animate-pulse" : logsStatus === "error" ? "bg-red-400" : "bg-zinc-500"}`} />
-                  <span className={logsStatus === "live" ? "text-emerald-300" : logsStatus === "error" ? "text-red-300" : "text-zinc-400"}>
-                    {logsStatus === "live" ? "STREAMING" : logsStatus.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setLogLines([])} className={btnSecondary + " gap-1 !py-1 !text-[10px]"}>Clear</button>
-              <button onClick={closeLogs} className="p-1.5 rounded hover:bg-white/5 text-zinc-400">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed text-emerald-200 bg-black/50 whitespace-pre-wrap">
-              {logLines.length === 0 ? (
-                <div className="text-zinc-500 italic">Waiting for logs…</div>
-              ) : logLines.map((l, i) => (
-                <div key={i} className="border-b border-white/[0.03] py-1">{l}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </section>
     </div>
   );
 }
