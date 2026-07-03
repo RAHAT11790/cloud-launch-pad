@@ -17,4 +17,40 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+// ---- Firebase RTDB connection watchdog ----
+// Live domain-এ Firebase মাঝে মাঝে disconnect হয়ে যায় (tab throttle, network switch,
+// browser websocket idle timeout)। এই watchdog visibility/online/connection-loss
+// event-এ automatic reconnect করে যাতে সব স্ক্রিন frozen না থাকে।
+if (typeof window !== "undefined") {
+  let reconnectTimer: number | null = null;
+  const kick = (delay = 0) => {
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    reconnectTimer = window.setTimeout(() => {
+      try { goOffline(db); } catch {}
+      try { goOnline(db); } catch {}
+      reconnectTimer = null;
+    }, delay);
+  };
+
+  // .info/connected listen করে, disconnect হলে ২ সেকেন্ড পরে reconnect trigger।
+  try {
+    onValue(ref(db, ".info/connected"), (snap) => {
+      const connected = snap.val() === true;
+      if (!connected) kick(2000);
+    });
+  } catch {}
+
+  // Tab visible হলে সাথে সাথে reconnect চেষ্টা।
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") kick(0);
+  });
+
+  // Network এলে reconnect, গেলে সাফভাবে offline।
+  window.addEventListener("online", () => kick(0));
+  window.addEventListener("offline", () => { try { goOffline(db); } catch {} });
+
+  // Page focus fallback।
+  window.addEventListener("focus", () => kick(0));
+}
+
+export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, goOnline, goOffline, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
