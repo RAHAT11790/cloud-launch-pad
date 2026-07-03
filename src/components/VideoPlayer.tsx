@@ -1838,20 +1838,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, []);
 
   // Hard reset playback position when the user navigates to a DIFFERENT
-  // episode/season without an explicit resume time. Fixes the bug where
-  // episode 2 continued from episode 1's timestamp.
+  // episode/season/anime without an explicit resume time. Fixes the bug
+  // where episode 2 (or a different anime) continued from the previous
+  // episode's timestamp.
   const prevEpKeyRef = useRef<string>("");
   useEffect(() => {
-    const key = `${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
     const changed = prevEpKeyRef.current && prevEpKeyRef.current !== key;
     prevEpKeyRef.current = key;
     if (!changed) return;
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
     if (hasExplicitResume) return;
     pendingSeek.current = 0;
+    lastKnownTimeRef.current = 0;
     const v = videoRef.current;
     if (v) { try { v.currentTime = 0; } catch {} }
-  }, [currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+
+  // Per-anime isolation: when switching to a DIFFERENT anime, reset the
+  // server / quality / manual-selection state so preferences from the
+  // previous anime don't leak in (e.g. picking 4K on anime A then
+  // switching to anime B was starting B at 4K too).
+  const prevAnimeIdRef = useRef<string | undefined>(animeId);
+  useEffect(() => {
+    if (prevAnimeIdRef.current === animeId) return;
+    prevAnimeIdRef.current = animeId;
+    manualQualitySelectedRef.current = false;
+    currentQualityRef.current = "Auto";
+    setCurrentQuality("Auto");
+    manualServerSelectedRef.current = false;
+    setManualServerSelected(false);
+    preferredServerIndexRef.current = null;
+    premiumServerApplied.current = false;
+    setActiveServerIndex(0);
+    failedSrcsRef.current = new Set();
+    pendingSeek.current = 0;
+    lastKnownTimeRef.current = 0;
+  }, [animeId]);
 
 
 
