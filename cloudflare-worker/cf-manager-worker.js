@@ -118,14 +118,30 @@ async function actList(env) {
 
 async function actGet(env, name) {
   if (!name) return { ok: false, error: "name required", status: 400 };
-  // Source
   const src = await fetch(
     `${CF_API}/accounts/${env.CF_ACCOUNT_ID}/workers/scripts/${encodeURIComponent(name)}`,
     { headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` } },
   );
-  const code = await src.text();
   const contentType = src.headers.get("content-type") || "";
-  // Metadata
+  let code = "";
+  if (/multipart\/form-data/i.test(contentType)) {
+    // Module worker — parse multipart and return ONLY worker.js body
+    try {
+      const fd = await src.formData();
+      // Prefer entry-point "worker.js"; else first .js/.mjs file
+      let file = fd.get("worker.js") || fd.get("index.js") || fd.get("index.mjs");
+      if (!file) {
+        for (const [k, v] of fd.entries()) {
+          if (typeof v !== "string" && /\.(m?js)$/i.test(k)) { file = v; break; }
+        }
+      }
+      code = file && typeof file !== "string" ? await file.text() : "";
+    } catch (e) {
+      code = "// Failed to parse module worker: " + (e?.message || e);
+    }
+  } else {
+    code = await src.text();
+  }
   const meta = await cfFetch(env, `/accounts/${env.CF_ACCOUNT_ID}/workers/scripts/${encodeURIComponent(name)}/settings`);
   return {
     ok: src.ok,
