@@ -3,10 +3,10 @@ import { animeSaltApi } from '@/lib/animeSaltApi';
 import type { AnimeItem } from '@/data/animeData';
 
 const CACHE_KEY = 'animesalt_all_v3';
-// Background refresh interval. The cache itself is PERMANENT — we always show
-// cached AN cards immediately on mount even if they're older than this, so the
-// user sees a fully-populated homepage regardless of Firebase / network state.
-const REFRESH_AFTER_MS = 60 * 60 * 1000; // 1 hour
+// Silent background refresh cadence. The cache itself never expires — cards
+// are always visible from localStorage the moment the app loads, even if the
+// network is down. Fresh data merges in whenever the API responds.
+const BACKGROUND_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 
 const readCache = (): AnimeItem[] => {
   try {
@@ -15,15 +15,6 @@ const readCache = (): AnimeItem[] => {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed?.items) ? parsed.items : [];
   } catch { return []; }
-};
-
-const readCacheAge = (): number => {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return Infinity;
-    const parsed = JSON.parse(raw);
-    return Date.now() - Number(parsed?._ts || 0);
-  } catch { return Infinity; }
 };
 
 const writeCache = (items: AnimeItem[]) => {
@@ -38,8 +29,8 @@ const mergeById = (prev: AnimeItem[], next: AnimeItem[]): AnimeItem[] => {
 };
 
 export function useAnimeSaltData() {
-  // Hydrate synchronously from localStorage so cards render immediately even
-  // when the network / Firebase is down.
+  // Hydrate synchronously from localStorage so cards render on first paint,
+  // regardless of network / Firebase state.
   const [items, setItems] = useState<AnimeItem[]>(() => readCache());
   const [loading, setLoading] = useState(() => readCache().length === 0);
 
@@ -72,32 +63,37 @@ export function useAnimeSaltData() {
           writeCache(merged);
           return merged;
         });
-      } catch (err) {
-        // Never clear the cache on network failure — AN stays visible.
-        console.warn('AnimeSalt refresh failed (using cache):', err);
+      } catch {
+        // Silent — cached cards remain visible. Never clear the cache.
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    // Only hit network if cache is stale or empty. Otherwise defer.
-    if (readCacheAge() > REFRESH_AFTER_MS || readCache().length === 0) {
+    // First refresh: immediately if empty, otherwise after idle so cached UI
+    // paints without contention.
+    if (readCache().length === 0) {
       void refresh();
     } else {
-      setLoading(false);
-      // Silent background refresh after idle so cards stay fresh.
       const idle = (window as any).requestIdleCallback;
-      const id = typeof idle === 'function'
-        ? idle(() => void refresh(), { timeout: 5000 })
-        : window.setTimeout(() => void refresh(), 2500);
-      return () => {
-        cancelled = true;
-        try { (window as any).cancelIdleCallback?.(id); } catch {}
-        clearTimeout(id as any);
-      };
+      if (typeof idle === "function") idle(() => void refresh(), { timeout: 3000 });
+      else setTimeout(() => void refresh(), 1500);
     }
 
-    return () => { cancelled = true; };
+    // Silent periodic refresh keeps cards live-synced without ever hiding
+    // the UI behind a loading state.
+    const interval = window.setInterval(() => { void refresh(); }, BACKGROUND_REFRESH_MS);
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    const onOnline = () => { void refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
 
   return { items, loading };
