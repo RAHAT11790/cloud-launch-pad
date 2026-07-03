@@ -1,3 +1,7 @@
+// ============================================================
+// Cloudflare Worker port of Supabase Edge Function: verify-admin-pin
+// Ported automatically — replace CF_URL in EGD/Cloudflare Manager
+// ============================================================
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
