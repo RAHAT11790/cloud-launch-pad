@@ -138,10 +138,14 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
+  // Protocol is detected PURELY from the URL — no server number is hardcoded.
+  // Server 1/2/3/Premium can each be either http:// or https:// depending on
+  // what admin saved. isInsecureHttpSource() reads the actual scheme, so the
+  // right proxy path is chosen automatically per URL.
   const isHttp = isInsecureHttpSource(url);
   const isHttpLike = /^https?:\/\//i.test(url);
-  // Admin-configured proxy (from Firebase settings). This is the ONLY optional
-  // proxy — the user chooses it via the default-proxy toggle. Never forced.
+  // Admin-configured proxy (from Firebase settings). Optional — only used when
+  // the user opts in via preferProxy, or as a rescue for insecure http URLs.
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   // Built-in Supabase video-proxy — used ONLY to bridge insecure http:// media
   // onto an https:// page (mixed-content rescue). Never applied to https URLs.
@@ -149,8 +153,6 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
     : null;
 
-  // STRICT SERVER ISOLATION: each admin server plays through ITS OWN URL only.
-  // No auto-mirroring, no forced Supabase proxy on https servers.
   if (preferProxy && customProxyCandidate) {
     // User explicitly opted into the admin custom proxy (e.g. Live TV toggle).
     addCandidate(customProxyCandidate);
@@ -160,14 +162,14 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   }
 
   if (isHttp) {
-    // Insecure http:// source — must be rescued onto https. Prefer admin's own
-    // custom proxy if set, otherwise fall back to the built-in bridge.
+    // http:// URL — must be rescued onto https. Prefer admin's own custom
+    // proxy if set, otherwise fall back to the built-in bridge.
     addCandidate(customProxyCandidate);
     addCandidate(nativeHttpBridge);
     return candidates;
   }
 
-  // Default: HTTPS source — play direct. No forced proxy.
+  // https:// URL — play direct. No forced proxy, ever.
   addCandidate(url);
   return candidates;
 };
