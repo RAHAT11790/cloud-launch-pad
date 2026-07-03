@@ -133,67 +133,42 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
-  if (isHlsLikeUrl(url)) {
-    if (/^data:/i.test(url)) {
-      addCandidate(url);
-      return candidates;
-    }
-    const isHttp = isInsecureHttpSource(url);
-    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    const nativeProxyCandidate = DEFAULT_VIDEO_PROXY_URL ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url) : null;
-    if (preferProxy || isHttp) {
-      addCandidate(nativeProxyCandidate);
-      addCandidate(customProxyCandidate);
-      if (!isHttp) addCandidate(url);
-    } else {
-      addCandidate(url);
-      addCandidate(nativeProxyCandidate);
-      addCandidate(customProxyCandidate);
-    }
-    return candidates;
-  }
-
-  if (isBypassSource(url)) {
+  if (/^data:/i.test(url)) {
     addCandidate(url);
     return candidates;
   }
 
   const isHttp = isInsecureHttpSource(url);
   const isHttpLike = /^https?:\/\//i.test(url);
+  // Admin-configured proxy (from Firebase settings). This is the ONLY optional
+  // proxy — the user chooses it via the default-proxy toggle. Never forced.
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const nativeProxyCandidate = isHttpLike && DEFAULT_VIDEO_PROXY_URL
+  // Built-in Supabase video-proxy — used ONLY to bridge insecure http:// media
+  // onto an https:// page (mixed-content rescue). Never applied to https URLs.
+  const nativeHttpBridge = isHttp && isHttpLike && DEFAULT_VIDEO_PROXY_URL
     ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
     : null;
 
-  // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
-  // configured URL. We never silently mirror across servers — that previously
-  // caused the "Premium" tab to play from a free origin when its own server
-  // (e.g. Render) was down, hiding the failure. Per-server failover is handled
-  // explicitly by switchServer() using the admin-defined server list.
-
-  if (preferProxy) {
-    // Live TV / fragile HLS streams should use the admin-selected proxy first,
-    // then fall back to direct only if proxy is unavailable.
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (isHttp) addCandidate(nativeProxyCandidate);
+  // STRICT SERVER ISOLATION: each admin server plays through ITS OWN URL only.
+  // No auto-mirroring, no forced Supabase proxy on https servers.
+  if (preferProxy && customProxyCandidate) {
+    // User explicitly opted into the admin custom proxy (e.g. Live TV toggle).
+    addCandidate(customProxyCandidate);
     if (!isHttp) addCandidate(url);
+    else addCandidate(nativeHttpBridge);
     return candidates;
   }
 
   if (isHttp) {
-    // HTTP source — must be proxied on HTTPS pages. Prefer the built-in proxy
-    // first because a stale EGD custom proxy DNS record can otherwise make every
-    // RS card look blocked; keep the custom proxy as a secondary fallback.
-    addCandidate(nativeProxyCandidate);
+    // Insecure http:// source — must be rescued onto https. Prefer admin's own
+    // custom proxy if set, otherwise fall back to the built-in bridge.
     addCandidate(customProxyCandidate);
-  } else {
-    // HTTPS source — direct first, then proxy fallback. Some RS mirrors play
-    // directly, while others intermittently block range/CORS on live domains.
-    addCandidate(url);
-    addCandidate(nativeProxyCandidate);
-    addCandidate(customProxyCandidate);
+    addCandidate(nativeHttpBridge);
+    return candidates;
   }
 
+  // Default: HTTPS source — play direct. No forced proxy.
+  addCandidate(url);
   return candidates;
 };
 
