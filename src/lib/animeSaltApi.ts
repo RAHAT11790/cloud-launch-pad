@@ -20,7 +20,7 @@ const filterAnimeOnly = <T extends { title?: string; slug?: string }>(items: T[]
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
 const CACHE_TTL_PLAYBACK_MS = 4 * 60 * 60 * 1000;      // 4 hours — playback links generally last several hours
-const AN_CACHE_PREFIX = 'rs_an_cache_v8_tail_playability';
+const AN_CACHE_PREFIX = 'rs_an_cache_v9_codecs_playback';
 const memCache = new Map<string, { ts: number; data: any }>();
 
 // ===== In-flight request dedupe =====

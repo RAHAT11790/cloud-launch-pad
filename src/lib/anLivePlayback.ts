@@ -15,8 +15,8 @@ const mem = new Map<string, { expiresAt: number; data: any }>();
 let lastPrune = 0;
 
 const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
-const localKey = (kind: string, slug: string) => `rs_an_playback_v8_tail_playability:${kind}:${safeKey(slug)}`;
-const FB_CACHE_ROOT = "anPlaybackCache_v8_tail_playability";
+const localKey = (kind: string, slug: string) => `rs_an_playback_v9_codecs:${kind}:${safeKey(slug)}`;
+const FB_CACHE_ROOT = "anPlaybackCache_v9_codecs";
 const fbPath = (kind: string, slug: string) => `${FB_CACHE_ROOT}/${kind}/${safeKey(slug)}`;
 
 export async function pruneExpiredPlaybackCache() {
@@ -187,10 +187,10 @@ const pickPayload = (r: any) => r?.data || r;
 type EpisodePlayback = Partial<Episode>;
 type SeriesBundle = { expiresAt: number; episodes: Record<string, EpisodePlayback> };
 const BUNDLE_TTL_MS = 180 * 60 * 1000; // 3h — matches AnimeSalt signed-URL window
-const BUNDLE_FB_ROOT = "anSeriesBundle_v9";
+const BUNDLE_FB_ROOT = "anSeriesBundle_v10_codecs";
 const bundleMem = new Map<string, SeriesBundle>();
 const bundleLoadInflight = new Map<string, Promise<SeriesBundle>>();
-const bundleLsKey = (slug: string) => `rs_an_bundle_v9:${safeKey(slug)}`;
+const bundleLsKey = (slug: string) => `rs_an_bundle_v10_codecs:${safeKey(slug)}`;
 const bundleFbPath = (slug: string) => `${BUNDLE_FB_ROOT}/${safeKey(slug)}`;
 
 const pendingBundleSaves = new Set<string>();

@@ -19,7 +19,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const TEXT_TIMEOUT_MS = 7_000;
 const PLAYER_TIMEOUT_MS = 6_500;
-const API_CACHE_VERSION = "v8-tail-playability";
+const API_CACHE_VERSION = "v9-codecs-playback";
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
 const getCache = <T>(key: string, forceRefresh = false): T | null => {
   if (forceRefresh) {
