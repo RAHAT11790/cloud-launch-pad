@@ -173,13 +173,16 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
       )}
 
       {tab === "tasks" && (
-        <TasksTab
-          glassCard={glassCard}
-          inputClass={inputClass}
-          btnPrimary={btnPrimary}
-          btnSecondary={btnSecondary}
-          tasks={tasks}
-        />
+        <>
+          <BuiltInTasksSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+          <TasksTab
+            glassCard={glassCard}
+            inputClass={inputClass}
+            btnPrimary={btnPrimary}
+            btnSecondary={btnSecondary}
+            tasks={tasks}
+          />
+        </>
       )}
 
       {tab === "users" && (
