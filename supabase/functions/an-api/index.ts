@@ -523,13 +523,16 @@ function parseMaster(masterUrl: string, body: string) {
   const base = new URL(masterUrl);
   const baseOrigin = `${base.protocol}//${base.host}`;
   const resolve = (u: string) => /^https?:\/\//i.test(u) ? u : u.startsWith("/") ? baseOrigin + u : new URL(u, masterUrl).toString();
-  const streams: any[] = [];
+  const streamsWithAudio: any[] = [];
+  const streamsMixed: any[] = [];
   const audio: any[] = [];
   const lines = body.split(/\r?\n/);
+  let hasAudioGroup = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
+      hasAudioGroup = true;
       const attrs = parseHlsAttrs(line);
       const uri = attrs.URI || "";
       if (uri) {
@@ -548,33 +551,38 @@ function parseMaster(masterUrl: string, body: string) {
       const next = (lines[i + 1] || "").trim();
       if (!next || next.startsWith("#")) continue;
       const attrs = parseHlsAttrs(line);
-      // Strict policy from the player side: only variant playlists that mount a
-      // separate AUDIO group are valid. Single mixed A/V master/media playlists
-      // are intentionally skipped because those AnimeSalt CDN entries black-screen.
-      if (!attrs.AUDIO) continue;
       const res = attrs.RESOLUTION || "";
       const height = res ? Number(res.split("x")[1]) : 0;
       const label = attrs.NAME || (height ? `${height}p` : "Auto");
-      streams.push({ url: resolve(next), filename: `${label}.m3u8`, resolution: res, height, bandwidth: Number(attrs.BANDWIDTH || 0), label });
+      const entry = { url: resolve(next), filename: `${label}.m3u8`, resolution: res, height, bandwidth: Number(attrs.BANDWIDTH || 0), label };
+      // Variants that reference a separate AUDIO group are the preferred path.
+      // Variants without one are accepted as a fallback so anime shipped with a
+      // single baked-in audio track (Captain Tsubasa, Farming Life in Another
+      // World, newer Pokemon/Doraemon/Shinchan releases, etc.) still play.
+      if (attrs.AUDIO) streamsWithAudio.push(entry);
+      else streamsMixed.push(entry);
     }
   }
 
-  streams.sort((a, b) => b.height - a.height);
+  // Prefer the separate-audio variants when the master offers them; otherwise
+  // fall back to the mixed A/V variants so the extractor never returns empty.
+  const streams = (streamsWithAudio.length > 0 ? streamsWithAudio : streamsMixed)
+    .sort((a, b) => b.height - a.height);
   const uniqueAudio = uniqueBy(audio, (a) => a.uri);
-  // Default audio policy: Hindi ALWAYS wins. Only fall back to the HLS-declared
-  // default (or the first track) when no Hindi track exists.
   const hindiIdx = uniqueAudio.findIndex((a: any) => a.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a.name || ""} ${a.language || ""}`));
   const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
   const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
   uniqueAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
-  const separateAudioVideo = streams.length > 0 && uniqueAudio.length > 0;
+  const separateAudioVideo = streamsWithAudio.length > 0 && uniqueAudio.length > 0;
   return {
     streams: uniqueBy(streams, (s) => s.url),
     audio: uniqueAudio,
     defaultAudioIdx: defaultIdx,
     preferredAudio: uniqueAudio[defaultIdx]?.name || "",
     separateAudioVideo,
-    rejected: separateAudioVideo ? "" : "mixed/master-only HLS rejected: video and audio are not separate",
+    hasAudioGroup,
+    mixedFallback: streamsWithAudio.length === 0 && streamsMixed.length > 0,
+    rejected: streams.length === 0 ? "no playable variants in master" : "",
   };
 }
 
