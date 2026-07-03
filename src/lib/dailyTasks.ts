@@ -331,8 +331,11 @@ export const claimTask = async (taskId: TaskId): Promise<ClaimResult> => {
   const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
 
-  const task = DAILY_TASKS.find((t) => t.id === taskId);
-  if (!task) return { ok: false, reason: "unknown" };
+  const baseTask = DAILY_TASKS.find((t) => t.id === taskId);
+  if (!baseTask) return { ok: false, reason: "unknown" };
+
+  const override = await fetchOverrideReward(taskId);
+  const task: TaskDef = override !== null ? { ...baseTask, reward: override } : baseTask;
 
   // Latest server state (avoid double-claim races)
   const snap = await get(ref(db, `users/${uid}/dailyTasks/${todayKey()}`));
