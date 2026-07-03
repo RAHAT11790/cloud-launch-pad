@@ -72,9 +72,9 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
         coins: Number(u?.coinWallet?.coins || 0),
         banned: !!u?.banned,
         createdAt: Number(u?.createdAt || 0),
-        referralEarnings: Object.values(u?.referralEarnings || {}).reduce(
+        referralEarnings: (Object.values(u?.referralEarnings || {}) as any[]).reduce(
           (s: number, r: any) => s + Number(r?.amount || 0), 0,
-        ),
+        ) as number,
       }));
       setUsers(rows);
       setLoading(false);
