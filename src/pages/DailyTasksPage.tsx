@@ -41,6 +41,11 @@ export default function DailyTasksPage() {
   const [tick, setTick] = useState(0);
   const [countdown, setCountdown] = useState(msUntilNextReset());
   const [busy, setBusy] = useState<string | null>(null);
+  const [customTasks, setCustomTasks] = useState<CustomTask[]>([]);
+  const [customClaims, setCustomClaims] = useState<Record<string, CustomTaskClaim>>({});
+
+  useEffect(() => subscribeCustomTasks(setCustomTasks), []);
+  useEffect(() => subscribeMyCustomClaims(setCustomClaims), []);
 
   // Ensure user + mark daily login progress
   useEffect(() => {
