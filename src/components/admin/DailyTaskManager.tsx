@@ -136,9 +136,11 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
         {([
           { id: "overview",  label: "Overview",  icon: LayoutDashboard },
           { id: "tasks",     label: "Tasks",     icon: ListChecks },
+          { id: "pricing",   label: "Pricing",   icon: Coins },
           { id: "users",     label: "Users",     icon: UsersIcon },
           { id: "referrals", label: "Referrals", icon: Share2 },
         ] as { id: Tab; label: string; icon: any }[]).map((t) => {
+
           const Icon = t.icon;
           const active = tab === t.id;
           return (
