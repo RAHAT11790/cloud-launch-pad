@@ -925,3 +925,99 @@ function ReferralsTab({
     </div>
   );
 }
+
+/* =====================================================================
+   BUILT-IN TASKS (the permanent 5) — admin can edit rewards
+   ===================================================================== */
+
+function BuiltInTasksSection({
+  glassCard, inputClass, btnPrimary,
+}: {
+  glassCard: string;
+  inputClass: string;
+  btnPrimary: string;
+}) {
+  const [overrides, setOverrides] = useState<DailyTaskOverrides>({});
+  const [drafts, setDrafts] = useState<Record<string, number>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => subscribeDailyTaskOverrides(setOverrides), []);
+
+  const rewardFor = (t: TaskDef) => {
+    const o = overrides[t.id];
+    return typeof o?.reward === "number" ? o.reward : t.reward;
+  };
+
+  const save = async (t: TaskDef) => {
+    const val = drafts[t.id];
+    if (typeof val !== "number" || val < 0) { toast.error("Invalid reward"); return; }
+    setBusy(t.id);
+    try {
+      await setDailyTaskReward(t.id, val);
+      toast.success(`${t.title} → +${val} coins`);
+      setDrafts((d) => { const c = { ...d }; delete c[t.id]; return c; });
+    } catch (e: any) {
+      toast.error("Save failed: " + (e?.message || "unknown"));
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-black text-white">Built-in Daily Tasks</h3>
+          <p className="text-[11.5px] text-white/60">The permanent 5 — edit reward coins per task.</p>
+        </div>
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 whitespace-nowrap">
+          {DAILY_TASKS.length} active
+        </span>
+      </div>
+
+      <div className="grid gap-2.5">
+        {DAILY_TASKS.map((t) => {
+          const current = rewardFor(t);
+          const draft = drafts[t.id];
+          const dirty = typeof draft === "number" && draft !== current;
+          return (
+            <div key={t.id} className={glassCard + " p-3.5"}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 flex items-center justify-center flex-shrink-0 text-lg">
+                  ✅
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-white truncate">{t.title}</h4>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-1 rounded-lg bg-amber-500/15 text-amber-200 border border-amber-400/30 whitespace-nowrap">
+                      <Coins className="w-3 h-3" /> +{current}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[12px] text-white/60 line-clamp-2">{t.description}</p>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-white/50 whitespace-nowrap">Reward</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={typeof draft === "number" ? draft : current}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: Number(e.target.value) }))}
+                      className={inputClass + " w-24 text-sm"}
+                    />
+                    <button
+                      onClick={() => save(t)}
+                      disabled={!dirty || busy === t.id}
+                      className={btnPrimary + " inline-flex items-center gap-1 text-[12px] px-3 py-1.5 disabled:opacity-40"}
+                    >
+                      <Save className="w-3.5 h-3.5" /> {busy === t.id ? "Saving…" : "Save"}
+                    </button>
+                    <span className="text-[10.5px] text-white/40 ml-auto whitespace-nowrap">
+                      Goal {t.goal} {t.unit}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
