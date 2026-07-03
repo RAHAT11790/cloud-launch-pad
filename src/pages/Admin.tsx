@@ -8853,6 +8853,13 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
  <SecurityCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
+ {/* ==================== DAILY TASK MANAGER ==================== */}
+ {activeSection === "task-manager" && (
+ <Suspense fallback={<AdminSectionLoader label="Daily Task Manager" />}>
+ <DailyTaskManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+ </Suspense>
+ )}
+
 
 
 
