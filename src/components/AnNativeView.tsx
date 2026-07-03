@@ -88,7 +88,7 @@ function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number): 
   // playback hangs at readyState 0 forever. If the upstream master exposed
   // CODECS we pass it through; otherwise fall back to H.264 High + AAC-LC
   // which covers every AnimeSalt stream we've seen.
-  const codecs = stream.codecs && stream.codecs.trim() ? stream.codecs.trim() : "avc1.640028,mp4a.40.2";
+  const codecs = stream.codecs && stream.codecs.trim() ? stream.codecs.trim() : "avc1.4d401f,mp4a.40.2";
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 2560000)},RESOLUTION=${resolution},CODECS="${codecs}"${audioRef}`);
   lines.push(hlsUrl(stream.url));
   const text = lines.join("\n");
