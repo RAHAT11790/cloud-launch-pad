@@ -10,8 +10,14 @@ import {
   CustomTask, CustomTaskKind, subscribeCustomTasks, saveCustomTask, deleteCustomTask,
 } from "@/lib/customTasks";
 import {
-  DAILY_TASKS, TaskDef, subscribeDailyTaskOverrides, setDailyTaskReward, DailyTaskOverrides,
+  DAILY_TASKS, TaskDef, subscribeDailyTaskOverrides, setDailyTaskReward,
+  setDailyTaskTitle, setDailyTaskEnabled, DailyTaskOverrides,
 } from "@/lib/dailyTasks";
+import {
+  subscribePremiumSettings, savePremiumSettings, DEFAULT_PREMIUM_SETTINGS,
+  type CoinPlan, type PremiumGlobalSettings,
+} from "@/lib/premiumAccess";
+
 
 interface Props {
   glassCard: string;
