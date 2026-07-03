@@ -378,7 +378,7 @@ export default function DailyTasksPage() {
                   setBusy(`custom:${t.id}`);
                   const r = await claimCustomTask(t);
                   setBusy(null);
-                  if (!r.ok) { toast.warning(r.reason); return; }
+                  if (!r.ok) { toast.warning((r as { reason: string }).reason); return; }
                   toast.success(`+${r.coins} coin${r.coins > 1 ? "s" : ""}! Balance: ${r.total}`);
                 };
 
