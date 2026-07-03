@@ -951,7 +951,8 @@ function BuiltInTasksSection({
   btnPrimary: string;
 }) {
   const [overrides, setOverrides] = useState<DailyTaskOverrides>({});
-  const [drafts, setDrafts] = useState<Record<string, number>>({});
+  const [rewardDrafts, setRewardDrafts] = useState<Record<string, number>>({});
+  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => subscribeDailyTaskOverrides(setOverrides), []);
@@ -960,71 +961,126 @@ function BuiltInTasksSection({
     const o = overrides[t.id];
     return typeof o?.reward === "number" ? o.reward : t.reward;
   };
+  const titleFor = (t: TaskDef) => {
+    const o = overrides[t.id];
+    return o?.title && o.title.length ? o.title : t.title;
+  };
+  const enabledFor = (t: TaskDef) => !overrides[t.id]?.disabled;
 
   const save = async (t: TaskDef) => {
-    const val = drafts[t.id];
-    if (typeof val !== "number" || val < 0) { toast.error("Invalid reward"); return; }
     setBusy(t.id);
     try {
-      await setDailyTaskReward(t.id, val);
-      toast.success(`${t.title} → +${val} coins`);
-      setDrafts((d) => { const c = { ...d }; delete c[t.id]; return c; });
+      const rDraft = rewardDrafts[t.id];
+      const tDraft = titleDrafts[t.id];
+      if (typeof rDraft === "number" && rDraft >= 0 && rDraft !== rewardFor(t)) {
+        await setDailyTaskReward(t.id, rDraft);
+      }
+      if (typeof tDraft === "string" && tDraft.trim() && tDraft !== titleFor(t)) {
+        await setDailyTaskTitle(t.id, tDraft.trim());
+      }
+      setRewardDrafts((d) => { const c = { ...d }; delete c[t.id]; return c; });
+      setTitleDrafts((d) => { const c = { ...d }; delete c[t.id]; return c; });
+      toast.success(`${titleFor(t)} saved`);
     } catch (e: any) {
       toast.error("Save failed: " + (e?.message || "unknown"));
     } finally { setBusy(null); }
   };
+
+  const toggle = async (t: TaskDef) => {
+    const next = !enabledFor(t);
+    try {
+      await setDailyTaskEnabled(t.id, next);
+      toast.success(`${titleFor(t)} ${next ? "enabled" : "hidden from users"}`);
+    } catch (e: any) {
+      toast.error("Toggle failed: " + (e?.message || "unknown"));
+    }
+  };
+
+  const activeCount = DAILY_TASKS.filter(enabledFor).length;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h3 className="text-base font-black text-white">Built-in Daily Tasks</h3>
-          <p className="text-[11.5px] text-white/60">The permanent 5 — edit reward coins per task.</p>
+          <p className="text-[11.5px] text-white/60">Rename, re-price, or hide any of the built-in tasks.</p>
         </div>
         <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 whitespace-nowrap">
-          {DAILY_TASKS.length} active
+          {activeCount}/{DAILY_TASKS.length} live
         </span>
       </div>
 
       <div className="grid gap-2.5">
         {DAILY_TASKS.map((t) => {
-          const current = rewardFor(t);
-          const draft = drafts[t.id];
-          const dirty = typeof draft === "number" && draft !== current;
+          const enabled = enabledFor(t);
+          const currentReward = rewardFor(t);
+          const currentTitle = titleFor(t);
+          const rDraft = rewardDrafts[t.id];
+          const tDraft = titleDrafts[t.id];
+          const dirty =
+            (typeof rDraft === "number" && rDraft !== currentReward) ||
+            (typeof tDraft === "string" && tDraft.trim() !== currentTitle);
           return (
-            <div key={t.id} className={glassCard + " p-3.5"}>
+            <div key={t.id} className={glassCard + " p-3.5 " + (enabled ? "" : "opacity-60")}>
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 flex items-center justify-center flex-shrink-0 text-lg">
-                  ✅
+                <div className={
+                  "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg " +
+                  (enabled
+                    ? "bg-emerald-500/15 text-emerald-300 border border-emerald-400/30"
+                    : "bg-white/[0.04] text-white/40 border border-white/10")
+                }>
+                  {enabled ? "✅" : "⏸️"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <h4 className="text-sm font-bold text-white truncate">{t.title}</h4>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-1 rounded-lg bg-amber-500/15 text-amber-200 border border-amber-400/30 whitespace-nowrap">
-                      <Coins className="w-3 h-3" /> +{current}
-                    </span>
+                    <h4 className="text-sm font-bold text-white truncate">{currentTitle}</h4>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-1 rounded-lg bg-amber-500/15 text-amber-200 border border-amber-400/30 whitespace-nowrap">
+                        <Coins className="w-3 h-3" /> +{currentReward}
+                      </span>
+                      <button
+                        onClick={() => toggle(t)}
+                        className={
+                          "inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border whitespace-nowrap transition-colors " +
+                          (enabled
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-400/30 hover:bg-emerald-500/20"
+                            : "bg-white/5 text-white/60 border-white/15 hover:bg-white/10")
+                        }
+                      >
+                        {enabled ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+                        {enabled ? "Live" : "Hidden"}
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-0.5 text-[12px] text-white/60 line-clamp-2">{t.description}</p>
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-white/50 whitespace-nowrap">Reward</label>
+                  <div className="mt-2.5 grid gap-2 sm:grid-cols-[1fr_120px_auto] items-center">
                     <input
-                      type="number"
-                      min={0}
-                      value={typeof draft === "number" ? draft : current}
-                      onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: Number(e.target.value) }))}
-                      className={inputClass + " w-24 text-sm"}
+                      placeholder="Title"
+                      value={typeof tDraft === "string" ? tDraft : currentTitle}
+                      onChange={(e) => setTitleDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                      className={inputClass + " text-sm"}
                     />
+                    <div className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-amber-300" />
+                      <input
+                        type="number"
+                        min={0}
+                        value={typeof rDraft === "number" ? rDraft : currentReward}
+                        onChange={(e) => setRewardDrafts((d) => ({ ...d, [t.id]: Number(e.target.value) }))}
+                        className={inputClass + " w-full text-sm"}
+                      />
+                    </div>
                     <button
                       onClick={() => save(t)}
                       disabled={!dirty || busy === t.id}
-                      className={btnPrimary + " inline-flex items-center gap-1 text-[12px] px-3 py-1.5 disabled:opacity-40"}
+                      className={btnPrimary + " inline-flex items-center justify-center gap-1 text-[12px] px-3 py-1.5 disabled:opacity-40"}
                     >
                       <Save className="w-3.5 h-3.5" /> {busy === t.id ? "Saving…" : "Save"}
                     </button>
-                    <span className="text-[10.5px] text-white/40 ml-auto whitespace-nowrap">
-                      Goal {t.goal} {t.unit}
-                    </span>
                   </div>
+                  <p className="mt-1.5 text-[10.5px] text-white/40">
+                    Goal: {t.goal} {t.unit} · ID <code className="text-white/60">{t.id}</code>
+                  </p>
                 </div>
               </div>
             </div>
@@ -1034,3 +1090,181 @@ function BuiltInTasksSection({
     </div>
   );
 }
+
+/* =====================================================================
+   PRICING TAB — admin controls the coin → premium-days plans
+   Reads/writes settings/premium/extraPlans
+   ===================================================================== */
+
+function PricingTab({
+  glassCard, inputClass, btnPrimary, btnSecondary,
+}: {
+  glassCard: string;
+  inputClass: string;
+  btnPrimary: string;
+  btnSecondary: string;
+}) {
+  const [settings, setSettings] = useState<PremiumGlobalSettings>(DEFAULT_PREMIUM_SETTINGS);
+  const [plans, setPlans] = useState<CoinPlan[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    return subscribePremiumSettings((s) => {
+      setSettings(s);
+      if (!dirty) setPlans(Array.isArray(s.extraPlans) ? s.extraPlans : []);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mutate = (fn: (list: CoinPlan[]) => CoinPlan[]) => {
+    setPlans((prev) => fn(prev));
+    setDirty(true);
+  };
+
+  const addPlan = () =>
+    mutate((prev) => [
+      ...prev,
+      {
+        id: `plan-${Date.now().toString(36)}`,
+        name: `${(prev.length + 1) * 10} Days`,
+        coins: 100,
+        days: 10,
+        featured: false,
+      },
+    ]);
+
+  const updatePlan = (i: number, patch: Partial<CoinPlan>) =>
+    mutate((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+
+  const removePlan = (i: number) => {
+    if (!confirm("Remove this plan?")) return;
+    mutate((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const save = async () => {
+    // Basic validation.
+    for (const p of plans) {
+      if (!p.name?.trim()) return toast.error("Every plan needs a name");
+      if (!(p.coins > 0) || !(p.days > 0)) return toast.error(`"${p.name}" needs coins & days > 0`);
+    }
+    setSaving(true);
+    try {
+      await savePremiumSettings({ extraPlans: plans });
+      setDirty(false);
+      toast.success("Pricing plans saved");
+    } catch (e: any) {
+      toast.error("Save failed: " + (e?.message || "unknown"));
+    } finally { setSaving(false); }
+  };
+
+  const resetToLive = () => {
+    setPlans(Array.isArray(settings.extraPlans) ? settings.extraPlans : []);
+    setDirty(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={glassCard + " p-5"}>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-base font-black text-white flex items-center gap-2">
+              <Coins className="w-4 h-4 text-amber-300" /> Coin → Premium Plans
+            </h3>
+            <p className="mt-1 text-[12px] text-white/60">
+              Set how many coins buy how many days of Premium. Users see these on the redeem page.
+              Leave empty to use the built-in default (100/200/300 → 10/20/30 days).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <button
+                onClick={resetToLive}
+                className={btnSecondary + " inline-flex items-center gap-1 text-[12px] px-3 py-1.5"}
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Revert
+              </button>
+            )}
+            <button
+              onClick={save}
+              disabled={!dirty || saving}
+              className={btnPrimary + " inline-flex items-center gap-1 text-[12px] px-3 py-1.5 disabled:opacity-40"}
+            >
+              <Save className="w-3.5 h-3.5" /> {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2.5">
+        {plans.length === 0 && (
+          <div className={glassCard + " p-6 text-center"}>
+            <Sparkles className="w-6 h-6 mx-auto text-amber-300 mb-2" />
+            <p className="text-sm font-bold text-white">No custom plans yet</p>
+            <p className="mt-1 text-[12px] text-white/60">
+              The default 3-tier plan is showing to users. Add your own to override.
+            </p>
+          </div>
+        )}
+        {plans.map((p, i) => (
+          <div key={p.id || i} className={glassCard + " p-3.5"}>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px_100px_auto_auto] items-center">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/50 font-bold">Name</label>
+                <input
+                  className={inputClass + " text-sm mt-0.5"}
+                  value={p.name}
+                  onChange={(e) => updatePlan(i, { name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/50 font-bold">Coins</label>
+                <input
+                  type="number"
+                  min={1}
+                  className={inputClass + " text-sm mt-0.5"}
+                  value={p.coins}
+                  onChange={(e) => updatePlan(i, { coins: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/50 font-bold">Days</label>
+                <input
+                  type="number"
+                  min={1}
+                  className={inputClass + " text-sm mt-0.5"}
+                  value={p.days}
+                  onChange={(e) => updatePlan(i, { days: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </div>
+              <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 whitespace-nowrap select-none mt-4">
+                <input
+                  type="checkbox"
+                  checked={!!p.featured}
+                  onChange={(e) => updatePlan(i, { featured: e.target.checked })}
+                  className="accent-amber-400"
+                />
+                Featured
+              </label>
+              <button
+                onClick={() => removePlan(i)}
+                className="mt-4 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-400/30 text-rose-300 hover:bg-rose-500/20"
+                title="Remove"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={addPlan}
+        className={btnSecondary + " w-full inline-flex items-center justify-center gap-1.5 text-[12.5px] px-4 py-2.5"}
+      >
+        <Plus className="w-4 h-4" /> Add plan
+      </button>
+    </div>
+  );
+}
+
