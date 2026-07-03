@@ -1698,26 +1698,85 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [activePage, filteredSeries.length, filteredMovies.length, tabGridVisibleCount]);
 
-  // Group content by admin-defined categories. Every admin category gets its own
-  // rail on the homepage, and each anime appears under EVERY category it matches
-  // (series + movies), so no admin category is dropped for lack of a unique match.
+  // Hourly refresh tick: rotates content so every anime cycles through the homepage
+  // rails over time. Bumped every 60 minutes.
+  const [homeRefreshTick, setHomeRefreshTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setHomeRefreshTick((x) => x + 1), 60 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Group content by admin-defined categories.
+  // Rule: an anime appears in ONLY ONE rail — the first admin category that
+  // matches its own primary metadata label. Sparse rails get backfilled from
+  // the AN live pool (matching the rail's category first, then any AN item)
+  // and finally from any pool item, so no rail ever looks empty.
   const categoryGroups = useMemo(() => {
-    const adminCats = (categories || [])
-      .map((c) => String(c || "").trim())
-      .filter(Boolean);
+    const MIN_SLOTS = 6;
+    const MAX_SLOTS = 10;
+    const adminCats = (categories || []).map((c) => String(c || "").trim()).filter(Boolean);
+    if (!adminCats.length) return [] as { key: string; title: string; items: AnimeItem[] }[];
+
+    const rotate = <T,>(arr: T[], n: number): T[] => {
+      if (!arr.length) return arr;
+      const off = ((n % arr.length) + arr.length) % arr.length;
+      return off === 0 ? arr : [...arr.slice(off), ...arr.slice(0, off)];
+    };
+
     const pool = [...filteredSeries, ...filteredMovies];
-    return adminCats.map((cat, index) => {
-      const seen = new Set<string>();
-      const items: AnimeItem[] = [];
-      pool.forEach((a) => {
-        if (categoryMatches(a, cat) && !seen.has(a.id)) {
-          seen.add(a.id);
-          items.push(a);
-        }
-      });
-      return { key: `${index}-${cat}`, title: cat, items };
+    const rotatedPool = rotate(pool, homeRefreshTick * 3);
+    const rotatedAn = rotate(activeSaltItems, homeRefreshTick * 5);
+
+    // Pick each anime's ONE primary admin category based on its first-listed
+    // matching metadata label.
+    const primaryFor = new Map<string, string>();
+    rotatedPool.forEach((a) => {
+      const labels = contentCategoryLabels(a);
+      let chosen: string | null = null;
+      for (const label of labels) {
+        const match = adminCats.find((cat) => metadataLabelMatches(label, cat));
+        if (match) { chosen = match; break; }
+      }
+      if (!chosen) chosen = adminCats.find((cat) => categoryMatches(a, cat)) || null;
+      if (chosen) primaryFor.set(a.id, chosen);
     });
-  }, [filteredSeries, filteredMovies, categories]);
+
+    const groups = adminCats.map((cat) => ({ cat, items: [] as AnimeItem[], ids: new Set<string>() }));
+    const byCat = new Map(groups.map((g) => [g.cat, g]));
+
+    rotatedPool.forEach((a) => {
+      const cat = primaryFor.get(a.id);
+      if (!cat) return;
+      const g = byCat.get(cat);
+      if (g && !g.ids.has(a.id)) { g.ids.add(a.id); g.items.push(a); }
+    });
+
+    const globallyUsed = new Set<string>();
+    groups.forEach((g) => g.items.forEach((i) => globallyUsed.add(i.id)));
+
+    const tryPush = (g: { items: AnimeItem[]; ids: Set<string> }, a: AnimeItem) => {
+      if (g.ids.has(a.id) || globallyUsed.has(a.id)) return;
+      g.ids.add(a.id); g.items.push(a); globallyUsed.add(a.id);
+    };
+
+    groups.forEach((g) => {
+      if (g.items.length >= MIN_SLOTS) return;
+      for (const a of rotatedAn) {
+        if (g.items.length >= MIN_SLOTS) break;
+        if (categoryMatches(a, g.cat)) tryPush(g, a);
+      }
+      for (const a of rotatedAn) {
+        if (g.items.length >= MIN_SLOTS) break;
+        tryPush(g, a);
+      }
+      for (const a of rotatedPool) {
+        if (g.items.length >= MIN_SLOTS) break;
+        tryPush(g, a);
+      }
+    });
+
+    return groups.map((g, i) => ({ key: `${i}-${g.cat}`, title: g.cat, items: g.items.slice(0, MAX_SLOTS) }));
+  }, [filteredSeries, filteredMovies, categories, activeSaltItems, homeRefreshTick]);
 
   // Hero slides: randomized mix from all anime with backdrop
   const [heroRotation, setHeroRotation] = useState(0);
