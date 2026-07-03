@@ -4,7 +4,7 @@ import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
 import { db, ref, get, set, remove } from "@/lib/firebase";
 
-type ApiStream = { url: string; height?: number | string; label?: string; resolution?: string; filename?: string; bandwidth?: number };
+type ApiStream = { url: string; height?: number | string; label?: string; resolution?: string; filename?: string; bandwidth?: number; codecs?: string };
 type ApiAudio = { language?: string; name?: string; uri?: string; url?: string; link?: string };
 type ApiSource = { streams?: ApiStream[]; audio?: ApiAudio[]; master?: string; videoSource?: string; securedLink?: string };
 
@@ -116,6 +116,7 @@ const collectPlaybackStreams = (data: any): ApiStream[] => {
       resolution: stream?.resolution,
       filename: stream?.filename,
       bandwidth: stream?.bandwidth,
+      codecs: stream?.codecs,
     });
   };
 
@@ -149,17 +150,26 @@ const collectPlaybackAudio = (data: any): ApiAudio[] => {
 };
 
 const streamFields = (streams: ApiStream[]) => {
-  const find = (h: number) => streams.find((s) => streamHeight(s) === h)?.url;
-  const link1080 = find(1080);
-  const link720 = find(720);
-  const link480 = find(480);
-  const link4k = find(2160);
+  const find = (h: number) => streams.find((s) => streamHeight(s) === h);
+  const s1080 = find(1080);
+  const s720 = find(720);
+  const s480 = find(480);
+  const s4k = find(2160);
+  const primary = s1080 || s720 || s480 || streams.find((s) => streamHeight(s) > 0) || streams[0];
   return {
-    link480,
-    link720,
-    link1080,
-    link4k,
-    link: link1080 || link720 || link480 || streams.find((s) => streamHeight(s) > 0)?.url || streams[0]?.url || "",
+    link480: s480?.url,
+    link720: s720?.url,
+    link1080: s1080?.url,
+    link4k: s4k?.url,
+    link: primary?.url || "",
+    anStreamMeta: streams.map((s) => ({
+      url: s.url,
+      height: streamHeight(s),
+      label: s.label,
+      resolution: s.resolution,
+      bandwidth: s.bandwidth,
+      codecs: s.codecs,
+    })),
   };
 };
 
@@ -358,8 +368,12 @@ export async function warmAnSeriesPlaybackCache(seriesSlug: string, seasons: Sea
   const unique = Array.from(new Set(slugs));
   const missing = unique.filter((s) => !getEpisodeFromBundle(seriesSlug, s));
   if (!missing.length) return;
-  const CONCURRENCY = 8;
+  // Keep background warm-up deliberately light. The previous 8-way burst ran
+  // while the user had just opened the player, competing with HLS segment loads
+  // and causing buffering / edge runtime disconnect noise in preview.
+  const CONCURRENCY = 2;
   let cursor = 0;
+  await new Promise((resolve) => setTimeout(resolve, 4500));
   const workers = Array.from({ length: Math.min(CONCURRENCY, missing.length) }, async () => {
     while (cursor < missing.length) {
       const next = missing[cursor++];
