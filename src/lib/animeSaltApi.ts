@@ -1,5 +1,6 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
 import { db, ref, get } from '@/lib/firebase';
+import { SUPABASE_URL } from '@/lib/siteConfig';
 
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
@@ -160,7 +161,7 @@ const parseMeta = (html: string) => {
 const uniqueUrls = (urls: string[]) => Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean)));
 
 const getLovableAnimeSaltUrl = () => {
-  const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || '';
+  const base = SUPABASE_URL || '';
   return base ? `${String(base).replace(/\/$/, '')}/functions/v1/animesalt` : '';
 };
 
