@@ -633,50 +633,34 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
               const isDeleting = deleting === w.id;
               return (
                 <div key={w.id}
-                  className={`rounded-xl border p-3 transition-all overflow-hidden ${
-                    active ? "border-orange-500/50 bg-orange-500/[0.06] shadow-inner shadow-orange-500/5"
-                           : "border-white/10 bg-white/[0.02]"}`}>
-                  {/* Row 1 — name + status dot */}
-                  <button onClick={() => openWorker(w.id)} className="w-full text-left min-w-0 block">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? "bg-orange-400" : "bg-emerald-400/70"}`} />
-                      <span className="text-[13px] font-bold text-white truncate">{w.id}</span>
-                    </div>
-                    {w.modified_on && (
-                      <div className="text-[10px] text-zinc-500 mt-0.5 pl-3.5">
-                        {new Date(w.modified_on).toLocaleString()}
-                      </div>
-                    )}
-                    {url && (
-                      <div className="text-[10px] font-mono text-orange-300/80 mt-1 pl-3.5 break-all leading-tight">
-                        {url}
-                      </div>
-                    )}
+                  className={`rounded-xl border px-3 py-2 flex items-center gap-2 transition-all ${
+                    active ? "border-orange-500/50 bg-orange-500/[0.06]"
+                           : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? "bg-orange-400" : "bg-emerald-400/70"}`} />
+                  <button onClick={() => openWorker(w.id)} className="flex-1 min-w-0 text-left">
+                    <div className="text-[12.5px] font-bold text-white truncate">{w.id}</div>
+                    {url && <div className="text-[9.5px] font-mono text-orange-300/70 truncate">{url}</div>}
                   </button>
-
-                  {/* Row 2 — action buttons (wrap-safe) */}
-                  <div className="mt-2.5 pt-2.5 border-t border-white/5 flex items-center gap-1.5 flex-wrap">
-                    <button onClick={() => openWorker(w.id)}
-                      className="flex-1 min-w-[70px] h-8 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center justify-center gap-1.5">
-                      <FileCode2 size={12} /> Edit
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => openWorker(w.id)} title="Edit"
+                      className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
+                      <FileCode2 size={12} />
                     </button>
                     {url && (
                       <>
-                        <button onClick={() => copy(url, "URL copied")}
-                          className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1.5">
-                          <Copy size={12} /> Copy
+                        <button onClick={() => copy(url, "URL copied")} title="Copy URL"
+                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
+                          <Copy size={12} />
                         </button>
-                        <a href={url} target="_blank" rel="noopener noreferrer"
-                          className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1.5">
-                          <ExternalLink size={12} /> Open
+                        <a href={url} target="_blank" rel="noopener noreferrer" title="Open"
+                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
+                          <ExternalLink size={12} />
                         </a>
                       </>
                     )}
-                    <button onClick={() => removeWorker(w.id)} disabled={isDeleting}
-                      className="h-8 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-[11px] font-semibold text-rose-200 flex items-center gap-1.5 disabled:opacity-50">
-                      {isDeleting
-                        ? <><Loader2 size={12} className="animate-spin" /> Deleting…</>
-                        : <><Trash2 size={12} /> Delete</>}
+                    <button onClick={() => removeWorker(w.id)} disabled={isDeleting} title="Delete"
+                      className="w-7 h-7 rounded-md bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center justify-center text-rose-300 disabled:opacity-50">
+                      {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                     </button>
                   </div>
                 </div>
