@@ -2841,9 +2841,29 @@ const Index = () => {
       || ((b.anime.updatedAt || b.anime.createdAt || 0) - (a.anime.updatedAt || a.anime.createdAt || 0))
       || String(a.anime.title || "").localeCompare(String(b.anime.title || ""))
     );
-    const next = scored.map(s => s.anime).slice(0, 15);
-    if (next.length) suggestedAnimeCacheRef.current.set(cacheKey, next);
-    return next;
+    const seen = new Set<string>([current.id]);
+    const picked: AnimeItem[] = [];
+    for (const s of scored) {
+      if (seen.has(s.anime.id)) continue;
+      seen.add(s.anime.id); picked.push(s.anime);
+      if (picked.length >= 15) break;
+    }
+    // Fallback fill: never leave the suggestion strip empty or short.
+    // Use popular / recently-updated anime across the whole catalogue.
+    if (picked.length < 15) {
+      const fillers = [...allAnime]
+        .filter((a) => !seen.has(a.id))
+        .sort((a, b) =>
+          (Number(b.rating) || 0) - (Number(a.rating) || 0)
+          || ((b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        );
+      for (const a of fillers) {
+        if (picked.length >= 15) break;
+        seen.add(a.id); picked.push(a);
+      }
+    }
+    if (picked.length) suggestedAnimeCacheRef.current.set(cacheKey, picked);
+    return picked;
   }, [playerState?.anime?.id, saltPlayerState?.anime?.id, allAnime]);
 
   const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
