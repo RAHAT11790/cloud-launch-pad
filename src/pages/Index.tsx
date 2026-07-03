@@ -1723,9 +1723,11 @@ const Index = () => {
       return off === 0 ? arr : [...arr.slice(off), ...arr.slice(0, off)];
     };
 
-    const pool = [...filteredSeries, ...filteredMovies];
+    // Category rails show ONLY series (RS + AN). Movies are shown solely in
+    // the dedicated "Most Favorite Movies" rail — never inside category rails.
+    const pool = filteredSeries.filter((a) => a.type !== "movie");
     const rotatedPool = rotate(pool, homeRefreshTick * 3);
-    const rotatedAn = rotate(activeSaltItems, homeRefreshTick * 5);
+    const rotatedAn = rotate(activeSaltItems.filter((a) => a.type !== "movie"), homeRefreshTick * 5);
 
     // Pick each anime's ONE primary admin category based on its first-listed
     // matching metadata label.
