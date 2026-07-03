@@ -363,6 +363,7 @@ export async function warmAnSeriesPlaybackCache(seriesSlug: string, seasons: Sea
   await loadAnSeriesBundle(seriesSlug);
   const slugs = seasons
     .flatMap((s) => s.episodes || [])
+    .filter((ep) => isAnimeSaltSentinel(ep.link))
     .map((ep) => slugFromSentinel(ep.link))
     .filter((slug): slug is string => Boolean(slug));
   const unique = Array.from(new Set(slugs));
@@ -387,7 +388,7 @@ export const isAnimeSaltSentinel = (link?: string | null) =>
   !!link && String(link).startsWith("animesalt://");
 
 export const slugFromSentinel = (link?: string | null) =>
-  String(link || "").replace(/^animesalt:\/\//, "");
+  isAnimeSaltSentinel(link) ? String(link || "").replace(/^animesalt:\/\//, "") : "";
 
 /** Resolve playback for a single episode in-place inside a Seasons array. */
 export async function enrichEpisodeInPlace(

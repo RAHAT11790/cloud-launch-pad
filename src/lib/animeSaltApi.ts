@@ -260,6 +260,10 @@ const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
   const fallback = String((import.meta as any)?.env?.VITE_SUPABASE_URL || '').trim()
     ? `${String((import.meta as any).env.VITE_SUPABASE_URL).replace(/\/$/, '')}/functions/v1/an-api`
     : '';
+  // Prefer the bundled Lovable Cloud function exclusively when available. A
+  // stale EGD/custom AN URL can still exist in settings; hitting it after the
+  // bundled function succeeds creates noisy 500/RUNTIME_ERROR alerts in preview.
+  if (fallback) return [ensureAnApiFunctionUrl(fallback)].filter(Boolean);
   const configured = await getEdgeFunctionUrl('an-api').catch(() => '');
   // Use the app's bundled Supabase function first. It is the version that
   // matches this codebase; a stale EGD/custom URL is the usual cause of the
