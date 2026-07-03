@@ -1,54 +1,44 @@
-// an-playback — playback-only AN HLS proxy.
-//
-// The fetch/extract API (`an-api`) gathers metadata, seasons, streams and audio.
-// This function does only one job: proxy HLS playlists/segments with stable CORS
-// and CDN-safe headers so video playback load is separated from extraction load.
-
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-const cors: Record<string, string> = {
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified",
-  "Access-Control-Max-Age": "86400",
+  "Access-Control-Max-Age": "86400"
 };
-
-const decode = (value: string) =>
-  String(value || "")
-    .replace(/\\\//g, "/")
-    .replace(/\\u0026/g, "&")
-    .replace(/\\u003d/g, "=")
-    .replace(/\\u003f/g, "?")
-    .replace(/&amp;/g, "&")
-    .trim();
-
-const deepDecodeUrl = (value: string) => {
+const decode = (value) => String(value || "").replace(/\\\//g, "/").replace(/\\u0026/g, "&").replace(/\\u003d/g, "=").replace(/\\u003f/g, "?").replace(/&amp;/g, "&").trim();
+const deepDecodeUrl = (value) => {
   let out = decode(value || "");
   for (let i = 0; i < 3 && /%[0-9a-f]{2}/i.test(out); i++) {
     try {
       const next = decodeURIComponent(out);
       if (next === out) break;
       out = decode(next);
-    } catch { break; }
+    } catch {
+      break;
+    }
   }
   return out;
 };
-
-const resolveUrl = (value: string, baseUrl: string) => {
+const resolveUrl = (value, baseUrl) => {
   const raw = decode(value);
   if (!raw) return "";
-  try { return new URL(raw, baseUrl).toString(); } catch { return raw; }
+  try {
+    return new URL(raw, baseUrl).toString();
+  } catch {
+    return raw;
+  }
 };
-
-function getSafeOrigin(value?: string | null) {
+function getSafeOrigin(value) {
   const raw = decode(value || "");
   if (!raw) return "";
-  try { return new URL(deepDecodeUrl(raw)).origin; } catch { return ""; }
+  try {
+    return new URL(deepDecodeUrl(raw)).origin;
+  } catch {
+    return "";
+  }
 }
-
-function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
+function wrapHlsUrl(raw, baseUrl, proxyPrefix, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
   if (/\/an-playback\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value) || /\/functions\/v1\/hls\?url=/i.test(value)) return value;
@@ -58,10 +48,9 @@ function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOri
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
   return `${proxyPrefix}?${params.toString()}`;
 }
-
-function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
+function rewriteM3U8(body, baseUrl, proxyPrefix, parentOrigin = "") {
   const playlistOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
-  const rewriteUriAttr = (line: string) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix, playlistOrigin)}"`);
+  const rewriteUriAttr = (line) => line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapHlsUrl(uri, baseUrl, proxyPrefix, playlistOrigin)}"`);
   return body.split(/\r?\n/).map((raw) => {
     const line = raw.trim();
     if (!line) return raw;
@@ -69,75 +58,73 @@ function rewriteM3U8(body: string, baseUrl: string, proxyPrefix: string, parentO
     return wrapHlsUrl(line, baseUrl, proxyPrefix, playlistOrigin);
   }).join("\n");
 }
-
-function getPublicFunctionOrigin(reqUrl: URL) {
+function getPublicFunctionOrigin(reqUrl) {
   const protocol = /(?:^|\.)supabase\.co$/i.test(reqUrl.hostname) ? "https:" : reqUrl.protocol;
   return `${protocol}//${reqUrl.host}`;
 }
-
-const isAnimeSaltIndexPlaylist = (url: URL) => /\/hls\/[^?#]+\/index\.ts$/i.test(url.pathname);
-const isLikelySegmentUrl = (url: URL) => !isAnimeSaltIndexPlaylist(url) && (/\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname));
-const isLikelyPlaylistUrl = (url: URL) => isAnimeSaltIndexPlaylist(url) || /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
-
-async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: string) {
+const isAnimeSaltIndexPlaylist = (url) => /\/hls\/[^?#]+\/index\.ts$/i.test(url.pathname);
+const isLikelySegmentUrl = (url) => !isAnimeSaltIndexPlaylist(url) && (/\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname));
+const isLikelyPlaylistUrl = (url) => isAnimeSaltIndexPlaylist(url) || /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
+async function fetchHlsUpstream(req, targetUrl, parentOrigin) {
   const range = req.headers.get("range");
   const playlist = isLikelyPlaylistUrl(targetUrl);
   const accept = playlist ? "application/vnd.apple.mpegurl,*/*" : "video/mp2t,video/*,*/*";
   const refererOrigin = getSafeOrigin(parentOrigin) || targetUrl.origin;
-  const baseHeaders: Record<string, string> = {
+  const baseHeaders = {
     "User-Agent": UA,
     Accept: accept,
     "Accept-Language": "en-US,en;q=0.9",
-    Referer: `${refererOrigin}/`,
+    Referer: `${refererOrigin}/`
   };
   if (range) baseHeaders.Range = range;
-  const attempts: Record<string, string>[] = [
+  const attempts = [
     baseHeaders,
     { ...baseHeaders, Referer: `${targetUrl.origin}/` },
-    ...(playlist ? [{ ...baseHeaders, Origin: refererOrigin }] : []),
+    ...playlist ? [{ ...baseHeaders, Origin: refererOrigin }] : []
   ];
   let lastStatus = 0;
   for (const headers of attempts) {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), playlist ? 12_000 : 45_000);
+    const timer = setTimeout(() => ac.abort(), playlist ? 12e3 : 45e3);
     try {
       const res = await fetch(targetUrl.toString(), {
         method: req.method === "HEAD" ? "HEAD" : "GET",
         headers,
         signal: ac.signal,
-        redirect: "follow",
+        redirect: "follow"
       });
       lastStatus = res.status;
       if (res.ok || res.status === 206 || res.status === 304) return res;
-      try { await res.body?.cancel(); } catch {}
+      try {
+        await res.body?.cancel();
+      } catch {
+      }
     } catch {
-      // Try next safe header profile.
     } finally {
       clearTimeout(timer);
     }
   }
-  return { errorStatus: lastStatus } as const;
+  return { errorStatus: lastStatus };
 }
-
-export default { async fetch(req, env, ctx) {
+var stdin_default = { async fetch(req, env, ctx) {
   try {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405, headers: cors });
-
     const reqUrl = new URL(req.url);
-    const path = reqUrl.pathname.includes("/an-playback") ? (reqUrl.pathname.split("/an-playback")[1] || "/") : reqUrl.pathname;
+    const path = reqUrl.pathname.includes("/an-playback") ? reqUrl.pathname.split("/an-playback")[1] || "/" : reqUrl.pathname;
     if (path !== "/" && path !== "/hls") return new Response(JSON.stringify({ ok: true, endpoint: "/hls?url=..." }), { headers: { ...cors, "Content-Type": "application/json" } });
     const target = reqUrl.searchParams.get("url") || "";
     if (!target) return new Response(JSON.stringify({ error: "missing ?url=" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
-
-    let targetUrl: URL;
-    try { targetUrl = new URL(deepDecodeUrl(target)); } catch { return new Response("bad url", { status: 400, headers: cors }); }
+    let targetUrl;
+    try {
+      targetUrl = new URL(deepDecodeUrl(target));
+    } catch {
+      return new Response("bad url", { status: 400, headers: cors });
+    }
     if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
-
     const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
     const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
     if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
-
     const h = new Headers(cors);
     for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
       const v = upstream.headers.get(k);
@@ -161,14 +148,13 @@ export default { async fetch(req, env, ctx) {
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
     if (isSegment) {
-      // Buffer short HLS fragments inside the edge before responding. Streaming
-      // upstream.body directly logs noisy runtime errors whenever hls.js cancels
-      // an in-flight fragment during seek/quality switch; fragments are small,
-      // so buffering is safer and keeps preview free of false crash alerts.
       return new Response(await upstream.arrayBuffer(), { status: upstream.status, statusText: upstream.statusText, headers: h });
     }
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
   } catch (e) {
-    return new Response(`AN playback proxy failed: ${(e as Error)?.message || String(e)}`, { status: 502, headers: cors });
+    return new Response(`AN playback proxy failed: ${e?.message || String(e)}`, { status: 502, headers: cors });
   }
 } };
+export {
+  stdin_default as default
+};
