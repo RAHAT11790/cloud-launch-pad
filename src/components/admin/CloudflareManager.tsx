@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Cloud, Copy, Loader2, Plus, RefreshCw, Rocket, Trash2, X, FileCode2, KeyRound,
   Link as LinkIcon, ExternalLink, Settings, CheckCircle2, AlertCircle, Download,
-  Library, Eye, EyeOff, ShieldCheck, Terminal, Zap, Activity, Sparkles,
+  Library, Eye, EyeOff, ShieldCheck, Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
