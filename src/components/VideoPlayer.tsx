@@ -2044,8 +2044,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
     if (!failedKey) return false;
 
-    const selectedQuality = currentQualityRef.current || currentQuality || "Auto";
-
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
 
