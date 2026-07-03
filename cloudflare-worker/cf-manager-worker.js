@@ -281,7 +281,7 @@ export default {
       return json(req, {
         ok: true,
         name: "cf-manager",
-        version: "1.0.0",
+        version: "1.1.0",
         hasToken: !!env.CF_API_TOKEN,
         hasAccount: !!env.CF_ACCOUNT_ID,
         hasAdmin: !!env.ADMIN_AUTH_TOKEN,
