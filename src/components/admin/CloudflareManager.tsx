@@ -483,11 +483,16 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
         {/* RIGHT — editor + secrets */}
         <div className="space-y-3">
           <div className={`${glassCard} p-4 space-y-3`}>
-            <div className="flex items-center gap-2">
-              <FileCode2 size={14} className="text-orange-300" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <FileCode2 size={14} className="text-orange-300 shrink-0" />
               <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))}
                 placeholder="worker-name (lowercase, dashes)"
-                className={inputClass + " font-mono text-[12px] flex-1"} />
+                className={inputClass + " font-mono text-[12px] flex-1 min-w-[160px]"} />
+              {selected && (
+                <button onClick={() => openLogs(selected)} className={btnSecondary + " gap-1 !py-1.5 !text-[11px]"} title="Live tail logs">
+                  <Terminal size={12} /> Logs
+                </button>
+              )}
               <button onClick={deploy} disabled={deploying || !slug || !code.trim()}
                 className={btnPrimary + " gap-1 !py-1.5"}>
                 {deploying ? <Loader2 size={12} className="animate-spin" /> : <Rocket size={12} />}
