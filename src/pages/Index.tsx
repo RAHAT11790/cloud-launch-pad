@@ -3342,7 +3342,7 @@ const Index = () => {
               if (window.history.length > 1) navigate(-1);
               else navigate("/");
             }}
-            onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
+            onCardClick={(anime) => { navigate("/", { replace: true }); setTimeout(() => handleCardClick(anime), 0); }}
           />
         )}
       </AnimatePresence>
