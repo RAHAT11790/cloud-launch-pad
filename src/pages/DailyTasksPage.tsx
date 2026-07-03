@@ -212,9 +212,8 @@ export default function DailyTasksPage() {
             <h2 className="text-sm font-semibold">How it works</h2>
           </div>
           <ul className="space-y-1.5 text-[12.5px] text-muted-foreground leading-relaxed">
-            <li>• Complete any of the 5 daily tasks below to fill its progress bar.</li>
-            <li>• Once a task is ready, the card turns golden and shows a <b className="text-amber-300">Claim</b> button.</li>
-            <li>• Tap Claim to instantly add coins to your wallet.</li>
+            <li>• Complete any task below to fill its progress bar.</li>
+            <li>• When a task is ready, its card turns golden and shows a <b className="text-amber-300">Claim</b> button.</li>
             <li>
               • Redeem coins on the{" "}
               <button
@@ -224,11 +223,12 @@ export default function DailyTasksPage() {
               >
                 Premium
               </button>{" "}
-              page — 100 coins = 10 days, 200 = 20 days, 300 = 30 days.
+              page to unlock premium days.
             </li>
-            <li>• All tasks reset every 24 hours at UTC midnight.</li>
+            <li>• Daily tasks reset every 24 hours at UTC midnight.</li>
           </ul>
         </div>
+
 
         {/* Task cards */}
         <div className="mt-5 space-y-3">
