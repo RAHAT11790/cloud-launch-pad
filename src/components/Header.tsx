@@ -37,9 +37,10 @@ interface HeaderProps {
   animeTitles?: string[];
   onLogoClick?: () => void;
   chatOpen?: boolean;
+  showSearch?: boolean;
 }
 
-const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen }: HeaderProps) => {
+const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen, showSearch = true }: HeaderProps) => {
   const branding = useBranding();
   const logoSrc = branding.logoUrl ;
   const [userId, setUserId] = useState<string | undefined>(undefined);
@@ -154,18 +155,20 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         </div>
       )}
 
-      <div className="relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
-        <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
-          style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
-          <span
-            className={`text-muted-foreground text-sm block whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-300 ${animating ? "opacity-0" : "opacity-100"}`}
-            style={{ width: '100%' }}
-          >
-            {currentPlaceholder}
-          </span>
+      {showSearch && (
+        <div className="relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
+          <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
+            style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
+            <span
+              className={`text-muted-foreground text-sm block whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-300 ${animating ? "opacity-0" : "opacity-100"}`}
+              style={{ width: '100%' }}
+            >
+              {currentPlaceholder}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
       <div className="flex items-center gap-1 flex-shrink-0">
         <ThemeToggle />
         <NotificationPanel userId={userId} onOpenContent={onOpenContent} />

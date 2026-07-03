@@ -1708,23 +1708,21 @@ const Index = () => {
   // rail on the homepage, and each anime appears under EVERY category it matches
   // (series + movies), so no admin category is dropped for lack of a unique match.
   const categoryGroups = useMemo(() => {
-    const groups: Record<string, AnimeItem[]> = {};
     const adminCats = (categories || [])
       .map((c) => String(c || "").trim())
       .filter(Boolean);
-    adminCats.forEach((cat) => { groups[cat] = []; });
     const pool = [...filteredSeries, ...filteredMovies];
-    const seenPerCat: Record<string, Set<string>> = {};
-    adminCats.forEach((cat) => { seenPerCat[cat] = new Set(); });
-    pool.forEach((a) => {
-      adminCats.forEach((cat) => {
-        if (categoryMatches(a, cat) && !seenPerCat[cat].has(a.id)) {
-          seenPerCat[cat].add(a.id);
-          groups[cat].push(a);
+    return adminCats.map((cat, index) => {
+      const seen = new Set<string>();
+      const items: AnimeItem[] = [];
+      pool.forEach((a) => {
+        if (categoryMatches(a, cat) && !seen.has(a.id)) {
+          seen.add(a.id);
+          items.push(a);
         }
       });
+      return { key: `${index}-${cat}`, title: cat, items };
     });
-    return groups;
   }, [filteredSeries, filteredMovies, categories]);
 
   // Hero slides: randomized mix from all anime with backdrop
@@ -3111,10 +3109,9 @@ const Index = () => {
           {filteredMovies.length > 0 && (
             <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
           )}
-          {Object.entries(categoryGroups)
-            .filter(([, items]) => items.length > 0)
-            .map(([cat, items]) => (
-              <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+          {categoryGroups
+            .map(({ key, title, items }) => (
+              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={handleCardClick} showWhenEmpty />
             ))}
         </>
       )}
@@ -3298,7 +3295,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
+      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} showSearch={activePage !== "home"} />
       <main
         className="relative overflow-hidden"
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}
