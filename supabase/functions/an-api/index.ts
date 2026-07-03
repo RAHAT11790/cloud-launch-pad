@@ -879,8 +879,8 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   if (!master) throw new Error("AN player did not return HLS source");
   const body = await fetchMaster(master, embedUrl, origin);
   const parsed = parseMaster(master, body);
-  if (!parsed.streams.length) {
-    throw new Error("AN master did not expose any playable variant");
+  if (parsed.rejected || !parsed.streams.length) {
+    throw new Error(parsed.rejected || "AN master did not expose any playable variant");
   }
   const hasHindiAudio = (parsed.audio || []).some((a: any) => a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`));
   const streams = parsed.streams || [];
