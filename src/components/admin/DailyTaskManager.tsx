@@ -26,7 +26,7 @@ interface Props {
   btnSecondary: string;
 }
 
-type Tab = "overview" | "tasks" | "users" | "referrals";
+type Tab = "overview" | "tasks" | "pricing" | "users" | "referrals";
 
 interface UserRow {
   id: string;
