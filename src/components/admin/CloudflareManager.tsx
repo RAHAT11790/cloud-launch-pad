@@ -82,6 +82,10 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
   const [secretDraftValue, setSecretDraftValue] = useState("");
   const [savingSecret, setSavingSecret] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [logsWorker, setLogsWorker] = useState<string | null>(null);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [logsStatus, setLogsStatus] = useState<"idle" | "connecting" | "live" | "error" | "closed">("idle");
+  const logsWsRef = useRef<WebSocket | null>(null);
 
   // ---- Load config ----
   useEffect(() => {
