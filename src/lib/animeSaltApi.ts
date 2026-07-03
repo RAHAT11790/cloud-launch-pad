@@ -1,6 +1,5 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
 import { db, ref, get } from '@/lib/firebase';
-import { SUPABASE_URL } from '@/lib/siteConfig';
 
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
@@ -88,7 +87,7 @@ const normalizeLinkList = (values: Array<{ url?: string | null; quality?: string
 
 const isPlaybackCandidate = (value: string) => {
   const url = toAbsoluteUrl(value);
-  if (!url || url === '#' || /^javascript:/i.test(url) || /^data:image\//i.test(url) || ASSET_EXT_RE.test(url)) return false;
+  if (!url || ASSET_EXT_RE.test(url)) return false;
   if (/animesalt\.(?:ac|top)\/(?:series|movies|episode)\//i.test(url) && !PLAYABLE_EXT_RE.test(url)) return false;
   return PLAYABLE_EXT_RE.test(url) || !/animesalt\.(?:ac|top)/i.test(url) || /embed|watch|player|stream|download/i.test(url);
 };
@@ -158,22 +157,12 @@ const parseMeta = (html: string) => {
   };
 };
 
-const uniqueUrls = (urls: string[]) => Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean)));
-
-const getLovableAnimeSaltUrl = () => {
-  const base = SUPABASE_URL || '';
-  return base ? `${String(base).replace(/\/$/, '')}/functions/v1/animesalt` : '';
-};
-
-/** Get AnimeSalt proxy URLs - tries saved custom URL first, then built-in backend fallback */
-const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
-  // Own backend first: saved Cloudflare/custom URLs can go stale or lose CORS,
-  // and trying those first blocks card clicks for 12s per failed endpoint.
-  const urls: string[] = [getLovableAnimeSaltUrl()];
+/** Get AnimeSalt proxy URL - checks custom URL first, then edge router */
+const getAnimeSaltProxyUrl = async (): Promise<string> => {
   try {
     const snap = await get(ref(db, 'settings/animesaltConfig'));
     const val = snap.val();
-    if (val?.enabled !== false && val?.customUrl) urls.push(val.customUrl);
+    if (val?.enabled !== false && val?.customUrl) return val.customUrl;
     if (val?.enabled === false) throw new Error('AnimeSalt বন্ধ আছে। Admin Panel থেকে চালু করুন।');
   } catch (e: any) {
     if (e.message?.includes('বন্ধ')) throw e;
@@ -182,56 +171,30 @@ const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
   try {
     const overrideSnap = await get(ref(db, 'settings/functionOverrides/animesalt'));
     const override = overrideSnap.val();
-    if (override?.customUrl) urls.push(override.customUrl);
+    if (override?.customUrl) return override.customUrl;
     if (override?.enabled === false) throw new Error('AnimeSalt ফাংশন বন্ধ আছে।');
   } catch (e: any) {
     if (e.message?.includes('বন্ধ')) throw e;
   }
 
   const proxyUrl = await getEdgeFunctionUrl('animesalt');
-  urls.push(proxyUrl);
-
-  const candidates = uniqueUrls(urls);
-  if (!candidates.length) throw new Error('AnimeSalt endpoint not configured. Set Base URL or Custom URL in Admin Panel.');
-  return candidates;
-};
-
-/** Backward-compatible first URL getter */
-const getAnimeSaltProxyUrl = async (): Promise<string> => {
-  const [first] = await getAnimeSaltProxyUrls();
-  return first;
-};
-
-const postAnimeSaltProxy = async (body: any, preferredUrl?: string): Promise<any> => {
-  const urls = uniqueUrls([preferredUrl || '', ...(await getAnimeSaltProxyUrls())]);
-  let lastError: any = null;
-
-  for (const proxyUrl of urls) {
-    try {
-      const res = await fetchWithTimeout(proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        lastError = new Error(`AnimeSalt proxy error: ${res.status}`);
-        continue;
-      }
-      return await res.json();
-    } catch (e) {
-      lastError = e;
-    }
-  }
-
-  throw lastError || new Error('AnimeSalt proxy unavailable');
+  if (!proxyUrl) throw new Error('AnimeSalt endpoint not configured. Set Base URL or Custom URL in Admin Panel.');
+  return proxyUrl;
 };
 
 const fetchPage = async (url: string): Promise<string> => {
-  let data: any = null;
-  try {
-    data = await postAnimeSaltProxy({ url });
+  const proxyUrl = await getAnimeSaltProxyUrl();
+  let res = await fetchWithTimeout(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+
+  let data: any;
+  if (res.ok) {
+    data = await res.json();
     if (data.success && data.html) return data.html;
-  } catch {}
+  }
 
   const isMoviesPage = url.includes('/movies');
   const isEpisodePage = url.includes('/episode/');
@@ -243,7 +206,14 @@ const fetchPage = async (url: string): Promise<string> => {
   else if (slugMatch && !pageMatch) fallbackBody = { action: slugMatch[1] === 'series' ? 'series' : 'movie', slug: slugMatch[2] };
   else fallbackBody = { action: 'browse', type: isMoviesPage ? 'movies' : 'series', page: pageMatch ? parseInt(pageMatch[1], 10) : 1 };
 
-  data = await postAnimeSaltProxy(fallbackBody);
+  res = await fetchWithTimeout(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fallbackBody),
+  });
+
+  if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
+  data = await res.json();
   if (data.success && data.html) return data.html;
   throw new Error('No HTML returned from AnimeSalt proxy');
 };
@@ -400,7 +370,13 @@ const parsePlaybackPage = (html: string) => {
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
   try {
-    const data = await postAnimeSaltProxy(body, proxyUrl);
+    const res = await fetchWithTimeout(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
     if (!data?.success) return null;
     if (data.data) return data.data;
     if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
