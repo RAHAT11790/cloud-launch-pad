@@ -52,6 +52,7 @@ import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/l
 const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
 
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
+const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"));
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
