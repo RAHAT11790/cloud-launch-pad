@@ -372,9 +372,9 @@ export async function warmAnSeriesPlaybackCache(seriesSlug: string, seasons: Sea
   // Keep background warm-up deliberately light. The previous 8-way burst ran
   // while the user had just opened the player, competing with HLS segment loads
   // and causing buffering / edge runtime disconnect noise in preview.
-  const CONCURRENCY = 2;
+  const CONCURRENCY = 1;
   let cursor = 0;
-  await new Promise((resolve) => setTimeout(resolve, 4500));
+  await new Promise((resolve) => setTimeout(resolve, 15000));
   const workers = Array.from({ length: Math.min(CONCURRENCY, missing.length) }, async () => {
     while (cursor < missing.length) {
       const next = missing[cursor++];
