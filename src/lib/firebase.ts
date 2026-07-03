@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast } from "firebase/database";
+import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast, goOffline, goOnline } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
 
 const firebaseConfig = {
@@ -17,4 +17,49 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+// ============================================================
+// Connection watchdog — auto-reconnects when Firebase drops
+// (common after admin updates, tab-sleep, or flaky networks).
+// ============================================================
+if (typeof window !== "undefined") {
+  let disconnectedSince = 0;
+  let recovering = false;
+  const RECOVER_AFTER_MS = 8000;
+
+  const forceReconnect = () => {
+    if (recovering) return;
+    recovering = true;
+    try { goOffline(db); } catch {}
+    setTimeout(() => {
+      try { goOnline(db); } catch {}
+      recovering = false;
+    }, 400);
+  };
+
+  try {
+    onValue(ref(db, ".info/connected"), (snap) => {
+      const connected = !!snap.val();
+      if (connected) {
+        disconnectedSince = 0;
+      } else if (!disconnectedSince) {
+        disconnectedSince = Date.now();
+        setTimeout(() => {
+          if (disconnectedSince && Date.now() - disconnectedSince >= RECOVER_AFTER_MS) {
+            forceReconnect();
+          }
+        }, RECOVER_AFTER_MS + 100);
+      }
+    });
+  } catch {}
+
+  // Nudge reconnection when the browser comes back online or the tab
+  // becomes visible again.
+  window.addEventListener("online", forceReconnect);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && disconnectedSince) {
+      forceReconnect();
+    }
+  });
+}
+
+export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast, goOffline, goOnline, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
