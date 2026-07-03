@@ -105,7 +105,7 @@ const pickAnPreferredQualityIdx = (streams: Array<{ height?: number }>) => {
 };
 
 const buildAnSyntheticMaster = (
-  stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
+  stream: { url: string; bandwidth?: number; resolution?: string; height?: number; codecs?: string },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
   defaultAudioIdx?: number,
 ) => {
@@ -124,8 +124,9 @@ const buildAnSyntheticMaster = (
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
+  const codecs = String(stream.codecs || "").trim() || "avc1.4d401f,mp4a.40.2";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`}${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`},CODECS="${codecs.replace(/"/g, "")}"${audioRef}`,
   );
   lines.push(buildAnHlsPlaybackUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
@@ -313,11 +314,18 @@ const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[]
 
 const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
   if (!ep) return null;
+  const metaByUrl = new Map<string, any>();
+  const metaList = Array.isArray((ep as any).anStreamMeta) ? (ep as any).anStreamMeta : [];
+  metaList.forEach((stream: any) => {
+    const url = String(stream?.url || "").trim();
+    if (url) metaByUrl.set(url, stream);
+  });
   const pushStream = (list: any[], label: string, url?: string | null, height?: number) => {
     const clean = String(url || "").trim();
     if (!isAnPlayableHlsUrl(clean)) return;
     if (list.some((item) => item.url === clean)) return;
-    list.push({ label, url: clean, height });
+    const meta = metaByUrl.get(clean) || {};
+    list.push({ label: meta.label || label, url: clean, height: Number(meta.height || height || 0) || height, resolution: meta.resolution, bandwidth: meta.bandwidth, codecs: meta.codecs });
   };
 
   const streams: any[] = [];
