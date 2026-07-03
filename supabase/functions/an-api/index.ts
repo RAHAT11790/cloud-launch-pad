@@ -445,17 +445,17 @@ async function detail(slug: string, type: string, forceRefresh = false) {
 
 // ---------- HINDI PLAYABILITY VERIFICATION ----------
 async function verifyEpisodeHindiPlayable(epSlug: string): Promise<boolean> {
-  const key = `hindiOk:${API_CACHE_VERSION}:${epSlug}`;
+  const key = `playable:${API_CACHE_VERSION}:${epSlug}`;
   const cached = getCache<boolean>(key);
   if (cached !== null) return cached;
   try {
     const data: any = await episode(epSlug, "", false);
-    const ok = !!data?.success
-      && data?.separateAudioVideo === true
-      && Array.isArray(data.streams) && data.streams.length > 0
-      && (data?.hindiDub === true || (Array.isArray(data.audio) && data.audio.some((a: any) =>
-        a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`),
-      )));
+    // Playability now means: the extractor returned at least one HLS variant.
+    // Hindi is still preferred by parseMaster/extractFromPlayer but no longer
+    // required — otherwise entire series without a Hindi dub (Captain Tsubasa,
+    // Farming Life in Another World, many newer Pokemon/Doraemon/Shinchan
+    // uploads) would be silently trimmed to zero episodes.
+    const ok = !!data?.success && Array.isArray(data.streams) && data.streams.length > 0;
     setCache(key, ok, ok ? 6 * 60 * 60_000 : 30 * 60_000);
     return ok;
   } catch {
