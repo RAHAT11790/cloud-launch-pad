@@ -122,11 +122,15 @@ Deno.serve(async (req) => {
     const candidateBaseHeaders = { ...baseHeaders };
     const rawRange = req.headers.get("range");
     if (rawRange) candidateBaseHeaders.range = capLargeMediaRange(rawRange, candidate) || rawRange;
+    // IMPORTANT: never forward the browser's own Referer (rsanime03.lovable.app)
+    // to upstream — some HTTP mirrors (bot-hosting/render/etc.) reject requests
+    // whose Referer is a public site domain, which is what broke Server 2 / the
+    // HTTP proxy path. We only synthesize a Referer/Origin that matches the
+    // upstream host so it looks like a same-origin fetch.
     const attempts: Record<string, string>[] = [
       candidateBaseHeaders,
       { ...candidateBaseHeaders, Referer: `${origin}/` },
       { ...candidateBaseHeaders, Referer: `${origin}/`, Origin: origin },
-      { ...candidateBaseHeaders, Referer: req.headers.get("referer") || `${origin}/` },
     ];
     for (const headers of attempts) {
       try {
