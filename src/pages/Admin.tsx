@@ -8841,6 +8841,12 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
  <EgdManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
+ {/* ==================== CLOUDFLARE MANAGER ==================== */}
+ {activeSection === "cf-manager" && (
+ <CloudflareManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+ )}
+
+
  {/* ==================== ADSTERRA ADS ==================== */}
  {activeSection === "adsterra" && (
  <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
