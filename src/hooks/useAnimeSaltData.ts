@@ -3,18 +3,28 @@ import { animeSaltApi } from '@/lib/animeSaltApi';
 import type { AnimeItem } from '@/data/animeData';
 
 const CACHE_KEY = 'animesalt_all_v3';
-// Silent background refresh cadence. The cache itself never expires — cards
-// are always visible from localStorage the moment the app loads, even if the
-// network is down. Fresh data merges in whenever the API responds.
-const BACKGROUND_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+// AN cards are permanent in localStorage. We only revalidate against the
+// upstream API once per hour (category refresh cadence). Refreshes never
+// happen on every page mount / reload — that was the "preload storm" the
+// user was seeing. RS uses Firebase realtime; AN uses this cached window.
+const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
-const readCache = (): AnimeItem[] => {
+type CacheShape = { items: AnimeItem[]; _ts: number };
+
+const readCacheRaw = (): CacheShape | null => {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return [];
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.items) ? parsed.items : [];
-  } catch { return []; }
+    if (!Array.isArray(parsed?.items)) return null;
+    return { items: parsed.items, _ts: Number(parsed._ts) || 0 };
+  } catch { return null; }
+};
+
+const readCache = (): AnimeItem[] => readCacheRaw()?.items || [];
+const readCacheAge = (): number => {
+  const c = readCacheRaw();
+  return c ? Date.now() - c._ts : Infinity;
 };
 
 const writeCache = (items: AnimeItem[]) => {
@@ -70,29 +80,31 @@ export function useAnimeSaltData() {
       }
     };
 
-    // First refresh: immediately if empty, otherwise after idle so cached UI
-    // paints without contention.
-    if (readCache().length === 0) {
+    // Only fetch on mount if:
+    //  a) cache is empty, or
+    //  b) cache is older than the 1-hour refresh window.
+    // Otherwise the cards stay in localStorage — no network request per
+    // refresh, matching RS's realtime-cached behavior.
+    const age = readCacheAge();
+    if (readCache().length === 0 || age >= REFRESH_INTERVAL_MS) {
       void refresh();
     } else {
-      const idle = (window as any).requestIdleCallback;
-      if (typeof idle === "function") idle(() => void refresh(), { timeout: 3000 });
-      else setTimeout(() => void refresh(), 1500);
+      setLoading(false);
     }
 
-    // Silent periodic refresh keeps cards live-synced without ever hiding
-    // the UI behind a loading state.
-    const interval = window.setInterval(() => { void refresh(); }, BACKGROUND_REFRESH_MS);
-    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
-    const onOnline = () => { void refresh(); };
+    // Hourly background sync while the tab lives; also runs when the tab
+    // returns to focus after >= 1 hour, or when connectivity comes back.
+    const interval = window.setInterval(() => { void refresh(); }, REFRESH_INTERVAL_MS);
+    const maybeRefresh = () => { if (readCacheAge() >= REFRESH_INTERVAL_MS) void refresh(); };
+    const onVisible = () => { if (document.visibilityState === "visible") maybeRefresh(); };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("online", onOnline);
+    window.addEventListener("online", maybeRefresh);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("online", onOnline);
+      window.removeEventListener("online", maybeRefresh);
     };
   }, []);
 
