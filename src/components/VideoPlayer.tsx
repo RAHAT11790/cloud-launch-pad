@@ -1872,7 +1872,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setActiveServerIndex(0);
     failedSrcsRef.current = new Set();
     pendingSeek.current = 0;
-    lastKnownTimeRef.current = 0;
+    
   }, [animeId]);
 
 
