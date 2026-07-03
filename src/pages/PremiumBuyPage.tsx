@@ -8,11 +8,12 @@ import { usePremium } from "@/hooks/usePremium";
 import { db, ref, get } from "@/lib/firebase";
 import { buyPremiumWithCoins, type CoinPlan } from "@/lib/premiumAccess";
 
-const COIN_PLANS: CoinPlan[] = [
+const DEFAULT_COIN_PLANS: CoinPlan[] = [
   { id: "coin-10d", name: "10 Days", coins: 100, days: 10 },
   { id: "coin-20d", name: "20 Days", coins: 200, days: 20, featured: true },
   { id: "coin-30d", name: "30 Days", coins: 300, days: 30 },
 ];
+
 
 export default function PremiumBuyPage() {
   const navigate = useNavigate();
