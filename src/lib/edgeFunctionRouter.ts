@@ -88,6 +88,7 @@ function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
   if (!base) return "";
   const ENABLED = new Set([
+    "animesalt",
     "telegram-post",
     "generate-backdrop",
     "rs-bot",
