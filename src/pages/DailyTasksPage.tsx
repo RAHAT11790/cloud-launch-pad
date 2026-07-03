@@ -348,6 +348,96 @@ export default function DailyTasksPage() {
           })}
         </div>
 
+        {/* ==================== ADMIN-DEFINED BONUS TASKS ==================== */}
+        {customTasks.filter((t) => t.active).length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Sparkles className="w-4 h-4 text-fuchsia-300" />
+              <h2 className="text-sm font-bold">Bonus Tasks & Promotions</h2>
+            </div>
+            <div className="space-y-3">
+              {customTasks.filter((t) => t.active).map((t) => {
+                const claim = customClaims[t.id];
+                const check = canClaimCustomTask(t, claim);
+                const claimed = t.dailyReset
+                  ? claim?.claimedDay === new Date().toISOString().slice(0, 10)
+                  : !!claim?.claimedAt;
+                const isBusy = busy === `custom:${t.id}`;
+                const needsVisit = (t.minSeconds || 0) > 0 && !claim?.visitedAt;
+                const waiting = check.reason?.startsWith("Wait ");
+
+                const openLink = async () => {
+                  openPopunderIfConfigured();
+                  await markCustomTaskVisited(t.id);
+                  if (t.url) window.open(t.url, "_blank", "noopener,noreferrer");
+                };
+
+                const doClaim = async () => {
+                  if (isBusy) return;
+                  openPopunderIfConfigured();
+                  setBusy(`custom:${t.id}`);
+                  const r = await claimCustomTask(t);
+                  setBusy(null);
+                  if (!r.ok) { toast.warning(r.reason); return; }
+                  toast.success(`+${r.coins} coin${r.coins > 1 ? "s" : ""}! Balance: ${r.total}`);
+                };
+
+                return (
+                  <div key={t.id} className={[
+                    "rounded-2xl border p-4 transition-colors",
+                    claimed
+                      ? "border-emerald-400/30 bg-emerald-500/[0.06]"
+                      : check.ok
+                        ? "border-amber-400/40 bg-gradient-to-br from-amber-500/[0.12] to-yellow-500/[0.04]"
+                        : "border-fuchsia-400/20 bg-fuchsia-500/[0.04]",
+                  ].join(" ")}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-fuchsia-500/15 text-fuchsia-300 flex items-center justify-center flex-shrink-0 text-xl">
+                        {t.icon || "🎯"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-bold leading-tight">{t.title}</h3>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 flex-shrink-0 inline-flex items-center gap-1">
+                            <Coins className="w-3 h-3" /> +{t.reward}
+                          </span>
+                        </div>
+                        {t.description && (
+                          <p className="mt-0.5 text-[12px] text-muted-foreground">{t.description}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {t.url && !claimed && (
+                            <button onClick={openLink}
+                              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 inline-flex items-center gap-1.5">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              {needsVisit ? "Open link" : "Open again"}
+                            </button>
+                          )}
+                          {claimed ? (
+                            <div className="text-[12px] font-semibold text-emerald-300 inline-flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4" /> Claimed
+                            </div>
+                          ) : check.ok ? (
+                            <button onClick={doClaim} disabled={isBusy}
+                              className="ml-auto text-[12px] font-black px-4 py-1.5 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-500 text-black shadow-lg shadow-amber-500/20 active:scale-[0.97] disabled:opacity-60">
+                              {isBusy ? "Claiming…" : `Claim +${t.reward}`}
+                            </button>
+                          ) : (
+                            <div className="ml-auto text-[11px] font-semibold text-muted-foreground inline-flex items-center gap-1.5">
+                              {waiting ? <><Clock className="w-3.5 h-3.5" /> {check.reason}</> : <><Lock className="w-3.5 h-3.5" /> {check.reason || "Not ready"}</>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+
         {/* Invite Friends — hero reward section */}
         <div className="mt-6">
           <InviteFriendCard variant="full" siteName={branding.siteName || "our platform"} />
