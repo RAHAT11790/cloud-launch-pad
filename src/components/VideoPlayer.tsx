@@ -3020,6 +3020,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    // AN/HLS startup can legitimately take longer while hls.js mounts the
+    // synthetic master + separate audio/video playlists. Do not let the generic
+    // direct-MP4 watchdog mark it as expired before hls.js has recovered/retried.
+    if (isAnimeSaltContent || isHlsSrc) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
     const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw) ? 24000 : 12000;
     const timer = window.setTimeout(() => {
@@ -3030,7 +3034,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [activeServerIndex, adGateActive, currentSrc, getServerScopedSource, isEmbedPlayback, playbackRouteReady, src, tryNextPlaybackRoute]);
+  }, [activeServerIndex, adGateActive, currentSrc, getServerScopedSource, isAnimeSaltContent, isEmbedPlayback, isHlsSrc, playbackRouteReady, src, tryNextPlaybackRoute]);
 
   // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
   // can fail with a quick 502 while the video element waits much longer before
