@@ -3086,6 +3086,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
+  "task-manager": "Daily Task Manager",
   
   };
 
