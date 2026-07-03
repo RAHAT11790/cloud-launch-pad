@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
 
-type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
+type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number; codecs?: string };
 type Audio  = { language: string; name: string; uri: string };
 
 const AN_PLAYBACK_HLS_PROXY_PREFIX = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback/hls`;
