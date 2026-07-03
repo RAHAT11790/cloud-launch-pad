@@ -152,7 +152,7 @@ export default function PremiumBuyPage() {
             Your wallet: <b className="text-amber-300">{wallet.coins || 0}</b> coins • Instant activation, no code needed.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {COIN_PLANS.map((plan) => {
+            {coinPlans.map((plan) => {
               const enough = (wallet.coins || 0) >= plan.coins;
               const isBuying = buying === plan.id;
               return (
