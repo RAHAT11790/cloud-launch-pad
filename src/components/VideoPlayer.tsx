@@ -2524,7 +2524,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
     hlsRef.current = hls;
 
-    hls.loadSource(hlsSource);
+    hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+      hls.loadSource(hlsSource);
+    });
     hls.attachMedia(v);
 
     const applyPreferredHlsAudio = () => {
@@ -2604,6 +2606,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyPreferredHlsAudio();
       refreshHlsAudio();
       refreshHlsSubs();
+      try { hls.startLoad(pendingSeek.current && pendingSeek.current > 0 ? pendingSeek.current : -1); } catch {}
       if (userPlaybackIntentRef.current && !adGateActiveRef.current) v.play().catch(() => {});
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
