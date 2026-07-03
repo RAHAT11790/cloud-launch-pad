@@ -88,7 +88,7 @@ const normalizeLinkList = (values: Array<{ url?: string | null; quality?: string
 
 const isPlaybackCandidate = (value: string) => {
   const url = toAbsoluteUrl(value);
-  if (!url || ASSET_EXT_RE.test(url)) return false;
+  if (!url || url === '#' || /^javascript:/i.test(url) || /^data:image\//i.test(url) || ASSET_EXT_RE.test(url)) return false;
   if (/animesalt\.(?:ac|top)\/(?:series|movies|episode)\//i.test(url) && !PLAYABLE_EXT_RE.test(url)) return false;
   return PLAYABLE_EXT_RE.test(url) || !/animesalt\.(?:ac|top)/i.test(url) || /embed|watch|player|stream|download/i.test(url);
 };
