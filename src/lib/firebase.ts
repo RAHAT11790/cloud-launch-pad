@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast } from "firebase/database";
+import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, goOnline, goOffline } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
 
 const firebaseConfig = {
@@ -12,16 +12,45 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:843989457516:web:57e0577d092183eedd9649"
 };
 
-// Guard against Vite HMR re-initializing the app on every hot update.
-// A second `initializeApp` call with the same name tears down the existing
-// WebSocket and forces every listener to reconnect — which is exactly what
-// the user was seeing as "Firebase disconnect after update".
-const globalKey = "__rs_firebase_app__";
-const g = globalThis as any;
-const app = g[globalKey] || (g[globalKey] = initializeApp(firebaseConfig));
-
-export const db = g.__rs_firebase_db__ || (g.__rs_firebase_db__ = getDatabase(app));
-export const auth = g.__rs_firebase_auth__ || (g.__rs_firebase_auth__ = getAuth(app));
+const app = initializeApp(firebaseConfig);
+export const db = getDatabase(app);
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, limitToLast, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+// ---- Firebase RTDB connection watchdog ----
+// Live domain-এ Firebase মাঝে মাঝে disconnect হয়ে যায় (tab throttle, network switch,
+// browser websocket idle timeout)। এই watchdog visibility/online/connection-loss
+// event-এ automatic reconnect করে যাতে সব স্ক্রিন frozen না থাকে।
+if (typeof window !== "undefined") {
+  let reconnectTimer: number | null = null;
+  const kick = (delay = 0) => {
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    reconnectTimer = window.setTimeout(() => {
+      try { goOffline(db); } catch {}
+      try { goOnline(db); } catch {}
+      reconnectTimer = null;
+    }, delay);
+  };
+
+  // .info/connected listen করে, disconnect হলে ২ সেকেন্ড পরে reconnect trigger।
+  try {
+    onValue(ref(db, ".info/connected"), (snap) => {
+      const connected = snap.val() === true;
+      if (!connected) kick(2000);
+    });
+  } catch {}
+
+  // Tab visible হলে সাথে সাথে reconnect চেষ্টা।
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") kick(0);
+  });
+
+  // Network এলে reconnect, গেলে সাফভাবে offline।
+  window.addEventListener("online", () => kick(0));
+  window.addEventListener("offline", () => { try { goOffline(db); } catch {} });
+
+  // Page focus fallback।
+  window.addEventListener("focus", () => kick(0));
+}
+
+export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, goOnline, goOffline, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };

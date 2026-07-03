@@ -1,184 +1,104 @@
 import { useEffect, useState } from "react";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { toast } from "sonner";
-import {
-  DEFAULT_COIN_ADS,
-  saveCoinAd,
-  subscribeCoinAds,
-  CoinAd,
-  DEFAULT_PREMIUM_SETTINGS,
-} from "@/lib/premiumAccess";
-import { Zap, Radio, LayoutGrid, Sparkles, Link2, Save } from "lucide-react";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 
-type SlotDef = {
-  id: string;
-  name: string;
-  kind: CoinAd["kind"];
-  help: string;
-  icon: JSX.Element;
-  accent: string;
-};
-
-const FREE_PREMIUM_SLOTS: SlotDef[] = [
-  { id: "adsterra_popunder",     name: "One Click Popunder",   kind: "sdk",       accent: "from-amber-500/20 to-orange-500/5",   icon: <Zap className="w-3.5 h-3.5 text-amber-300" />,     help: "Counted earn-coin click. Direct URL or popunder script." },
-  { id: "adsterra_social_bar",   name: "Social Bar (Push)",    kind: "sdk",       accent: "from-fuchsia-500/20 to-purple-500/5", icon: <Radio className="w-3.5 h-3.5 text-fuchsia-300" />, help: "Adsterra Push/In-Page notifications come from Social Bar — no separate push slot." },
-  { id: "adsterra_banner_160",   name: "160×300 Banner",       kind: "sdk",       accent: "from-sky-500/20 to-blue-500/5",       icon: <LayoutGrid className="w-3.5 h-3.5 text-sky-300" />, help: "Renders on the Free Premium page." },
-  { id: "adsterra_native_banner",name: "Native Banner",        kind: "sdk",       accent: "from-emerald-500/20 to-teal-500/5",   icon: <Sparkles className="w-3.5 h-3.5 text-emerald-300" />, help: "Native banner invoke.js snippet." },
-  { id: "adsterra_smartlink",    name: "Smartlink (Preview)",  kind: "smartlink", accent: "from-pink-500/20 to-rose-500/5",      icon: <Link2 className="w-3.5 h-3.5 text-pink-300" />,    help: "Direct smartlink URL — first tap 'not counted' preview." },
-];
-
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
-  const [vpEnabled, setVpEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
-  const [socialLink, setSocialLink] = useState("");
-  const [cooldownSec, setCooldownSec] = useState<number>(50);
-  const [savingVp, setSavingVp] = useState(false);
-
-  const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
-  const [adWatchSeconds, setAdWatchSeconds] = useState<number>(15);
-  const [dailyAdCap, setDailyAdCap] = useState<number>(5);
-  const [savingFp, setSavingFp] = useState(false);
+  const [socialBar, setSocialBar] = useState("");
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(60);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const u1 = onValue(ref(db, "settings/adsterra"), (snap) => {
+    const u = onValue(ref(db, "settings/adsterra"), (snap) => {
       const v = snap.val() || {};
-      setVpEnabled(v.enabled !== false);
+      setEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
-      setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
-      const cd = Number(v.refreshIntervalSec);
-      setCooldownSec(Number.isFinite(cd) && cd >= 0 ? cd : 50);
+      setSocialBar(v.socialBar || "");
+      const n = Number(v.refreshIntervalSec);
+      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? n : 60);
     });
-    const u2 = subscribeCoinAds((list) => {
-      const map: Record<string, CoinAd> = {};
-      FREE_PREMIUM_SLOTS.forEach((s) => {
-        const found = list.find((a) => a.id === s.id) || DEFAULT_COIN_ADS.find((a) => a.id === s.id);
-        map[s.id] = found || { id: s.id, name: s.name, url: "", enabled: true, kind: s.kind };
-      });
-      setCoinAds(map);
-    });
-    const u3 = onValue(ref(db, "settings/premium"), (snap) => {
-      const v = snap.val() || {};
-      setAdWatchSeconds(Number(v.adWatchSeconds) || DEFAULT_PREMIUM_SETTINGS.adWatchSeconds);
-      setDailyAdCap(Number(v.dailyAdCap) || DEFAULT_PREMIUM_SETTINGS.dailyAdCap);
-    });
-    return () => { u1(); u2(); u3(); };
+    return () => u();
   }, []);
 
-  const saveVideoPlayer = async () => {
-    setSavingVp(true);
+  const toggle = async (next: boolean) => {
+    setEnabled(next);
+    try { await update(ref(db, "settings/adsterra"), { enabled: next }); toast.success(next ? "Adsterra enabled" : "Adsterra disabled"); }
+    catch { toast.error("Failed"); }
+  };
+
+  const save = async () => {
+    setLoading(true);
     try {
-      const cd = Math.max(0, Math.min(3600, Number(cooldownSec) || 0));
       await set(ref(db, "settings/adsterra"), {
-        enabled: vpEnabled,
+        enabled,
         popunder: popunder.trim(),
-        streamLink: socialLink.trim(),
-        socialLink: socialLink.trim(),
-        pushNotification: socialLink.trim(),
-        socialBar: socialLink.trim(),
-        minGapSec: cd,
-        refreshIntervalSec: cd,
+        socialBar: socialBar.trim(),
+        refreshIntervalSec: Math.max(0, Math.min(3600, Number(refreshIntervalSec) || 0)),
       });
-      toast.success("Video Player ads saved");
+      toast.success("Adsterra config saved");
     } catch { toast.error("Save failed"); }
-    setSavingVp(false);
+    setLoading(false);
   };
-
-  const saveFreePremium = async () => {
-    setSavingFp(true);
-    try {
-      for (const slot of FREE_PREMIUM_SLOTS) {
-        const cur = coinAds[slot.id];
-        await saveCoinAd({
-          id: slot.id,
-          name: slot.name,
-          url: (cur?.url || "").trim(),
-          enabled: cur?.enabled !== false,
-          kind: slot.kind,
-        });
-      }
-      await update(ref(db, "settings/premium"), {
-        adWatchSeconds: Math.max(5, Math.min(120, Number(adWatchSeconds) || 15)),
-        dailyAdCap: Math.max(1, Math.min(50, Number(dailyAdCap) || 5)),
-      });
-      toast.success("Free Premium ads saved");
-    } catch { toast.error("Save failed"); }
-    setSavingFp(false);
-  };
-
-  const updateSlot = (id: string, patch: Partial<CoinAd>) => {
-    setCoinAds((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } as CoinAd }));
-  };
-
-  const codeArea =
-    "w-full min-w-0 rounded-lg bg-black/60 border border-white/10 px-2.5 py-2 " +
-    "font-mono text-[11px] leading-relaxed text-emerald-100/90 " +
-    "placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-fuchsia-400/40 " +
-    "resize-y break-all whitespace-pre-wrap overflow-auto";
 
   return (
-    <div className="space-y-5 min-w-0">
-      {/* Video Player Ads */}
-      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a0f2e]/70 to-black/40 p-4 space-y-4 min-w-0 overflow-hidden">
-        <header className="flex items-start justify-between gap-3 min-w-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-fuchsia-500/15 border border-fuchsia-400/25 flex items-center justify-center">🎬</span>
-              <h3 className="text-sm font-bold text-white truncate">Video Player Ads</h3>
-            </div>
-            <p className="text-[11px] text-white/50 mt-1">Only user-click gated — Popunder + Social/Push.</p>
-          </div>
-          <label className="inline-flex items-center gap-2 text-[11px] text-white/80 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-            <input type="checkbox" className="accent-fuchsia-500" checked={vpEnabled} onChange={(e) => setVpEnabled(e.target.checked)} />
-            {vpEnabled ? "Enabled" : "Off"}
-          </label>
-        </header>
+    <div className={glassCard + " space-y-4"}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <h3 className="text-base font-bold text-white">Adsterra Ads</h3>
+        <label className="inline-flex items-center gap-2 text-xs text-white/80 flex-shrink-0">
+          <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} />
+          {enabled ? "Enabled" : "Disabled"}
+        </label>
+      </div>
+      <p className="text-[11px] text-white/60 leading-relaxed">
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Only your player-scoped direct link and push notification ads run here, and each successful ad interaction starts the refresh cooldown so users do not get spammed.
+      </p>
 
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-amber-300" />
-            <span className="text-[11px] font-semibold text-white/85">One-Click Popunder</span>
-            <span className="text-[10px] text-white/40">click-gated</span>
-          </div>
-          <textarea value={popunder} onChange={(e) => setPopunder(e.target.value)} rows={3}
-            className={codeArea}
-            placeholder='https://... or <script src="https://.../popunder.js"></script>' />
-        </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">Direct Link Script</label>
+        <textarea
+          value={popunder}
+          onChange={(e) => setPopunder(e.target.value)}
+          rows={3}
+          className={inputClass + " w-full font-mono text-[11px] break-all"}
+          placeholder='<script src="https://pl29545318.effectivecpmnetwork.com/.../invoke.js"></script>'
+        />
+      </div>
 
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <Radio className="w-3.5 h-3.5 text-fuchsia-300" />
-            <span className="text-[11px] font-semibold text-white/85">Social Bar / In-Page Push</span>
-          </div>
-          <textarea value={socialLink} onChange={(e) => setSocialLink(e.target.value)} rows={3}
-            className={codeArea}
-            placeholder='https://... or <script src="https://.../social-bar.js"></script>' />
-          <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
-        </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">Push Notification Script</label>
+        <textarea
+          value={socialBar}
+          onChange={(e) => setSocialBar(e.target.value)}
+          rows={3}
+          className={inputClass + " w-full font-mono text-[11px] break-all"}
+          placeholder='<script src="https://pl29545319.effectivecpmnetwork.com/.../invoke.js"></script>'
+        />
+      </div>
 
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-white/85">Cool-down (seconds)</span>
-            <span className="text-[10px] text-white/40">between player ad calls · 0 = no cool-down</span>
-          </div>
-          <input
-            type="number" min={0} max={3600}
-            value={cooldownSec}
-            onChange={(e) => setCooldownSec(Number(e.target.value))}
-            className={inputClass + " w-full"}
-            placeholder="e.g. 50"
-          />
-          <p className="text-[10px] text-white/45">Adsterra can be spammy — keep 30-90s to protect the user experience.</p>
-        </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">
+          Ad Refresh Interval (seconds)
+        </label>
+        <input
+          type="number"
+          min={0}
+          max={3600}
+          value={refreshIntervalSec}
+          onChange={(e) => setRefreshIntervalSec(Number(e.target.value))}
+          className={inputClass + " w-full"}
+          placeholder="60"
+        />
+        <p className="text-[10px] text-white/50 leading-relaxed">
+          Refresh starts counting after the current ad cycle finishes loading. Example: if an ad loads at 1:00 and this is <strong>120</strong>, the next cycle starts at about 3:00. Set <strong>0</strong> to disable auto refresh.
+        </p>
+      </div>
 
-        <button onClick={saveVideoPlayer} disabled={savingVp}
-          className={btnPrimary + " w-full inline-flex items-center justify-center gap-1.5"}>
-          <Save className="w-3.5 h-3.5" />
-          {savingVp ? "Saving..." : "Save Video Player Ads"}
-        </button>
-      </section>
-
+      <button onClick={save} disabled={loading} className={btnPrimary + " w-full"}>
+        {loading ? "Saving..." : "Save Adsterra Config"}
+      </button>
     </div>
   );
 };

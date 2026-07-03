@@ -158,26 +158,6 @@ div[style*="z-index: 2147483647"],
     border: none;
   }
 
-  .admin-shell {
-    isolation: isolate;
-  }
-
-  .admin-optimized-panel,
-  .admin-isolated-overlay {
-    contain: layout paint style;
-    isolation: isolate;
-  }
-
-  .admin-isolated-overlay {
-    transform: translateZ(0);
-    backface-visibility: hidden;
-  }
-
-  .admin-scroll-smooth {
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-
   .neu-raised {
     box-shadow: var(--neu-shadow);
   }
@@ -238,30 +218,12 @@ div[style*="z-index: 2147483647"],
   }
 
   .poster-hover {
-    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
-    isolation: auto;
-    transform: none;
-    backface-visibility: visible;
-    -webkit-backface-visibility: visible;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
   }
-  @media (hover: hover) and (pointer: fine) {
-    .poster-hover {
-      transition: transform 0.18s ease, box-shadow 0.18s ease;
-    }
-    .poster-hover:hover {
-      transform: scale(1.05) translateY(-6px);
-      box-shadow: 8px 8px 20px #b8bec7, -8px -8px 20px #ffffff;
-      z-index: 10;
-    }
-  }
-
-  .poster-img {
-    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
-    display: block;
-    opacity: 1;
-    transform: none;
-    backface-visibility: visible;
-    -webkit-backface-visibility: visible;
+  .poster-hover:hover {
+    transform: scale(1.05) translateY(-6px);
+    box-shadow: 8px 8px 20px #b8bec7, -8px -8px 20px #ffffff;
+    z-index: 10;
   }
 
   .category-bar::before {
@@ -276,406 +238,100 @@ div[style*="z-index: 2147483647"],
 
   /* Video player styles */
   .player-controls-overlay {
-    background: transparent;
+    background: linear-gradient(to top, hsla(0, 0%, 0%, 0.9) 0%, transparent 40%),
+                linear-gradient(to bottom, hsla(0, 0%, 0%, 0.6) 0%, transparent 20%);
   }
 
   .player-glass {
-    background: hsl(0 0% 0% / 0.86);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 1px solid hsl(0 0% 100% / 0.10);
-    box-shadow: none;
-  }
-
-  .player-menu-panel {
-    background: hsl(0 0% 0% / 0.92);
-    color: hsl(0 0% 100%);
-    border: 1px solid hsl(0 0% 100% / 0.12);
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: hsl(var(--card) / 0.82);
+    backdrop-filter: blur(18px);
+    border: 1px solid hsl(var(--border) / 0.45);
+    box-shadow: var(--neu-shadow-sm);
   }
 
   .player-touch-button {
-    background: hsl(0 0% 0% / 0.55);
-    color: hsl(0 0% 100%);
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: hsl(var(--card) / 0.84);
+    color: hsl(var(--card-foreground));
+    backdrop-filter: blur(18px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: var(--neu-shadow-sm);
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    contain: paint;
-    transform: translateZ(0);
   }
 
   .player-touch-button:active {
-    transform: scale(0.92);
+    transform: scale(0.96);
   }
 
   .player-touch-button--primary {
-    background: hsl(0 0% 0% / 0.6);
-    color: hsl(0 0% 100%);
-    border: 1px solid hsl(0 0% 100% / 0.14);
-    box-shadow: none;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary) / 0.45);
+    box-shadow: 0 10px 24px hsl(var(--primary) / 0.32);
   }
 
   .player-control-chip {
-    background: hsl(0 0% 0% / 0.55);
-    color: hsl(0 0% 100%);
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    touch-action: manipulation;
-    contain: paint;
-    transform: translateZ(0);
+    background: hsl(var(--card) / 0.78);
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border) / 0.45);
+    box-shadow: var(--neu-shadow-sm);
   }
 
-  .player-controls-layer {
-    contain: layout paint;
-    will-change: opacity;
-    transform: translateZ(0);
-    background: linear-gradient(to bottom, hsl(0 0% 0% / 0.44), transparent 26%, transparent 58%, hsl(0 0% 0% / 0.52));
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-  }
-
-  /* Admin overlay / panel GPU smoothness — kills the lag the user feels when
-     popping open Admin overlays since the admin shell is one big stack of
-     conditionally-mounted overlays. */
-  .admin-surface,
-  [data-admin-overlay] {
-    contain: layout paint style;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    will-change: opacity, transform;
-  }
-  .admin-surface img,
-  [data-admin-overlay] img {
-    content-visibility: auto;
-    contain-intrinsic-size: 120px 170px;
-  }
-
-  /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */
+  /* Anime-style 12-petal loader (stainless / steel look) — compact */
   .player-loader-shell {
     position: relative;
-    width: 44px;
-    height: 44px;
-    display: inline-block;
-    transform: translateZ(0);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: petalSpin 1s steps(12, end) infinite;
     will-change: transform;
   }
+
   .player-loader-petal {
     position: absolute;
     left: 50%;
     top: 50%;
     width: 3px;
-    height: 12px;
-    margin: -20px 0 0 -1.5px;
-    transform-origin: 50% 20px;
-    background: #ffffff;
-    border-radius: 2px;
-    opacity: 1;
-    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.85));
-    animation: anSpinnerFade 1s linear infinite;
-  }
-  .player-loader-petal:nth-child(1)  { transform: rotate(0deg);   animation-delay: -1.000s; }
-  .player-loader-petal:nth-child(2)  { transform: rotate(30deg);  animation-delay: -0.917s; }
-  .player-loader-petal:nth-child(3)  { transform: rotate(60deg);  animation-delay: -0.833s; }
-  .player-loader-petal:nth-child(4)  { transform: rotate(90deg);  animation-delay: -0.750s; }
-  .player-loader-petal:nth-child(5)  { transform: rotate(120deg); animation-delay: -0.667s; }
-  .player-loader-petal:nth-child(6)  { transform: rotate(150deg); animation-delay: -0.583s; }
-  .player-loader-petal:nth-child(7)  { transform: rotate(180deg); animation-delay: -0.500s; }
-  .player-loader-petal:nth-child(8)  { transform: rotate(210deg); animation-delay: -0.417s; }
-  .player-loader-petal:nth-child(9)  { transform: rotate(240deg); animation-delay: -0.333s; }
-  .player-loader-petal:nth-child(10) { transform: rotate(270deg); animation-delay: -0.250s; }
-  .player-loader-petal:nth-child(11) { transform: rotate(300deg); animation-delay: -0.167s; }
-  .player-loader-petal:nth-child(12) { transform: rotate(330deg); animation-delay: -0.083s; }
-
-  @keyframes anSpinnerFade {
-    0%   { opacity: 1; }
-    100% { opacity: 0.35; }
+    height: 10px;
+    margin-left: -1.5px;
+    margin-top: -19px;
+    border-radius: 9999px;
+    background: hsl(0 0% 92%);
+    transform-origin: 1.5px 19px;
+    opacity: 0.15;
   }
 
-  /* Keep petalSpin keyframe for any other consumer */
+  .player-loader-petal:nth-child(1)  { transform: rotate(0deg);   opacity: 1;    }
+  .player-loader-petal:nth-child(2)  { transform: rotate(30deg);  opacity: 0.92; }
+  .player-loader-petal:nth-child(3)  { transform: rotate(60deg);  opacity: 0.82; }
+  .player-loader-petal:nth-child(4)  { transform: rotate(90deg);  opacity: 0.72; }
+  .player-loader-petal:nth-child(5)  { transform: rotate(120deg); opacity: 0.62; }
+  .player-loader-petal:nth-child(6)  { transform: rotate(150deg); opacity: 0.52; }
+  .player-loader-petal:nth-child(7)  { transform: rotate(180deg); opacity: 0.42; }
+  .player-loader-petal:nth-child(8)  { transform: rotate(210deg); opacity: 0.34; }
+  .player-loader-petal:nth-child(9)  { transform: rotate(240deg); opacity: 0.28; }
+  .player-loader-petal:nth-child(10) { transform: rotate(270deg); opacity: 0.22; }
+  .player-loader-petal:nth-child(11) { transform: rotate(300deg); opacity: 0.18; }
+  .player-loader-petal:nth-child(12) { transform: rotate(330deg); opacity: 0.15; }
+
   @keyframes petalSpin {
     to { transform: rotate(360deg); }
   }
 
-  /* Suggestion-card pending state — dim + centered amber ring */
-  .magic-card-pulse {
-    position: relative;
-    overflow: hidden;
-  }
-  .magic-card-pulse::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: hsl(0 0% 0% / 0.55);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    pointer-events: none;
-    z-index: 1;
-  }
-  .magic-card-pulse::after {
-    content: "";
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 36px; height: 36px;
-    margin: -18px 0 0 -18px;
-    border-radius: 9999px;
-    border: 3px solid hsl(35 95% 55% / 0.22);
-    border-top-color: hsl(35 95% 58%);
-    animation: petalSpin 0.85s linear infinite;
-    pointer-events: none;
-    z-index: 2;
-    box-shadow: 0 0 16px hsl(35 95% 55% / 0.5);
+  .skip-indicator {
+    background: hsl(var(--card) / 0.78);
+    backdrop-filter: blur(10px);
+    border: 1px solid hsl(var(--border) / 0.45);
+    border-radius: 50%;
+    animation: skipPulse 0.5s ease-out;
   }
 
-
-  /* Hero slider — lightweight CSS animations (no framer-motion) */
-  .hero-fade-in {
-    animation: heroFadeUp 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-    will-change: opacity, transform;
-  }
-  @keyframes heroFadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .hero-progress-bar {
-    transform-origin: left center;
-    animation: heroProgress linear forwards;
-  }
-  @keyframes heroProgress {
-    from { transform: scaleX(0); }
-    to   { transform: scaleX(1); }
-  }
-  /* CSS animations auto-pause when the tab is hidden in modern browsers,
-     but force-pause on reduced-motion + when parent hides */
-  @media (prefers-reduced-motion: reduce) {
-    .hero-fade-in, .hero-progress-bar { animation: none !important; }
-  }
-
-  /* YouTube-style skip burst — semi-transparent circle, no shadow,
-     centered on the tap zone. Used by both VideoPlayer and AN player. */
-  .skip-pill {
-    pointer-events: none;
-    z-index: 60;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    width: 96px;
-    height: 96px;
-    border-radius: 9999px;
-    background: transparent;
-    color: hsl(0 0% 100%);
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    animation: skipPillPop 460ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
-  }
-  .skip-pill__num { font: 700 12px/1 system-ui, -apple-system, sans-serif; letter-spacing: 0.2px; opacity: 0.95; }
-  .skip-pill--center { animation: skipPillCenterPop 420ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
-
-  @keyframes skipPillPop {
-    0%   { opacity: 0; transform: translateY(-50%) scale(0.7); }
-    35%  { opacity: 1; transform: translateY(-50%) scale(1.04); }
-    100% { opacity: 0; transform: translateY(-50%) scale(1); }
-  }
-  @keyframes skipPillCenterPop {
-    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
-    35%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
-  }
-
-  /* YouTube-style D-shaped skip overlay — a half-disc that covers one
-     side of the player. Vertically centered. Chevrons + "10 seconds"
-     text sit at the geometric center of the visible half. */
-  .skip-youtube {
-    pointer-events: none;
-    z-index: 65;
-    position: absolute;
-    top: -20%;
-    bottom: -20%;
-    width: 70%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: hsl(0 0% 100% / 0.98);
-    background: hsl(0 0% 100% / 0.22);
-    overflow: hidden;
-  }
-  .skip-youtube--left {
-    left: -28%;
-    border-top-right-radius: 55% 50%;
-    border-bottom-right-radius: 55% 50%;
-    animation: skipYoutubePopLeft 520ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
-  }
-  .skip-youtube--right {
-    right: -28%;
-    border-top-left-radius: 55% 50%;
-    border-bottom-left-radius: 55% 50%;
-    animation: skipYoutubePopRight 520ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
-  }
-  .skip-youtube__inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    transform: translateX(0);
-  }
-  .skip-youtube--left  .skip-youtube__inner { transform: translateX(38%); }
-  .skip-youtube--right .skip-youtube__inner { transform: translateX(-38%); }
-  .skip-youtube__arrows {
-    font: 900 26px/1 system-ui, -apple-system, sans-serif;
-    letter-spacing: -2px;
-  }
-  .skip-youtube__time {
-    font: 700 12px/1 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0.2px;
-    opacity: 0.95;
-  }
-
-  @keyframes skipYoutubePopLeft {
-    0%   { opacity: 0; transform: translateX(-6px) scale(0.96); }
-    25%  { opacity: 1; transform: translateX(0) scale(1); }
-    75%  { opacity: 1; transform: translateX(0) scale(1); }
-    100% { opacity: 0; transform: translateX(-4px) scale(0.98); }
-  }
-  @keyframes skipYoutubePopRight {
-    0%   { opacity: 0; transform: translateX(6px) scale(0.96); }
-    25%  { opacity: 1; transform: translateX(0) scale(1); }
-    75%  { opacity: 1; transform: translateX(0) scale(1); }
-    100% { opacity: 0; transform: translateX(4px) scale(0.98); }
-  }
-
-  /* Swipe-up fullscreen — compact YouTube-like push/lift response */
-  .player-fs-enter { animation: playerFsEnter 300ms cubic-bezier(0.18, 0.82, 0.22, 1) both; transform-origin: center top; }
-  .player-fs-exit  { animation: playerFsExit  220ms cubic-bezier(0.22, 0.9, 0.25, 1) both; transform-origin: center top; }
-  @keyframes playerFsEnter {
-    0%   { transform: translate3d(0, -30px, 0) scale(0.955); opacity: 0.92; }
-    58%  { transform: translate3d(0, 2px, 0) scale(1.006); opacity: 1; }
-    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
-  }
-  @keyframes playerFsExit {
-    0%   { transform: translate3d(0, 12px, 0) scale(1.01); opacity: 0.95; }
-    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
-  }
-
-  .player-custom-controls {
-    contain: layout paint;
-    will-change: transform, opacity;
-  }
-
-  .player-control-round,
-  .player-control-main {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: hsl(0 0% 100%);
-    background: hsl(0 0% 5% / 0.72);
-    border: 1px solid hsl(0 0% 100% / 0.14);
-    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.35);
-    touch-action: manipulation;
-    transition: transform 90ms ease, background 120ms ease;
-  }
-
-  .player-control-round { width: 31px; height: 31px; border-radius: 999px; }
-  .player-control-main { width: 40px; height: 40px; border-radius: 999px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
-
-  .player-control-round:active,
-  .player-control-main:active { transform: scale(0.92); }
-
-  .player-seek {
-    height: 14px;
-    accent-color: hsl(var(--primary));
-    touch-action: none;
-  }
-
-  .player-seek::-webkit-slider-runnable-track { height: 3px; border-radius: 999px; background: hsl(0 0% 100% / 0.28); }
-  .player-seek::-webkit-slider-thumb { margin-top: -5px; width: 12px; height: 12px; border-radius: 999px; background: hsl(var(--primary)); }
-
-  .youtube-skip-burst {
-    pointer-events: none;
-    color: hsl(0 0% 100%);
-    will-change: transform, opacity;
-  }
-
-  .youtube-skip-ring {
-    width: 64px;
-    height: 64px;
-    border-radius: 999px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1px;
-    background: hsl(0 0% 0% / 0.55);
-    border: 1px solid hsl(0 0% 100% / 0.18);
-    box-shadow: 0 10px 30px hsl(0 0% 0% / 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    animation: youtubeSkipPop 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
-  }
-
-  .youtube-skip-ring span { font-size: 12px; line-height: 1; font-weight: 800; }
-
-  .player-speed-hud {
-    position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 55;
-    pointer-events: none;
-    padding: 5px 12px;
-    border-radius: 999px;
-    background: hsl(0 0% 0% / 0.72);
-    color: hsl(0 0% 100%);
-    font: 700 11px/1 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0.5px;
-    border: 1px solid hsl(0 0% 100% / 0.18);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-
-  .player-speed-hold-hud {
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    z-index: 75;
-    pointer-events: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transform: translateX(-50%);
-    padding: 5px 11px;
-    border-radius: 999px;
-    background: hsl(0 0% 0% / 0.58);
-    color: hsl(0 0% 100%);
-    border: 1px solid hsl(0 0% 100% / 0.16);
-    font: 800 12px/1 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    animation: speedHoldIn 160ms ease-out both;
-  }
-
-  @keyframes speedHoldIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.94); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-  }
-
-  @keyframes youtubeSkipPop {
-    0% { opacity: 0; transform: translateY(-50%) scale(0.76); }
-    18% { opacity: 1; transform: translateY(-50%) scale(1.04); }
-    100% { opacity: 0; transform: translateY(-50%) scale(1); }
+  @keyframes skipPulse {
+    0% { transform: scale(0.8); opacity: 0; }
+    50% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.9; }
   }
 
   @keyframes fadeInUp {
@@ -706,158 +362,6 @@ div[style*="z-index: 2147483647"],
   @keyframes logoPulse {
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.1); opacity: 0.8; }
-  }
-
-  @keyframes splashHexSpin {
-    to { transform: rotate(360deg); }
-  }
-  @keyframes splashHexSpinRev {
-    to { transform: rotate(-360deg); }
-  }
-  @keyframes splashGlow {
-    0%, 100% { opacity: 0.5; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.15); }
-  }
-  @keyframes splashPetalFall {
-    0% { transform: translate3d(0,-10vh,0) rotate(0deg); opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { transform: translate3d(var(--drift,40px),110vh,0) rotate(540deg); opacity: 0; }
-  }
-  @keyframes splashGlitch {
-    0%, 92%, 100% { transform: translate(0,0); }
-    93% { transform: translate(-2px,1px); }
-    95% { transform: translate(2px,-1px); }
-    97% { transform: translate(-1px,2px); }
-  }
-  @keyframes splashScan {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-  @keyframes splashCorner {
-    0%, 100% { opacity: 0.4; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.08); }
-  }
-  @keyframes splashBarFill {
-    0% { transform: translateX(-100%); }
-    50% { transform: translateX(0%); }
-    100% { transform: translateX(100%); }
-  }
-  @keyframes splashKanji {
-    0%, 100% { opacity: 0.15; }
-    50% { opacity: 0.35; }
-  }
-  @keyframes splashTitleShift {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 300% 50%; }
-  }
-
-  /* Single anime sakura splash loader — transform/opacity only for smooth mobile performance. */
-  @keyframes sakuraPetalFall {
-    0% { transform: translate3d(0, -12vh, 0) rotate(0deg) scale(0.72); opacity: 0; }
-    8% { opacity: var(--petal-opacity, 0.75); }
-    50% { transform: translate3d(calc(var(--drift, 40px) * 0.46), 50vh, 0) rotate(240deg) scale(1); }
-    92% { opacity: var(--petal-opacity, 0.75); }
-    100% { transform: translate3d(var(--drift, 40px), 112vh, 0) rotate(520deg) scale(0.86); opacity: 0; }
-  }
-
-  @keyframes sakuraSparkRain {
-    0% { transform: translate3d(0, -10vh, 0) scale(0.35); opacity: 0; }
-    18% { opacity: 1; }
-    72% { opacity: 0.9; }
-    100% { transform: translate3d(var(--drift, 24px), 108vh, 0) scale(1.08); opacity: 0; }
-  }
-
-  @keyframes sakuraAuraSpin {
-    to { transform: rotate(360deg); }
-  }
-
-  @keyframes sakuraSoftPulse {
-    0%, 100% { transform: scale(0.985); opacity: 0.72; }
-    50% { transform: scale(1.035); opacity: 1; }
-  }
-
-  @keyframes sakuraTitleGlow {
-    0%, 100% { background-position: 0% 50%; filter: drop-shadow(0 0 10px rgba(255, 170, 215, 0.28)); }
-    50% { background-position: 100% 50%; filter: drop-shadow(0 0 18px rgba(179, 235, 255, 0.42)); }
-  }
-
-  @keyframes sakuraSheen {
-    0%, 100% { transform: translate3d(-18%, 0, 0); opacity: 0.22; }
-    50% { transform: translate3d(18%, 0, 0); opacity: 0.62; }
-  }
-
-  @keyframes splFadeIn {
-    from { opacity: 0; transform: scale(0.94); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
-  @keyframes confettiBurst {
-    0% { transform: translate3d(0,0,0) rotate(0deg) scale(0.3); opacity: 0; }
-    8% { opacity: 1; }
-    100% { transform: translate3d(var(--cx, 0px), var(--cy, -80px), 0) rotate(var(--cr, 540deg)) scale(1); opacity: 0; }
-  }
-
-  @keyframes rgbConicSpin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Petal/spark ejects radially from the spinner center outward */
-  @keyframes petalEject {
-    0%   { transform: translate3d(0,0,0) rotate(0deg) scale(0.2); opacity: 0; }
-    12%  { opacity: 1; }
-    100% { transform: translate3d(var(--ex, 200px), var(--ey, 0px), 0) rotate(var(--er, 720deg)) scale(1); opacity: 0; }
-  }
-
-  /* Expanding aura rings emitted from spinner */
-  @keyframes auraRing {
-    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
-    80%  { opacity: 0.18; }
-    100% { transform: translate(-50%, -50%) scale(5); opacity: 0; }
-  }
-
-  /* Light beams rotating out of the spinner */
-  @keyframes beamSpin {
-    to { transform: translate(-50%, -50%) rotate(360deg); }
-  }
-
-  @keyframes sparkFlicker {
-    0%, 100% { filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor); }
-    50%      { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 22px currentColor); }
-  }
-
-  /* Streak lines shooting outward from the spinner */
-  @keyframes streakOut {
-    0%   { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(60px) scaleX(0.2); opacity: 0; }
-    20%  { opacity: 1; }
-    100% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(320px) scaleX(1); opacity: 0; }
-  }
-
-  /* Dots radiating outward (dust/particles) */
-  @keyframes dotOut {
-    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
-    15%  { opacity: 1; }
-    100% { transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1); opacity: 0; }
-  }
-
-  /* RGB rainbow text glow cycle */
-  @keyframes rgbTextGlow {
-    0%   { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
-    25%  { text-shadow: 0 0 8px #ffd23b, 0 0 18px #ffae00, 0 0 32px #ff5a00; }
-    50%  { text-shadow: 0 0 8px #00ff85, 0 0 18px #00d4ff, 0 0 32px #00d4ff; }
-    75%  { text-shadow: 0 0 8px #6a5cff, 0 0 18px #a855f7, 0 0 32px #ff00c8; }
-    100% { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
-  }
-
-  /* Slow drifting anime grid + scanlines bg */
-  @keyframes bgGridDrift {
-    0%   { background-position: 0 0, 0 0; }
-    100% { background-position: 80px 80px, 0 4px; }
-  }
-
-  @keyframes auraBreath {
-    0%, 100% { transform: translate(-50%,-50%) scale(0.95); opacity: 0.55; }
-    50%      { transform: translate(-50%,-50%) scale(1.1);  opacity: 0.9; }
   }
 
   @keyframes runAcross {
@@ -917,11 +421,6 @@ div[style*="z-index: 2147483647"],
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
-  }
-
-  .premium-shine {
-    background-size: 200% 100%;
-    animation: premiumShimmer 2.4s ease-in-out infinite;
   }
 
   @keyframes unlockCtaFill {
@@ -984,23 +483,22 @@ div[style*="z-index: 2147483647"],
 /* Layout containment for cards — paint isolation prevents cascading reflows */
 .anime-card,
 [data-anime-card] {
-  contain: none;
-  transform: none;
-  backface-visibility: visible;
-  -webkit-backface-visibility: visible;
+  contain: layout style paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Reduce blur cost on low-end devices (blur is the #1 mobile FPS killer) */
 @media (max-width: 768px) {
   .player-glass,
-  .player-touch-button,
-  .player-menu-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .youtube-skip-ring { background: hsl(var(--background) / 0.72); }
+  .player-touch-button { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .skip-indicator { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 }
 @media (prefers-reduced-transparency: reduce), (update: slow) {
   .player-glass,
   .player-touch-button,
-  .youtube-skip-ring { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .skip-indicator { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
 
 /* Honor user reduced-motion */
@@ -1020,25 +518,8 @@ video, iframe[title="player"] {
 }
 :fullscreen video, :fullscreen iframe { width: 100% !important; height: 100% !important; }
 
-/* Keep images paintable while fast-scrolling; content-visibility on <img>
-   can show black placeholders on Android until scrolling stops. */
-img {
-  background: hsl(var(--card));
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-@media (max-width: 768px), (pointer: coarse) {
-  .backdrop-blur,
-  .backdrop-blur-sm,
-  .backdrop-blur-md,
-  .backdrop-blur-lg,
-  .backdrop-blur-xl,
-  [class*="backdrop-blur-"] {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-}
+/* Image perf — async decode + lazy paint */
+img { content-visibility: auto; }
 
 /* ============================================================
    ANDROID TV MODE — zero animations, D-pad focus rings,
@@ -1095,86 +576,4 @@ html.tv-mode .anime-card,
 html.tv-mode [data-anime-card] {
   contain: none;
   transform: none !important;
-}
-
-/* Android TV video player layout — larger controls, stable bottom bar, no tiny chips */
-html.tv-mode .rs-video-player-root {
-  background: #000 !important;
-  overflow: hidden !important;
-}
-
-html.tv-mode .rs-video-player-shell {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  border-radius: 0 !important;
-  position: relative !important;
-  top: auto !important;
-}
-
-html.tv-mode .rs-video-player-shell video,
-html.tv-mode .rs-video-player-shell iframe {
-  object-fit: contain !important;
-}
-
-html.tv-mode .rs-video-player-shell button,
-html.tv-mode .rs-video-player-shell [role="button"] {
-  min-width: 48px !important;
-  min-height: 48px !important;
-  font-size: 13px !important;
-}
-
-html.tv-mode .rs-video-player-shell .player-touch-button,
-html.tv-mode .rs-video-player-shell .player-control-chip {
-  min-width: 48px !important;
-  min-height: 48px !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-  border-radius: 999px !important;
-}
-
-html.tv-mode .rs-video-player-shell [data-player-panel="true"] {
-  min-width: 260px !important;
-  max-height: 62vh !important;
-  font-size: 15px !important;
-  background: rgba(0, 0, 0, 0.92) !important;
-}
-
-html.tv-mode .rs-video-player-shell [data-player-panel="true"] button {
-  min-height: 48px !important;
-  font-size: 14px !important;
-}
-
-/* ============================================================
-   Security hardening — anti-copy / anti-drag / anti-save UX
-   ============================================================
-   Determined attackers can disable these, but they block
-   casual right-click save, drag-to-download, text scraping. */
-html, body {
-  -webkit-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none; /* disable iOS long-press image menu */
-  -webkit-tap-highlight-color: transparent;
-}
-img, video, picture, svg {
-  -webkit-user-drag: none;
-  -khtml-user-drag: none;
-  -moz-user-drag: none;
-  -o-user-drag: none;
-  user-drag: none;
-  -webkit-touch-callout: none;
-}
-/* Re-enable selection where users legitimately need it */
-input, textarea, select, [contenteditable="true"], [contenteditable=""],
-.allow-select, .allow-select * {
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  -webkit-touch-callout: default !important;
-}
-/* Admin route — let admins copy IDs / paste data normally */
-html[data-route="/admin"] body, html[data-route="/admin"] body * {
-  -webkit-user-select: auto;
-  user-select: auto;
-  -webkit-touch-callout: default;
 }

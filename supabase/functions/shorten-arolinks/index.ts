@@ -9,12 +9,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = (Deno.env.get("AROLINKS_API_KEY") || "").trim();
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "AROLINKS_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const apiKey = (Deno.env.get("AROLINKS_API_KEY") || "da90d29148416bb4f7cb2d9f828edc50a492a993").trim();
 
     const { url } = await req.json();
     if (!url) {
@@ -37,7 +32,7 @@ Deno.serve(async (req) => {
       status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
+    return new Response(JSON.stringify({ error: e.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

@@ -1,53 +1,88 @@
-## Premium System সম্পূর্ণ Remove Plan
+# Firebase Add — Multi-Firebase Manager (replaces FB Cleanup)
 
-Premium Center কাজ করতেছে না তাই পুরা Premium logic A-to-Z remove করবো। সব content auto-unlock হয়ে যাবে, কেউ আর premium দেখাবে না।
+## Scope (this turn only)
+1. Replace admin sidebar item **FB Cleanup** with **FB Add**.
+2. New component `src/components/admin/FirebaseMultiManager.tsx` with full multi-Firebase UI.
+3. Persist all extra Firebase configs in primary Firebase at `admin/extraFirebases/{id}`.
+4. Per-Firebase: section-wise transfer (push real data from primary), JSON export per section, JSON import per section, copy RTDB rules, status pings, progress bars.
+5. NOT in scope this turn: changing how the live app reads/writes (app still reads from primary). The extras are warm replicas — `useFirebaseData.ts` stays untouched. We can wire automatic read-fallback in a later turn if you want.
 
-### 1. Pages & Routes Remove (App.tsx থেকে)
-- `PremiumRequired.tsx` — delete
-- `PremiumBuyPage.tsx` — delete
-- `FreePremium.tsx` (coin ad-flow page) — delete
-- `Unlock.tsx` / `UnlockRequired.tsx` — delete
-- App.tsx থেকে সব premium/unlock/free-premium routes সরানো
+## UI Layout
 
-### 2. Admin Panel থেকে Remove
-- `src/components/admin/PremiumCenter.tsx` — delete
-- Admin.tsx এর `premium-center` section, sidebar entry, lazy import — সরানো
-- Episode Lock Tab (RS lock UI) — সরানো
-- Premium Device Limits section — সরানো
-- bKash payment auto-activate premium logic — সরানো (payment request থাকলে থাকবে, কিন্তু premium activate করবে না)
-- Server URL locked/premium toggle button — সরানো
+```
+┌─ Firebase Add (sidebar item) ─────────────────────┐
+│ [+ Add Firebase Account]   [📋 Copy RTDB Rules]   │
+│                                                    │
+│ ┌── FB #1 · "Backup-A" · ● online ──────────────┐ │
+│ │ Project ID:  rs-backup-a                       │ │
+│ │ DB URL:      https://rs-backup-a.firebase…    │ │
+│ │ Mirror URL:  https://rs-backup-a.asia-se1…    │ │
+│ │ [Edit] [Delete] [Ping]                         │ │
+│ │                                                 │ │
+│ │ Sections this FB handles:                      │ │
+│ │  ☑ images    ☑ webseries   ☑ movies            │ │
+│ │  ☑ users     ☑ adminLinks  ☐ analytics          │ │
+│ │  ☑ liveTv    ☐ subscriptions ☐ notifications    │ │
+│ │                                                 │ │
+│ │ Per-section actions:                            │ │
+│ │  images   [⬇ Pull JSON] [⬆ Push from Main] [📤] │ │
+│ │  webseries[⬇ Pull JSON] [⬆ Push from Main] [📤] │ │
+│ │  …                                              │ │
+│ │                                                 │ │
+│ │ [▶ Sync ALL selected sections]                  │ │
+│ │ ▓▓▓▓▓▓▓▓░░░░░░  42%  · webseries · 18/52 nodes │ │
+│ └────────────────────────────────────────────────┘ │
+│                                                    │
+│ ┌── FB #2 · "Backup-B" · ● online ──────────────┐ │
+│ │ …                                              │ │
+│ └────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────┘
+```
 
-### 3. Profile Page থেকে Remove
-- `usePremium` hook usage
-- Premium tab / panel পুরাটা
-- Premium expiry, coin wallet, device count UI
-- "Pause/Restore premium" button
-- Premium status listener (`users/{uid}/premium` subscribe)
+## Section list (checkboxes per FB)
+All top-level RTDB roots used by the app:
+- `webseries`, `movies`, `liveTv`, `users`, `userProfiles`, `watchHistory`, `library`, `comments`, `notifications`, `pushTokens`, `subscriptions`, `adminLinks`, `admin`, `seasonsByLanguage`, `images`, `analytics`, `miniApp`, `telegramPerAnimeButtons`, `fcmTokens`, `weeklyEpisodes`
 
-### 4. Library Files Delete
-- `src/lib/premiumAccess.ts`
-- `src/lib/premiumDevice.ts`
-- `src/lib/unlockAccess.ts`
-- `src/lib/freeAccessDevice.ts`
-- `src/hooks/usePremium.ts`
+(rendered as a grid of checkboxes, persisted per-FB in `admin/extraFirebases/{id}.sections`)
 
-### 5. Content Playback (Auto-Unlock)
-- `useSelectedAnimeSalt.ts` — `premium` / `premiumEpisodes` fields ignore
-- `Index.tsx` — premium/unlock gate check বাদ, সরাসরি play
-- `VideoPlayer.tsx` — premium download restriction বাদ, সবাই download করতে পারবে
-- `AnimeCard.tsx` / poster cards — Premium badge/lock icon সরানো
+## Transfer engine (`src/lib/firebaseMultiSync.ts`)
+- Initialize each extra Firebase via `initializeApp(config, uniqueName)` + `getDatabase(app, dbUrl)` lazily on demand (cached map).
+- **Push from main → extra**: for each selected section, `get(ref(mainDb, section))` → walk top-level children → batched `update(ref(extraDb, section), { [childKey]: value })` in groups of 25 → report progress via callback `(done, total, currentSection, currentNode) => void`.
+- **Pull JSON from extra**: `get(ref(extraDb, section))` → JSON.stringify → trigger download `section-{fbId}-{date}.json`.
+- **Upload JSON to extra**: file input → JSON.parse → validate shape (object) → `set(ref(extraDb, section), parsed)` with confirm modal.
+- **Copy RTDB rules**: clipboard with the standard rules block:
+  ```json
+  { "rules": { ".read": "auth != null", ".write": "auth != null" } }
+  ```
+  (Adjustable inline before copy.)
+- **Ping**: `get(ref(extraDb, ".info/connected"))` with 5s timeout → green/red dot.
 
-### 6. Mapper & Data Layer
-- `firebaseAnimeMapper.ts` / `adminContentIndex.ts` — premium metadata preserve logic সরানো (harmless কিন্তু cleanup)
-- `animeData.ts` — premium flags সরানো
+## Add/Edit dialog fields
+- Display name (e.g. "Backup-A")
+- API key, Auth domain, Project ID, **Database URL**, **Mirror URL** (optional alt region), Storage bucket, Messaging sender ID, App ID
+- "Test connection" button before save
+- Persists to `admin/extraFirebases/{id}` (id = uuid)
 
-### 7. Ads & Support
-- `AdsterraAdManager.tsx` / `adsterraAds.ts` — coin-collection related ad flow সরানো (Adsterra config admin এ থাকলে থাকতে পারে, শুধু premium tie-in বাদ)
-- LiveSupportChat, About, Privacy pages এ premium mention সরানো
+## Sidebar change
+`Admin.tsx`:
+- Replace label `fb-cleanup` → `fb-add`, icon `Database`, title "Firebase Add"
+- Replace `<FirebaseCleanupSection />` with `<FirebaseMultiManager />`
+- Keep old `FirebaseCleanup.tsx` file for now (not deleted) so existing code paths don't break; we just stop rendering it.
 
-### 8. Verify
-- Build check করে ensure হবে কোন import error নাই
-- `/`, `/admin`, `/profile` routes load হয় কিনা test
+## Files touched
+- **New**: `src/components/admin/FirebaseMultiManager.tsx` (~500 LOC: UI, dialog, per-FB card, progress bar)
+- **New**: `src/lib/firebaseMultiSync.ts` (~200 LOC: app cache, push/pull/upload helpers, progress callback)
+- **Edit**: `src/pages/Admin.tsx` (sidebar item + render swap, ~6 line change)
 
-### Result
-সব anime/movie/episode সবার জন্য free, download button সবার জন্য visible, কোনো coin/ad-gate নাই, Admin panel থেকে Premium tab পুরাটা গায়েব।
+## Out of scope (will need a follow-up turn)
+- Auto read-fallback in `useFirebaseData.ts` (app still reads main only)
+- Auto realtime mirror on every write (huge architectural change; needs every `set/update` call wrapped)
+- Edge function for server-side scheduled sync
+
+## After approval — implementation steps
+1. Write `firebaseMultiSync.ts` (engine).
+2. Write `FirebaseMultiManager.tsx` (UI).
+3. Patch `Admin.tsx` (3 spots: import, sidebar item, render).
+4. Test: add a dummy FB, push `webseries` section, watch progress bar.
+
+Confirm and I'll build.

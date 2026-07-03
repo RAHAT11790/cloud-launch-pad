@@ -47,7 +47,7 @@ const DEFAULT_CONFIG: EdgeRouterConfig = {
 
 let cachedConfig: EdgeRouterConfig | null = null;
 let cacheTime = 0;
-const CACHE_TTL = 120_000;
+const CACHE_TTL = 30_000;
 
 export async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
   const now = Date.now();
@@ -83,67 +83,34 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
   return "";
 }
 
-const SELF_DEPLOYED_FUNCTIONS = new Set([
-  "video-proxy",
-  "video-download",
-  "live-tv-proxy",
-  "telegram-post",
-  "apk-download",
-  "link-share-bot",
-  "shorten-arolinks",
-  "an-api",
-  "an-playback",
-  "verify-admin-pin",
-]);
-
-/** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
+/** Auto-fallback Supabase URL for built-in important functions */
 function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
   if (!base) return "";
   const ENABLED = new Set([
+    "telegram-post",
     "generate-backdrop",
     "rs-bot",
-    "send-otp-email",
-    "process-email-queue",
-    // Playback critical defaults: EGD Router may point to the user's own
-    // deployment, but preview/runtime must still have a working backup.
-    "an-api",
-    "an-playback",
     "video-proxy",
-    "verify-admin-pin",
+    "apk-download",
+    "send-otp-email",
+    "link-share-bot",
+    "process-email-queue",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
 }
 
-function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
-  const u = String(deployerUrl || "").trim();
-  if (!/^https?:\/\//i.test(u)) return "";
-  try {
-    const url = new URL(u);
-    const match = url.pathname.match(/^(.*\/functions\/v1\/)[^/]+(?:\/.*)?$/i);
-    url.pathname = match
-      ? `${match[1]}${fnName}`
-      : `${url.pathname.replace(/\/+$/, "")}/functions/v1/${fnName}`;
-    url.search = "";
-    url.hash = "";
-    return url.toString();
-  } catch {
-    return "";
-  }
-}
-
 /** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
-  // generate-backdrop uses GEMINI_API_KEY inside the user's EGD-deployed
-  // project only. Never allow stale app overrides or Lovable fallbacks here.
-  if (fnName === "generate-backdrop") {
+  // Telegram has its own dedicated Supabase URL
+  if (fnName === "telegram-post") {
     try {
-      const egdSnap = await get(ref(db, "egdManager/config/deployerUrl"));
-      return deriveFromEgdDeployerUrl(egdSnap.val() || "", fnName);
-    } catch {
-      return "";
-    }
+      const snap = await get(ref(db, "settings/telegramProvider"));
+      const val = snap.val();
+      if (val?.url) return val.url;
+    } catch {}
+    return supabaseFallbackUrl(fnName);
   }
 
   // Check per-function override from Firebase
@@ -151,24 +118,15 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
-    const customUrl = String(override?.customUrl || "").trim();
-    if (override?.enabled === true && customUrl) return customUrl;
+    if (override?.customUrl) return override.customUrl;
   } catch {}
-
-  // User-deployable functions normally come from EGD Router. Playback-critical
-  // functions still fall back to the project default so AN/HTTP playback does
-  // not go dead when the custom deployment is missing or credits run out.
-  const selfDeployedFallback = supabaseFallbackUrl(fnName);
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && !selfDeployedFallback) return "";
 
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
   if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
   const built = buildFunctionUrl(fnName, config);
-  if (built) return built;
-
-  return selfDeployedFallback || supabaseFallbackUrl(fnName);
+  return built || supabaseFallbackUrl(fnName);
 }
 
 /** Call a cloud function */
@@ -179,8 +137,6 @@ export async function callEdgeFunction(
 ): Promise<any> {
   let url = await getEdgeFunctionUrl(fnName);
   const method = options?.method || "POST";
-
-  if (!url) throw new Error(`Cloud function ${fnName} is not configured in EGD Router`);
 
   if (options?.queryParams) {
     url += `?${new URLSearchParams(options.queryParams).toString()}`;
