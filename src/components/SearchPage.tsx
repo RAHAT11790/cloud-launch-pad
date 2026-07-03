@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, forwardRef } from "react";
+import { useState, useEffect, useMemo, useRef, forwardRef } from "react";
 import { ArrowLeft, Search, Clock, X } from "lucide-react";
 import { type AnimeItem } from "@/data/animeData";
 import { motion } from "framer-motion";
@@ -80,10 +80,30 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
       .filter(Boolean) as AnimeItem[];
   }, [historyIds, allAnime]);
 
+  const openingCardRef = useRef<string | null>(null);
+
   const handleCardClick = (anime: AnimeItem) => {
+    if (openingCardRef.current === anime.id) return;
+    openingCardRef.current = anime.id;
+    (document.activeElement as HTMLElement | null)?.blur?.();
     addToSearchHistory(anime.id);
     setHistoryIds(getSearchHistory());
     onCardClick(anime);
+    window.setTimeout(() => {
+      if (openingCardRef.current === anime.id) openingCardRef.current = null;
+    }, 1200);
+  };
+
+  const handleCardPointerDown = (e: React.PointerEvent, anime: AnimeItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleCardClick(anime);
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent, anime: AnimeItem) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    handleCardClick(anime);
   };
 
   const handleRemoveHistory = (e: React.MouseEvent, animeId: string) => {
@@ -150,7 +170,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {historyAnime.map((anime) => (
-                  <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
+                  <div key={anime.id} data-anime-card="true" role="button" tabIndex={0} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover touch-manipulation" style={{ boxShadow: "var(--neu-shadow-sm)" }} onPointerDown={(e) => handleCardPointerDown(e, anime)} onClick={() => handleCardClick(anime)} onKeyDown={(e) => handleCardKeyDown(e, anime)}>
                     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                     <button onClick={(e) => handleRemoveHistory(e, anime.id)}
@@ -192,7 +212,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
         <div className="grid grid-cols-3 gap-2.5">
           {results.map((anime) => (
             <div key={anime.id} className="w-full">
-              <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
+              <div data-anime-card="true" role="button" tabIndex={0} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover touch-manipulation" style={{ boxShadow: "var(--neu-shadow-sm)" }} onPointerDown={(e) => handleCardPointerDown(e, anime)} onClick={() => handleCardClick(anime)} onKeyDown={(e) => handleCardKeyDown(e, anime)}>
                 <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                 <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                 <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
