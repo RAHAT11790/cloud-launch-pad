@@ -837,15 +837,9 @@ const Index = () => {
   // Only admin-defined categories are shown as pills/rails on the homepage.
   // Auto-derived categories from content metadata are intentionally excluded.
   const userCategoryPills = useMemo(() => {
-    const byKey = new Map<string, string>();
-    (categories || [])
+    return (categories || [])
       .map((cat) => String(cat || "").trim())
-      .filter(Boolean)
-      .forEach((cat) => {
-        const key = cat.toLowerCase();
-        if (!byKey.has(key)) byKey.set(key, cat);
-      });
-    return Array.from(byKey.values());
+      .filter(Boolean);
   }, [categories]);
 
   
