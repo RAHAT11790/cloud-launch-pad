@@ -469,10 +469,14 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
         <input id="cf-name-input" value={slug} onChange={(e) => setSlug(e.target.value)}
           placeholder="my-worker-name"
           className={inputClass + " font-mono text-[13px]"} />
-        <div className="text-[10px] text-zinc-500">
-          URL: {slug ? (
-            <span className="font-mono text-orange-300">https://{slugify(slug) || "…"}.{subdomain || "<sub>"}.workers.dev</span>
-          ) : "—"}
+        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 flex items-start gap-2 min-w-0">
+          <LinkIcon size={12} className="text-orange-300 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] uppercase tracking-wide text-zinc-500 font-semibold">Worker URL preview</div>
+            <div className="font-mono text-[10.5px] leading-snug text-orange-300 break-all">
+              {slug ? `https://${slugify(slug) || "…"}.${subdomain || "<sub>"}.workers.dev` : "—"}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -595,11 +599,15 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
             )}
           </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#050508] p-3 h-[220px] overflow-auto
-                        font-mono text-[11px] leading-[1.5] text-emerald-200/90 whitespace-pre-wrap">
+        <div className="rounded-xl border border-white/10 bg-[#050508] p-2.5 h-[220px] overflow-y-auto overflow-x-hidden
+                        font-mono text-[11px] leading-[1.55] text-emerald-200/90 whitespace-pre-wrap break-words">
           {logLines.length === 0
-            ? <span className="text-zinc-600">{selected ? "Press Start to tail live requests…" : "Select a deployed script to view logs."}</span>
-            : logLines.map((l, i) => <div key={i}>{l}</div>)}
+            ? <div className="h-full grid place-items-center text-center text-zinc-600 px-4">{selected ? "Press Start to tail live requests…" : "Select a deployed script to view logs."}</div>
+            : logLines.map((l, i) => (
+              <div key={i} className="rounded-lg px-2 py-1.5 mb-1 bg-white/[0.025] border border-white/[0.04] break-words [overflow-wrap:anywhere]">
+                {l}
+              </div>
+            ))}
         </div>
       </section>
 
@@ -633,34 +641,36 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
               const isDeleting = deleting === w.id;
               return (
                 <div key={w.id}
-                  className={`rounded-xl border px-3 py-2 flex items-center gap-2 transition-all ${
+                  className={`rounded-xl border px-3 py-2.5 space-y-2 transition-all overflow-hidden ${
                     active ? "border-orange-500/50 bg-orange-500/[0.06]"
                            : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? "bg-orange-400" : "bg-emerald-400/70"}`} />
-                  <button onClick={() => openWorker(w.id)} className="flex-1 min-w-0 text-left">
-                    <div className="text-[12.5px] font-bold text-white truncate">{w.id}</div>
-                    {url && <div className="text-[9.5px] font-mono text-orange-300/70 truncate">{url}</div>}
+                  <button onClick={() => openWorker(w.id)} className="w-full min-w-0 text-left flex items-start gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${active ? "bg-orange-400" : "bg-emerald-400/70"}`} />
+                    <span className="min-w-0 flex-1 block">
+                      <span className="block text-[12.5px] font-bold text-white truncate">{w.id}</span>
+                      {url && <span className="block text-[9.5px] font-mono text-orange-300/70 truncate">{url}</span>}
+                    </span>
                   </button>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="grid grid-cols-4 gap-1.5 min-w-0">
+                    <a href={url || undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!url}
+                      onClick={(e) => { if (!url) e.preventDefault(); }} title="Open URL"
+                      className={`h-8 rounded-lg border flex items-center justify-center gap-1 text-[10.5px] font-semibold min-w-0 ${
+                        url ? "bg-white/5 hover:bg-white/10 border-white/10 text-zinc-200" : "bg-white/[0.02] border-white/5 text-zinc-600 pointer-events-none"
+                      }`}>
+                      <ExternalLink size={11} className="shrink-0" /> <span className="truncate">Open</span>
+                    </a>
                     <button onClick={() => openWorker(w.id)} title="Edit"
-                      className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
-                      <FileCode2 size={12} />
+                      className="h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-zinc-200 min-w-0">
+                      <FileCode2 size={11} className="shrink-0" /> <span className="truncate">Edit</span>
                     </button>
-                    {url && (
-                      <>
-                        <button onClick={() => copy(url, "URL copied")} title="Copy URL"
-                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
-                          <Copy size={12} />
-                        </button>
-                        <a href={url} target="_blank" rel="noopener noreferrer" title="Open"
-                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-200">
-                          <ExternalLink size={12} />
-                        </a>
-                      </>
-                    )}
+                    <button onClick={() => url && copy(url, "URL copied")} disabled={!url} title="Copy URL"
+                      className="h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-zinc-200 disabled:opacity-40 min-w-0">
+                      <Copy size={11} className="shrink-0" /> <span className="truncate">Copy</span>
+                    </button>
                     <button onClick={() => removeWorker(w.id)} disabled={isDeleting} title="Delete"
-                      className="w-7 h-7 rounded-md bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center justify-center text-rose-300 disabled:opacity-50">
-                      {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      className="h-8 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-rose-300 disabled:opacity-50 min-w-0">
+                      {isDeleting ? <Loader2 size={11} className="animate-spin shrink-0" /> : <Trash2 size={11} className="shrink-0" />}
+                      <span className="truncate">Delete</span>
                     </button>
                   </div>
                 </div>
