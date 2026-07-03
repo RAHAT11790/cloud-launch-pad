@@ -1704,20 +1704,28 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [activePage, filteredSeries.length, filteredMovies.length, tabGridVisibleCount]);
 
-  // Group series ONLY by admin-defined categories. Each card appears in exactly
-  // ONE rail — the first matching admin category (in admin order). No duplicates.
+  // Group content by admin-defined categories. Every admin category gets its own
+  // rail on the homepage, and each anime appears under EVERY category it matches
+  // (series + movies), so no admin category is dropped for lack of a unique match.
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
     const adminCats = (categories || [])
       .map((c) => String(c || "").trim())
       .filter(Boolean);
     adminCats.forEach((cat) => { groups[cat] = []; });
-    filteredSeries.forEach((a) => {
-      const match = adminCats.find((cat) => categoryMatches(a, cat));
-      if (match) groups[match].push(a);
+    const pool = [...filteredSeries, ...filteredMovies];
+    const seenPerCat: Record<string, Set<string>> = {};
+    adminCats.forEach((cat) => { seenPerCat[cat] = new Set(); });
+    pool.forEach((a) => {
+      adminCats.forEach((cat) => {
+        if (categoryMatches(a, cat) && !seenPerCat[cat].has(a.id)) {
+          seenPerCat[cat].add(a.id);
+          groups[cat].push(a);
+        }
+      });
     });
     return groups;
-  }, [filteredSeries, categories]);
+  }, [filteredSeries, filteredMovies, categories]);
 
   // Hero slides: randomized mix from all anime with backdrop
   const [heroRotation, setHeroRotation] = useState(0);
