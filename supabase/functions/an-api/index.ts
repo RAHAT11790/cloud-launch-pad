@@ -529,6 +529,9 @@ function parseMaster(masterUrl: string, body: string) {
   const lines = body.split(/\r?\n/);
   let hasAudioGroup = false;
 
+  const HINDI_RE = /hindi|हिन्दी|हिंदी|\bhin\b/i;
+  const ENGLISH_RE = /english|\beng\b|\ben\b/i;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
@@ -538,13 +541,14 @@ function parseMaster(masterUrl: string, body: string) {
       if (uri) {
         const name = attrs.NAME || attrs.LANGUAGE || `Audio ${audio.length + 1}`;
         const language = attrs.LANGUAGE || "";
-        const blob = `${name} ${language}`.toLowerCase();
+        const blob = `${name} ${language}`;
         audio.push({
           language,
           name,
           uri: resolve(uri),
           default: /YES/i.test(attrs.DEFAULT || ""),
-          isHindi: /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob),
+          isHindi: HINDI_RE.test(blob),
+          isEnglish: ENGLISH_RE.test(blob),
         });
       }
     } else if (line.startsWith("#EXT-X-STREAM-INF")) {
@@ -555,34 +559,48 @@ function parseMaster(masterUrl: string, body: string) {
       const height = res ? Number(res.split("x")[1]) : 0;
       const label = attrs.NAME || (height ? `${height}p` : "Auto");
       const entry = { url: resolve(next), filename: `${label}.m3u8`, resolution: res, height, bandwidth: Number(attrs.BANDWIDTH || 0), label };
-      // Variants that reference a separate AUDIO group are the preferred path.
-      // Variants without one are accepted as a fallback so anime shipped with a
-      // single baked-in audio track (Captain Tsubasa, Farming Life in Another
-      // World, newer Pokemon/Doraemon/Shinchan releases, etc.) still play.
       if (attrs.AUDIO) streamsWithAudio.push(entry);
       else streamsMixed.push(entry);
     }
   }
 
-  // Prefer the separate-audio variants when the master offers them; otherwise
-  // fall back to the mixed A/V variants so the extractor never returns empty.
   const streams = (streamsWithAudio.length > 0 ? streamsWithAudio : streamsMixed)
     .sort((a, b) => b.height - a.height);
   const uniqueAudio = uniqueBy(audio, (a) => a.uri);
-  const hindiIdx = uniqueAudio.findIndex((a: any) => a.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a.name || ""} ${a.language || ""}`));
-  const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
-  const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
+
+  // Language policy (mandatory):
+  //   1. If a separate AUDIO group exists, Hindi MUST be the default when
+  //      present.
+  //   2. If Hindi is missing, English becomes the default.
+  //   3. If neither Hindi nor English exist (e.g. Japanese-only sub track),
+  //      the whole master is rejected — the anime yields no data.
+  // When there is NO audio group (mixed / baked-in single track), we cannot
+  // detect the language from the manifest, so we accept the stream. This
+  // keeps titles like Captain Tsubasa / Farming Life in Another World /
+  // newer Pokemon-Doraemon-Shinchan uploads playable.
+  const hindiIdx = uniqueAudio.findIndex((a: any) => a.isHindi);
+  const englishIdx = uniqueAudio.findIndex((a: any) => a.isEnglish);
+
+  let rejected = "";
+  let defaultIdx = 0;
+  if (hasAudioGroup && uniqueAudio.length > 0) {
+    if (hindiIdx >= 0) defaultIdx = hindiIdx;
+    else if (englishIdx >= 0) defaultIdx = englishIdx;
+    else rejected = "no Hindi or English audio track";
+  }
+  if (streams.length === 0) rejected = rejected || "no playable variants in master";
+
   uniqueAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
   const separateAudioVideo = streamsWithAudio.length > 0 && uniqueAudio.length > 0;
   return {
-    streams: uniqueBy(streams, (s) => s.url),
-    audio: uniqueAudio,
+    streams: rejected ? [] : uniqueBy(streams, (s) => s.url),
+    audio: rejected ? [] : uniqueAudio,
     defaultAudioIdx: defaultIdx,
-    preferredAudio: uniqueAudio[defaultIdx]?.name || "",
+    preferredAudio: rejected ? "" : (uniqueAudio[defaultIdx]?.name || ""),
     separateAudioVideo,
     hasAudioGroup,
     mixedFallback: streamsWithAudio.length === 0 && streamsMixed.length > 0,
-    rejected: streams.length === 0 ? "no playable variants in master" : "",
+    rejected,
   };
 }
 
