@@ -648,17 +648,23 @@ async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
   if (masterHadSeparateAudio && workingAudio.length === 0) {
     return { streams: [], audio: [], defaultAudioIdx: 0, preferredAudio: "", rejected: "audio tracks failed validation" };
   }
-  const hindiIdx = workingAudio.findIndex((a: any) => a.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a.name || ""} ${a.language || ""}`));
-  const declaredDefaultIdx = workingAudio.findIndex((a: any) => a.default);
-  const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
+  const hindiIdx = workingAudio.findIndex((a: any) => a.isHindi);
+  const englishIdx = workingAudio.findIndex((a: any) => a.isEnglish);
+  let defaultIdx = 0;
+  let rejected = "";
+  if (workingAudio.length > 0) {
+    if (hindiIdx >= 0) defaultIdx = hindiIdx;
+    else if (englishIdx >= 0) defaultIdx = englishIdx;
+    else rejected = "no Hindi or English audio track";
+  }
   workingAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
   return {
-    streams: workingStreams,
-    audio: workingAudio,
+    streams: rejected ? [] : workingStreams,
+    audio: rejected ? [] : workingAudio,
     defaultAudioIdx: defaultIdx,
-    preferredAudio: workingAudio[defaultIdx]?.name || "",
-    separateAudioVideo: workingStreams.length > 0 && workingAudio.length > 0,
-    rejected: workingStreams.length === 0 ? "no validated video playlists" : "",
+    preferredAudio: rejected ? "" : (workingAudio[defaultIdx]?.name || ""),
+    separateAudioVideo: !rejected && workingStreams.length > 0 && workingAudio.length > 0,
+    rejected: rejected || (workingStreams.length === 0 ? "no validated video playlists" : ""),
   };
 }
 
