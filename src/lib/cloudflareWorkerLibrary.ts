@@ -13,6 +13,9 @@ import videoDownloadSrc from "../../cloudflare-workers/video-download.js?raw";
 import apkDownloadSrc   from "../../cloudflare-workers/apk-download.js?raw";
 import shortenArolinksSrc from "../../cloudflare-workers/shorten-arolinks.js?raw";
 import telegramPostSrc  from "../../cloudflare-workers/telegram-post.js?raw";
+import anApiSrc         from "../../cloudflare-workers/an-api.js?raw";
+import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
+import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
 
 export type CfLibraryEntry = {
   slug: string;
