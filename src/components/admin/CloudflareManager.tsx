@@ -261,6 +261,50 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     toast.success(`Loaded template: ${entry.label}`);
   };
 
+  const openLogs = async (name: string) => {
+    setLogsWorker(name);
+    setLogLines([`[${new Date().toLocaleTimeString()}] Requesting tail session for ${name}…`]);
+    setLogsStatus("connecting");
+    try {
+      const r = await call("logs", { name });
+      if (!r.ok || !r.tail?.url) {
+        setLogLines((l) => [...l, `❌ Failed to open tail: ${JSON.stringify(r.error || r)}`]);
+        setLogsStatus("error");
+        return;
+      }
+      const wsUrl = r.tail.url.replace(/^http/, "ws");
+      setLogLines((l) => [...l, `→ Connecting to ${wsUrl.split("?")[0]}…`]);
+      const ws = new WebSocket(wsUrl);
+      logsWsRef.current = ws;
+      ws.onopen = () => { setLogsStatus("live"); setLogLines((l) => [...l, `✔ Live tail connected. Waiting for requests…`]); };
+      ws.onmessage = (ev) => {
+        let msg = ev.data;
+        try {
+          const j = JSON.parse(ev.data);
+          const outcome = j.outcome ? `[${j.outcome}]` : "";
+          const req = j.event?.request ? `${j.event.request.method} ${j.event.request.url}` : "";
+          const logs = (j.logs || []).map((x: any) => `  ${x.level}: ${(x.message || []).join(" ")}`).join("\n");
+          const errs = (j.exceptions || []).map((x: any) => `  ⚠ ${x.name}: ${x.message}`).join("\n");
+          msg = [`${new Date().toLocaleTimeString()} ${outcome} ${req}`, logs, errs].filter(Boolean).join("\n");
+        } catch {}
+        setLogLines((l) => [...l.slice(-500), String(msg)]);
+      };
+      ws.onerror = () => { setLogsStatus("error"); setLogLines((l) => [...l, "❌ WebSocket error"]); };
+      ws.onclose = () => { setLogsStatus("closed"); setLogLines((l) => [...l, "— Tail closed —"]); };
+    } catch (e: any) {
+      setLogsStatus("error");
+      setLogLines((l) => [...l, `❌ ${e?.message || e}`]);
+    }
+  };
+
+  const closeLogs = () => {
+    try { logsWsRef.current?.close(); } catch {}
+    logsWsRef.current = null;
+    setLogsWorker(null);
+    setLogLines([]);
+    setLogsStatus("idle");
+  };
+
   const copy = (t: string, l = "Copied") => navigator.clipboard.writeText(t).then(() => toast.success(l));
   const downloadManagerCode = () => {
     const blob = new Blob([CF_MANAGER_WORKER_CODE], { type: "text/javascript" });
