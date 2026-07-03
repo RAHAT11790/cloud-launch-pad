@@ -467,6 +467,10 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
                     <ExternalLink size={11} />
                   </a>
                 )}
+                <button onClick={() => openLogs(w.id)}
+                  className="p-1 rounded text-zinc-500 hover:text-cyan-300 opacity-0 group-hover:opacity-100" title="Live logs">
+                  <Terminal size={11} />
+                </button>
                 <button onClick={() => removeWorker(w.id)} disabled={deleting === w.id}
                   className="p-1 rounded text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100" title="Delete">
                   {deleting === w.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
