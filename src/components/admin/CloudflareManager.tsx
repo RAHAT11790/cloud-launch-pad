@@ -604,17 +604,17 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
       </section>
 
       {/* ─────────── 6. DEPLOYED SCRIPTS ─────────── */}
-      <section className={`${glassCard} p-4 space-y-3`}>
-        <div className="flex items-center gap-2">
-          <Cloud size={16} className="text-orange-300" />
+      <section className={`${glassCard} p-4 space-y-3 overflow-hidden`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Cloud size={16} className="text-orange-300 shrink-0" />
           <h4 className="text-sm font-bold text-white">Deployed Scripts</h4>
-          <span className="text-[10px] text-zinc-500">{list.length}</span>
-          <div className="ml-auto relative flex-1 max-w-[200px]">
-            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)}
-              placeholder="filter…"
-              className={inputClass + " pl-7 text-[11px] py-1.5 h-auto"} />
-          </div>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-400 font-mono">{list.length}</span>
+        </div>
+        <div className="relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="filter scripts…"
+            className={inputClass + " pl-8 text-[12px]"} />
         </div>
 
         {loadingList ? (
@@ -630,39 +630,53 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
             {filtered.map((w) => {
               const active = selected === w.id;
               const url = subdomain ? `https://${w.id}.${subdomain}.workers.dev` : "";
+              const isDeleting = deleting === w.id;
               return (
                 <div key={w.id}
-                  className={`rounded-xl border p-3 flex items-center gap-3 transition-all ${
-                    active ? "border-orange-500/50 bg-orange-500/[0.06]"
-                           : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"}`}>
-                  <button onClick={() => openWorker(w.id)} className="flex-1 min-w-0 text-left">
-                    <div className="text-[13px] font-bold text-white truncate">{w.id}</div>
+                  className={`rounded-xl border p-3 transition-all overflow-hidden ${
+                    active ? "border-orange-500/50 bg-orange-500/[0.06] shadow-inner shadow-orange-500/5"
+                           : "border-white/10 bg-white/[0.02]"}`}>
+                  {/* Row 1 — name + status dot */}
+                  <button onClick={() => openWorker(w.id)} className="w-full text-left min-w-0 block">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? "bg-orange-400" : "bg-emerald-400/70"}`} />
+                      <span className="text-[13px] font-bold text-white truncate">{w.id}</span>
+                    </div>
                     {w.modified_on && (
-                      <div className="text-[10px] text-zinc-500">
-                        modified {new Date(w.modified_on).toLocaleString()}
+                      <div className="text-[10px] text-zinc-500 mt-0.5 pl-3.5">
+                        {new Date(w.modified_on).toLocaleString()}
                       </div>
                     )}
-                    {url && <div className="text-[10px] font-mono text-orange-300/80 truncate">{url}</div>}
+                    {url && (
+                      <div className="text-[10px] font-mono text-orange-300/80 mt-1 pl-3.5 break-all leading-tight">
+                        {url}
+                      </div>
+                    )}
                   </button>
-                  <div className="flex items-center gap-1">
+
+                  {/* Row 2 — action buttons (wrap-safe) */}
+                  <div className="mt-2.5 pt-2.5 border-t border-white/5 flex items-center gap-1.5 flex-wrap">
+                    <button onClick={() => openWorker(w.id)}
+                      className="flex-1 min-w-[70px] h-8 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center justify-center gap-1.5">
+                      <FileCode2 size={12} /> Edit
+                    </button>
                     {url && (
                       <>
                         <button onClick={() => copy(url, "URL copied")}
-                          title="Copy URL"
-                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
-                          <Copy size={12} />
+                          className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1.5">
+                          <Copy size={12} /> Copy
                         </button>
                         <a href={url} target="_blank" rel="noopener noreferrer"
-                          title="Open"
-                          className="w-7 h-7 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
-                          <ExternalLink size={12} />
+                          className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-zinc-200 flex items-center gap-1.5">
+                          <ExternalLink size={12} /> Open
                         </a>
                       </>
                     )}
-                    <button onClick={() => removeWorker(w.id)} disabled={deleting === w.id}
-                      title="Delete"
-                      className="w-7 h-7 rounded-md bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-300">
-                      {deleting === w.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    <button onClick={() => removeWorker(w.id)} disabled={isDeleting}
+                      className="h-8 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-[11px] font-semibold text-rose-200 flex items-center gap-1.5 disabled:opacity-50">
+                      {isDeleting
+                        ? <><Loader2 size={12} className="animate-spin" /> Deleting…</>
+                        : <><Trash2 size={12} /> Delete</>}
                     </button>
                   </div>
                 </div>
