@@ -45,26 +45,44 @@ export default {
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 
-// Old cf-manager (v1.0.0) returned raw multipart body as `code`. Strip it here
-// so users don't have to redeploy the manager for the "select shows garbage" bug.
+// Old cf-manager (v1.0.0) returned the raw multipart form body as `code`, so
+// the editor showed boundary + Content-Disposition headers around the actual
+// worker source. Parse it here so users don't have to redeploy the manager.
 function cleanMultipart(raw: string): string {
   if (!raw) return "";
-  if (!raw.includes("Content-Disposition: form-data")) return raw;
-  // Boundary = first line
-  const firstNl = raw.indexOf("\n");
-  const boundary = raw.slice(0, firstNl).trim();
+  if (!/Content-Disposition:\s*form-data/i.test(raw)) return raw;
+
+  // Boundary = first non-empty line, must start with "--"
+  const firstLineEnd = raw.search(/\r?\n/);
+  if (firstLineEnd < 0) return raw;
+  const boundary = raw.slice(0, firstLineEnd).trim();
   if (!boundary.startsWith("--")) return raw;
-  const parts = raw.split(boundary);
-  for (const p of parts) {
-    const m = p.match(/Content-Disposition: form-data;[^\n]*name="([^"]+)"[^\n]*\r?\n(?:[^\n]*\r?\n)*\r?\n([\s\S]*?)\r?\n?--?$/);
-    if (!m) continue;
-    const filename = m[1];
-    if (/\.(m?js)$/i.test(filename) || filename === "worker.js") {
-      return m[2].replace(/\r\n/g, "\n").trimEnd();
+
+  // Split into parts, dropping preamble + closing epilogue
+  const parts = raw.split(boundary).slice(1, -1);
+
+  let jsBody = "";
+  let fallback = "";
+  for (const part of parts) {
+    const headerEnd = part.search(/\r?\n\r?\n/);
+    if (headerEnd < 0) continue;
+    const headers = part.slice(0, headerEnd);
+    let body = part.slice(headerEnd).replace(/^\r?\n\r?\n/, "");
+    // Trim trailing CRLF before the next boundary marker
+    body = body.replace(/\r?\n$/, "");
+
+    const filename = headers.match(/filename="([^"]+)"/i)?.[1] || "";
+    const name = headers.match(/name="([^"]+)"/i)?.[1] || "";
+    const partName = filename || name;
+
+    if (/\.(m?js)$/i.test(partName) || partName === "worker.js") {
+      jsBody = body;
+      break;
     }
+    if (partName && partName !== "metadata" && !fallback) fallback = body;
   }
-  // Fallback: take biggest chunk after the last blank line inside any part
-  return raw;
+  const out = (jsBody || fallback || raw).replace(/\r\n/g, "\n");
+  return out.replace(/\s+$/, "") + "\n";
 }
 
 type Props = {
