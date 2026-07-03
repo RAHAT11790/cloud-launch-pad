@@ -854,27 +854,24 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   const master = String(jData?.sources?.file || jData?.videoSource || jData?.securedLink || jData?.file || "").replace(/\\\//g, "/");
   if (!master) throw new Error("AN player did not return HLS source");
   const body = await fetchMaster(master, embedUrl, origin);
-  const parsedMaster = parseMaster(master, body);
-  if (parsedMaster.separateAudioVideo !== true) {
-    throw new Error("Rejected mixed/master-only AN stream: video and audio are not separate");
+  const parsed = parseMaster(master, body);
+  if (!parsed.streams.length) {
+    throw new Error("AN master did not expose any playable variant");
   }
-  const hasHindiAudio = (parsedMaster.audio || []).some((a: any) => a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`));
-  if (!hasHindiAudio) {
-    throw new Error("Rejected AN stream without Hindi audio");
-  }
-  const parsed = parsedMaster;
+  const hasHindiAudio = (parsed.audio || []).some((a: any) => a?.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.name || ""} ${a?.language || ""}`));
   const streams = parsed.streams || [];
   const primaryVideo = streams[0]?.url || "";
   const out = {
     success: true,
-    hindiDub: true,
-    separateAudioVideo: true,
+    hindiDub: hasHindiAudio,
+    separateAudioVideo: parsed.separateAudioVideo === true,
+    mixedFallback: parsed.mixedFallback === true,
     embedUrl,
     directUrl: primaryVideo,
     videoSource: primaryVideo,
     securedLink: primaryVideo,
     poster: jData?.videoImage || "",
-    sources: [{ type: "hls", separateAudioVideo: true, streams, audio: parsed.audio || [] }],
+    sources: [{ type: "hls", separateAudioVideo: parsed.separateAudioVideo === true, streams, audio: parsed.audio || [] }],
     streams,
     audio: parsed.audio || [],
     links: streams.map((s: any) => ({ label: s.label, quality: s.label, height: s.height, url: s.url })),
