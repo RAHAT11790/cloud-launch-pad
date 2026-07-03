@@ -2490,17 +2490,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
       // player appear to "sip" only 200-300KB and never build a healthy buffer.
       testBandwidth: true,
-      abrEwmaDefaultEstimate: 2_500_000,
-      abrBandWidthFactor: 0.82,
-      abrBandWidthUpFactor: 0.72,
+      abrEwmaDefaultEstimate: 4_500_000,
+      abrBandWidthFactor: 0.9,
+      abrBandWidthUpFactor: 0.8,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
-      backBufferLength: 15,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
-      // Cap forward check/buffer to 1 MB so low-power phones don't choke loading
-      // huge HLS windows. Player still pre-fetches the next fragment.
-      maxBufferSize: 12 * 1024 * 1024,
+      backBufferLength: 20,
+      maxBufferLength: 90,
+      maxMaxBufferLength: 180,
+      // Give AN HLS enough room to build a real forward buffer. The old 12MB
+      // cap made the player request tiny bursts and stall on preview/mobile.
+      maxBufferSize: 80 * 1024 * 1024,
       maxBufferHole: 0.45,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,

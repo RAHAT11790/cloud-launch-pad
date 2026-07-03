@@ -107,8 +107,8 @@ const pickHindiAudioIdx = (audio: Audio[]) => {
 };
 
 const pickQualityIdx = (streams: Stream[]) => {
-  const preferred = streams.findIndex((x) => x.height === 1080);
-  const fallback = streams.findIndex((x) => x.height >= 720);
+  const preferred = streams.findIndex((x) => x.height === 720);
+  const fallback = streams.findIndex((x) => x.height === 1080 || x.height >= 480);
   return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
 };
 

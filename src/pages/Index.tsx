@@ -356,7 +356,11 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     height: stream.height,
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
-  const preferred = qualityOptions.find((option) => Number(option.height) === 1080) || qualityOptions[0];
+  // Start AN on 720p when available. 1080p remains selectable, but opening on
+  // 720p fills buffer much faster on preview/mobile networks and avoids stalls.
+  const preferred = qualityOptions.find((option) => Number(option.height) === 720)
+    || qualityOptions.find((option) => Number(option.height) === 1080)
+    || qualityOptions[0];
   const normalizedAudio = normalizeAnAudioTracks(audio, streams) || (ep as any).audioTracks;
   const defaultAudio = (normalizedAudio || []).find((track: any) => track?.isDefault) || normalizedAudio?.[0];
   return {

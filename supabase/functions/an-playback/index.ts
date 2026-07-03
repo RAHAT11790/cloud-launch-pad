@@ -99,7 +99,7 @@ async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: stri
   let lastStatus = 0;
   for (const headers of attempts) {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 20_000);
+    const timer = setTimeout(() => ac.abort(), playlist ? 12_000 : 45_000);
     try {
       const res = await fetch(targetUrl.toString(), {
         method: req.method === "HEAD" ? "HEAD" : "GET",
@@ -148,13 +148,14 @@ Deno.serve(async (req) => {
     if (isM3u8) {
       h.delete("content-length");
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      h.set("cache-control", "no-store");
+      h.set("cache-control", "public, max-age=12, stale-while-revalidate=30");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
       return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
     if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
       h.set("content-disposition", "inline");
+      if (!h.has("cache-control")) h.set("cache-control", "public, max-age=86400, immutable");
     }
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
