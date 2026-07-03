@@ -621,6 +621,42 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
           </div>
         </div>
       )}
+
+      {/* LOGS MODAL */}
+      {logsWorker && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={closeLogs}>
+          <div className={`${glassCard} !bg-zinc-950 w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 p-4 border-b border-white/10">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                <Terminal size={16} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  Live Tail
+                  <code className="text-[11px] font-mono text-cyan-300">{logsWorker}</code>
+                </div>
+                <div className="text-[10px] flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${logsStatus === "live" ? "bg-emerald-400 animate-pulse" : logsStatus === "connecting" ? "bg-amber-400 animate-pulse" : logsStatus === "error" ? "bg-red-400" : "bg-zinc-500"}`} />
+                  <span className={logsStatus === "live" ? "text-emerald-300" : logsStatus === "error" ? "text-red-300" : "text-zinc-400"}>
+                    {logsStatus === "live" ? "STREAMING" : logsStatus.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setLogLines([])} className={btnSecondary + " gap-1 !py-1 !text-[10px]"}>Clear</button>
+              <button onClick={closeLogs} className="p-1.5 rounded hover:bg-white/5 text-zinc-400">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed text-emerald-200 bg-black/50 whitespace-pre-wrap">
+              {logLines.length === 0 ? (
+                <div className="text-zinc-500 italic">Waiting for logs…</div>
+              ) : logLines.map((l, i) => (
+                <div key={i} className="border-b border-white/[0.03] py-1">{l}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
