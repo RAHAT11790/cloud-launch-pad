@@ -102,11 +102,12 @@ export const startVisitTracker = () => {
 };
 
 /* ================== Admin-editable reward overrides ==================
-   Path: settings/dailyTaskOverrides/{taskId} = { reward: number }
-   Lets admin change built-in task rewards without redeploy.
+   Path: settings/dailyTaskOverrides/{taskId} = { reward?, title?, disabled? }
+   Lets admin change built-in task reward / title / visibility without redeploy.
 */
 const OVERRIDES_PATH = "settings/dailyTaskOverrides";
-export type DailyTaskOverrides = Partial<Record<TaskId, { reward?: number }>>;
+export type DailyTaskOverride = { reward?: number; title?: string; disabled?: boolean };
+export type DailyTaskOverrides = Partial<Record<TaskId, DailyTaskOverride>>;
 
 export const subscribeDailyTaskOverrides = (
   cb: (o: DailyTaskOverrides) => void,
@@ -120,11 +121,26 @@ export const setDailyTaskReward = async (id: TaskId, reward: number) => {
   await update(ref(db, `${OVERRIDES_PATH}/${id}`), { reward: Math.max(0, Number(reward) || 0) });
 };
 
+export const setDailyTaskTitle = async (id: TaskId, title: string) => {
+  await update(ref(db, `${OVERRIDES_PATH}/${id}`), { title: String(title || "").trim() });
+};
+
+export const setDailyTaskEnabled = async (id: TaskId, enabled: boolean) => {
+  await update(ref(db, `${OVERRIDES_PATH}/${id}`), { disabled: !enabled });
+};
+
+/** Resolve built-in tasks with overrides applied. Disabled tasks are excluded. */
 export const resolveDailyTasks = (overrides: DailyTaskOverrides): TaskDef[] =>
-  DAILY_TASKS.map((t) => {
-    const o = overrides[t.id];
-    return o && typeof o.reward === "number" ? { ...t, reward: o.reward } : t;
-  });
+  DAILY_TASKS
+    .filter((t) => !overrides[t.id]?.disabled)
+    .map((t) => {
+      const o = overrides[t.id] || {};
+      return {
+        ...t,
+        reward: typeof o.reward === "number" ? o.reward : t.reward,
+        title: o.title && o.title.length ? o.title : t.title,
+      };
+    });
 
 const fetchOverrideReward = async (id: TaskId): Promise<number | null> => {
   try {
@@ -133,6 +149,7 @@ const fetchOverrideReward = async (id: TaskId): Promise<number | null> => {
     return typeof v === "number" ? v : null;
   } catch { return null; }
 };
+
 
 /* ================== Firebase state ================== */
 export interface TaskState {
