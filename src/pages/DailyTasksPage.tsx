@@ -472,7 +472,7 @@ export default function DailyTasksPage() {
 
         {/* Progress summary */}
         <p className="mt-6 text-center text-[11px] text-muted-foreground">
-          {claimedCount}/{DAILY_TASKS.length} tasks claimed today • Fresh set unlocks in{" "}
+          {claimedCount}/{resolvedTasks.length} tasks claimed today • Fresh set unlocks in{" "}
           <span className="tabular-nums text-foreground/80">{fmtCountdown(countdown)}</span>
         </p>
 
