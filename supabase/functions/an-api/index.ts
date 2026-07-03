@@ -558,7 +558,7 @@ function parseMaster(masterUrl: string, body: string) {
       const res = attrs.RESOLUTION || "";
       const height = res ? Number(res.split("x")[1]) : 0;
       const label = attrs.NAME || (height ? `${height}p` : "Auto");
-      const entry = { url: resolve(next), filename: `${label}.m3u8`, resolution: res, height, bandwidth: Number(attrs.BANDWIDTH || 0), label };
+      const entry = { url: resolve(next), filename: `${label}.m3u8`, resolution: res, height, bandwidth: Number(attrs.BANDWIDTH || 0), codecs: attrs.CODECS || "", label };
       if (attrs.AUDIO) streamsWithAudio.push(entry);
       else streamsMixed.push(entry);
     }
