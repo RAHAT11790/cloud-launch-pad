@@ -457,7 +457,7 @@ export default function DailyTasksPage() {
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-bold">Ready to redeem?</h3>
               <p className="text-[11.5px] text-muted-foreground">
-                Buy Premium with coins — 100 / 200 / 300 coins for 10 / 20 / 30 days.
+                Spend your coins for Premium access — see current plans on the redeem page.
               </p>
             </div>
             <button
@@ -469,6 +469,7 @@ export default function DailyTasksPage() {
             </button>
           </div>
         </div>
+
 
         {/* Progress summary */}
         <p className="mt-6 text-center text-[11px] text-muted-foreground">
