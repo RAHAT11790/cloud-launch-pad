@@ -22,6 +22,15 @@ export default function PremiumBuyPage() {
   const [lockedCount, setLockedCount] = useState<number>(0);
   const [buying, setBuying] = useState<string | null>(null);
 
+  // Admin-controlled plans (settings.extraPlans); fallback to defaults if none.
+  const coinPlans: CoinPlan[] = useMemo(() => {
+    const list = (settings?.extraPlans || []).filter(
+      (p) => p && typeof p.coins === "number" && typeof p.days === "number",
+    );
+    return list.length > 0 ? list : DEFAULT_COIN_PLANS;
+  }, [settings?.extraPlans]);
+
+
   useEffect(() => {
     let cancel = false;
     (async () => {
