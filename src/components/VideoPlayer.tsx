@@ -68,6 +68,37 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
 };
 
 const DEFAULT_VIDEO_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
+const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
+
+const normalizeVideoServersValue = (val: unknown): VideoServerOption[] => {
+  let servers: VideoServerOption[] = [];
+  if (val && Array.isArray(val)) {
+    servers = val.filter((s: any) => s && s.domain);
+  } else if (val && typeof val === "object") {
+    servers = Object.values(val).filter((s: any) => s && s.domain) as VideoServerOption[];
+  }
+  return servers.map((server) => ({
+    name: String(server.name || "").trim(),
+    domain: String(server.domain || "").trim(),
+    locked: !!server.locked,
+  })).filter((server) => !!server.domain);
+};
+
+const readCachedVideoServers = (): VideoServerOption[] => {
+  try {
+    if (typeof localStorage === "undefined") return [];
+    return normalizeVideoServersValue(JSON.parse(localStorage.getItem(VIDEO_SERVERS_CACHE_KEY) || "[]"));
+  } catch { return []; }
+};
+
+const readCachedProxyUrl = (): string => {
+  try {
+    if (typeof localStorage === "undefined") return "";
+    return String(localStorage.getItem(VIDEO_PROXY_CACHE_KEY) || "").trim();
+  } catch { return ""; }
+};
+
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
@@ -411,9 +442,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const manualQualitySelectedRef = useRef(false);
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
-  const [proxyUrl, setProxyUrl] = useState<string>('');
+  const [proxyUrl, setProxyUrl] = useState<string>(() => readCachedProxyUrl());
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
-  const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
+  const [playbackRouteReady, setPlaybackRouteReady] = useState(true);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
@@ -443,7 +474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
+  const [videoServers, setVideoServers] = useState<VideoServerOption[]>(() => readCachedVideoServers());
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const manualServerSelectedRef = useRef(false);
@@ -453,14 +484,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
-      const val = snap.val();
-      let servers: VideoServerOption[] = [];
-      if (val && Array.isArray(val)) {
-        servers = val.filter((s: any) => s && s.domain);
-      } else if (val && typeof val === "object") {
-        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
-      }
+      const servers = normalizeVideoServersValue(snap.val());
       setVideoServers(servers);
+      try { localStorage.setItem(VIDEO_SERVERS_CACHE_KEY, JSON.stringify(servers)); } catch {}
     });
     return () => unsub();
   }, []);
@@ -644,36 +670,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     const httpSrc = isInsecureHttpSource(src || "");
     const hlsSrc = isHlsLikeUrl(src || "");
+    setPlaybackRouteReady(true);
     if (hlsSrc || (noProxy && !preferProxy && !httpSrc)) {
       setCdnEnabled(false);
-      setProxyUrl('');
+      if (!httpSrc) setProxyUrl('');
       setProxyApiKey('');
-      setPlaybackRouteReady(true);
       return;
     }
 
-    let gotCdn = false;
-    let gotProxy = false;
     let cancelled = false;
-    const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
-
-    // Safety: for HTTP sources we wait for the admin proxy setting so we
-    // never inject a raw http:// URL into <video>. For https we can play
-    // direct very quickly even if Firebase is slow.
-    const safetyMs = httpSrc ? 2500 : 250;
-    const safety = window.setTimeout(() => {
-      if (httpSrc) {
-        gotProxy = true;
-        gotCdn = true;
-      }
-      setPlaybackRouteReady(true);
-    }, safetyMs);
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
       setCdnEnabled(val !== false);
-      gotCdn = true;
-      maybeReady();
     });
 
     // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
@@ -687,13 +696,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
-      gotProxy = true;
-      maybeReady();
+      try { localStorage.setItem(VIDEO_PROXY_CACHE_KEY, url); } catch {}
     });
 
     return () => {
       cancelled = true;
-      window.clearTimeout(safety);
       unsub1();
       unsub2();
     };
@@ -2006,22 +2013,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch {}
     }
 
-    // Auto-failover only for automatic routes. If the user manually selected
-    // RSFR02 / HTTP proxy, never jump back to Server 1 just because buffering is slow.
-    window.setTimeout(() => {
-      const vv = videoRef.current;
-      if (!vv || isEmbedPlayback) return;
-      if (manual || manualServerSelectedRef.current) return;
-      if (vv.readyState < 1 && vv.networkState === 3) {
-        const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
-        if (nextIdx >= 0 && nextIdx !== serverIndex) {
-          serverSwitchingRef.current = false;
-          setServerSwitching(false);
-          switchServer(nextIdx, false);
-        }
-      }
-    }, 1800);
-
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
       setServerSwitching(false);
@@ -2073,64 +2064,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return true;
     }
 
-    // Try EVERY configured quality on the current admin server before declaring
-    // the server/link expired. Current quality is checked first, then the rest;
-    // only after every quality + proxy route is exhausted do we move servers.
-    const orderedQualities = (manualQualitySelectedRef.current && selectedQuality !== "Auto"
-      ? availableQualities.filter((q) => q.label === selectedQuality)
-      : [
-          ...availableQualities.filter((q) => q.label === selectedQuality),
-          ...availableQualities.filter((q) => q.label !== selectedQuality),
-        ]
-    ).filter((q) => !is4KLabel(q.label) || isPremium);
-
-    const nextQualityRoute = orderedQualities
-      .map((q) => {
-        const candidateRaw = getServerScopedSource(q.src);
-        const route = buildPlaybackCandidates(
-          candidateRaw,
-          cdnEnabled,
-          proxyUrl || undefined,
-          proxyApiKey || undefined,
-          preferProxy
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
-        return route ? { option: q, raw: candidateRaw, src: route } : null;
-      })
-      .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
-
-    if (nextQualityRoute) {
-      pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
-      sourceBaseRef.current = nextQualityRoute.option.src;
-      activeSourceBaseRef.current = nextQualityRoute.raw;
-      setCurrentSrc(nextQualityRoute.src);
-      currentQualityRef.current = nextQualityRoute.option.label;
-      setCurrentQuality(nextQualityRoute.option.label);
-      return true;
-    }
-
-    // All qualities on this server failed — move to the next configured server.
-    if (effectiveVideoServers.length > 1) {
-      failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
-      const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
-        .find((idx) => {
-          const srv = effectiveVideoServers[idx];
-          return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
-        });
-      if (typeof nextServerIdx === "number") {
-        // Preserve a user-selected fixed quality during server failover. The old
-        // logic reset to `src` (usually 480p), which made HTTP quality switching
-        // look broken even when every quality URL was valid.
-        sourceBaseRef.current = (manualQualitySelectedRef.current && selectedQuality !== "Auto"
-          ? availableQualities.find((q) => q.label === selectedQuality)?.src
-          : src) || src;
-        switchServer(nextServerIdx, false);
-        return true;
-      }
-    }
-
+    // Do NOT cascade through every quality/server on a single media error.
+    // That old scanner made one bad/proxy-blocked URL poison every configured
+    // server and visibly jumped through the list. Keep failure scoped to the
+    // current selected server; the user can manually pick another server.
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl, src, switchServer]);
+  }, [cdnEnabled, currentQuality, currentSrc, isAnimeSaltContent, preferProxy, proxyApiKey, proxyUrl]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
