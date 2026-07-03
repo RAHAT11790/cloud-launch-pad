@@ -230,8 +230,20 @@ export default function DailyTasksPage() {
         </div>
 
 
+        {/* Empty state (no built-in and no custom) */}
+        {resolvedTasks.length === 0 && customTasks.filter((t) => t.active).length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
+            <Sparkles className="w-8 h-8 mx-auto text-amber-300 mb-2" />
+            <h3 className="text-sm font-bold">No tasks available right now</h3>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              New tasks are added regularly — check back soon.
+            </p>
+          </div>
+        )}
+
         {/* Task cards */}
         <div className="mt-5 space-y-3">
+
           {resolvedTasks.map((task) => {
             const Icon = ICONS[task.id] || Zap;
             const progress = getTaskProgress(task, state);
