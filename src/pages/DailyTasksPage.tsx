@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Coins, LogIn, Clock, Timer, Share2, MessageSquare,
-  CheckCircle2, Lock, Sparkles, Zap, Info, Gift,
+  CheckCircle2, Lock, Sparkles, Zap, Info, Gift, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBranding } from "@/hooks/useBranding";
@@ -12,6 +12,10 @@ import {
   getTaskProgress, isTaskReady, isTaskClaimed, claimTask,
   markDailyLogin, getVisitSecondsToday, msUntilNextReset,
 } from "@/lib/dailyTasks";
+import {
+  CustomTask, CustomTaskClaim, subscribeCustomTasks, subscribeMyCustomClaims,
+  markCustomTaskVisited, claimCustomTask, canClaimCustomTask,
+} from "@/lib/customTasks";
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
 import { firePopunderAd } from "@/lib/adsterraAds";
