@@ -152,13 +152,21 @@ Deno.serve(async (req) => {
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
       return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
-    if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
+    const isSegment = /\.(?:ts|m4s|js|css|woff2?)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct);
+    if (isSegment) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
       h.set("content-disposition", "inline");
       if (!h.has("cache-control")) h.set("cache-control", "public, max-age=86400, immutable");
     }
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
+    if (isSegment) {
+      // Buffer short HLS fragments inside the edge before responding. Streaming
+      // upstream.body directly logs noisy runtime errors whenever hls.js cancels
+      // an in-flight fragment during seek/quality switch; fragments are small,
+      // so buffering is safer and keeps preview free of false crash alerts.
+      return new Response(await upstream.arrayBuffer(), { status: upstream.status, statusText: upstream.statusText, headers: h });
+    }
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
   } catch (e) {
     return new Response(`AN playback proxy failed: ${(e as Error)?.message || String(e)}`, { status: 502, headers: cors });
