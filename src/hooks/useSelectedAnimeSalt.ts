@@ -123,25 +123,29 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
 export function useSelectedAnimeSalt() {
   const initial = readCache() || [];
   const [items, setItems] = useState<AnimeItem[]>(initial || []);
-  const [loading, setLoading] = useState(false);
+  // If cache is present we already have cards on screen — don't flip into
+  // "loading" state and cause the grid to flash empty.
+  const [loading, setLoading] = useState(initial.length === 0);
 
   useEffect(() => {
     try { localStorage.removeItem("rs_cache_animesalt_selected_v1"); } catch {}
-    let selectedList: AnimeItem[] = readCache() || [];
-    if (selectedList.length) {
-      setItems(selectedList);
-      setLoading(false);
-    }
+    let lastSignature = ""; // skip identical snapshots — prevents re-render flash
 
     const unsub = onValue(ref(db, SELECTED_PATH), (snap) => {
       const val = (snap.val() as Record<string, SavedItem>) || {};
-      selectedList = Object.values(val)
+      const selectedList = (Object.values(val)
         .map(mapSaved)
-        .filter(Boolean) as AnimeItem[];
-      // Newest first
-      selectedList.sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
-      setItems(selectedList);
-      writeCache(selectedList);
+        .filter(Boolean) as AnimeItem[])
+        .sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
+
+      // Signature by id+updatedAt — if nothing meaningful changed, skip setState
+      // to avoid re-renders that flicker the card grid.
+      const signature = selectedList.map((i) => `${i.id}:${i.updatedAt || 0}`).join("|");
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        setItems(selectedList);
+        writeCache(selectedList);
+      }
       setLoading(false);
     });
 
