@@ -3856,8 +3856,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Computed stats (memoized to prevent recalculation on every render)
  const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
- const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
- const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
+ // Live online = heartbeat within last 90s (heartbeat runs every 30s). Falls back to `online` flag if lastSeen missing.
+ const [liveTick, setLiveTick] = useState(0);
+ useEffect(() => {
+   const t = setInterval(() => setLiveTick((n) => n + 1), 15000);
+   return () => clearInterval(t);
+ }, []);
+ const ONLINE_WINDOW_MS = 90_000;
+ const onlineUsers = useMemo(() => {
+   const now = Date.now();
+   return usersData.filter((u) => {
+     const ls = Number(u?.lastSeen || 0);
+     if (ls > 0) return now - ls <= ONLINE_WINDOW_MS;
+     return !!u?.online;
+   }).length;
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [usersData, liveTick]);
+ const offlineUsers = useMemo(() => Math.max(0, usersData.length - onlineUsers), [usersData.length, onlineUsers]);
 
  // Strict guest detection (per user spec):
  // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
