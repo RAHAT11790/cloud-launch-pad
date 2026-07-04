@@ -191,25 +191,6 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   document.body.removeChild(link);
 }
 
-function openDownloadViaIframe(finalUrl: string) {
-  try {
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = finalUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      try { document.body.removeChild(iframe); } catch {}
-    }, 10_000);
-  } catch {
-    const link = document.createElement("a");
-    link.href = finalUrl;
-    link.rel = "noopener noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-}
-
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) {
@@ -252,12 +233,9 @@ export function triggerBulkBackgroundDownloads(
     return 0;
   }
 
-  const [head, ...rest] = valid;
-  openDownloadLink(head.final, head.fn);
-
-  rest.forEach((entry, idx) => {
-    setTimeout(() => openDownloadViaIframe(entry.final), 80 * (idx + 1));
-  });
+  // Fire every anchor immediately from the user's click handler so the browser's
+  // native downloader receives the request; do not queue/fetch inside the app.
+  valid.forEach((entry) => openDownloadLink(entry.final, entry.fn));
 
   return valid.length;
 }
