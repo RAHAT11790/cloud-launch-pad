@@ -10,7 +10,7 @@ const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
-  "Access-Control-Expose-Headers": "content-length, content-type, content-disposition, accept-ranges",
+  "Access-Control-Expose-Headers": "content-length, content-type, content-disposition, content-range, accept-ranges",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -32,6 +32,18 @@ function safeName(n) {
   return String(n || "video.mp4").replace(/[\r\n"]/g, "").slice(0, 180);
 }
 
+function pickTarget(params) {
+  for (const key of ["url", "source", "target", "u"]) {
+    const value = String(params.get(key) || "").trim();
+    if (/^https?:\/\//i.test(value)) return value;
+  }
+  const src = String(params.get("src") || "").trim();
+  if (!src) return "";
+  const decoded = fromOpaqueUrlToken(src);
+  if (/^https?:\/\//i.test(decoded)) return decoded;
+  return /^https?:\/\//i.test(src) ? src : "";
+}
+
 async function tryFetch(url, headers, method) {
   for (let i = 0; i < 3; i++) {
     try {
@@ -50,9 +62,14 @@ export default {
   async fetch(req) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const u = new URL(req.url);
-    const target = u.searchParams.get("url") || fromOpaqueUrlToken(u.searchParams.get("src") || "");
+    const target = pickTarget(u.searchParams);
     const filename = safeName(u.searchParams.get("filename") || "video.mp4");
-    if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
+    if (!target) {
+      return new Response(JSON.stringify({ error: "Missing ?url= or ?src= parameter" }), {
+        status: 400,
+        headers: { ...cors, "content-type": "application/json" },
+      });
+    }
     let up;
     try { up = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
 
