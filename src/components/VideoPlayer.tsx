@@ -1303,15 +1303,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           if (acceptBytes(len)) return [u, len];
         } catch {}
       }
-      try {
-        const direct = buildDirectDownloadUrl(u);
-        if (!direct || !direct.startsWith("https://")) return null;
-        const r3 = await fetch(direct, { method: "HEAD" });
-        if (!isValidSizeResponse(r3)) { try { await r3.body?.cancel(); } catch {}; return null; }
-        const len = Number(r3.headers.get("content-length") || 0);
-        try { await r3.body?.cancel(); } catch {}
-        if (acceptBytes(len)) return [u, len];
-      } catch {}
       return null;
     };
     (async () => {
@@ -5344,7 +5335,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
-            return directCandidate || buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || buildDirectDownloadUrl(directCandidate) || "";
+            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>
