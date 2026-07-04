@@ -196,10 +196,11 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
   if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));
-  const built = buildFunctionUrl(fnName, config);
-  if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
   if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
+
+  const built = buildFunctionUrl(fnName, config);
+  if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
   return supabaseFallbackUrl(fnName);
 }
