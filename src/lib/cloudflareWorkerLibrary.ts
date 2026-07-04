@@ -55,6 +55,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("video-boost",     "Video Boost",     "🚀 Alpha professional playback proxy — 8MB aligned CF edge cache + background prefetch + Referer/Origin domain lock (set ALLOWED_ORIGINS env). Sits in front of every RS/Telegram video URL for lightspeed playback + anti-theft.", videoBoostSrc, [], { isNew: true, badgeText: "LIGHTSPEED", badgeTone: "emerald" }),
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
   entry("video-proxy",     "Video Proxy",     "Universal HLS/video proxy with playlist rewriting, range streaming and multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { badgeText: "UNLIMITED", badgeTone: "emerald" }),
