@@ -4,7 +4,7 @@ import { isLegacyAnEntry } from "@/lib/legacyAn";
 
 export type AdminContentKind = "webseries" | "movies";
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour — admin cards should NOT re-fetch on every panel open
 const DEFAULT_RECENT_LIMIT = 500;
 
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v2`;
