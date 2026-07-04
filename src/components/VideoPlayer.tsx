@@ -178,16 +178,23 @@ const isBypassSource = (url: string): boolean => {
   // what admin saved. isInsecureHttpSource() reads the actual scheme, so the
   // right proxy path is chosen automatically per URL.
   const isHttp = isInsecureHttpSource(url);
-  // HTTPS URLs play directly from the <video> tag — fastest path, no proxy.
-  // Only HTTP (mixed-content) URLs need to be rescued onto HTTPS via the
-  // admin-configured `video-proxy`.
-  if (isHttp) {
+  // HTTP (mixed-content) URLs MUST be rescued onto HTTPS via the admin-configured
+  // `video-proxy` — that's the RS Server 2/3 path.
+  // Server 1 (HuggingFace / hf.space etc.) is HTTPS but buffers hard when the
+  // browser pulls giant MKV/MP4 slabs direct from the origin. Route those
+  // through the same proxy so the 1MB "check size" cap applies and skip stays
+  // snappy on low-end phones. HLS playlists and embed pages skip this.
+  const lower = url.toLowerCase();
+  const isHfLike = /(?:^|\/\/|\.)(hf\.space|huggingface\.co|huggingface\.io)(?:[/:?#]|$)/i.test(lower);
+  const isMediaFile = /\.(?:mp4|m4v|mkv|mov|webm)(?:[?#]|$)/i.test(lower);
+  const shouldProxyHttps = !isHttp && !!proxyUrl && isMediaFile && (preferProxy || isHfLike);
+
+  if (isHttp || shouldProxyHttps) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
-    // If no EGD video-proxy is configured yet, do not return an empty source;
-    // keep the raw URL as a diagnostic/failover candidate so the server scanner
-    // can move to the next RS mirror instead of showing a dead blank player.
-    if (!customProxyCandidate) addCandidate(url);
+    // Always keep the raw URL as a diagnostic/failover fallback so the server
+    // scanner can move to the next RS mirror instead of showing a blank player.
+    addCandidate(url);
     return candidates;
   }
 
