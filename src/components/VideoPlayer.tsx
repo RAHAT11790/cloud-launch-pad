@@ -2513,6 +2513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // and immediately trigger fallback, which looked like the player was
     // "switching back" to 480p even when the selected URL was healthy.
     hlsFatalRetriesRef.current = 0;
+    rsSoftRetriesRef.current = 0;
 
     const hls = new Hls({
       enableWorker: true,
