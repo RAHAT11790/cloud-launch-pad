@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     if (isSegment) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
       h.set("content-disposition", "inline");
-      if (!h.has("cache-control")) h.set("cache-control", "public, max-age=86400, immutable");
+      h.set("cache-control", "public, max-age=604800, immutable");
     }
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
