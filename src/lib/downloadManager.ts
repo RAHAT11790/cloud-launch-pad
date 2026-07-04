@@ -1,4 +1,4 @@
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload } from "./videoDownload";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
@@ -173,7 +173,7 @@ class DownloadManager {
   private resolveHttpDownloadUrl(url: string, fileName: string) {
     const raw = String(url || "").trim();
     if (!raw || raw.toLowerCase().startsWith("data:") || isHlsUrl(raw)) return raw;
-    if (/^https?:\/\//i.test(raw)) return buildVideoDownloadUrl(raw, fileName) || unwrapManagedVideoUrl(raw) || raw;
+    if (/^https?:\/\//i.test(raw)) return buildVideoDownloadUrl(raw, fileName) || raw;
     return raw;
   }
 
@@ -181,12 +181,10 @@ class DownloadManager {
     const raw = String(url || "").trim();
     if (!raw || raw.toLowerCase().startsWith("data:") || isHlsUrl(raw)) return raw ? [raw] : [];
     if (!/^https?:\/\//i.test(raw)) return raw ? [raw] : [];
-    const direct = unwrapManagedVideoUrl(raw) || raw;
     return Array.from(new Set([
       ...buildVideoDownloadUrlCandidates(raw, fileName),
       ...buildVideoProxyUrlCandidates(raw),
       buildVideoDownloadUrl(raw, fileName) || "",
-      direct.startsWith("https://") ? direct : "",
     ].filter(Boolean)));
   }
 

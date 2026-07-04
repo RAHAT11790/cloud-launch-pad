@@ -25,6 +25,25 @@ const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
 
+const toOpaqueUrlToken = (value) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
+};
+
+const fromOpaqueUrlToken = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return "";
+  }
+};
+
 function capRange(range, u) {
   if (!range || !isDirectMp4Like(u)) return range;
   const m = range.match(/^bytes=(\d+)-(\d*)$/i);
@@ -40,7 +59,7 @@ function capRange(range, u) {
 }
 
 function proxyUrl(reqUrl, target) {
-  return `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?url=${encodeURIComponent(target)}`;
+  return `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 }
 
 function resolveUrl(v, base) {
@@ -71,7 +90,7 @@ export default {
       return new Response("Method not allowed", { status: 405, headers: cors });
 
     const reqUrl = new URL(req.url);
-    const target = reqUrl.searchParams.get("url") || "";
+    const target = reqUrl.searchParams.get("url") || fromOpaqueUrlToken(reqUrl.searchParams.get("src") || "");
     if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
 
     let up;

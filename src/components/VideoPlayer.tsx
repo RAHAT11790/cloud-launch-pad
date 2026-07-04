@@ -44,8 +44,9 @@ interface VideoServerOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -56,11 +57,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
-  // Support ending with = or ?url= or &url=
-  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
-  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
-  // Default: append ?url=
-  else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  // Default: append an opaque src token, not the raw upstream URL.
+  else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
   if (apiKey) {
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
@@ -169,12 +167,11 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   const isHttp = isInsecureHttpSource(url);
   const isHttpLike = /^https?:\/\//i.test(url);
   // Admin-configured proxy (from Firebase settings). Optional — only used when
-  // the user opts in via preferProxy, or as a rescue for insecure http URLs.
+  // available. When configured, route both HTTP and HTTPS through it so browser
+  // network never requests RS media hosts directly.
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (preferProxy && customProxyCandidate) {
-    // User explicitly opted into the admin custom proxy (e.g. Live TV toggle).
+  if (customProxyCandidate) {
     addCandidate(customProxyCandidate);
-    if (!isHttp) addCandidate(url);
     return candidates;
   }
 
@@ -186,7 +183,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
-  // https:// URL — play direct. No forced proxy, ever.
+  // https:// URL without an admin proxy — only then play direct.
   addCandidate(url);
   return candidates;
 };
@@ -499,8 +496,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (u.protocol === "http:" || u.protocol === "https:") origins.add(u.origin);
       } catch {}
     };
-    addOrigin(src);
-    effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
+    // Do not preconnect to raw RS media hosts when an admin proxy is active —
+    // that leaks source domains in the Network panel and bypasses the router.
+    if (proxyUrl) addOrigin(proxyUrl);
+    else {
+      addOrigin(src);
+      effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
+    }
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -518,7 +520,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     };
-  }, [effectiveVideoServers, src]);
+  }, [effectiveVideoServers, proxyUrl, src]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -827,12 +829,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const meta = clean.slice(0, comma).toLowerCase();
           const payload = clean.slice(comma + 1);
           const decoded = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
-          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(decoded)))}`;
+          const remasked = isAnimeSaltContent
+            ? decoded
+                .split(/\r?\n/)
+                .map((line) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return line;
+                  if (trimmed.startsWith("#")) {
+                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri)}"`);
+                  }
+                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed) : line;
+                })
+                .join("\n")
+            : decoded;
+          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(remasked)))}`;
         }
       } catch {}
     }
     return clean;
-  }, []);
+  }, [isAnimeSaltContent]);
 
   const currentLangLabel = useMemo(() => {
     // AnimeSalt: lock to Hindi as the visible label whenever AN content is
@@ -1285,15 +1300,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           if (acceptBytes(len)) return [u, len];
         } catch {}
       }
-      try {
-        const direct = buildDirectDownloadUrl(u);
-        if (!direct || !direct.startsWith("https://")) return null;
-        const r3 = await fetch(direct, { method: "HEAD" });
-        if (!isValidSizeResponse(r3)) { try { await r3.body?.cancel(); } catch {}; return null; }
-        const len = Number(r3.headers.get("content-length") || 0);
-        try { await r3.body?.cancel(); } catch {}
-        if (acceptBytes(len)) return [u, len];
-      } catch {}
       return null;
     };
     (async () => {
@@ -5326,7 +5332,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
-            return directCandidate || buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || buildDirectDownloadUrl(directCandidate) || "";
+            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>

@@ -124,10 +124,12 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
         parts[fnIdx] = fnName;
       }
       url.pathname = `/${parts.join("/")}`;
+      url.search = "";
       url.hash = "";
       return url.toString().replace(/\/+$/, "");
     }
 
+    url.search = "";
     url.hash = "";
     return url.toString().replace(/\/+$/, "");
   } catch {

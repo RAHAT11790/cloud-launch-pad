@@ -16,7 +16,7 @@
 //     re-emits a clean response.
 //
 // URL format:
-//   /functions/v1/video-download?url=<encoded>&filename=<encoded>
+//   /functions/v1/video-download?src=<opaque-token>&filename=<encoded>
 // ============================================================
 
 const corsHeaders: Record<string, string> = {
@@ -38,6 +38,24 @@ const RETRY_DELAY_MS = 600;
 const VIDEO_PROXY_BASE = Deno.env.get("SUPABASE_URL")
   ? `${Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "")}/functions/v1/video-proxy`
   : "";
+
+const toOpaqueUrlToken = (value: string) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || ""))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  } catch { return ""; }
+};
+
+const fromOpaqueUrlToken = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch { return ""; }
+};
 
 const sanitizeFilename = (raw: string) => {
   const cleaned = String(raw || "video.mp4")
@@ -69,7 +87,7 @@ const fetchViaVideoProxy = async (target: URL, method: "GET" | "HEAD", range: st
   try {
     const headers: Record<string, string> = { Accept: "*/*" };
     if (range) headers.Range = range;
-    const res = await fetch(`${VIDEO_PROXY_BASE}?url=${encodeURIComponent(target.toString())}`, {
+    const res = await fetch(`${VIDEO_PROXY_BASE}?src=${encodeURIComponent(toOpaqueUrlToken(target.toString()))}`, {
       method,
       headers,
       redirect: "follow",
@@ -151,7 +169,7 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const target = url.searchParams.get("url");
+  const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
   const filename = sanitizeFilename(url.searchParams.get("filename") || "video.mp4");
   if (!target) {
     return new Response(
@@ -190,23 +208,6 @@ Deno.serve(async (req) => {
     if (proxied) {
       upstream = proxied;
     } else {
-    // Some HTTP file hosts (notably bot-hosting/RSFR style servers) accept
-    // HEAD/probe requests but close cloud/Supabase GET streams before sending
-    // bytes. In that case the only working route is the user's own browser/IP.
-    // For real download clicks, redirect to the original URL instead of ending
-    // on a dead JSON error page. Client code also prefers direct HTTP first.
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser",
-          "X-RS-Upstream-Error": msg.slice(0, 180),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -217,18 +218,6 @@ Deno.serve(async (req) => {
   // Any non-OK final upstream → return JSON, never broken bytes.
   if (!upstream.ok && upstream.status !== 206) {
     try { await upstream.body?.cancel(); } catch {}
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser-status",
-          "X-RS-Upstream-Status": String(upstream.status),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({
         error: "Download source error",

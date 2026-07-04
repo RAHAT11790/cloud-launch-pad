@@ -586,12 +586,35 @@ function getSafeOrigin(value) {
     return "";
   }
 }
+const toOpaqueUrlToken = (value) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
+};
+const fromOpaqueUrlToken = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return "";
+  }
+};
 function wrapHlsUrl(raw, baseUrl, proxyPrefix, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
-  if (/\/an-api\/hls\?url=/i.test(value)) return value;
-  const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
-  const params = new URLSearchParams({ url: abs });
+  let abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  try {
+    const existing = new URL(abs);
+    if (/\/(?:an-api|an-playback|hls)(?:\/hls)?$/i.test(existing.pathname) || /\/functions\/v1\/(?:an-api|an-playback|hls)(?:\/hls)?$/i.test(existing.pathname)) {
+      abs = existing.searchParams.get("url") || fromOpaqueUrlToken(existing.searchParams.get("src") || "") || abs;
+    }
+  } catch {
+  }
+  const params = new URLSearchParams({ src: toOpaqueUrlToken(abs) });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
   return `${proxyPrefix}?${params.toString()}`;
@@ -856,7 +879,7 @@ var stdin_default = { async fetch(req, env, ctx) {
     }
     if (path === "/" || path === "") return json(API_ENDPOINTS);
     if (path === "/raw") {
-      const target = url.searchParams.get("url") || "";
+      const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
       if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       return json({ success: true, html: await fetchText(target) });
     }
@@ -887,10 +910,10 @@ var stdin_default = { async fetch(req, env, ctx) {
       return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1" || url.searchParams.get("refresh") === "1"));
     }
     if (path === "/hls") {
-      const target = url.searchParams.get("url") || "";
+      const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
       if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       const playback = new URL(`${publicProtocol}//${url.host}${normalizedPrefix}/an-playback/hls`.replace(/([^:]\/)\/+/g, "$1"));
-      playback.searchParams.set("url", target);
+      playback.searchParams.set("src", toOpaqueUrlToken(target));
       const origin = url.searchParams.get("origin") || url.searchParams.get("parent") || url.searchParams.get("ref") || "";
       if (origin) playback.searchParams.set("origin", origin);
       return new Response(null, { status: 302, headers: { ...cors, Location: playback.toString(), "Cache-Control": "no-store" } });

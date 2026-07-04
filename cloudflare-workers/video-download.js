@@ -1,7 +1,7 @@
 // ============================================================
 // Cloudflare Worker — video-download (CF-native)
 // Clean single-shot download proxy with attachment Content-Disposition.
-// Usage: /?url=<ENCODED_URL>&filename=<ENCODED_NAME>
+// Usage: /?src=<OPAQUE_URL_TOKEN>&filename=<ENCODED_NAME>
 // ============================================================
 
 const cors = {
@@ -14,6 +14,17 @@ const cors = {
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+const fromOpaqueUrlToken = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return "";
+  }
+};
 
 function safeName(n) {
   return String(n || "video.mp4").replace(/[\r\n"]/g, "").slice(0, 180);
@@ -37,7 +48,7 @@ export default {
   async fetch(req) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const u = new URL(req.url);
-    const target = u.searchParams.get("url") || "";
+    const target = u.searchParams.get("url") || fromOpaqueUrlToken(u.searchParams.get("src") || "");
     const filename = safeName(u.searchParams.get("filename") || "video.mp4");
     if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
     let up;

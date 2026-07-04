@@ -36,6 +36,24 @@ const deepDecodeUrl = (value: string) => {
   return out;
 };
 
+const toOpaqueUrlToken = (value: string) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || ""))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  } catch { return ""; }
+};
+
+const fromOpaqueUrlToken = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch { return ""; }
+};
+
 const resolveUrl = (value: string, baseUrl: string) => {
   const raw = decode(value);
   if (!raw) return "";
@@ -51,9 +69,14 @@ function getSafeOrigin(value?: string | null) {
 function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
-  if (/\/an-playback\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value) || /\/functions\/v1\/hls\?url=/i.test(value)) return value;
-  const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
-  const params = new URLSearchParams({ url: abs });
+  let abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  try {
+    const existing = new URL(abs);
+    if (/\/(?:an-playback|an-api|hls)(?:\/hls)?$/i.test(existing.pathname) || /\/functions\/v1\/(?:an-playback|an-api|hls)(?:\/hls)?$/i.test(existing.pathname)) {
+      abs = existing.searchParams.get("url") || fromOpaqueUrlToken(existing.searchParams.get("src") || "") || abs;
+    }
+  } catch {}
+  const params = new URLSearchParams({ src: toOpaqueUrlToken(abs) });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
   return `${proxyPrefix}?${params.toString()}`;
@@ -127,7 +150,7 @@ Deno.serve(async (req) => {
     const reqUrl = new URL(req.url);
     const path = reqUrl.pathname.includes("/an-playback") ? (reqUrl.pathname.split("/an-playback")[1] || "/") : reqUrl.pathname;
     if (path !== "/" && path !== "/hls") return new Response(JSON.stringify({ ok: true, endpoint: "/hls?url=..." }), { headers: { ...cors, "Content-Type": "application/json" } });
-    const target = reqUrl.searchParams.get("url") || "";
+    const target = reqUrl.searchParams.get("url") || fromOpaqueUrlToken(reqUrl.searchParams.get("src") || "");
     if (!target) return new Response(JSON.stringify({ error: "missing ?url=" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
 
     let targetUrl: URL;

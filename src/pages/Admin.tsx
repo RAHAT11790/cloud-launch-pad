@@ -19,6 +19,7 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import {
  buildAdminContentIndexItem,
  fetchAdminCount,
@@ -11436,11 +11437,10 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
 const buildProxyTestUrl = (proxyBase: string, testUrl: string, apiKey?: string): string => {
  if (!proxyBase) return testUrl;
  const encoded = encodeURIComponent(testUrl);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(testUrl));
  let url: string;
  if (proxyBase.includes('{url}')) url = proxyBase.split('{url}').join(encoded);
- else if (/[?&]url=$/.test(proxyBase) || proxyBase.endsWith('=')) url = `${proxyBase}${encoded}`;
- else if (proxyBase.includes('?url=') || proxyBase.includes('&url=')) url = `${proxyBase}${encoded}`;
- else url = `${proxyBase.replace(/\/$/, '')}?url=${encoded}`;
+ else url = `${proxyBase.replace(/\/$/, '')}?src=${opaque}`;
  if (apiKey) url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
  return url;
 };
@@ -11607,7 +11607,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
  type="text"
  value={newProxyUrl}
  onChange={e => setNewProxyUrl(e.target.value)}
- placeholder="প্রক্সি URL (such as: https://xxx.supabase.co/functions/v1/rs-video-proxy?url=)"
+  placeholder="প্রক্সি URL (such as: https://xxx.workers.dev/video-proxy)"
  className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-cyan-500 outline-none"
  />
  <input
@@ -11618,8 +11618,8 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
  className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-yellow-500 outline-none"
  />
  <p className="text-[10px] text-zinc-500 leading-relaxed">
- ✨ Key থাকলে: <code className="text-cyan-400">proxy?url=VIDEO&apikey=KEY</code><br/>
- ✨ Key No থাকলে: <code className="text-cyan-400">proxy?url=VIDEO</code>
+  ✨ Key থাকলে: <code className="text-cyan-400">proxy?src=TOKEN&apikey=KEY</code><br/>
+  ✨ Key No থাকলে: <code className="text-cyan-400">proxy?src=TOKEN</code>
  </p>
  <div className="flex gap-2">
  <button onClick={addCustomProxy} className="flex-1 py-2 text-xs bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors">
@@ -12118,19 +12118,18 @@ const LinkCheckerSection = ({
  const buildPlaybackCandidates = (url: string): string[] => {
  if (!url) return [];
  const encoded = encodeURIComponent(url);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(url));
  const candidates: string[] = [];
  const addCandidate = (candidate?: string | null) => {
  if (!candidate || candidates.includes(candidate)) return;
  candidates.push(candidate);
  };
 
- const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
+ const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?src=${opaque}`;
  const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
  ? (proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`)
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`)
  : null;
 
  if (cdnEnabled) {
@@ -12749,18 +12748,17 @@ const WsInlineLinkChecker = ({
  const cdnEnabled = settings.cdnEnabled !== false;
  const proxyUrl = settings.proxyServer?.url || '';
  const encoded = encodeURIComponent(url);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(url));
  const candidates: string[] = [];
 
  if (cdnEnabled) {
- candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`);
+ candidates.push(`${CLOUDFLARE_CDN}/video-proxy?src=${opaque}`);
  } else if (url.startsWith('http://')) {
  if (proxyUrl) {
  candidates.push(
  proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
  } else {
@@ -12768,12 +12766,9 @@ const WsInlineLinkChecker = ({
  candidates.push(
  proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
- candidates.push(url);
  }
  for (const c of candidates) {
  const ok = await testPlayable(c);

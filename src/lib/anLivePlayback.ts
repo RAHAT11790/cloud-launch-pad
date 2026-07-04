@@ -1,8 +1,8 @@
-// Resolve AN playback from short-lived Firebase + localStorage cache first,
+// Resolve AN playback from short-lived memory/localStorage cache first,
 // then refresh through the fetch API only when the signed links expire.
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
-import { db, ref, get, set, remove } from "@/lib/firebase";
+import { refreshAnPlaybackRoute } from "@/lib/anPlaybackProxy";
 
 type ApiStream = { url: string; height?: number | string; label?: string; resolution?: string; filename?: string; bandwidth?: number; codecs?: string };
 type ApiAudio = { language?: string; name?: string; uri?: string; url?: string; link?: string };
@@ -16,8 +16,8 @@ let lastPrune = 0;
 
 const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 const localKey = (kind: string, slug: string) => `rs_an_playback_v9_codecs:${kind}:${safeKey(slug)}`;
-const FB_CACHE_ROOT = "anPlaybackCache_v9_codecs";
-const fbPath = (kind: string, slug: string) => `${FB_CACHE_ROOT}/${kind}/${safeKey(slug)}`;
+// Playback URLs are short-lived and sensitive. Keep them client-local only;
+// never mirror raw media URLs through the realtime database/network payload.
 
 export async function pruneExpiredPlaybackCache() {
   const now = Date.now();
@@ -25,16 +25,6 @@ export async function pruneExpiredPlaybackCache() {
   lastPrune = now;
   try {
     for (const [key, hit] of Array.from(mem.entries())) if (!hit?.expiresAt || hit.expiresAt <= now) mem.delete(key);
-    const snap = await get(ref(db, FB_CACHE_ROOT));
-    const tree = snap.val() || {};
-    const jobs: Promise<unknown>[] = [];
-    for (const kind of ["episode", "movie", "series"] as const) {
-      const bucket = tree?.[kind] || {};
-      Object.entries(bucket).forEach(([slugKey, row]: [string, any]) => {
-        if (!row?.expiresAt || row.expiresAt <= now) jobs.push(remove(ref(db, `${FB_CACHE_ROOT}/${kind}/${slugKey}`)).catch(() => null));
-      });
-    }
-    await Promise.all(jobs);
   } catch {}
 }
 
@@ -55,16 +45,6 @@ async function readPlaybackCache<T>(kind: "episode" | "movie" | "series", slug: 
       localStorage.removeItem(localKey(kind, slug));
     }
   } catch {}
-  try {
-    const snap = await get(ref(db, fbPath(kind, slug)));
-    const row = snap.val();
-    if (row?.expiresAt > now && row?.data) {
-      mem.set(key, { expiresAt: row.expiresAt, data: row.data });
-      try { localStorage.setItem(localKey(kind, slug), JSON.stringify({ expiresAt: row.expiresAt, data: row.data })); } catch {}
-      return row.data as T;
-    }
-    if (row) await remove(ref(db, fbPath(kind, slug))).catch(() => {});
-  } catch {}
   return null;
 }
 
@@ -74,7 +54,6 @@ async function writePlaybackCache(kind: "episode" | "movie" | "series", slug: st
   const key = `${kind}:${slug}`;
   mem.set(key, { expiresAt, data });
   try { localStorage.setItem(localKey(kind, slug), JSON.stringify({ expiresAt, data })); } catch {}
-  try { await set(ref(db, fbPath(kind, slug)), { slug, kind, savedAt: Date.now(), expiresAt, data }); } catch {}
 }
 
 const isHindi = (a: ApiAudio) =>
@@ -178,20 +157,18 @@ const pickPayload = (r: any) => r?.data || r;
 // ============================================================================
 // SERIES BUNDLE CACHE
 // ----------------------------------------------------------------------------
-// One Firebase document per series that maps { episodeSlug -> playback }. On
-// series open we load the bundle once (1 RTT), mirror to memory + localStorage,
-// then background-fill any missing episodes with high concurrency. All later
-// episode/season clicks become pure in-memory lookups — zero latency.
+// One client-local bundle per series maps { episodeSlug -> playback }. On
+// series open we load memory/localStorage, then background-fill any missing
+// episodes with high concurrency. All later episode/season clicks become
+// pure in-memory lookups — zero latency without leaking URLs through DB reads.
 // ============================================================================
 
 type EpisodePlayback = Partial<Episode>;
 type SeriesBundle = { expiresAt: number; episodes: Record<string, EpisodePlayback> };
 const BUNDLE_TTL_MS = 180 * 60 * 1000; // 3h — matches AnimeSalt signed-URL window
-const BUNDLE_FB_ROOT = "anSeriesBundle_v10_codecs";
 const bundleMem = new Map<string, SeriesBundle>();
 const bundleLoadInflight = new Map<string, Promise<SeriesBundle>>();
 const bundleLsKey = (slug: string) => `rs_an_bundle_v10_codecs:${safeKey(slug)}`;
-const bundleFbPath = (slug: string) => `${BUNDLE_FB_ROOT}/${safeKey(slug)}`;
 
 const pendingBundleSaves = new Set<string>();
 let bundleSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -206,7 +183,6 @@ function scheduleBundleSave(seriesSlug: string) {
       const bundle = bundleMem.get(slug);
       if (!bundle) continue;
       try { localStorage.setItem(bundleLsKey(slug), JSON.stringify(bundle)); } catch {}
-      try { await set(ref(db, bundleFbPath(slug)), bundle); } catch {}
     }
   }, 1500);
 }
@@ -231,7 +207,7 @@ export function getEpisodeFromBundle(seriesSlug: string, epSlug: string): Episod
   return ep?.link ? ep : null;
 }
 
-/** Load a series bundle from mem → localStorage → Firebase (1 RTT max). */
+/** Load a series bundle from mem → localStorage only. */
 export async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBundle> {
   const now = Date.now();
   if (!seriesSlug) return { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
@@ -248,16 +224,6 @@ export async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBund
         localStorage.removeItem(bundleLsKey(seriesSlug));
       }
     } catch {}
-    try {
-      const snap = await get(ref(db, bundleFbPath(seriesSlug)));
-      const row = snap.val() as SeriesBundle | null;
-      if (row?.expiresAt && row.expiresAt > now) {
-        bundleMem.set(seriesSlug, row);
-        try { localStorage.setItem(bundleLsKey(seriesSlug), JSON.stringify(row)); } catch {}
-        return row;
-      }
-      if (row) await remove(ref(db, bundleFbPath(seriesSlug))).catch(() => {});
-    } catch {}
     const empty: SeriesBundle = { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
     bundleMem.set(seriesSlug, empty);
     return empty;
@@ -271,6 +237,7 @@ export async function resolveAnEpisodePlayback(
   opts?: { seriesSlug?: string },
 ): Promise<EpisodePlayback | null> {
   if (!slug) return null;
+  await refreshAnPlaybackRoute();
   const seriesSlug = opts?.seriesSlug || "";
   // 1) Series bundle — in-memory hit → zero latency.
   if (seriesSlug) {
@@ -303,6 +270,7 @@ export async function resolveAnMoviePlayback(
   slug: string,
 ): Promise<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] } | null> {
   if (!slug) return null;
+  await refreshAnPlaybackRoute();
   try {
     const cached = await readPlaybackCache<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] }>("movie", slug);
     if (cached?.fields?.movieLink) return cached;

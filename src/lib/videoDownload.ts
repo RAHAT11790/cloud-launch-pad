@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -42,13 +43,13 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
   const fileName = buildSafeFileName(rawFileName);
-  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(rawUrl)}`;
+  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
-  return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
+  return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 
 export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string): string[] {
@@ -98,7 +99,8 @@ export function unwrapManagedVideoUrl(value: string): string {
   if (!trimmed) return "";
   if (isManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
     try {
-      return new URL(trimmed).searchParams.get("url") || trimmed;
+      const parsed = new URL(trimmed);
+      return parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "") || trimmed;
     } catch {
       return trimmed;
     }
@@ -153,15 +155,12 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
-  const unwrapped = unwrapManagedVideoUrl(trimmedUrl);
   // HTTPS file hosts are most reliable when the browser downloads them directly
   // from the user's own IP/session. Only route http:// or already-proxied links
   // through the download proxy to avoid mixed-content blocks.
-  const preferDirect = unwrapped.startsWith("https://");
-  const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
-  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || (directUrl?.startsWith("https://") ? directUrl : null));
+  const finalUrl = proxiedUrl;
   if (!finalUrl) {
     toast.error("Download service is unavailable");
     return false;
@@ -180,11 +179,8 @@ export function triggerBulkBackgroundDownloads(
       const u = String(it?.url || "").trim();
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
-      const unwrapped = unwrapManagedVideoUrl(u);
-      const preferDirect = unwrapped.startsWith("https://");
-      const direct = buildDirectDownloadUrl(u);
       const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
-      const final = preferDirect ? (direct || proxied) : (proxied || direct);
+      const final = proxied;
       return final ? { final, fn } : null;
     })
     .filter((x): x is { final: string; fn: string } => !!x);
