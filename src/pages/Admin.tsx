@@ -3105,11 +3105,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Ref to store last saved series ID (for Save+Notify on new series)
   const lastSavedSeriesIdRef = useRef<string>("");
+  const savingSeriesRef = useRef<boolean>(false);
 
-  const saveSeries = () => {
+  const saveSeries = async () => {
     if (!seriesForm) return;
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
+    if (savingSeriesRef.current) { toast.info("Saving in progress…"); return; }
+
+    // Duplicate-title guard when adding a NEW series (case/space-insensitive)
+    if (!seriesEditId) {
+      const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const target = norm(seriesForm.title);
+      const dupe = webseriesData.find((w: any) => norm(w.title) === target);
+      if (dupe) {
+        const ok = confirm(`"${dupe.title}" নামে একটা সিরিজ আগে থেকেই আছে। আরেকটা duplicate তৈরি করবে?\n\nCancel = বাতিল, OK = তবুও তৈরি করব।`);
+        if (!ok) return;
+      }
+    }
 
       const nextMap = sanitizeSeasonLanguageMap({
         ...seriesSeasonsByLanguage,
@@ -3117,7 +3130,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       });
       const syncedForm = syncSeriesLanguageSummary(seriesForm, nextMap);
       setSeriesForm(syncedForm);
-      const data = {
+      const data: any = {
       ...syncedForm,
       cast: seriesCast,
       audioTracks: Array.isArray(syncedForm.audioTracks)
@@ -3140,20 +3153,31 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     let newId = seriesEditId || "";
     if (seriesEditId) {
       saveRef = ref(db, `webseries/${seriesEditId}`);
+      // Preserve original createdAt so Recent Content ordering stays stable
+      try {
+        const existingSnap = await get(saveRef);
+        const existing = existingSnap.val() || {};
+        data.createdAt = existing.createdAt || Date.now();
+      } catch {
+        data.createdAt = Date.now();
+      }
     } else {
       saveRef = push(ref(db, "webseries"));
       newId = saveRef.key || "";
       data.createdAt = Date.now();
     }
     lastSavedSeriesIdRef.current = newId;
+    savingSeriesRef.current = true;
     set(saveRef, data)
       .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
         // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
-      .catch(err => toast.error("Error: " + err.message));
+      .catch(err => toast.error("Error: " + err.message))
+      .finally(() => { savingSeriesRef.current = false; });
   };
+
 
   const editSeries = async (id: string) => {
     savedScrollPos.current = window.scrollY;
