@@ -191,18 +191,7 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   document.body.removeChild(link);
 }
 
-// Hidden iframe fallback — used for bulk downloads so we don't trip the
-// browser's "multiple popup" blocker. The proxy's Content-Disposition:
-// attachment header still forces the browser's native downloader.
-function openDownloadViaIframe(finalUrl: string) {
-  if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;border:0;";
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.src = finalUrl;
-  document.body.appendChild(iframe);
-  window.setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 60_000);
-}
+
 
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
@@ -241,16 +230,12 @@ export function triggerBulkBackgroundDownloads(
     return 0;
   }
 
-  // First download stays on the anchor click so the user gesture is preserved.
-  // Remaining downloads go through hidden iframes with a small stagger so
-  // Chrome/Safari don't collapse them into a single popup or trip the
-  // "site is trying to download multiple files" blocker.
-  const [first, ...rest] = valid;
-  openDownloadLink(first.final, first.fn);
-  rest.forEach((entry, idx) => {
-    window.setTimeout(() => openDownloadViaIframe(entry.final), 400 * (idx + 1));
-  });
+  // Fire every download as a real anchor click, all in one synchronous batch
+  // from the user's gesture. Browser's native downloader handles the queue —
+  // user can pause/resume individually from the browser's download tray.
+  valid.forEach((entry) => openDownloadLink(entry.final, entry.fn));
 
   return valid.length;
 }
+
 
