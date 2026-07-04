@@ -45,8 +45,8 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
-import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
-import { toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { buildSelfHostedFunctionUrl, deriveSiblingWorkerFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -57,6 +57,9 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
+  // Existing Cloudflare Worker deployments accept `?url=` while Lovable-hosted
+  // function copies accept opaque `?src=`.
+  else if (/\.workers\.dev(?:\/)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
   // Default: append an opaque src token, not the raw upstream URL.
   else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
@@ -64,6 +67,20 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
   }
   return url;
+};
+
+const unwrapProxyPlaybackTarget = (value: string): string => {
+  try {
+    const parsed = new URL(String(value || ""));
+    return parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "") || "";
+  } catch {
+    return "";
+  }
+};
+
+const isVideoProxyPlaybackUrl = (value: string): boolean => {
+  const raw = String(value || "");
+  return /\/functions\/v1\/video-proxy\?/i.test(raw) || /\/video-proxy\?/i.test(raw) || /video-proxy\.[^/]+\.workers\.dev\//i.test(raw);
 };
 
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
@@ -141,7 +158,7 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -171,6 +188,10 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    // If no EGD video-proxy is configured yet, do not return an empty source;
+    // keep the raw URL as a diagnostic/failover candidate so the server scanner
+    // can move to the next RS mirror instead of showing a dead blank player.
+    if (!customProxyCandidate) addCandidate(url);
     return candidates;
   }
 
@@ -418,7 +439,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
-  const [playbackRouteReady, setPlaybackRouteReady] = useState(true);
+  const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
@@ -647,9 +668,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   //                allow-list (anti-hotlink protection). If no proxy URL is set
   //                we play https sources directly from the <video> tag.
   useEffect(() => {
-    setPlaybackRouteReady(true);
-
     let cancelled = false;
+    let routerBase = "";
+    let overrideRaw: any = null;
+    let siblingWorkerUrl = "";
+
+    const applyProxyRoute = () => {
+      if (cancelled) return;
+      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
+      const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
+      const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
+      const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
+      const finalUrl = enabled
+        ? (isBackendFunctionUrl(overrideUrl) ? (siblingWorkerUrl || selfHostedUrl || overrideUrl) : overrideUrl)
+        : (siblingWorkerUrl || selfHostedUrl);
+      setProxyUrl(finalUrl);
+      setProxyApiKey('');
+      setPlaybackRouteReady(true);
+      try {
+        if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
+        else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
+      } catch {}
+    };
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
@@ -661,20 +701,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       if (cancelled) return;
-      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
-      const raw = snap.val();
-      const url = normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim());
-      const enabled = Boolean(url) && raw?.enabled !== false;
-      const finalUrl = enabled ? url : "";
-      setProxyUrl(finalUrl);
-      setProxyApiKey('');
-      try {
-        if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
-        else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
-      } catch {}
+      overrideRaw = snap.val();
+      applyProxyRoute();
     });
 
-    return () => { cancelled = true; unsub1(); unsub2(); };
+    const unsub3 = onValue(ref(db, "settings/edgeRouter"), (snap) => {
+      const v = snap.val() || {};
+      routerBase = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
+      applyProxyRoute();
+    });
+
+    const unsub4 = onValue(ref(db, "settings/functionOverrides"), (snap) => {
+      siblingWorkerUrl = deriveSiblingWorkerFunctionUrl("video-proxy", snap.val() || {});
+      applyProxyRoute();
+    });
+
+    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
@@ -1257,7 +1299,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       ];
       for (const proxied of proxiedCandidates) {
         try {
-          const r = await fetch(proxied, { method: "HEAD" });
+      if (/video-download/i.test(proxied)) continue;
+      const r = await fetch(proxied, { method: "HEAD" });
           if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
           const len = Number(r.headers.get("content-length") || 0);
           try { await r.body?.cancel(); } catch {}
@@ -3055,9 +3098,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
-    if (!/\/functions\/v1\/video-proxy\?/i.test(currentSrc)) return;
-    let nested = "";
-    try { nested = new URL(currentSrc).searchParams.get("url") || ""; } catch {}
+    if (!isVideoProxyPlaybackUrl(currentSrc)) return;
+    const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
     const t = window.setTimeout(() => ac.abort(), 6500);
@@ -3831,14 +3873,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     if (!v) return;
 
-    manualSeekUntilRef.current = Date.now() + 2500;
+    manualSeekUntilRef.current = Date.now() + 3500;
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = nextTime;
+    setIsBuffering(true);
     try {
       if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(nextTime);
       else v.currentTime = nextTime;
     } catch {
       v.currentTime = nextTime;
     }
+    if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${(nextTime / v.duration) * 100}%`;
+    if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(nextTime)} / ${formatTime(v.duration)}`;
+    setCurrentTime(nextTime);
 
     showSkipPill(seconds);
     resetHideTimer();
@@ -3915,8 +3964,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    manualSeekUntilRef.current = Date.now() + 3500;
+    const target = getSafeSeekTime(v, pct * v.duration);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    setIsBuffering(true);
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
+    if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${pct * 100}%`;
+    if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
+    setCurrentTime(target);
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
@@ -3931,8 +3991,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    manualSeekUntilRef.current = Date.now() + 3500;
+    const target = getSafeSeekTime(v, pct * v.duration);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    setIsBuffering(true);
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${pct * 100}%`;
     }
@@ -3947,8 +4015,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = target;
+    manualSeekUntilRef.current = Date.now() + 3500;
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
 
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;

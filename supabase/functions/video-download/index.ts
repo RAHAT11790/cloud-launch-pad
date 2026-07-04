@@ -1,4 +1,4 @@
-// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// 🆕 NEW v3 (2026-07-04) — Opaque src token + no stale fallback. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-download — Dedicated, hardened download proxy
@@ -37,10 +37,6 @@ const UA =
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 600;
-const VIDEO_PROXY_BASE = Deno.env.get("SUPABASE_URL")
-  ? `${Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "")}/functions/v1/video-proxy`
-  : "";
-
 const toOpaqueUrlToken = (value: string) => {
   try {
     return btoa(unescape(encodeURIComponent(String(value || ""))))
@@ -83,23 +79,6 @@ const buildUpstreamHeaders = (target: URL, range: string | null, withContext = t
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const fetchViaVideoProxy = async (target: URL, method: "GET" | "HEAD", range: string | null, signal: AbortSignal): Promise<Response | null> => {
-  if (!VIDEO_PROXY_BASE) return null;
-  try {
-    const headers: Record<string, string> = { Accept: "*/*" };
-    if (range) headers.Range = range;
-    const res = await fetch(`${VIDEO_PROXY_BASE}?src=${encodeURIComponent(toOpaqueUrlToken(target.toString()))}`, {
-      method,
-      headers,
-      redirect: "follow",
-      signal,
-    });
-    if (res.ok || res.status === 206) return res;
-    try { await res.body?.cancel(); } catch {}
-  } catch {}
-  return null;
-};
 
 const fetchWithRetry = async (
   target: URL,
@@ -206,15 +185,10 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     const msg = (e as Error)?.message || "Upstream unreachable";
-    const proxied = await fetchViaVideoProxy(targetUrl, req.method as "GET" | "HEAD", req.headers.get("range"), ac.signal);
-    if (proxied) {
-      upstream = proxied;
-    } else {
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-    }
   }
 
   // Any non-OK final upstream → return JSON, never broken bytes.

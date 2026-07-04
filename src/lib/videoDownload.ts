@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
-import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { buildSelfHostedFunctionUrl, deriveSiblingWorkerFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -22,17 +22,52 @@ let overrideBaseUrl = "";
 let overrideEnabled = false;
 let playbackProxyBaseUrl = "";
 let playbackProxyEnabled = false;
+let routerBaseUrl = "";
+let downloadOverrideRaw: any = null;
+let proxyOverrideRaw: any = null;
+let allOverrides: Record<string, any> = {};
+
+const applyDownloadRoute = () => {
+  const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
+  const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
+  const siblingWorker = deriveSiblingWorkerFunctionUrl("video-download", allOverrides);
+  const enabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
+  overrideBaseUrl = enabled
+    ? (isBackendFunctionUrl(overrideUrl) ? (selfHosted || overrideUrl) : overrideUrl)
+    : (siblingWorker || selfHosted);
+  overrideEnabled = Boolean(overrideBaseUrl);
+};
+
+const applyProxyRoute = () => {
+  const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
+  const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
+  const siblingWorker = deriveSiblingWorkerFunctionUrl("video-proxy", allOverrides);
+  const enabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
+  playbackProxyBaseUrl = enabled
+    ? (isBackendFunctionUrl(overrideUrl) ? (siblingWorker || selfHosted || overrideUrl) : overrideUrl)
+    : (siblingWorker || selfHosted);
+  playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
+};
 try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
-      const v = snap.val() || {};
-      overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", String(v.customUrl || v.url || "").trim());
-      overrideEnabled = Boolean(overrideBaseUrl) && v.enabled !== false;
+      downloadOverrideRaw = snap.val() || {};
+      applyDownloadRoute();
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
+      proxyOverrideRaw = snap.val() || {};
+      applyProxyRoute();
+    });
+    onValue(ref(db, "settings/edgeRouter"), (snap) => {
       const v = snap.val() || {};
-      playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", String(v.customUrl || v.url || "").trim());
-      playbackProxyEnabled = Boolean(playbackProxyBaseUrl) && v.enabled !== false;
+      routerBaseUrl = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
+      applyDownloadRoute();
+      applyProxyRoute();
+    });
+    onValue(ref(db, "settings/functionOverrides"), (snap) => {
+      allOverrides = snap.val() || {};
+      applyDownloadRoute();
+      applyProxyRoute();
     });
   }
 } catch {}
@@ -49,6 +84,9 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
+  if (/\.workers\.dev(?:\/)?$/i.test(trimmedBase.replace(/\?.*$/, ""))) {
+    return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
+  }
   return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 
@@ -57,7 +95,8 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
   if (isManagedVideoProxyUrl(trimmedUrl) || isManagedVideoDownloadUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return unique([trimmedUrl, ...buildVideoDownloadUrlCandidates(inner, rawFileName)]);
     } catch {}
     return [trimmedUrl];
@@ -73,7 +112,8 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
   if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
   if (isManagedVideoDownloadUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return buildVideoProxyUrlCandidates(inner);
     } catch {}
   }
@@ -87,7 +127,8 @@ export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): stri
   if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
   if (isManagedVideoProxyUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return buildVideoDownloadUrl(inner, rawFileName);
     } catch {}
   }
