@@ -26,12 +26,12 @@ try {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
       const v = snap.val() || {};
       overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", String(v.customUrl || v.url || "").trim());
-      overrideEnabled = v.enabled === true;
+      overrideEnabled = Boolean(overrideBaseUrl) && v.enabled !== false;
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const v = snap.val() || {};
       playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", String(v.customUrl || v.url || "").trim());
-      playbackProxyEnabled = v.enabled === true;
+      playbackProxyEnabled = Boolean(playbackProxyBaseUrl) && v.enabled !== false;
     });
   }
 } catch {}

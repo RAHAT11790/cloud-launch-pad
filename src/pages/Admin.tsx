@@ -532,9 +532,9 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const v = snap.val() || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
- ROUTER_FUNCTIONS.forEach(({ slug }) => {
+  ROUTER_FUNCTIONS.forEach(({ slug }) => {
   u[slug] = normalizeFunctionEndpointUrl(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
- e[slug] = v?.[slug]?.enabled === true;
+  e[slug] = Boolean(u[slug]) && v?.[slug]?.enabled !== false;
  });
  setUrls(u);
  setEnabled(e);

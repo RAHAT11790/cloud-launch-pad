@@ -676,8 +676,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // proxy with an HTTPS URL is wrong and can make a good admin proxy look bad.
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const raw = snap.val();
-      const enabled = raw?.enabled === true;
-      const url = enabled ? normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim()) : "";
+      const configuredUrl = normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim());
+      const enabled = Boolean(configuredUrl) && raw?.enabled !== false;
+      const url = enabled ? configuredUrl : "";
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
