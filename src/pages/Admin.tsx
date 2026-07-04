@@ -57,10 +57,21 @@ const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
- if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
- if (epIdx !== undefined) params.set("e", String(epIdx));
+ if (seasonIdx !== undefined) params.set("s", String(Math.max(0, seasonIdx) + 1));
+ if (epIdx !== undefined) params.set("e", String(Math.max(0, epIdx) + 1));
  const qs = params.toString();
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+};
+
+const getEpisodeIndexForShare = (season: any, episodeNumber: unknown, fallbackIdx = 0) => {
+ const num = Number(episodeNumber);
+ const episodes = Array.isArray(season?.episodes) ? season.episodes : [];
+ if (Number.isFinite(num) && num > 0) {
+  const exactIdx = episodes.findIndex((ep: any) => Number(ep?.episodeNumber) === num);
+  if (exactIdx >= 0) return exactIdx;
+  return Math.max(0, Math.floor(num) - 1);
+ }
+ return Math.max(0, fallbackIdx);
 };
 
 const TG_DUB_TAGS = {
