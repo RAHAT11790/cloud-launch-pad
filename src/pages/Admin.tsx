@@ -3538,8 +3538,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   saveRef = push(ref(db, "movies"));
    newMovieId = saveRef.key || "";
   data.createdAt = Date.now();
-  }
-  try {
+   }
+   data.updatedAt = Date.now(); // stamp so the recently-edited card stays at the top
+   try {
   await set(saveRef, data);
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
