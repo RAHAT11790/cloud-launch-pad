@@ -7286,6 +7286,116 @@ ${tgBulkFooter}
  });
  })()}
  </div>
+
+ {/* ==================== Manual Push Notification ==================== */}
+ <div className={`${glassCard} relative z-10 p-4 mt-4`}>
+ <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+ <Bell size={14} className="text-yellow-400" /> Manual Push Notification
+ </h3>
+ <p className="text-[11px] text-[#957DAD] mb-3">Select any anime/episode above → optionally edit title & body → send instant FCM push to all users.</p>
+
+ {!releaseContent ? (
+ <div className="text-[12px] text-yellow-400/80 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+ ⚠️ First pick a content (and season/episode for series) from the "Manage New Episode Releases" card above.
+ </div>
+ ) : (
+ <>
+ <div className="flex gap-3 items-center bg-[#1A1A2E] border border-purple-500/30 rounded-xl p-3 mb-3">
+ <CachedImg src={contentOptions.find(o => o.value === releaseContent)?.poster} alt="" className="w-[46px] h-[66px] rounded-lg object-cover flex-shrink-0" />
+ <div className="flex-1 min-w-0">
+ <h4 className="text-[13px] font-semibold truncate">{contentOptions.find(o => o.value === releaseContent)?.label}</h4>
+ <p className="text-[11px] text-pink-500 mt-0.5">
+ {showSeasonEpisode
+ ? (releaseSeason !== "" && releaseEpisode !== ""
+ ? `${releaseSeasons.find(s => String(s.index) === String(releaseSeason))?.name || "Season"} — ${releaseEpisodes.find(e => String(e.index) === String(releaseEpisode))?.name || "Episode"}`
+ : "Pick season & episode above")
+ : "Movie"}
+ </p>
+ </div>
+ </div>
+
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (optional override)</label>
+ <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="🎬 auto: New Episode – <title>" />
+
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Body (optional override)</label>
+ <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={2} className={`${inputClass} mb-3 resize-none`} placeholder="auto: <Season> — Episode <N> is now available!" />
+
+ <button
+ disabled={pushSending || !releaseContent}
+ onClick={async () => {
+ if (!releaseContent) return;
+ if (showSeasonEpisode && (releaseSeason === "" || releaseEpisode === "")) {
+ toast.error("Pick season & episode above"); return;
+ }
+ const [contentId, contentType] = releaseContent.split("|");
+ let content: any;
+ if (contentType === "webseries") {
+ content = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
+ } else {
+ content = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
+ }
+ if (!content) { toast.error("Content not found"); return; }
+
+ let seasonNumber: number | undefined; let episodeNumber: number | undefined;
+ let seasonName = "Movie"; let deepLink = `/watch/${contentId}`;
+ if (contentType === "webseries") {
+ const sIdx = parseInt(releaseSeason); const eIdx = parseInt(releaseEpisode);
+ const season = content.seasons?.[sIdx];
+ const episode = season?.episodes?.[eIdx];
+ seasonNumber = sIdx + 1;
+ episodeNumber = episode?.episodeNumber || eIdx + 1;
+ seasonName = season?.name || `Season ${seasonNumber}`;
+ deepLink = `/watch/${contentId}?s=${sIdx}&e=${eIdx}`;
+ }
+
+ const backdrop = content.backdrop || content.poster || "";
+ const image = backdrop ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
+ const autoTitle = contentType === "webseries"
+ ? `🎬 ${content.title} — New Episode`
+ : `🎬 ${content.title} — New Movie`;
+ const autoBody = contentType === "webseries"
+ ? `${seasonName} — Episode ${episodeNumber} is now available!`
+ : `${content.title} (${content.year || ""}) is now available!`;
+
+ const title = pushTitleOverride.trim() || autoTitle;
+ const body = pushBodyOverride.trim() || autoBody;
+
+ setPushSending(true); setPushLastResult("");
+ const toastId = toast.loading("🔔 Sending push to all users…", { duration: 60000 });
+ try {
+ const pushMod = await import("@/lib/pushNotifications");
+ const res = await pushMod.sendPushNotification({
+ title, body, image, deepLink,
+ contentId: String(contentId), contentType,
+ seasonNumber, episodeNumber,
+ });
+ toast.dismiss(toastId);
+ if (res.ok) {
+ const msg = `Push sent → ${res.sent}/${res.total} users${res.invalidRemoved ? ` (cleaned ${res.invalidRemoved} dead tokens)` : ""}`;
+ toast.success("🔔 " + msg, { duration: 6000 });
+ setPushLastResult(msg);
+ } else {
+ toast.error("Push failed: " + (res.error || "send-fcm not configured"));
+ setPushLastResult("Failed: " + (res.error || "send-fcm not configured"));
+ }
+ } catch (err: any) {
+ toast.dismiss(toastId);
+ toast.error("Push error: " + (err?.message || String(err)));
+ setPushLastResult("Error: " + (err?.message || String(err)));
+ } finally {
+ setPushSending(false);
+ }
+ }}
+ className={`${btnPrimary} w-full py-3.5 text-[14px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
+ >
+ <Send size={16} /> {pushSending ? "Sending push…" : "Send Push Notification Now"}
+ </button>
+ {pushLastResult && (
+ <p className="text-[11px] text-center text-[#957DAD] mt-2.5">{pushLastResult}</p>
+ )}
+ </>
+ )}
+ </div>
  </div>
  )}
 
