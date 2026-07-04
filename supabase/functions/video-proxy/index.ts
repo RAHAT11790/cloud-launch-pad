@@ -27,6 +27,21 @@ const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
 
+function clampInvalidContentRange(headers: Headers) {
+  const raw = headers.get("content-range") || "";
+  const match = raw.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+  if (!match) return;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(total) || total <= 0) return;
+  const maxEnd = total - 1;
+  if (end <= maxEnd) return;
+  const safeLength = Math.max(0, total - start);
+  headers.set("content-range", `bytes ${start}-${maxEnd}/${total}`);
+  headers.set("content-length", String(safeLength));
+}
+
 function fallbackResponse(message: string, detail = "", upstreamStatus?: number) {
   return new Response(JSON.stringify({
     error: "VIDEO_SOURCE_UNAVAILABLE",
@@ -82,14 +97,12 @@ function buildUpstreamCandidates(target: URL): URL[] {
 
 
 function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
-  if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
-  const match = range.match(/^bytes=(\d+)-(\d*)$/i);
-  if (!match) return { range, windowStart: null };
-  const start = Number(match[1]);
-  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  const windowStart = Math.floor(start / MEDIA_CHUNK_BYTES) * MEDIA_CHUNK_BYTES;
-  const windowEnd = windowStart + MEDIA_CHUNK_BYTES - 1;
-  return { range: `bytes=${windowStart}-${windowEnd}`, windowStart };
+  // Do NOT rewrite browser Range requests. The previous 8MB-aligned window
+  // optimization returned a different Content-Range start than Chromium asked
+  // for (especially when it probes MP4 metadata near EOF), so the upstream sent
+  // 206 but the native <video> element still raised MEDIA_ERR_SRC_NOT_SUPPORTED.
+  // Exact pass-through is the reliable path for playback and seeking.
+  return { range, windowStart: null };
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
@@ -189,6 +202,7 @@ Deno.serve(async (req) => {
 
   const out = new Headers(cors);
   for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }
+  clampInvalidContentRange(out);
   if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
   out.set("content-disposition", "inline");
   out.set("Cross-Origin-Resource-Policy", "cross-origin");
