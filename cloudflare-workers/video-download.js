@@ -1,3 +1,5 @@
+// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // Cloudflare Worker — video-download (CF-native)
 // Clean single-shot download proxy with attachment Content-Disposition.
