@@ -23,6 +23,24 @@ const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
 
+const toOpaqueUrlToken = (value: string) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || ""))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  } catch { return ""; }
+};
+
+const fromOpaqueUrlToken = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch { return ""; }
+};
+
 // NOTE: cross-mirror auto-swap removed. Previously this proxy silently rewrote
 // requests between rahat1102-video-hosting-bot.hf.space, fi3.bot-hosting.net,
 // rs-stream-bot-*.onrender.com when one origin was down. That masked outages
@@ -63,7 +81,7 @@ function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
 
 function proxyUrl(reqUrl: URL, target: string) {
   const base = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}`;
-  return `${base}?url=${encodeURIComponent(target)}`;
+  return `${base}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 }
 
 function resolveHttpUrl(value: string, baseUrl: string) {
@@ -94,7 +112,7 @@ Deno.serve(async (req) => {
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405, headers: cors });
 
   const reqUrl = new URL(req.url);
-  const target = reqUrl.searchParams.get("url") || "";
+  const target = reqUrl.searchParams.get("url") || fromOpaqueUrlToken(reqUrl.searchParams.get("src") || "");
   if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
 
   let upstreamUrl: URL;
