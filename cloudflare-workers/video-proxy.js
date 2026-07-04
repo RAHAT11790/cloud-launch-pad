@@ -46,18 +46,22 @@ const fromOpaqueUrlToken = (value) => {
   }
 };
 
-function capRange(range, u) {
-  if (!range || !isDirectMp4Like(u)) return range;
+// Align every browser range request to a fixed 8MB window boundary.
+// Effect: seeking to 4:23 and 4:29 map to the SAME upstream fetch → CF cache hit.
+function alignRange(range, u) {
+  if (!range || !isDirectMp4Like(u)) return { range, windowStart: null };
   const m = range.match(/^bytes=(\d+)-(\d*)$/i);
-  if (!m) return range;
+  if (!m) return { range, windowStart: null };
   const start = Number(m[1]);
-  const reqEnd = m[2] ? Number(m[2]) : NaN;
-  if (!Number.isFinite(start) || start < 0) return range;
-  const hasEnd = Boolean(m[2]);
-  const capEnd = start + MEDIA_CHUNK_BYTES - 1;
-  if (!hasEnd && start > 8 * 1024 * 1024) return range;
-  if (!Number.isFinite(reqEnd) || reqEnd - start + 1 > MEDIA_CHUNK_BYTES) return `bytes=${start}-${capEnd}`;
-  return range;
+  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
+  const windowStart = Math.floor(start / MEDIA_CHUNK_BYTES) * MEDIA_CHUNK_BYTES;
+  const windowEnd = windowStart + MEDIA_CHUNK_BYTES - 1;
+  return { range: `bytes=${windowStart}-${windowEnd}`, windowStart };
+}
+
+function capRange(range, u) {
+  const aligned = alignRange(range, u);
+  return aligned.range;
 }
 
 function proxyUrl(reqUrl, target) {
