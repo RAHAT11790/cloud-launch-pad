@@ -3093,7 +3093,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const t = window.setTimeout(() => ac.abort(), 6500);
     fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
       .then((res) => {
-        if (res.status >= 500 || res.status === 403 || res.status === 404) {
+        const proxyFallback = res.headers.get("x-rs-proxy-fallback") === "1"
+          || /application\/json/i.test(res.headers.get("content-type") || "");
+        if (proxyFallback || res.status >= 500 || res.status === 403 || res.status === 404) {
           tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         }
         try { res.body?.cancel(); } catch {}
