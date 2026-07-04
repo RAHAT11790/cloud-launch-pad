@@ -7306,9 +7306,9 @@ ${tgBulkFooter}
  <div>
  <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
- <Bell size={14} className="text-yellow-400" /> Manual Push Notification
+ <Bell size={14} className="text-yellow-400" /> Synced Notification
  </h3>
- <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season/episode → send instant FCM push to all users.</p>
+ <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → auto-generated title + description → instant FCM push to all users. Notification click loads the start episode.</p>
 
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Anime / Movie</label>
  <div className="relative z-[130] mb-4">
