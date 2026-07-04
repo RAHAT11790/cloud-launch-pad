@@ -12769,7 +12769,6 @@ const WsInlineLinkChecker = ({
   : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
- candidates.push(url);
  }
  for (const c of candidates) {
  const ok = await testPlayable(c);
