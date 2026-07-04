@@ -91,3 +91,14 @@ export const toOpaqueUrlToken = (value: string) => {
     return "";
   }
 };
+
+export const fromOpaqueUrlToken = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return "";
+  }
+};
