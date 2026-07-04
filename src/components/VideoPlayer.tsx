@@ -45,6 +45,7 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
+import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -67,7 +68,6 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
-const DEFAULT_VIDEO_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
 
@@ -178,25 +178,18 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   // Admin-configured proxy (from Firebase settings). Optional — only used when
   // the user opts in via preferProxy, or as a rescue for insecure http URLs.
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  // Built-in Supabase video-proxy — used ONLY to bridge insecure http:// media
-  // onto an https:// page (mixed-content rescue). Never applied to https URLs.
-  const nativeHttpBridge = isHttp && isHttpLike && DEFAULT_VIDEO_PROXY_URL
-    ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
-    : null;
-
   if (preferProxy && customProxyCandidate) {
     // User explicitly opted into the admin custom proxy (e.g. Live TV toggle).
     addCandidate(customProxyCandidate);
     if (!isHttp) addCandidate(url);
-    else addCandidate(nativeHttpBridge);
     return candidates;
   }
 
   if (isHttp) {
-    // http:// URL — must be rescued onto https. Prefer admin's own custom
-    // proxy if set, otherwise fall back to the built-in bridge.
+    // http:// URL — must be rescued onto https via the admin-selected EGD
+    // Router video-proxy. Do not silently spend default backend credits here;
+    // the Default button is the only way to opt into the project-hosted proxy.
     addCandidate(customProxyCandidate);
-    addCandidate(nativeHttpBridge);
     return candidates;
   }
 
@@ -691,12 +684,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const raw = snap.val();
       const enabled = raw?.enabled === true;
-      let url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
-      if (!url) url = DEFAULT_VIDEO_PROXY_URL;
+      const url = enabled ? normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim()) : "";
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
-      try { localStorage.setItem(VIDEO_PROXY_CACHE_KEY, url); } catch {}
+      try {
+        if (url) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, url);
+        else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
+      } catch {}
     });
 
     return () => {
