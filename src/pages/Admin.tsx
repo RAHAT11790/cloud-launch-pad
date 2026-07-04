@@ -5082,7 +5082,7 @@ ${tgBulkFooter}
  { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
  { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
  { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
- { section: "manual-push", icon: <Bell size={16} />, label: "Manual Push" },
+ { section: "manual-push", icon: <Bell size={16} />, label: "Synced Notification" },
  { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
