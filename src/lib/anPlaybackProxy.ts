@@ -67,7 +67,7 @@ export const wrapAnHlsPlaybackUrl = (value: string, explicitPrefix?: string): st
     const parsed = new URL(raw);
     const wrapped = isAnPlaybackProxyPath(parsed.pathname) ? (parsed.searchParams.get("url") || "") : "";
     if (wrapped && prefix) {
-      const params = new URLSearchParams({ url: wrapped });
+      const params = new URLSearchParams({ src: toOpaqueUrlToken(wrapped) });
       const origin = parsed.searchParams.get("origin") || parsed.searchParams.get("parent") || parsed.searchParams.get("ref") || "";
       if (origin) params.set("origin", origin);
       return `${prefix}?${params.toString()}`;
