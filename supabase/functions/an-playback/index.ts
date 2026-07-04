@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
     if (isM3u8) {
       h.delete("content-length");
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      h.set("cache-control", "public, max-age=12, stale-while-revalidate=30");
+      h.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
       return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
