@@ -41,9 +41,24 @@ type SavedItem = {
   premiumEpisodes?: Record<string, boolean>;
 };
 
+// Card grid only needs these light fields — trimming cast/overview/genres keeps
+// the payload well under localStorage's ~5MB quota so writeCache never silently
+// fails. Full metadata is re-hydrated live on card click.
+const CACHE_FIELDS: (keyof AnimeItem)[] = [
+  "id", "title", "poster", "backdrop", "year", "rating", "language", "category",
+  "type", "source", "sourceName", "anSlug", "animeSaltSlug", "slug", "tmdbId",
+  "premium", "premiumEpisodes", "createdAt", "updatedAt",
+] as any;
+
+const slimForCache = (item: AnimeItem): AnimeItem => {
+  const out: any = { seasons: [] };
+  CACHE_FIELDS.forEach((k) => { if ((item as any)[k] !== undefined) out[k] = (item as any)[k]; });
+  return out as AnimeItem;
+};
+
 const readCache = (): AnimeItem[] | null => {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY) || sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed;
@@ -53,7 +68,12 @@ const readCache = (): AnimeItem[] | null => {
 
 const writeCache = (items: AnimeItem[]) => {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(items));
+    const slim = items.map(slimForCache);
+    const payload = JSON.stringify(slim);
+    // Mirror to sessionStorage first — always succeeds even if localStorage is
+    // full/quota-blocked — so the next page nav still hits cache instantly.
+    try { sessionStorage.setItem(CACHE_KEY, payload); } catch {}
+    localStorage.setItem(CACHE_KEY, payload);
   } catch {}
 };
 
