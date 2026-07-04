@@ -27,7 +27,9 @@ import {
  fetchRecentAdminContentList,
  mergeAdminContentLists,
  primeAdminContentIndexFromList,
- readCachedAdminContentList,
+  readCachedAdminContentList,
+  isAdminContentCacheFresh,
+  invalidateAdminContentCache,
  removeAdminContentIndex,
  sortAdminContentList,
  upsertAdminContentIndex,
@@ -2051,8 +2053,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
- const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
- const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
+  const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
+  const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
+  const adminLoadContentListRef = useRef<((kind: AdminContentKind, opts?: { force?: boolean }) => Promise<void>) | null>(null);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
   const listItem = buildAdminContentIndexItem(id, item, kind);
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
@@ -2559,26 +2562,32 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   startTransition(() => setCategoriesData(snap.val() || {}));
   }));
 
- const loadContentList = async (kind: AdminContentKind) => {
-  const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-  const cached = readCachedAdminContentList(kind);
+ const loadContentList = async (kind: AdminContentKind, opts?: { force?: boolean }) => {
+   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+   const cached = readCachedAdminContentList(kind);
    if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
-  try {
-   const [indexed, recent] = await Promise.all([
-    fetchAdminContentIndex(kind).catch(() => []),
-    fetchRecentAdminContentList(kind).catch(() => []),
-   ]);
-   const merged = mergeAdminContentLists(cached, indexed, recent);
-    startTransition(() => setter(merged));
-   writeCachedAdminContentList(kind, merged);
-   if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
-  } catch (err) {
-   console.warn(`[Admin] ${kind} light index load failed`, err);
-  }
- };
+   // Skip network fetch entirely when the cache is fresh — prevents the
+   // card-list flicker every time the admin panel is (re)opened. Manual
+   // "Refresh Data" (or a save that invalidates the cache) still refetches.
+   if (!opts?.force && isAdminContentCacheFresh(kind)) return;
+   try {
+    const [indexed, recent] = await Promise.all([
+     fetchAdminContentIndex(kind).catch(() => []),
+     fetchRecentAdminContentList(kind).catch(() => []),
+    ]);
+    const merged = mergeAdminContentLists(cached, indexed, recent);
+     startTransition(() => setter(merged));
+    writeCachedAdminContentList(kind, merged);
+    if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
+   } catch (err) {
+    console.warn(`[Admin] ${kind} light index load failed`, err);
+   }
+  };
 
- loadContentList("webseries");
- loadContentList("movies");
+  adminLoadContentListRef.current = loadContentList;
+
+  loadContentList("webseries");
+  loadContentList("movies");
 
   let countsCancelled = false;
   Promise.all([
@@ -3151,21 +3160,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  finally { setFetchingOverlay(false); }
  };
 
- const fetchSeriesDetails = async (id: number) => {
- // Check if this TMDB ID already exists
- const existing = webseriesData.find(s => s.tmdbId === id || s.tmdbId === String(id));
- if (existing) {
- toast.warning(`"${existing.title}" already exists!`, { duration: 5000 });
- // On second click (confirm), load existing data for editing
- if (seriesForm?.tmdbId === id || seriesForm?.tmdbId === String(id)) {
- editSeries(existing.id);
- setSeriesResults([]);
- return;
- }
- // Set form with TMDB ID so next click loads existing
- setSeriesForm({ tmdbId: id });
- return;
- }
+  const fetchSeriesDetails = async (id: number) => {
+  // Check if this TMDB ID already exists → jump straight to Edit page.
+  const existing = webseriesData.find(s => s.tmdbId === id || s.tmdbId === String(id));
+  if (existing) {
+   toast.warning(`"${existing.title}" is already added — opening edit page`, { duration: 4000 });
+   editSeries(existing.id);
+   setSeriesResults([]);
+   setSeriesSearch("");
+   return;
+  }
 
  setFetchingOverlay(true);
  try {
@@ -3338,7 +3342,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   newId = saveRef.key || "";
   data.createdAt = Date.now();
   }
-  lastSavedSeriesIdRef.current = newId;
+   data.updatedAt = Date.now(); // stamp so the recently-edited card stays at the top
+   lastSavedSeriesIdRef.current = newId;
    try {
    await set(saveRef, data);
    upsertAdminContentListItem("webseries", newId, data);
@@ -3435,21 +3440,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  finally { setFetchingOverlay(false); }
  };
 
- const fetchMovieDetails = async (id: number) => {
- // Check if this TMDB ID already exists
- const existing = moviesData.find(m => m.tmdbId === id || m.tmdbId === String(id));
- if (existing) {
- toast.warning(`"${existing.title}" already exists!`, { duration: 5000 });
- // On second click (confirm), load existing data for editing
- if (movieForm?.tmdbId === id || movieForm?.tmdbId === String(id)) {
- editMovie(existing.id);
- setMovieResults([]);
- return;
- }
- // Set form with TMDB ID so next click loads existing
- setMovieForm({ tmdbId: id });
- return;
- }
+  const fetchMovieDetails = async (id: number) => {
+  // Check if this TMDB ID already exists → jump straight to Edit page.
+  const existing = moviesData.find(m => m.tmdbId === id || m.tmdbId === String(id));
+  if (existing) {
+   toast.warning(`"${existing.title}" is already added — opening edit page`, { duration: 4000 });
+   editMovie(existing.id);
+   setMovieResults([]);
+   setMovieSearch("");
+   return;
+  }
 
  setFetchingOverlay(true);
  try {
@@ -3537,8 +3537,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   saveRef = push(ref(db, "movies"));
    newMovieId = saveRef.key || "";
   data.createdAt = Date.now();
-  }
-  try {
+   }
+   data.updatedAt = Date.now(); // stamp so the recently-edited card stays at the top
+   try {
   await set(saveRef, data);
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
@@ -3829,10 +3830,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ==================== EXPORT / REFRESH ====================
- const refreshData = () => {
- toast.info("Data is auto-synced with Firebase!");
- setDropdownOpen(false);
- };
+  const refreshData = async () => {
+   setDropdownOpen(false);
+   invalidateAdminContentCache();
+   toast.info("Refreshing series & movies…");
+   const load = adminLoadContentListRef.current;
+   if (!load) { toast.error("Refresh unavailable"); return; }
+   try {
+     await Promise.all([load("webseries", { force: true }), load("movies", { force: true })]);
+     toast.success("Refreshed ✓");
+   } catch { toast.error("Refresh failed"); }
+  };
 
  const exportData = async () => {
  try {

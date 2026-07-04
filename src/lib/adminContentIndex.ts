@@ -4,7 +4,7 @@ import { isLegacyAnEntry } from "@/lib/legacyAn";
 
 export type AdminContentKind = "webseries" | "movies";
 
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour — admin cards should NOT re-fetch on every panel open
 const DEFAULT_RECENT_LIMIT = 500;
 
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v2`;
@@ -80,6 +80,29 @@ export const readCachedAdminContentList = (kind: AdminContentKind) => {
   } catch {
     return [];
   }
+};
+
+export const isAdminContentCacheFresh = (kind: AdminContentKind) => {
+  try {
+    const raw = localStorage.getItem(cacheKeyFor(kind));
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ts) return false;
+    if (Date.now() - Number(parsed.ts) > CACHE_TTL_MS) return false;
+    return Array.isArray(parsed.items) && parsed.items.length > 0;
+  } catch {
+    return false;
+  }
+};
+
+export const invalidateAdminContentCache = (kind?: AdminContentKind) => {
+  try {
+    if (kind) localStorage.removeItem(cacheKeyFor(kind));
+    else {
+      localStorage.removeItem(cacheKeyFor("webseries"));
+      localStorage.removeItem(cacheKeyFor("movies"));
+    }
+  } catch {}
 };
 
 export const writeCachedAdminContentList = (kind: AdminContentKind, items: any[]) => {
