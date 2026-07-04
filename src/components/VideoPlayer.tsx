@@ -657,14 +657,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   //                we play https sources directly from the <video> tag.
   useEffect(() => {
     const httpSrc = isInsecureHttpSource(src || "");
-    const hlsSrc = isHlsLikeUrl(src || "");
     setPlaybackRouteReady(true);
-    if (hlsSrc || (noProxy && !preferProxy && !httpSrc)) {
-      setCdnEnabled(false);
-      if (!httpSrc) setProxyUrl('');
-      setProxyApiKey('');
-      return;
-    }
 
     let cancelled = false;
 
@@ -673,14 +666,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCdnEnabled(val !== false);
     });
 
-    // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
-    // The proxy is HTTP-only. HTTPS sources always play directly, so probing the
-    // proxy with an HTTPS URL is wrong and can make a good admin proxy look bad.
-    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
-      const raw = snap.val();
-      const configuredUrl = normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim());
-      const enabled = Boolean(configuredUrl) && raw?.enabled !== false;
-      const url = enabled ? configuredUrl : "";
+    // 🚀 ALPHA PROXY RESOLUTION — priority order:
+    //   1. `video-boost` (new pro proxy: aligned windows + edge cache
+    //      + prefetch + domain-lock anti-theft). Sits in front of EVERY
+    //      RS/Telegram URL — HTTP, HTTPS, and HLS all routed through it.
+    //   2. `video-proxy` (legacy) — fallback for admins who haven't yet
+    //      deployed video-boost.
+    // AN URLs (an-playback own proxy) bypass this entirely.
+    const isAnHls = isAnApiHlsProxyUrl(src || "");
+
+    const resolveProxy = (boostRaw: any, proxyRaw: any) => {
+      const boostUrl = normalizeFunctionEndpointUrl("video-boost", String(boostRaw?.customUrl || boostRaw?.url || "").trim());
+      const boostEnabled = Boolean(boostUrl) && boostRaw?.enabled !== false;
+      if (boostEnabled) return boostUrl;
+      const proxyUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyRaw?.customUrl || proxyRaw?.url || "").trim());
+      const proxyEnabled = Boolean(proxyUrl) && proxyRaw?.enabled !== false;
+      return proxyEnabled ? proxyUrl : "";
+    };
+
+    let latestBoost: any = null, latestProxy: any = null;
+    const apply = () => {
+      // AN's own proxy handles AN — don't wrap it.
+      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
+      const url = resolveProxy(latestBoost, latestProxy);
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
@@ -688,13 +696,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (url) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, url);
         else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
       } catch {}
-    });
-
-    return () => {
-      cancelled = true;
-      unsub1();
-      unsub2();
     };
+
+    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-boost"), (snap) => { latestBoost = snap.val(); apply(); });
+    const unsub3 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => { latestProxy = snap.val(); apply(); });
+
+    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
