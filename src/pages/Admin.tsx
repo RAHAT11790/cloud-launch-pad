@@ -2561,26 +2561,33 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   startTransition(() => setCategoriesData(snap.val() || {}));
   }));
 
- const loadContentList = async (kind: AdminContentKind) => {
-  const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-  const cached = readCachedAdminContentList(kind);
+ const loadContentList = async (kind: AdminContentKind, opts?: { force?: boolean }) => {
+   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+   const cached = readCachedAdminContentList(kind);
    if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
-  try {
-   const [indexed, recent] = await Promise.all([
-    fetchAdminContentIndex(kind).catch(() => []),
-    fetchRecentAdminContentList(kind).catch(() => []),
-   ]);
-   const merged = mergeAdminContentLists(cached, indexed, recent);
-    startTransition(() => setter(merged));
-   writeCachedAdminContentList(kind, merged);
-   if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
-  } catch (err) {
-   console.warn(`[Admin] ${kind} light index load failed`, err);
-  }
- };
+   // Skip network fetch entirely when the cache is fresh — prevents the
+   // card-list flicker every time the admin panel is (re)opened. Manual
+   // "Refresh Data" (or a save that invalidates the cache) still refetches.
+   if (!opts?.force && isAdminContentCacheFresh(kind)) return;
+   try {
+    const [indexed, recent] = await Promise.all([
+     fetchAdminContentIndex(kind).catch(() => []),
+     fetchRecentAdminContentList(kind).catch(() => []),
+    ]);
+    const merged = mergeAdminContentLists(cached, indexed, recent);
+     startTransition(() => setter(merged));
+    writeCachedAdminContentList(kind, merged);
+    if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
+   } catch (err) {
+    console.warn(`[Admin] ${kind} light index load failed`, err);
+   }
+  };
 
- loadContentList("webseries");
- loadContentList("movies");
+  (loadContentList as any).__ref = loadContentList;
+  adminLoadContentListRef.current = loadContentList;
+
+  loadContentList("webseries");
+  loadContentList("movies");
 
   let countsCancelled = false;
   Promise.all([
