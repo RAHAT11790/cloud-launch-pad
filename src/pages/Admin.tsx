@@ -11437,11 +11437,10 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
 const buildProxyTestUrl = (proxyBase: string, testUrl: string, apiKey?: string): string => {
  if (!proxyBase) return testUrl;
  const encoded = encodeURIComponent(testUrl);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(testUrl));
  let url: string;
  if (proxyBase.includes('{url}')) url = proxyBase.split('{url}').join(encoded);
- else if (/[?&]url=$/.test(proxyBase) || proxyBase.endsWith('=')) url = `${proxyBase}${encoded}`;
- else if (proxyBase.includes('?url=') || proxyBase.includes('&url=')) url = `${proxyBase}${encoded}`;
- else url = `${proxyBase.replace(/\/$/, '')}?url=${encoded}`;
+ else url = `${proxyBase.replace(/\/$/, '')}?src=${opaque}`;
  if (apiKey) url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
  return url;
 };
@@ -12130,8 +12129,6 @@ const LinkCheckerSection = ({
  const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
  ? (proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
   : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`)
  : null;
 
@@ -12761,8 +12758,6 @@ const WsInlineLinkChecker = ({
  candidates.push(
  proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
   : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
@@ -12771,9 +12766,7 @@ const WsInlineLinkChecker = ({
  candidates.push(
  proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
- : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
- ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
  candidates.push(url);
