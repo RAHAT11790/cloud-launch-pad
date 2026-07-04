@@ -1868,6 +1868,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = 0;
     mediaRecoverySeekRef.current = 0;
     lastPlaybackPositionRef.current = 0;
+    rsSoftRetriesRef.current = 0;
+    hlsFatalRetriesRef.current = 0;
   }, [animeId]);
 
 
