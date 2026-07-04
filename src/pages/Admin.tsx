@@ -6436,8 +6436,48 @@ ${tgBulkFooter}
  : "✅ New Release added!");
  // Clear so a future Save+Notify on the same form starts fresh
   startTransition(() => setWsAutoRanges([]));
- // FCM removed — notifications go through Telegram only.
- // Skip straight to telegram step (no in-app push, no FCM).
+  // ⚡ FCM Push — send background push to every user who has notifications enabled.
+  // Notification body: anime backdrop image + RS logo badge, click deep-links
+  // straight to /watch/<seriesId>?s=<season>&e=<episodeIdx> and auto-plays.
+  try {
+    const pushMod = await import("@/lib/pushNotifications");
+    const pushTitle = `🎬 ${ctxForm.title} — New Episode`;
+    const pushBody = rangesToPublish.length > 1
+      ? `Multiple new episodes are live!`
+      : (rangesToPublish[0].endEp !== rangesToPublish[0].startEp
+          ? `${rangesToPublish[0].seasonName} — EP ${rangesToPublish[0].startEp}–${rangesToPublish[0].endEp} is out!`
+          : `${rangesToPublish[0].seasonName} — Episode ${rangesToPublish[0].startEp} is now available!`);
+    const backdrop = ctxForm.backdrop || ctxForm.poster || "";
+    const image = backdrop
+      ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/')
+      : "";
+    const firstRange = rangesToPublish[0];
+    const seasonIdxForLink = usingMulti ? (wsAutoRanges[0]?.seasonIdx ?? 0) : parseInt(wsNotifySeason);
+    const epIdxForLink = usingMulti ? 0 : getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode));
+    const deepLink = buildEpisodeShareUrl(ctxSeriesId, seasonIdxForLink, epIdxForLink).replace(/^https?:\/\/[^/]+/, "");
+    const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
+    setAdminBusyTask("Sending push to users…");
+    const pushResult = await pushMod.sendPushNotification({
+      title: pushTitle,
+      body: pushBody,
+      image,
+      deepLink,
+      contentId: String(ctxSeriesId),
+      contentType: "webseries",
+      seasonNumber: firstRange.seasonIdxNum,
+      episodeNumber: firstRange.startEp,
+    });
+    toast.dismiss(pushToastId);
+    setAdminBusyTask(null);
+    if (pushResult.ok) {
+      toast.success(`🔔 Push sent → ${pushResult.sent}/${pushResult.total} users${pushResult.invalidRemoved ? ` (cleaned ${pushResult.invalidRemoved} dead tokens)` : ""}`, { duration: 5000 });
+    } else {
+      toast.warning(`Push skipped: ${pushResult.error || "send-fcm not configured"}`);
+    }
+  } catch (pushErr: any) {
+    toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
+  }
+  // Auto-fill Telegram post fields next (Telegram post step comes after push)
  // Auto-fill telegram fields
   startTransition(() => setTgTitle(ctxForm.title));
  const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
