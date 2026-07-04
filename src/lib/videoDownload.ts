@@ -36,15 +36,6 @@ try {
   }
 } catch {}
 
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || "";
-const DEFAULT_DOWNLOAD_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-download` : "";
-const DEFAULT_PLAYBACK_PROXY_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-proxy` : "";
-
-const resolveBaseSync = (): string => {
-  if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
-  return DEFAULT_DOWNLOAD_BASE;
-};
-
 const unique = (items: string[]) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
 
 const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string) => {
