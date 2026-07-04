@@ -2480,17 +2480,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const unsubs: (() => void)[] = [];
 
     unsubs.push(onValue(ref(db, "categories"), (snap) => {
-      setCategoriesData(snap.val() || {});
+      updateCachedState(setCategoriesData, ADMIN_CACHE.categories, snap.val() || {});
     }));
 
     unsubs.push(onValue(ref(db, "webseries"), (snap) => {
       const data = snap.val() || {};
-      setWebseriesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
+      updateCachedState(setWebseriesData, ADMIN_CACHE.webseries, Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
     }));
 
     unsubs.push(onValue(ref(db, "movies"), (snap) => {
       const data = snap.val() || {};
-      setMoviesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
+      updateCachedState(setMoviesData, ADMIN_CACHE.movies, Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
     }));
 
     unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
@@ -2548,11 +2548,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
     unsubs.push(onValue(ref(db, "users"), (snap) => {
       const data = snap.val() || {};
-      setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
+      updateCachedState(setUsersData, ADMIN_CACHE.users, Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
     }));
 
     unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
-      setAppUsersGlobal(snap.val() || {});
+      updateCachedState(setAppUsersGlobal, ADMIN_CACHE.appUsers, snap.val() || {});
     }));
 
     // FCM token stats listener removed
@@ -2572,7 +2572,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
       allNotifs.sort((a, b) => b.timestamp - a.timestamp);
-      setNotificationsData(allNotifs);
+      updateCachedState(setNotificationsData, ADMIN_CACHE.notifications, allNotifs);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2584,7 +2584,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       const data = snap.val() || {};
       const arr = Object.entries(data).map(([id, r]: any) => ({ id, ...r }));
       arr.sort((a, b) => b.timestamp - a.timestamp);
-      setReleasesData(arr);
+      updateCachedState(setReleasesData, ADMIN_CACHE.releases, arr);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2593,7 +2593,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   useEffect(() => {
     if (activeSection !== "new-releases" && activeSection !== "notifications" && activeSection !== "dashboard") return;
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
-      setAnimesaltSelectedData(snap.val() || {});
+      updateCachedState(setAnimesaltSelectedData, ADMIN_CACHE.animesaltSelected, snap.val() || {});
     });
     return () => unsub();
   }, [activeSection]);
@@ -2806,7 +2806,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
       allComments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      setCommentsData(allComments);
+      updateCachedState(setCommentsData, ADMIN_CACHE.comments, allComments);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2817,7 +2817,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
       const data = snap.val() || {};
-      setAnalyticsViews(data);
+      updateCachedState(setAnalyticsViews, ADMIN_CACHE.analyticsViews, data);
 
       // 🧹 Auto-cleanup: delete every date bucket older than today.
       // Today's bucket is preserved so the dashboard always shows fresh stats.
@@ -2834,11 +2834,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       } catch {}
     }));
     unsubs.push(onValue(ref(db, "analytics/activeViewers"), (snap) => {
-      setActiveViewers(snap.val() || {});
+      updateCachedState(setActiveViewers, ADMIN_CACHE.activeViewers, snap.val() || {});
     }));
     unsubs.push(onValue(ref(db, "analytics/dailyActive"), (snap) => {
       const data = snap.val() || {};
-      setDailyActiveUsers(data);
+      updateCachedState(setDailyActiveUsers, ADMIN_CACHE.dailyActiveUsers, data);
 
       // 🧹 Cleanup older daily-active buckets too (keep today only)
       try {
@@ -2852,7 +2852,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     }));
     // Subscribe to persistent all-time totals (never reset)
     unsubs.push(onValue(ref(db, "analytics/totals/views"), (snap) => {
-      setAllTimeTotals(snap.val() || {});
+      updateCachedState(setAllTimeTotals, ADMIN_CACHE.allTimeTotals, snap.val() || {});
     }));
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
