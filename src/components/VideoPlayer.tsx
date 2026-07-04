@@ -3034,11 +3034,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           : null);
     if (preservedQuality) manualQualitySelectedRef.current = true;
     // RS direct HTTPS servers often host non-faststart MP4s. Starting Auto on
-    // 720p avoids pulling a huge 1080p open-ended range before metadata lands,
-    // which is the main Server 1 buffering/false-expired trigger on low phones.
+    // the lightest available stream avoids pulling a huge 1080p/720p open-ended
+    // range before metadata lands, which is the main Server 1 buffering trigger
+    // on low phones. Users can still switch quality manually after playback starts.
     const autoStartQuality = !preservedQuality && !isAnimeSaltContent
       ? nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
-        || nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
+      ? nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
+        || nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
         || null
       : null;
     const baseRawSrc = preservedQuality?.src || autoStartQuality?.src || src;
