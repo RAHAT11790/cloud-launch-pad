@@ -29,7 +29,7 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
-import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
+import { readPersistentCache, updateCachedState, writePersistentCache } from "@/lib/persistentCache";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -10189,7 +10189,11 @@ const AnimeSaltManagerSection = ({
   const handleRefresh = async () => {
     setRefreshing(true);
     // Clear cache to force fresh fetch
-    try { localStorage.removeItem('animesalt_all_v3'); } catch {}
+    try {
+      localStorage.removeItem('animesalt_all_v3');
+      localStorage.removeItem(ADMIN_CACHE.animesaltAll);
+      localStorage.removeItem(ADMIN_CACHE.animesaltAllTs);
+    } catch {}
     await loadItems(true);
     setRefreshing(false);
     toast.success('AnimeSalt ডাটা রিফ্রেশ হয়েছে!');
@@ -10814,7 +10818,10 @@ const AnimeSaltManagerSection = ({
     // Also add to allItems so it shows in the grid
     setAllItems(prev => {
       if (prev.some(i => i.slug === item.slug)) return prev;
-      return [item, ...prev];
+      const next = [item, ...prev];
+      writePersistentCache(ADMIN_CACHE.animesaltAll, next);
+      try { localStorage.setItem(ADMIN_CACHE.animesaltAllTs, JSON.stringify(Date.now())); } catch {}
+      return next;
     });
     setUrlFetchedItem(null);
     setUrlInput("");
