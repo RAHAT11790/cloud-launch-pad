@@ -84,6 +84,7 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
 }
 
 const SELF_DEPLOYED_FUNCTIONS = new Set([
+  "video-boost",
   "video-proxy",
   "video-download",
   "live-tv-proxy",
