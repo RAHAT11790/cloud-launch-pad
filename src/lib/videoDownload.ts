@@ -158,7 +158,6 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   // HTTPS file hosts are most reliable when the browser downloads them directly
   // from the user's own IP/session. Only route http:// or already-proxied links
   // through the download proxy to avoid mixed-content blocks.
-  const preferDirect = false;
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
   const finalUrl = proxiedUrl;
@@ -180,7 +179,6 @@ export function triggerBulkBackgroundDownloads(
       const u = String(it?.url || "").trim();
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
-      const preferDirect = false;
       const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
       const final = proxied;
       return final ? { final, fn } : null;
