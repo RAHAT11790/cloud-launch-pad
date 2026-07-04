@@ -29,6 +29,7 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
+import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -36,6 +37,23 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
   if (epIdx !== undefined) params.set("e", String(epIdx));
   const qs = params.toString();
   return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+};
+
+const ADMIN_CACHE = {
+  categories: "rs_admin_cache_categories_v1",
+  webseries: "rs_admin_cache_webseries_v1",
+  movies: "rs_admin_cache_movies_v1",
+  users: "rs_admin_cache_users_v1",
+  appUsers: "rs_admin_cache_app_users_v1",
+  notifications: "rs_admin_cache_notifications_v1",
+  releases: "rs_admin_cache_releases_v1",
+  comments: "rs_admin_cache_comments_v1",
+  animesaltSelected: "rs_admin_cache_animesalt_selected_v1",
+  weeklySchedule: "rs_admin_cache_weekly_schedule_v1",
+  analyticsViews: "rs_admin_cache_analytics_views_v1",
+  activeViewers: "rs_admin_cache_active_viewers_v1",
+  dailyActiveUsers: "rs_admin_cache_daily_active_users_v1",
+  allTimeTotals: "rs_admin_cache_all_time_totals_v1",
 };
 
 type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "adsterra" | "backdrop-ai";
@@ -2010,11 +2028,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [fetchingOverlay, setFetchingOverlay] = useState(false);
 
   // Data state
-  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
-  const [webseriesData, setWebseriesData] = useState<any[]>([]);
-  const [moviesData, setMoviesData] = useState<any[]>([]);
-  const [usersData, setUsersData] = useState<any[]>([]);
-  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
+  const [categoriesData, setCategoriesData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.categories, {}));
+  const [webseriesData, setWebseriesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.webseries, []));
+  const [moviesData, setMoviesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.movies, []));
+  const [usersData, setUsersData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.users, []));
+  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.appUsers, {}));
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   useEffect(() => {
@@ -2031,9 +2049,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       return name.includes(q) || email.includes(q) || id.includes(q);
     });
   }, [usersData, debouncedUserSearch]);
-  const [notificationsData, setNotificationsData] = useState<any[]>([]);
-  const [releasesData, setReleasesData] = useState<any[]>([]);
-  const [commentsData, setCommentsData] = useState<any[]>([]);
+  const [notificationsData, setNotificationsData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.notifications, []));
+  const [releasesData, setReleasesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.releases, []));
+  const [commentsData, setCommentsData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.comments, []));
 
   // Form states
   const [categoryInput, setCategoryInput] = useState("");
@@ -2131,13 +2149,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [globalFreeMinutes, setGlobalFreeMinutes] = useState("0");
 
   // Analytics state
-  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
-  const [activeViewers, setActiveViewers] = useState<Record<string, any>>({});
-  const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>({});
-  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>({});
+  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.analyticsViews, {}));
+  const [activeViewers, setActiveViewers] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.activeViewers, {}));
+  const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.dailyActiveUsers, {}));
+  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>(() => readPersistentCache<Record<string, { count: number; title?: string; lastSeen?: number }>>(ADMIN_CACHE.allTimeTotals, {}));
 
   // AnimeSalt selected data for content options
-  const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>({});
+  const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.animesaltSelected, {}));
 
   // Push progress state
   const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
