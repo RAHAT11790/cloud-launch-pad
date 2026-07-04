@@ -16,7 +16,7 @@ const cors: Record<string, string> = {
   ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
-  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
+  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error, x-rs-proxy-range, x-rs-window",
   "Access-Control-Max-Age": "86400",
 };
 
