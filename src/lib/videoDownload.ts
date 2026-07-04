@@ -30,6 +30,7 @@ let allOverrides: Record<string, any> = {};
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
+  const siblingWorker = deriveSiblingWorkerFunctionUrl("video-download", allOverrides);
   const enabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
   overrideBaseUrl = enabled
     ? (isBackendFunctionUrl(overrideUrl) ? (selfHosted || overrideUrl) : overrideUrl)
