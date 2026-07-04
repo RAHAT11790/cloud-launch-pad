@@ -150,7 +150,7 @@ const applyAdminEnglish = (root: ParentNode) => {
  }
 };
 
-const ADMIN_VISIBLE_CARD_LIMIT = 80;
+const ADMIN_VISIBLE_CARD_LIMIT = Number.MAX_SAFE_INTEGER;
 const ADMIN_DROPDOWN_LIMIT = 60;
 
 const adminIdle = (callback: () => void, timeout = 1200) => {
@@ -161,6 +161,40 @@ const adminIdle = (callback: () => void, timeout = 1200) => {
  }
  const id = window.setTimeout(callback, Math.min(timeout, 350));
  return () => window.clearTimeout(id);
+};
+
+const getAdminContentTime = (item: any) => Number(item?.updatedAt || item?.createdAt || 0);
+const sortAdminLatestFirst = (items: any[]) => [...items].sort((a: any, b: any) => getAdminContentTime(b) - getAdminContentTime(a));
+const buildSearchBigrams = (s: string) => {
+ const out = new Set<string>();
+ for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
+ return out;
+};
+const adminTitleSimilarity = (title: string, query: string, queryBigrams: Set<string>) => {
+ const t = String(title || "").toLowerCase();
+ if (!t) return 0;
+ if (t.includes(query)) return 1;
+ if (query.length < 2 || t.length < 2) return 0;
+ const titleBigrams = buildSearchBigrams(t);
+ let inter = 0;
+ queryBigrams.forEach(g => { if (titleBigrams.has(g)) inter++; });
+ return (2 * inter) / (queryBigrams.size + titleBigrams.size);
+};
+const filterAdminSeriesList = (items: any[], query: string) => {
+ const latestFirst = sortAdminLatestFirst(items);
+ const q = String(query || "").trim().toLowerCase();
+ if (!q) return latestFirst;
+ const qb = buildSearchBigrams(q);
+ return latestFirst
+  .map((item: any) => ({ item, score: adminTitleSimilarity(item?.title || "", q, qb) }))
+  .filter(x => x.score >= 0.5)
+  .sort((a, b) => b.score - a.score)
+  .map(x => x.item);
+};
+const filterAdminMovieList = (items: any[], query: string) => {
+ const q = String(query || "").trim().toLowerCase();
+ const latestFirst = sortAdminLatestFirst(items);
+ return q ? latestFirst.filter((item: any) => String(item?.title || "").toLowerCase().includes(q)) : latestFirst;
 };
 
 const yieldAdminFrame = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
@@ -2056,6 +2090,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
   const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
+   const [adminContentLoading, setAdminContentLoading] = useState({ webseries: true, movies: true });
   const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
   const adminLoadContentListRef = useRef<((kind: AdminContentKind, opts?: { force?: boolean }) => Promise<void>) | null>(null);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
@@ -2129,6 +2164,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [mvListSearch, setMvListSearch] = useState("");
  const deferredWsListSearch = useDeferredValue(wsListSearch);
  const deferredMvListSearch = useDeferredValue(mvListSearch);
+ const filteredWebseriesAdminList = useMemo(() => filterAdminSeriesList(webseriesData, deferredWsListSearch), [webseriesData, deferredWsListSearch]);
+ const filteredMoviesAdminList = useMemo(() => filterAdminMovieList(moviesData, deferredMvListSearch), [moviesData, deferredMvListSearch]);
  const [movieEditId, setMovieEditId] = useState("");
 
  // Notification form
@@ -2585,24 +2622,43 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const subscribeContentList = (kind: AdminContentKind) => {
     const setter = kind === "movies" ? setMoviesData : setWebseriesData;
     const cached = readCachedAdminContentList(kind);
-    if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
+    if (cached.length) {
+      startTransition(() => {
+        setter(sortAdminContentList(cached));
+        setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+      });
+    }
 
     const indexRef = ref(db, `adminContentIndex/${kind}`);
-    const unsub = onValue(indexRef, async (snap) => {
+    let reconcileRun = 0;
+    const unsub = onValue(indexRef, (snap) => {
       const data = snap.val() || {};
       let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
+      const merged = mergeAdminContentLists(items);
+      if (merged.length || cached.length) {
+        startTransition(() => {
+          setter(merged.length ? merged : sortAdminContentList(cached));
+          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+        });
+        writeCachedAdminContentList(kind, merged.length ? merged : cached);
+      }
+
+      const runId = ++reconcileRun;
+      const cancelReconcile = adminIdle(() => {
+        void (async () => {
       // Reconcile against the real collection: `adminContentIndex` may be
       // partially populated (legacy rows never got indexed). Whenever the
       // actual Firebase collection has more items than the index, hydrate
       // the missing ones and prime the index so it stays complete.
       try {
         const allKeys = await firebaseRestShallowKeys(kind);
+        if (runId !== reconcileRun) return;
         const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
         const indexedIds = new Set(items.map((it: any) => String(it.id)));
         const missing = cleanKeys.filter((k) => !indexedIds.has(k));
+        const hydrated: any[] = [];
         if (missing.length) {
           const chunkSize = 8;
-          const hydrated: any[] = [];
           for (let i = 0; i < missing.length; i += chunkSize) {
             const chunk = missing.slice(i, i + chunkSize);
             const rows = await Promise.all(chunk.map(async (id) => {
@@ -2612,6 +2668,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
               } catch { return null; }
             }));
             rows.forEach((r) => { if (r) hydrated.push(r); });
+            if (runId !== reconcileRun) return;
           }
           if (hydrated.length) {
             items = [...items, ...hydrated];
@@ -2638,6 +2695,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
                 } catch { return null; }
               }));
               rows.forEach((r) => { if (r) repaired.push(r); });
+              if (runId !== reconcileRun) return;
             }
             if (repaired.length) {
               const byId = new Map(items.map((it: any) => [String(it.id), it]));
@@ -2648,9 +2706,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           }
         }
       } catch {}
-      const merged = mergeAdminContentLists(items);
-      startTransition(() => setter(merged));
-      writeCachedAdminContentList(kind, merged);
+        const reconciled = mergeAdminContentLists(items);
+        startTransition(() => {
+          setter(reconciled);
+          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+        });
+        writeCachedAdminContentList(kind, reconciled);
+        })();
+      }, 250);
+      unsubs.push(cancelReconcile);
     });
     unsubs.push(unsub);
   };
@@ -5660,46 +5724,20 @@ ${tgBulkFooter}
  </div>
  </div>
  {(() => {
- // Latest-first ordering (newest createdAt/updatedAt at top)
- const latestFirst = [...webseriesData].sort((a: any, b: any) => {
- const ta = Number(a?.updatedAt || a?.createdAt || 0);
- const tb = Number(b?.updatedAt || b?.createdAt || 0);
- return tb - ta;
- });
   const q = deferredWsListSearch.trim().toLowerCase();
- let filtered = latestFirst;
- if (q) {
- // 50%-similarity fuzzy match (bigram Dice coefficient) + substring fast path
- const bigrams = (s: string) => {
- const out = new Set<string>();
- for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
- return out;
- };
- const qb = bigrams(q);
- const similarity = (title: string) => {
- const t = title.toLowerCase();
- if (!t) return 0;
- if (t.includes(q)) return 1;
- if (q.length < 2 || t.length < 2) return 0;
- const tb = bigrams(t);
- let inter = 0;
- qb.forEach(g => { if (tb.has(g)) inter++; });
- return (2 * inter) / (qb.size + tb.size);
- };
- filtered = latestFirst
- .map((item: any) => ({ item, score: similarity(item.title || "") }))
- .filter(x => x.score >= 0.5)
- .sort((a, b) => b.score - a.score)
- .map(x => x.item);
- }
+ const filtered = filteredWebseriesAdminList;
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
- <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
+ adminContentLoading.webseries && !q ? (
+ <div className="space-y-3 py-2">
+ {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+ </div>
+ ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
   ) : <>
   {visible.map(item => (
- <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
+ <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
- <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+  <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
@@ -6760,17 +6798,19 @@ ${tgBulkFooter}
  </div>
  </div>
  {(() => {
-  const filtered = deferredMvListSearch.trim()
-  ? moviesData.filter(item => item.title?.toLowerCase().includes(deferredMvListSearch.toLowerCase()))
- : moviesData;
+  const filtered = filteredMoviesAdminList;
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
-  <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
+  adminContentLoading.movies && !deferredMvListSearch.trim() ? (
+  <div className="space-y-3 py-2">
+  {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+  </div>
+  ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
   ) : <>
   {visible.map(item => (
- <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
+ <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
- <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+  <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>

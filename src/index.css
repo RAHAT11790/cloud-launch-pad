@@ -264,6 +264,17 @@ div[style*="z-index: 2147483647"],
     -webkit-backface-visibility: visible;
   }
 
+  .admin-content-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 145px;
+    contain: layout paint style;
+  }
+
+  .admin-content-list-img {
+    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
+    transform: translateZ(0);
+  }
+
   .category-bar::before {
     content: '';
     width: 4px;
