@@ -22,9 +22,11 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-// 1 MB "check size" — cap for open-ended byte-range requests so RS server does
-// not stream huge windows into low-end phones. Small chunks make skip land fast
-// (browser can throw away tiny buffers immediately) and reduce mobile stalls.
+// Cap only open-ended browser ranges (`bytes=N-`). RS file servers otherwise
+// answer with the whole remaining file (often 40MB-2GB), which makes Server 1
+// feel slow and causes Server 2/HTTP proxy requests to hang. Bounded ranges let
+// the browser request exactly the next piece it needs and keep seeking snappy.
+const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -98,11 +100,22 @@ function buildUpstreamCandidates(target: URL): URL[] {
 }
 
 
-function alignMediaRange(range: string | null, _upstreamUrl: URL): { range: string | null; windowStart: number | null } {
-  // Pure pass-through: whatever Range the browser sends goes straight upstream.
-  // No check-size / chunk cap. The proxy is only here to bridge http:// media
-  // into an https:// page so the browser can play it like a normal HTTPS video.
-  return { range, windowStart: null };
+function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
+  if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
+  const m = range.trim().match(/^bytes=(\d+)-$/i);
+  if (!m) return { range, windowStart: null };
+  const start = Number(m[1]);
+  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
+  return { range: `bytes=${start}-${start + MEDIA_CHUNK_BYTES - 1}`, windowStart: start };
+}
+
+function requestedOpenEndedRange(range: string | null) {
+  return /^bytes=\d+-$/i.test(String(range || "").trim());
+}
+
+function browserRangeResponseHeaders(headers: Headers, originalRange: string | null) {
+  if (!requestedOpenEndedRange(originalRange)) return;
+  if (!headers.has("content-range")) headers.delete("content-length");
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
@@ -204,6 +217,7 @@ Deno.serve(async (req) => {
   const out = new Headers(cors);
   for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }
   clampInvalidContentRange(out);
+  browserRangeResponseHeaders(out, rawRange);
   if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
   out.set("content-disposition", "inline");
   out.set("Cross-Origin-Resource-Policy", "cross-origin");

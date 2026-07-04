@@ -22,6 +22,7 @@ const cors = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
+const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -78,6 +79,24 @@ function fallbackResponse(message, detail = "", upstreamStatus) {
   });
 }
 
+function alignMediaRange(range, upstreamUrl) {
+  if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
+  const m = String(range).trim().match(/^bytes=(\d+)-$/i);
+  if (!m) return { range, windowStart: null };
+  const start = Number(m[1]);
+  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
+  return { range: `bytes=${start}-${start + MEDIA_CHUNK_BYTES - 1}`, windowStart: start };
+}
+
+function requestedOpenEndedRange(range) {
+  return /^bytes=\d+-$/i.test(String(range || "").trim());
+}
+
+function browserRangeResponseHeaders(headers, originalRange) {
+  if (!requestedOpenEndedRange(originalRange)) return;
+  if (!headers.has("content-range")) headers.delete("content-length");
+}
+
 function proxyUrl(reqUrl, target) {
   return `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 }
@@ -119,6 +138,7 @@ export default {
       return new Response("Only http/https supported", { status: 400, headers: cors });
 
     const rawRange = req.headers.get("range");
+    const aligned = alignMediaRange(rawRange, up);
     const headers = {
       "User-Agent": UA,
       Accept: req.headers.get("accept") || "*/*",
@@ -127,7 +147,7 @@ export default {
     };
     for (const k of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
       const v = req.headers.get(k);
-      if (v) headers[k] = v;
+      if (v) headers[k] = k === "range" ? (aligned.range || v) : v;
     }
     const origin = `${up.protocol}//${up.host}`;
     const attempts = [
@@ -154,6 +174,7 @@ export default {
     const out = new Headers(cors);
     for (const k of PASS) { const v = res.headers.get(k); if (v) out.set(k, v); }
     clampInvalidContentRange(out);
+    browserRangeResponseHeaders(out, rawRange);
     if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
     out.set("content-disposition", "inline");
     out.set("Cross-Origin-Resource-Policy", "cross-origin");
