@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
+import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -24,12 +25,12 @@ try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
       const v = snap.val() || {};
-      overrideBaseUrl = String(v.customUrl || "").trim();
+      overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", String(v.customUrl || v.url || "").trim());
       overrideEnabled = v.enabled === true;
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const v = snap.val() || {};
-      playbackProxyBaseUrl = String(v.customUrl || v.url || "").trim();
+      playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", String(v.customUrl || v.url || "").trim());
       playbackProxyEnabled = v.enabled === true;
     });
   }
@@ -70,11 +71,9 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return [trimmedUrl];
   }
 
-  const bases = unique([
-    resolveBaseSync(),
-    DEFAULT_DOWNLOAD_BASE,
-    overrideEnabled && overrideBaseUrl ? overrideBaseUrl : "",
-  ]);
+  const bases = overrideEnabled && overrideBaseUrl
+    ? [overrideBaseUrl]
+    : unique([resolveBaseSync(), DEFAULT_DOWNLOAD_BASE]);
   return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
 }
 
@@ -88,10 +87,9 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
       if (inner) return buildVideoProxyUrlCandidates(inner);
     } catch {}
   }
-  const bases = unique([
-    playbackProxyEnabled && playbackProxyBaseUrl ? playbackProxyBaseUrl : "",
-    DEFAULT_PLAYBACK_PROXY_BASE,
-  ]);
+  const bases = playbackProxyEnabled && playbackProxyBaseUrl
+    ? [playbackProxyBaseUrl]
+    : unique([DEFAULT_PLAYBACK_PROXY_BASE]);
   return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
 }
 
