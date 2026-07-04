@@ -1801,22 +1801,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // where episode 2 (or a different anime) continued from the previous
   // episode's timestamp.
   const prevEpKeyRef = useRef<string>("");
-  const episodeMountKeyRef = useRef<string>("");
+  const initialMountKeyRef = useRef<string>("");
   useEffect(() => {
     const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    if (!initialMountKeyRef.current) initialMountKeyRef.current = key;
     const isFirstMount = !prevEpKeyRef.current;
     const changed = prevEpKeyRef.current && prevEpKeyRef.current !== key;
     prevEpKeyRef.current = key;
-    if (isFirstMount) {
-      episodeMountKeyRef.current = key;
-      return;
-    }
-    if (!changed) return;
-    episodeMountKeyRef.current = key;
+    if (isFirstMount || !changed) return;
     // Episode changed via Next button (or season/episode switch). ALWAYS start
-    // from 0 — the stale `initialSeekTime` prop from the previous episode must
-    // NOT resume the new episode at the same timestamp. Explicit resume only
-    // applies on the first mount of a player instance.
+    // from 0 — stale `initialSeekTime` from the previous episode must NOT
+    // resume the new episode at the same timestamp.
     pendingSeek.current = 0;
     mediaRecoverySeekRef.current = 0;
     lastPlaybackPositionRef.current = 0;
