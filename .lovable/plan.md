@@ -1,53 +1,58 @@
-## Premium System সম্পূর্ণ Remove Plan
+## কী কী ঠিক করা হবে
 
-Premium Center কাজ করতেছে না তাই পুরা Premium logic A-to-Z remove করবো। সব content auto-unlock হয়ে যাবে, কেউ আর premium দেখাবে না।
+### ১) Video Player — State reset (series change এ সব default এ ফেরা)
+`src/components/VideoPlayer.tsx` এ series/anime ID track করার একটা `prevSeriesIdRef` যোগ করা হবে।
+- Series ID change হলে: quality, language, server, resume-time — সব default এ reset।
+- একই series-এর ভিতরে episode change হলে: quality/language/server preserve, কিন্তু time reset।
 
-### 1. Pages & Routes Remove (App.tsx থেকে)
-- `PremiumRequired.tsx` — delete
-- `PremiumBuyPage.tsx` — delete
-- `FreePremium.tsx` (coin ad-flow page) — delete
-- `Unlock.tsx` / `UnlockRequired.tsx` — delete
-- App.tsx থেকে সব premium/unlock/free-premium routes সরানো
+### ২) Control-panel Next button fix
+Player-এর "Next" button-এর handler এখন internal state (currentTime, quality) carry করে ফেলছে। নিচের episode-bar এর মতো একই `handleEpisodeChange(nextIndex, { reset: true })` route দিয়ে চালানো হবে যাতে time/quality reset হয়।
 
-### 2. Admin Panel থেকে Remove
-- `src/components/admin/PremiumCenter.tsx` — delete
-- Admin.tsx এর `premium-center` section, sidebar entry, lazy import — সরানো
-- Episode Lock Tab (RS lock UI) — সরানো
-- Premium Device Limits section — সরানো
-- bKash payment auto-activate premium logic — সরানো (payment request থাকলে থাকবে, কিন্তু premium activate করবে না)
-- Server URL locked/premium toggle button — সরানো
+### ৩) "Link expired" false-positive (AN)
+`VideoPlayer.tsx` এর expire-detection এখন সব ধরনের HLS error কে expire ধরে নিচ্ছে। শুধু নিচের ক্ষেত্রে expire দেখানো হবে:
+- HTTP 403/410 response, বা
+- Manifest এ `EXT-X-ENDLIST` না থাকা + `fatal networkError` + URL এ expiry-token query param থাকা।
+বাকিসব error এ silent retry + fallback server।
 
-### 3. Profile Page থেকে Remove
-- `usePremium` hook usage
-- Premium tab / panel পুরাটা
-- Premium expiry, coin wallet, device count UI
-- "Pause/Restore premium" button
-- Premium status listener (`users/{uid}/premium` subscribe)
+### ৪) EasyRouter path গুলো ঠিক করা
+`src/components/admin/CloudflareManager.tsx` এ EasyRouter save করার সময় path key mismatch হচ্ছে:
+- AN Fetch → `an-fetch` এর বদলে কোথাও `anFetch` লেখা।
+- AN Playback → একই সমস্যা।
+সব path কে একটা `ROUTE_KEYS` constant এ centralize করা হবে (`an-fetch`, `an-playback`, `video-proxy`, `rs-server-1`, `rs-server-2`)। User-saved URL থাকলে ওইটা, না হলে default fallback — এই priority strict রাখা হবে। Runtime resolver-ও একই key ব্যবহার করবে।
 
-### 4. Library Files Delete
-- `src/lib/premiumAccess.ts`
-- `src/lib/premiumDevice.ts`
-- `src/lib/unlockAccess.ts`
-- `src/lib/freeAccessDevice.ts`
-- `src/hooks/usePremium.ts`
+### ৫) RS Free Server 2 বন্ধ
+মূল কারণ #৪ এর path mismatch। Fix হলেই চলা শুরু হবে। সাথে health-check ping যোগ করে dead server auto-mark হবে।
 
-### 5. Content Playback (Auto-Unlock)
-- `useSelectedAnimeSalt.ts` — `premium` / `premiumEpisodes` fields ignore
-- `Index.tsx` — premium/unlock gate check বাদ, সরাসরি play
-- `VideoPlayer.tsx` — premium download restriction বাদ, সবাই download করতে পারবে
-- `AnimeCard.tsx` / poster cards — Premium badge/lock icon সরানো
+### ৬) Server Ultra-Optimization (download-like playback)
+`SaltPlayer.tsx` / `VideoPlayer.tsx` এর hls.js config aggressive tune:
+```
+maxBufferLength: 60
+maxMaxBufferLength: 600
+maxBufferSize: 200 * 1000 * 1000   // 200MB
+backBufferLength: 90
+lowLatencyMode: false
+enableWorker: true
+startLevel: -1                      // auto based on bandwidth
+abrEwmaDefaultEstimate: 5_000_000
+fragLoadingMaxRetry: 6
+manifestLoadingMaxRetry: 4
+liveSyncDurationCount: 3
+```
+Edge functions (`video-proxy`, `rs-server-*`) এ:
+- `Cache-Control: public, max-age=3600, immutable` fragment এর জন্য।
+- `Accept-Ranges: bytes` + proper 206 partial response।
+- Upstream fetch এ `keepalive: true` + connection pooling।
+- Response body direct pipe (no full buffering) — memory pressure কমাবে multi-user এ।
 
-### 6. Mapper & Data Layer
-- `firebaseAnimeMapper.ts` / `adminContentIndex.ts` — premium metadata preserve logic সরানো (harmless কিন্তু cleanup)
-- `animeData.ts` — premium flags সরানো
+### Technical details
+Files to edit:
+- `src/components/VideoPlayer.tsx` — series-change reset, next-button fix, expire logic, hls config
+- `src/components/SaltPlayer.tsx` — hls config
+- `src/components/admin/CloudflareManager.tsx` — ROUTE_KEYS centralization
+- Router resolver hook (find via grep) — key alignment
+- `supabase/functions/video-proxy/index.ts` + RS server functions — streaming/range/cache headers
 
-### 7. Ads & Support
-- `AdsterraAdManager.tsx` / `adsterraAds.ts` — coin-collection related ad flow সরানো (Adsterra config admin এ থাকলে থাকতে পারে, শুধু premium tie-in বাদ)
-- LiveSupportChat, About, Privacy pages এ premium mention সরানো
-
-### 8. Verify
-- Build check করে ensure হবে কোন import error নাই
-- `/`, `/admin`, `/profile` routes load হয় কিনা test
-
-### Result
-সব anime/movie/episode সবার জন্য free, download button সবার জন্য visible, কোনো coin/ad-gate নাই, Admin panel থেকে Premium tab পুরাটা গায়েব।
+### কোন কিছু নষ্ট হবে না — safety
+- Legacy saved URL গুলো backward-compatible key map দিয়ে read হবে।
+- Existing episode bar behavior অপরিবর্তিত।
+- Premium/free server default logic টাচ হবে না, শুধু cross-series reset যোগ।
