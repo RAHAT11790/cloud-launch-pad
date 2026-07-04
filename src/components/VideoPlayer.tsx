@@ -169,12 +169,11 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   const isHttp = isInsecureHttpSource(url);
   const isHttpLike = /^https?:\/\//i.test(url);
   // Admin-configured proxy (from Firebase settings). Optional — only used when
-  // the user opts in via preferProxy, or as a rescue for insecure http URLs.
+  // available. When configured, route both HTTP and HTTPS through it so browser
+  // network never requests RS media hosts directly.
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (preferProxy && customProxyCandidate) {
-    // User explicitly opted into the admin custom proxy (e.g. Live TV toggle).
+  if (customProxyCandidate) {
     addCandidate(customProxyCandidate);
-    if (!isHttp) addCandidate(url);
     return candidates;
   }
 
@@ -186,7 +185,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
-  // https:// URL — play direct. No forced proxy, ever.
+  // https:// URL without an admin proxy — only then play direct.
   addCandidate(url);
   return candidates;
 };
@@ -499,8 +498,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (u.protocol === "http:" || u.protocol === "https:") origins.add(u.origin);
       } catch {}
     };
-    addOrigin(src);
-    effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
+    // Do not preconnect to raw RS media hosts when an admin proxy is active —
+    // that leaks source domains in the Network panel and bypasses the router.
+    if (proxyUrl) addOrigin(proxyUrl);
+    else {
+      addOrigin(src);
+      effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
+    }
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -518,7 +522,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     };
-  }, [effectiveVideoServers, src]);
+  }, [effectiveVideoServers, proxyUrl, src]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
