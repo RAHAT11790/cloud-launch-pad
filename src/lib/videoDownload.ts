@@ -159,10 +159,9 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   // from the user's own IP/session. Only route http:// or already-proxied links
   // through the download proxy to avoid mixed-content blocks.
   const preferDirect = false;
-  const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
-  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || (directUrl?.startsWith("https://") ? directUrl : null));
+  const finalUrl = proxiedUrl;
   if (!finalUrl) {
     toast.error("Download service is unavailable");
     return false;
@@ -182,9 +181,8 @@ export function triggerBulkBackgroundDownloads(
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
       const preferDirect = false;
-      const direct = buildDirectDownloadUrl(u);
       const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
-      const final = preferDirect ? (direct || proxied) : (proxied || direct);
+      const final = proxied;
       return final ? { final, fn } : null;
     })
     .filter((x): x is { final: string; fn: string } => !!x);
