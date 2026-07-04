@@ -3038,7 +3038,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // range before metadata lands, which is the main Server 1 buffering trigger
     // on low phones. Users can still switch quality manually after playback starts.
     const autoStartQuality = !preservedQuality && !isAnimeSaltContent
-      ? nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
       ? nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
         || nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
         || null
