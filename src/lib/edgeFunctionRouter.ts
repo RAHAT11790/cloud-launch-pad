@@ -139,6 +139,23 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
   }
 }
 
+export function isBackendFunctionUrl(rawUrl: string): boolean {
+  const value = String(rawUrl || "").trim();
+  if (!/^https?:\/\//i.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return /\.supabase\.co$/i.test(url.hostname) && /\/functions\/v1\//i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): string {
+  const base = String(baseUrl || "").trim().replace(/\/+$/, "");
+  if (!base || !/^https?:\/\//i.test(base)) return "";
+  return normalizeFunctionEndpointUrl(fnName, `${base}/${fnName}`);
+}
+
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
 function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
@@ -183,20 +200,31 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     }
   }
 
-  // Check per-function override from Firebase
+  const config = await getEdgeRouterConfig();
+  const selfHostedFromBase = buildSelfHostedFunctionUrl(fnName, config.cloudflareBaseUrl || config.denoBaseUrl || "");
+
+  // Check per-function override from Firebase. For self-deployed media/router
+  // functions, a stale Lovable-hosted default must not win over the configured
+  // Cloudflare/Deno base; otherwise Network shows the backend path instead of
+  // the admin's deployed route.
   try {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
     const customUrl = String(override?.customUrl || override?.url || "").trim();
-    if (customUrl && override?.enabled !== false) return normalizeFunctionEndpointUrl(fnName, customUrl);
+    if (customUrl && override?.enabled !== false) {
+      const normalized = normalizeFunctionEndpointUrl(fnName, customUrl);
+      if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && isBackendFunctionUrl(normalized) && selfHostedFromBase) {
+        return selfHostedFromBase;
+      }
+      return normalized;
+    }
   } catch {}
 
   // User-deployable functions must stay under admin control. They only route to
   // a custom/default URL when the EGD Router row is explicitly saved, or when a
   // legacy Edge Router base URL is configured below.
 
-  const config = await getEdgeRouterConfig();
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
   if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));

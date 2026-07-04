@@ -45,7 +45,7 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
-import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { buildSelfHostedFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
@@ -663,6 +663,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setPlaybackRouteReady(true);
 
     let cancelled = false;
+    let routerBase = "";
+    let overrideRaw: any = null;
+
+    const applyProxyRoute = () => {
+      if (cancelled) return;
+      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
+      const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
+      const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
+      const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
+      const finalUrl = enabled
+        ? (isBackendFunctionUrl(overrideUrl) && selfHostedUrl ? selfHostedUrl : overrideUrl)
+        : selfHostedUrl;
+      setProxyUrl(finalUrl);
+      setProxyApiKey('');
+      try {
+        if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
+        else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
+      } catch {}
+    };
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
@@ -674,20 +693,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       if (cancelled) return;
-      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
-      const raw = snap.val();
-      const url = normalizeFunctionEndpointUrl("video-proxy", String(raw?.customUrl || raw?.url || "").trim());
-      const enabled = Boolean(url) && raw?.enabled !== false;
-      const finalUrl = enabled ? url : "";
-      setProxyUrl(finalUrl);
-      setProxyApiKey('');
-      try {
-        if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
-        else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
-      } catch {}
+      overrideRaw = snap.val();
+      applyProxyRoute();
     });
 
-    return () => { cancelled = true; unsub1(); unsub2(); };
+    const unsub3 = onValue(ref(db, "settings/edgeRouter"), (snap) => {
+      const v = snap.val() || {};
+      routerBase = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
+      applyProxyRoute();
+    });
+
+    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
