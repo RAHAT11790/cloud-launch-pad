@@ -191,25 +191,6 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   document.body.removeChild(link);
 }
 
-function openDownloadViaIframe(finalUrl: string) {
-  try {
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    iframe.src = finalUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      try { document.body.removeChild(iframe); } catch {}
-    }, 10_000);
-  } catch {
-    const link = document.createElement("a");
-    link.href = finalUrl;
-    link.rel = "noopener noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-}
-
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) {
