@@ -1,6 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v5 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + prefetch. REDEPLOY REQUIRED.
+// 🆕 NEW v6 (2026-07-04) — RS LIGHTSPEED: 1MB check size cap for smooth skip. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
@@ -22,7 +22,10 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
+// 1 MB "check size" — cap for open-ended byte-range requests so RS server does
+// not stream huge windows into low-end phones. Small chunks make skip land fast
+// (browser can throw away tiny buffers immediately) and reduce mobile stalls.
+const MEDIA_CHUNK_BYTES = 1 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -96,13 +99,21 @@ function buildUpstreamCandidates(target: URL): URL[] {
 }
 
 
-function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
-  // Do NOT rewrite browser Range requests. The previous 8MB-aligned window
-  // optimization returned a different Content-Range start than Chromium asked
-  // for (especially when it probes MP4 metadata near EOF), so the upstream sent
-  // 206 but the native <video> element still raised MEDIA_ERR_SRC_NOT_SUPPORTED.
-  // Exact pass-through is the reliable path for playback and seeking.
-  return { range, windowStart: null };
+function alignMediaRange(range: string | null, _upstreamUrl: URL): { range: string | null; windowStart: number | null } {
+  // Exact pass-through for closed ranges (browser knows exactly what it wants —
+  // e.g. moov/MP4 metadata probes near EOF). Only cap OPEN-ENDED ranges like
+  // "bytes=1234-" down to a 1MB slice so RS server does not fire-hose a huge
+  // window into a low-end phone. This keeps skip snappy: each seek only pulls
+  // a 1MB slab, and the native <video> element requests the next slab as it
+  // plays. No Content-Range rewriting on our side — upstream returns its own
+  // matching 206 and Chromium accepts it cleanly.
+  if (!range) return { range, windowStart: null };
+  const match = range.match(/^bytes=(\d+)-\s*$/i);
+  if (!match) return { range, windowStart: null };
+  const start = Number(match[1]);
+  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
+  const end = start + MEDIA_CHUNK_BYTES - 1;
+  return { range: `bytes=${start}-${end}`, windowStart: start };
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
