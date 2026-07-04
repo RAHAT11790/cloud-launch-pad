@@ -41,14 +41,10 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-// Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
-
-const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -671,8 +667,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let cancelled = false;
     let routerBase = "";
     let overrideRaw: any = null;
-    let siblingWorkerUrl = "";
-
     const applyProxyRoute = () => {
       if (cancelled) return;
       if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
