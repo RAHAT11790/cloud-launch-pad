@@ -5,7 +5,7 @@ interface CategoryPillsProps {
 }
 
 const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => {
-  const uniqueCategories = categories.filter((cat, index) => Boolean(cat) && categories.indexOf(cat) === index);
+  const visibleCategories = categories.filter(Boolean);
 
   return (
     <div data-no-swipe="true" className="flex gap-2 overflow-x-auto px-4 py-4 no-scrollbar" style={{ touchAction: "pan-x pan-y" }}>
@@ -23,7 +23,7 @@ const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => 
       >
         All
       </button>
-      {uniqueCategories.map((cat, index) => (
+      {visibleCategories.map((cat, index) => (
         <button
           key={`${cat}-${index}`}
           onClick={() => onSelect(cat)}

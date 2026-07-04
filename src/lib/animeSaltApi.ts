@@ -1,10 +1,85 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
-import { db, ref, get } from '@/lib/firebase';
 
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
 const FETCH_TIMEOUT_MS = 12_000;
+const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|courage\s*the\s*cowardly|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|rio|moana|tangled|how\s*to\s*train\s*your\s*dragon|avatar\s*the\s*last\s*airbender|sponge\s*bob|nickelodeon|cartoon\s*network|disney|pixar|tintin|tin\s*tin|jurassic\s*world|sausage\s*party|maya\s*and\s*the\s*three|hazbin\s*hotel|captain\s*laserhawk|invincible|zig\s*and\s*sharko|twilight\s*of\s*the\s*gods|arcane|jentry\s*chau|vox\s*machina|dragon\s*prince|castlevania)\b/i;
+const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan|solo\s*leveling)\b/i;
+
+export const isAnimeSaltAllowedAnime = (item: { title?: string; slug?: string }) => {
+  const blob = `${item?.title || ''} ${item?.slug || ''}`.replace(/[-_]+/g, ' ').toLowerCase();
+  if (!blob.trim()) return false;
+  if (ANIME_ALLOW_RE.test(blob)) return true;
+  return !CARTOON_BLOCK_RE.test(blob);
+};
+
+const filterAnimeOnly = <T extends { title?: string; slug?: string }>(items: T[]) => (Array.isArray(items) ? items.filter(isAnimeSaltAllowedAnime) : []);
+
+// LocalStorage-first + Firebase-backed cache for AnimeSalt API responses.
+// Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
+const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
+const CACHE_TTL_PLAYBACK_MS = 4 * 60 * 60 * 1000;      // 4 hours — playback links generally last several hours
+const AN_CACHE_PREFIX = 'rs_an_cache_v9_codecs_playback';
+const memCache = new Map<string, { ts: number; data: any }>();
+
+// ===== In-flight request dedupe =====
+// Multiple cards/components hitting the same slug at once collapse to one fetch.
+const inflight = new Map<string, Promise<any>>();
+function dedupe<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<T>;
+  const p = fn().finally(() => { inflight.delete(key); });
+  inflight.set(key, p);
+  return p;
+}
+
+// ===== Retry with exponential backoff =====
+async function withRetry<T>(label: string, fn: () => Promise<T>, tries = 3, baseDelay = 400): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (e) {
+      lastErr = e;
+      if (i < tries - 1) await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(`${label} failed`);
+}
+
+const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
+
+async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, ttl: number, forceRefresh = false): Promise<any | null> {
+  if (forceRefresh) return null;
+  const key = `${kind}:${slug}`;
+  const mem = memCache.get(key);
+  const now = Date.now();
+  if (mem && now - mem.ts < ttl) return mem.data;
+  try {
+      const raw = localStorage.getItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`);
+    if (raw) {
+      const val = JSON.parse(raw);
+      if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
+        memCache.set(key, { ts: Number(val.ts), data: val.data });
+        return val.data;
+      }
+      localStorage.removeItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`);
+    }
+  } catch {}
+  return null;
+}
+
+function clearAsCache(kind: 'series' | 'movie' | 'episode', slug: string) {
+  const key = `${kind}:${slug}`;
+  memCache.delete(key);
+  try { localStorage.removeItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`); } catch {}
+}
+
+function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: any) {
+  const ts = Date.now();
+  const key = `${kind}:${slug}`;
+  memCache.set(key, { ts, data });
+  try { localStorage.setItem(`${AN_CACHE_PREFIX}:${sanitizeKey(key)}`, JSON.stringify({ ts, data })); } catch {}
+}
 
 type AnimeSaltLink = { quality: string; url: string };
 
@@ -95,9 +170,25 @@ const isPlaybackCandidate = (value: string) => {
 const pickPlaybackFields = (payload: any) => {
   const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
   const rawEmbedUrls = Array.isArray(payload?.embedUrls) ? payload.embedUrls : [];
+  const sourceLinks = Array.isArray(payload?.sources)
+    ? payload.sources.flatMap((source: any) => {
+        const streams = Array.isArray(source?.streams) ? source.streams : [];
+        return [
+          source?.master,
+          source?.videoSource,
+          source?.securedLink,
+          source?.embed,
+          ...streams.map((stream: any) => ({
+            quality: stream?.label || stream?.quality || (stream?.height ? `${stream.height}p` : undefined),
+            url: stream?.url,
+          })),
+        ];
+      })
+    : [];
   const collected = normalizeLinkList([
     ...rawLinks,
     ...rawEmbedUrls,
+    ...sourceLinks,
     payload?.embedUrl,
     payload?.movieEmbedUrl,
     payload?.directUrl,
@@ -157,65 +248,103 @@ const parseMeta = (html: string) => {
   };
 };
 
-/** Get AnimeSalt proxy URL - checks custom URL first, then edge router */
+/** Get AnimeSalt proxy URL from the EGD Router only. */
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
-  try {
-    const snap = await get(ref(db, 'settings/animesaltConfig'));
-    const val = snap.val();
-    if (val?.enabled !== false && val?.customUrl) return val.customUrl;
-    if (val?.enabled === false) throw new Error('AnimeSalt বন্ধ আছে। Admin Panel থেকে চালু করুন।');
-  } catch (e: any) {
-    if (e.message?.includes('বন্ধ')) throw e;
-  }
+  const proxyUrl = (await getAnimeSaltProxyUrls())[0] || '';
+  const normalized = normalizeAnApiBaseUrl(proxyUrl);
+  if (!normalized) throw new Error('AN API URL is not saved/enabled in EGD Router.');
+  return normalized;
+};
 
-  try {
-    const overrideSnap = await get(ref(db, 'settings/functionOverrides/animesalt'));
-    const override = overrideSnap.val();
-    if (override?.customUrl) return override.customUrl;
-    if (override?.enabled === false) throw new Error('AnimeSalt ফাংশন বন্ধ আছে।');
-  } catch (e: any) {
-    if (e.message?.includes('বন্ধ')) throw e;
-  }
+const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
+  const fallback = String((import.meta as any)?.env?.VITE_SUPABASE_URL || '').trim()
+    ? `${String((import.meta as any).env.VITE_SUPABASE_URL).replace(/\/$/, '')}/functions/v1/an-api`
+    : '';
+  // Prefer the bundled Lovable Cloud function exclusively when available. A
+  // stale EGD/custom AN URL can still exist in settings; hitting it after the
+  // bundled function succeeds creates noisy 500/RUNTIME_ERROR alerts in preview.
+  if (fallback) return [ensureAnApiFunctionUrl(fallback)].filter(Boolean);
+  const configured = await getEdgeFunctionUrl('an-api').catch(() => '');
+  // Use the app's bundled Supabase function first. It is the version that
+  // matches this codebase; a stale EGD/custom URL is the usual cause of the
+  // Admin "Failed to fetch" button error.
+  return Array.from(new Set([fallback, configured].map(ensureAnApiFunctionUrl).filter(Boolean)));
+};
 
-  const proxyUrl = await getEdgeFunctionUrl('animesalt');
-  if (!proxyUrl) throw new Error('AnimeSalt endpoint not configured. Set Base URL or Custom URL in Admin Panel.');
-  return proxyUrl;
+const normalizeAnApiBaseUrl = (value: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    url.search = '';
+    url.hash = '';
+    const endpointNames = new Set(['raw', 'search', 'anime', 'episode', 'embed', 'hls', 'subs', 'series', 'movies', 'movie']);
+    const parts = url.pathname.split('/').filter(Boolean);
+    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+    url.pathname = `/${parts.join('/')}`.replace(/\/+$/, '');
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs|series|movies|movie)(?:\?.*)?$/i, '').replace(/\/+$/, '');
+  }
+};
+
+const ensureAnApiFunctionUrl = (value: string): string => {
+  const normalized = normalizeAnApiBaseUrl(value);
+  if (!normalized) return '';
+  try {
+    const url = new URL(normalized);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const functionsIdx = parts.findIndex((part, idx) => part === 'functions' && parts[idx + 1] === 'v1');
+    if (functionsIdx >= 0) {
+      const fnIdx = functionsIdx + 2;
+      if (!parts[fnIdx]) {
+        parts[fnIdx] = 'an-api';
+      }
+      url.pathname = `/${parts.join('/')}`;
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {}
+  return normalized;
 };
 
 const fetchPage = async (url: string): Promise<string> => {
-  const proxyUrl = await getAnimeSaltProxyUrl();
-  let res = await fetchWithTimeout(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
+  const proxyUrls = await getAnimeSaltProxyUrls();
+  let lastError: any = null;
 
-  let data: any;
-  if (res.ok) {
-    data = await res.json();
-    if (data.success && data.html) return data.html;
+  // Important: do NOT call `/raw?url=...` from the app. The AN API contract
+  // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
+  // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
+  // which produced the reported invalid runtime path:
+  //   supabase/functions/raw?url=https://animesalt.ac/episode/.../index.ts
+  // Keep the raw HTML fallback only through the backwards-compatible POST
+  // shape supported by our deployable `an-api` source, never as a GET path.
+  for (const proxyUrl of proxyUrls) {
+    try {
+      const res = await fetchWithTimeout(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
+      const data = await res.json();
+      if (data.success && data.html) return data.html;
+      lastError = new Error('No HTML returned from AnimeSalt proxy');
+    } catch (err) {
+      lastError = err;
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
+};
 
-  const isMoviesPage = url.includes('/movies');
-  const isEpisodePage = url.includes('/episode/');
-  const pageMatch = url.match(/\/page\/(\d+)/);
-  const slugMatch = url.match(/\/(series|movies|episode)\/([^/?#]+)/);
-
-  let fallbackBody: any;
-  if (isEpisodePage && slugMatch) fallbackBody = { action: 'episode', slug: slugMatch[2] };
-  else if (slugMatch && !pageMatch) fallbackBody = { action: slugMatch[1] === 'series' ? 'series' : 'movie', slug: slugMatch[2] };
-  else fallbackBody = { action: 'browse', type: isMoviesPage ? 'movies' : 'series', page: pageMatch ? parseInt(pageMatch[1], 10) : 1 };
-
-  res = await fetchWithTimeout(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fallbackBody),
-  });
-
-  if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
-  data = await res.json();
-  if (data.success && data.html) return data.html;
-  throw new Error('No HTML returned from AnimeSalt proxy');
+const parseMaxPage = (html: string, type: 'series' | 'movies'): number => {
+  const nums = [1];
+  const pageRe = new RegExp(`/${type}/page/(\\d+)/`, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = pageRe.exec(html))) nums.push(Number(m[1]));
+  const titleM = html.match(/Page\s+\d+\s+of\s+(\d+)/i);
+  if (titleM) nums.push(Number(titleM[1]));
+  return Math.max(...nums.filter((n) => Number.isFinite(n) && n > 0));
 };
 
 const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string; language?: string; episodeCount?: number }[] => {
@@ -247,12 +376,12 @@ const parseListPage = (html: string): { slug: string; title: string; poster: str
     const match = href.match(/\/(series|movies)\/([^/?#]+)/i);
     if (!match) return;
     const slug = match[2];
-    if (!slug || seen.has(slug)) return;
+    if (!slug || ['page', 'feed', 'wp-json', 'category', 'tag', 'author'].includes(slug.toLowerCase()) || seen.has(slug)) return;
 
     const card = anchor.closest('article, li, .item, .poster, .bs, .ml-item, .anime-card') || anchor;
     const title =
       decodeHtml(anchor.getAttribute('title') || '') ||
-      decodeHtml((anchor.querySelector('img')?.getAttribute('alt') || '')) ||
+      decodeHtml((anchor.querySelector('img')?.getAttribute('alt') || '')).replace(/^Image\s+/i, '') ||
       getText(card, ['h1', 'h2', 'h3', 'h4', '.entry-title', '.title']) ||
       slug.replace(/-/g, ' ');
     const poster =
@@ -368,22 +497,39 @@ const parsePlaybackPage = (html: string) => {
 };
 
 /** Try direct API call first, supporting both nested and top-level response formats */
-const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
+const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): Promise<any | null> => {
+  const proxyUrls = Array.from(new Set([proxyUrl, ...(await getAnimeSaltProxyUrls())].map(ensureAnApiFunctionUrl).filter(Boolean)));
+  for (const candidate of proxyUrls) {
   try {
-    const res = await fetchWithTimeout(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const base = normalizeAnApiBaseUrl(candidate);
+    let endpoint = '';
+    const refreshParam = forceRefresh ? `&force=1&_=${Date.now()}` : '';
+    if (body.action === 'browse') {
+      const type = body.type === 'movies' ? 'movies' : 'series';
+      const sep = refreshParam ? refreshParam.replace(/^&/, '&') : '';
+      endpoint = `${base}/${type}?page=${encodeURIComponent(String(body.page || 1))}${sep}`;
+    } else if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}${refreshParam}`;
+    else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series${refreshParam}`;
+    else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies${refreshParam}`;
+    else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}${refreshParam}`;
+    else return null;
+    const res = await fetchWithTimeout(endpoint);
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data?.success) return null;
+    if (Array.isArray(data)) return { items: data };
+    if (data?.error) return null;
     if (data.data) return data.data;
-    if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
+    if (data.html && body.action === 'browse') {
+      const browseType = body.type === 'movies' ? 'movies' : 'series';
+      return { items: parseListPage(String(data.html)), maxPage: parseMaxPage(String(data.html), browseType), currentPage: body.page || 1 };
+    }
+    if (data.items) return { items: filterAnimeOnly(data.items), maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
   } catch {
-    return null;
+    // Try the next configured/fallback AN API endpoint.
   }
+  }
+  return null;
 };
 
 const normalizeSeriesPayload = (payload: any) => {
@@ -438,62 +584,139 @@ export const animeSaltApi = {
 
     const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
     const html = await fetchPage(url);
-    return { success: true, items: parseListPage(html) };
+    return { success: true, items: filterAnimeOnly(parseListPage(html)) };
   },
 
-  async browseAll() {
+  async browseAll(maxPagesOrForce: number | boolean = 40, forceRefresh = false) {
+    const maxPages = typeof maxPagesOrForce === 'number' ? maxPagesOrForce : 40;
+    const force = typeof maxPagesOrForce === 'boolean' ? maxPagesOrForce : forceRefresh;
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const [seriesDirect, moviesDirect] = await Promise.all([
-      tryDirectApi(proxyUrl, { action: 'browse', type: 'series', page: 1 }),
-      tryDirectApi(proxyUrl, { action: 'browse', type: 'movies', page: 1 }),
-    ]);
 
-    const sItems = (seriesDirect?.items || []).map((it: any) => ({ ...it, type: 'series' }));
-    const mItems = (moviesDirect?.items || []).map((it: any) => ({ ...it, type: 'movies' }));
-    if (sItems.length || mItems.length) return { success: true, items: [...sItems, ...mItems] };
+    const fetchType = async (type: 'series' | 'movies') => {
+      const all: any[] = [];
+      const seen = new Set<string>();
+      const CONCURRENCY = 6;
+      const addItems = (items: any[]) => {
+        let added = 0;
+        for (const it of items) {
+          const slug = String(it?.slug || '').trim();
+          if (!slug || seen.has(slug)) continue;
+          seen.add(slug);
+          const next = { ...it, type };
+          if (!isAnimeSaltAllowedAnime(next)) continue;
+          all.push(next);
+          added++;
+        }
+        return added;
+      };
+      const getPage = async (page: number): Promise<{ items: any[]; maxPage?: number }> => {
+        try {
+          const direct = await tryDirectApi(proxyUrl, { action: 'browse', type, page }, force);
+          let items = direct?.items as any[] | undefined;
+          let maxPage = Number(direct?.maxPage || 0) || undefined;
+          if (!items || !items.length) {
+            const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
+            const html = await fetchPage(url).catch(() => '');
+            items = html ? parseListPage(html) : [];
+            maxPage = html ? parseMaxPage(html, type) : maxPage;
+          }
+          return { items: items || [], maxPage };
+        } catch {
+          return { items: [] };
+        }
+      };
 
-    const [seriesHtml, moviesHtml] = await Promise.all([
-      fetchPage(`${ANIMESALT_BASE}/series/`),
-      fetchPage(`${ANIMESALT_BASE}/movies/`),
-    ]);
-    const sParsed = parseListPage(seriesHtml).map((it) => ({ ...it, type: 'series' }));
-    const mParsed = parseListPage(moviesHtml).map((it) => ({ ...it, type: 'movies' }));
-    return { success: true, items: [...sParsed, ...mParsed] };
+      const first = await getPage(1);
+      addItems(first.items);
+      const targetMax = Math.min(maxPages, Math.max(1, Number(first.maxPage || maxPages)));
+      const pages = Array.from({ length: Math.max(0, targetMax - 1) }, (_, i) => i + 2);
+      for (let i = 0; i < pages.length; i += CONCURRENCY) {
+        const batch = pages.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(getPage));
+        results.forEach((result) => addItems(result.items));
+      }
+      return all;
+    };
+
+    const [sItems, mItems] = await Promise.all([fetchType('series'), fetchType('movies')]);
+    return { success: true, items: filterAnimeOnly([...sItems, ...mItems]) };
   },
 
-  async getSeries(slug: string) {
-    const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug });
-    if (directResult) {
-      const normalized = normalizeSeriesPayload(directResult);
-      if (normalized.seasons.length > 0) return { success: true, data: normalized };
+  async getSeries(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('series', slug);
+    const cached = await readAsCache('series', slug, CACHE_TTL_SERIES_MS, forceRefresh);
+    if (cached) return { success: true, data: cached, cached: true };
+
+    return dedupe(`series:${slug}`, () => withRetry(`getSeries(${slug})`, async () => {
+      const proxyUrl = await getAnimeSaltProxyUrl();
+      const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug }, forceRefresh);
+      if (directResult) {
+        const normalized = normalizeSeriesPayload(directResult);
+          if (normalized.seasons.length > 0) {
+          writeAsCache('series', slug, normalized);
+          return { success: true, data: normalized };
+        }
+      }
+      const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
+      const data = parseSeriesDetail(html);
+      if (data?.seasons?.length) writeAsCache('series', slug, data);
+      return { success: true, data };
+    }));
+  },
+
+  async getMovie(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('movie', slug);
+    const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS, forceRefresh);
+    if (cached) {
+      const normalizedCached = normalizePlaybackPayload(cached);
+      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
+        return { success: true, data: normalizedCached, cached: true };
+      }
     }
 
-    const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
-    return { success: true, data: parseSeriesDetail(html) };
+    return dedupe(`movie:${slug}`, () => withRetry(`getMovie(${slug})`, async () => {
+      const proxyUrl = await getAnimeSaltProxyUrl();
+      const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug }, forceRefresh);
+      if (directResult) {
+        const normalized = normalizePlaybackPayload(directResult);
+        if (normalized.embedUrl || normalized.links?.length) {
+          writeAsCache('movie', slug, normalized);
+          return { success: true, data: normalized };
+        }
+      }
+      const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
+      const data = parsePlaybackPage(html);
+      if (data?.embedUrl || data?.links?.length) writeAsCache('movie', slug, data);
+      return { success: true, data };
+    }));
   },
 
-  async getMovie(slug: string) {
-    const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
-    if (directResult) {
-      const normalized = normalizePlaybackPayload(directResult);
-      if (normalized.embedUrl || normalized.links?.length) return { success: true, data: normalized };
+  async getEpisode(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('episode', slug);
+    const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS, forceRefresh);
+    if (cached) {
+      const normalizedCached = normalizePlaybackPayload(cached);
+      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
+        return { success: true, ...normalizedCached, cached: true };
+      }
     }
 
-    const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
-    return { success: true, data: parsePlaybackPage(html) };
-  },
-
-  async getEpisode(slug: string) {
-    const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug });
-    if (directResult) {
-      const normalized = normalizePlaybackPayload(directResult);
-      if (normalized.embedUrl || normalized.links?.length || normalized.allEmbeds?.length) return { success: true, ...normalized };
-    }
-
-    const html = await fetchPage(`${ANIMESALT_BASE}/episode/${slug}/`);
-    return { success: true, ...parsePlaybackPage(html) };
+    return dedupe(`episode:${slug}`, () => withRetry(`getEpisode(${slug})`, async () => {
+      const proxyUrl = await getAnimeSaltProxyUrl();
+      const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug }, forceRefresh);
+      if (directResult) {
+        const normalized = normalizePlaybackPayload(directResult);
+        if (normalized.embedUrl || normalized.links?.length || normalized.allEmbeds?.length) {
+          writeAsCache('episode', slug, normalized);
+          return { success: true, ...normalized };
+        }
+      }
+      const html = await fetchPage(`${ANIMESALT_BASE}/episode/${slug}/`);
+      const parsed = parsePlaybackPage(html);
+      if (parsed?.embedUrl || parsed?.links?.length || parsed?.allEmbeds?.length) {
+        writeAsCache('episode', slug, parsed);
+      }
+      return { success: true, ...parsed };
+    }));
   },
 };

@@ -12,15 +12,14 @@
 // New strategy:
 //   • Parse the admin-saved <script> snippet, recreate real <script>
 //     elements, and append them to a normal <div> inside <body>.
-//   • Adsterra's social-bar / popunder scripts then load and self-mount
-//     their own fixed elements as designed — when they fail (no fill /
-//     blocked / network error) NOTHING is left over to block clicks.
+//   • Player clicks inject both configured placements: Stream/Social/Push link
+//     and One-Click Popunder. No app-level cooldown is applied.
 //   • A MutationObserver tracks every node Adsterra adds to <body> while
 //     the player is open, so when the player closes we can rip every
 //     ad-injected node out (kills leftover social bars, popunder hooks).
 //   • Live config subscription: changes to settings/adsterra in Firebase
 //     are picked up immediately and re-mounted.
-//   • Configurable refresh interval — full teardown + re-inject every N s.
+//   • No timer cooldown: every player tap can request a fresh ad call.
 // ============================================
 import { db, ref, get, onValue } from "@/lib/firebase";
 
@@ -39,22 +38,30 @@ declare global {
     __adsterraCloseButton?: HTMLButtonElement | null;
     __adsterraLastLoadAt?: number;
     __adsterraMountPromise?: Promise<void> | null;
-    __adsterraLastInteractionAt?: number;
+    __adsterraLastPopAt?: number;
+    __adsterraOpenWrapped?: boolean;
+    __adsterraOpenOriginal?: Window["open"];
+    __adsterraPendingPopunderUrl?: string;
+    __adsterraPendingPopunderSnippet?: string;
+    __adsterraGestureBridgeInstalled?: boolean;
+
   }
 }
 
 export type AdsterraConfig = {
   enabled: boolean;
   popunder: string;
-  socialBar: string;
-  refreshIntervalSec: number; // 0 = no refresh
+  streamLink: string;
+  pushNotification: string;
+  refreshIntervalSec: number; // legacy only; player no longer uses cooldown timers
 };
 
 const DEFAULT: AdsterraConfig = {
   enabled: true,
   popunder: "",
-  socialBar: "",
-  refreshIntervalSec: 60,
+  streamLink: "",
+  pushNotification: "",
+  refreshIntervalSec: 50,
 };
 
 let cached: AdsterraConfig | null = null;
@@ -65,10 +72,12 @@ function normalize(v: any): AdsterraConfig {
   return {
     enabled: v?.enabled !== false,
     popunder: typeof v?.popunder === "string" ? v.popunder : "",
-    socialBar: typeof v?.socialBar === "string" ? v.socialBar : "",
-    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 60,
+    streamLink: typeof v?.streamLink === "string" ? v.streamLink : "",
+    pushNotification: typeof v?.pushNotification === "string" ? v.pushNotification : "",
+    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 50,
   };
 }
+
 
 export async function getAdsterraConfig(): Promise<AdsterraConfig> {
   if (cached) return cached;
@@ -97,18 +106,8 @@ export function setAdsterraPremium(p: boolean) {
   if (typeof window !== "undefined") window.__adsterraPremium = !!p;
 }
 
-export function markAdsterraInteractionNow() {
-  if (typeof window === "undefined") return;
-  window.__adsterraLastInteractionAt = Date.now();
-}
-
-export function getAdsterraLastInteractionAt(): number {
-  if (typeof window === "undefined") return 0;
-  return Number(window.__adsterraLastInteractionAt || 0);
-}
-
 function hasSnippets(cfg: AdsterraConfig) {
-  return !!(cfg.popunder.trim() || cfg.socialBar.trim());
+  return !!(cfg.popunder.trim() || cfg.streamLink.trim());
 }
 
 function isOwnedNode(node: Node) {
@@ -139,19 +138,6 @@ function hasVisibleAdNodes() {
 function scheduleRefresh(cfg: AdsterraConfig, baseTs: number) {
   if (typeof window === "undefined") return;
   clearRefreshTimer();
-  if (!window.__adsterraPlayerScopeActive || window.__adsterraPremium) return;
-  if (!cfg.enabled || !hasSnippets(cfg) || cfg.refreshIntervalSec <= 0) return;
-
-  const dueTs = baseTs + cfg.refreshIntervalSec * 1000;
-  const delay = Math.max(0, dueTs - Date.now());
-  window.__adsterraRefreshTimer = window.setTimeout(() => {
-    const lastInteractionAt = getAdsterraLastInteractionAt();
-    if (!lastInteractionAt || Date.now() - lastInteractionAt > 2000) return;
-    const nextCfg = window.__adsterraActiveConfig ?? cfg;
-    mountAdCycle(nextCfg, true).catch(() => {
-      scheduleRefresh(nextCfg, Date.now());
-    });
-  }, delay) as unknown as number;
 }
 
 function dismissVisibleAds(resetTimer = true) {
@@ -209,14 +195,55 @@ function ensureContainer(): HTMLDivElement {
   const div = document.createElement("div");
   div.setAttribute("data-adsterra-root", "true");
   div.dataset.adsterraOwned = "true";
-  div.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;left:-9999px;top:-9999px";
+  div.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;pointer-events:none;z-index:2147483000";
   document.body.appendChild(div);
   window.__adsterraContainer = div;
   return div;
 }
 
+function removeNotificationLikeNode(node: HTMLElement | null) {
+  if (!node || !(node instanceof HTMLElement) || !node.isConnected) return;
+  if (isOwnedNode(node)) return;
+}
+
+function installPopunderThrottle() {
+  if (typeof window === "undefined") return;
+  if (window.__adsterraOpenWrapped) return;
+  window.__adsterraOpenWrapped = true;
+  const origOpen = window.open?.bind(window);
+  if (!origOpen) return;
+  window.__adsterraOpenOriginal = origOpen as typeof window.open;
+  window.open = function (url?: string | URL, target?: string, features?: string): Window | null {
+    try {
+      const urlStr = String(url ?? "");
+      // Treat empty / same-origin / hash links as legitimate app navigation.
+      const isAppUrl =
+        !urlStr ||
+        urlStr.startsWith("#") ||
+        urlStr.startsWith("/") ||
+        urlStr.startsWith("mailto:") ||
+        urlStr.startsWith("tel:") ||
+        urlStr.startsWith(location.origin);
+      if (!isAppUrl) window.__adsterraLastPopAt = Date.now();
+    } catch {}
+    return origOpen(url as any, target as any, features as any);
+  } as typeof window.open;
+}
+
+function triggerPopunderUrl(url: string) {
+  if (typeof window === "undefined") return;
+  const clean = String(url || "").trim();
+  if (!clean) return;
+  try {
+    window.__adsterraLastPopAt = Date.now();
+    const opener = window.__adsterraOpenOriginal || window.open;
+    opener?.(clean, "_blank", "noopener,noreferrer");
+  } catch {}
+}
+
 function startObserver() {
   if (typeof window === "undefined") return;
+
   if (window.__adsterraObserver) return;
   if (!window.__adsterraTrackedNodes) window.__adsterraTrackedNodes = new Set();
   const tracked = window.__adsterraTrackedNodes!;
@@ -233,10 +260,12 @@ function startObserver() {
         const parent = (node as Node).parentNode;
         if (parent === document.body || parent === document.documentElement || parent === document.head) {
           tracked.add(node);
+          window.setTimeout(() => removeNotificationLikeNode(node as HTMLElement), 80);
         }
       });
     }
   });
+
   obs.observe(document.documentElement, { childList: true, subtree: true });
   window.__adsterraObserver = obs;
 }
@@ -259,6 +288,33 @@ function removeTrackedNodes() {
   tracked.clear();
 }
 
+function removeKnownAdResidue() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const shouldSkip = (el: HTMLElement) => {
+    if (el.id === "root") return true;
+    if (el.closest("[data-sonner-toaster], [data-radix-portal], [data-vaul-drawer]") || el.matches("[data-sonner-toaster], [data-radix-portal], [data-vaul-drawer]")) return true;
+    return false;
+  };
+  const looksLikeAd = (el: HTMLElement) => {
+    const fingerprint = `${el.id || ""} ${el.className || ""} ${el.getAttribute("data-zone") || ""} ${el.getAttribute("data-cfasync") || ""}`.toLowerCase();
+    if (/adsterra|social.?bar|popunder|invoke|atcontainer|ads?[-_]/i.test(fingerprint)) return true;
+    if (el.querySelector('script[src*="adsterra"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], iframe[src*="adsterra"], iframe[src*="highperformanceformat"], iframe[src*="profitabledisplaynetwork"]')) return true;
+    try {
+      const cs = window.getComputedStyle(el);
+      const zi = Number.parseInt(cs.zIndex || "0", 10);
+      if (cs.position === "fixed" && zi >= 10000 && (el.querySelector("iframe") || /ad|banner|pop|social/i.test(fingerprint))) return true;
+    } catch {}
+    return false;
+  };
+
+  Array.from(document.body.children).forEach((node) => {
+    if (!(node instanceof HTMLElement) || shouldSkip(node)) return;
+    if (isOwnedNode(node) || looksLikeAd(node)) {
+      try { node.remove(); } catch {}
+    }
+  });
+}
+
 function clearRefreshTimer() {
   if (typeof window === "undefined") return;
   if (window.__adsterraRefreshTimer) {
@@ -270,6 +326,12 @@ function clearRefreshTimer() {
 function injectSnippet(snippet: string, container: HTMLElement) {
   const trimmed = (snippet || "").trim();
   if (!trimmed) return [] as Promise<void>[];
+
+  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) {
+    triggerPopunderUrl(trimmed);
+    return [] as Promise<void>[];
+  }
+
   const tmp = document.createElement("div");
   tmp.innerHTML = trimmed;
 
@@ -320,6 +382,41 @@ function clearContainer() {
   }
 }
 
+function extractDirectUrl(snippet: string) {
+  const trimmed = String(snippet || "").trim();
+  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) return trimmed;
+  const match = trimmed.match(/https?:\/\/[^'"\s<>]+/i);
+  return match?.[0] || "";
+}
+
+function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
+  if (typeof window === "undefined") return;
+  if (!cfg.popunder.trim()) return;
+  window.__adsterraPendingPopunderUrl = extractDirectUrl(cfg.popunder);
+  window.__adsterraPendingPopunderSnippet = cfg.popunder;
+}
+
+function installPopunderGestureBridge() {
+  if (typeof window === "undefined") return;
+  if (window.__adsterraGestureBridgeInstalled) return;
+  window.__adsterraGestureBridgeInstalled = true;
+  const handler = () => {
+    const url = window.__adsterraPendingPopunderUrl;
+    const snippet = window.__adsterraPendingPopunderSnippet;
+    if (!url && !snippet) return;
+    window.__adsterraPendingPopunderUrl = undefined;
+    window.__adsterraPendingPopunderSnippet = undefined;
+    if (snippet && !/^https?:\/\//i.test(snippet.trim())) {
+      try { injectSnippet(snippet, ensureContainer()); } catch {}
+      return;
+    }
+    if (url) triggerPopunderUrl(url);
+  };
+  window.addEventListener("pointerup", handler, { capture: true, passive: true });
+  window.addEventListener("touchend", handler, { capture: true, passive: true });
+  window.addEventListener("click", handler, { capture: true, passive: true });
+}
+
 async function injectOnce(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -336,9 +433,11 @@ async function injectOnce(cfg: AdsterraConfig) {
   const container = ensureContainer();
   startObserver();
 
+  prewarmPopunderForNextGesture(cfg);
+
   const pending: Promise<void>[] = [];
-  if (cfg.socialBar?.trim()) pending.push(...injectSnippet(cfg.socialBar, container));
-  if (cfg.popunder?.trim()) pending.push(...injectSnippet(cfg.popunder, container));
+  pending.push(...injectSnippet(cfg.streamLink, container));
+  pending.push(...injectSnippet(cfg.popunder, container));
   if (pending.length) {
     await Promise.allSettled(pending);
   }
@@ -376,7 +475,11 @@ async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
 
 export function enterAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
+  removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
+  installPopunderThrottle();
+  installPopunderGestureBridge();
+
 }
 
 export function exitAdsterraPlayerScope() {
@@ -385,6 +488,9 @@ export function exitAdsterraPlayerScope() {
   clearRefreshTimer();
   stopObserver();
   dismissVisibleAds(false);
+  removeKnownAdResidue();
+  window.setTimeout(removeKnownAdResidue, 250);
+  window.setTimeout(removeKnownAdResidue, 1200);
   try { window.__adsterraContainer?.remove(); } catch {}
   window.__adsterraContainer = null;
   if (window.__adsterraConfigUnsub) {
@@ -396,7 +502,8 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastLoadAt = undefined;
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
-  window.__adsterraLastInteractionAt = undefined;
+  window.__adsterraPendingPopunderUrl = undefined;
+  window.__adsterraPendingPopunderSnippet = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {
@@ -418,9 +525,11 @@ export async function loadAdsterraSlots(): Promise<void> {
     });
   }
 
-  if (window.__adsterraLastConfigJson === json && (window.__adsterraRefreshTimer || window.__adsterraLastLoadAt)) {
-    return;
-  }
+  // Admin-configured cool-down between player ad calls.
+  const cooldownMs = Math.max(0, (cfg.refreshIntervalSec || 0) * 1000);
+  const last = window.__adsterraLastLoadAt || 0;
+  if (cooldownMs > 0 && last && Date.now() - last < cooldownMs) return;
+
   if (window.__adsterraMountPromise) {
     return window.__adsterraMountPromise;
   }
@@ -429,10 +538,41 @@ export async function loadAdsterraSlots(): Promise<void> {
   await mountAdCycle(cfg);
 }
 
-export async function forceReloadAdsterraSlots(): Promise<void> {
+/**
+ * Fire a standalone Adsterra pop-under ad (no player scope needed).
+ * Safe for use inside a user-gesture handler (e.g. Claim button).
+ *   • Direct URL → open new tab.
+ *   • <script> snippet → inject script tags so Adsterra's popunder hook
+ *     attaches to this gesture.
+ * Never calls window.open() with a non-URL string.
+ */
+export async function firePopunderAd(): Promise<void> {
   if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive || window.__adsterraPremium) return;
-  const cfg = await getAdsterraConfig();
-  window.__adsterraLastConfigJson = JSON.stringify(cfg);
-  await mountAdCycle(cfg);
+  try {
+    const cfg = await getAdsterraConfig();
+    if (!cfg.enabled) return;
+    const snippet = (cfg.popunder || "").trim();
+    if (!snippet) return;
+
+    if (/^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<")) {
+      window.open(snippet, "_blank", "noopener,noreferrer");
+      try { window.focus(); } catch {}
+      return;
+    }
+
+    const tmp = document.createElement("div");
+    tmp.innerHTML = snippet;
+    Array.from(tmp.childNodes).forEach((node) => {
+      if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
+        const old = node as HTMLScriptElement;
+        const s = document.createElement("script");
+        Array.from(old.attributes).forEach((a) => s.setAttribute(a.name, a.value));
+        if (old.textContent) s.textContent = old.textContent;
+        if (s.src) s.async = true;
+        document.body.appendChild(s);
+      } else {
+        document.body.appendChild(node);
+      }
+    });
+  } catch {}
 }
