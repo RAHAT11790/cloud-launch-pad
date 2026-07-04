@@ -1,27 +1,23 @@
 import { useState, useEffect } from 'react';
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import type { AnimeItem } from '@/data/animeData';
+import { readPersistentCache, sameJson, writePersistentCache } from '@/lib/persistentCache';
 
 const CACHE_KEY = 'animesalt_all_v3';
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export function useAnimeSaltData() {
-  const [items, setItems] = useState<AnimeItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<AnimeItem[]>(() => readPersistentCache<{ items?: AnimeItem[] }>(CACHE_KEY, {})?.items || []);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Try cache first
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.items?.length > 0 && Date.now() - (parsed._ts || 0) < CACHE_DURATION) {
-          setItems(parsed.items);
-          setLoading(false);
-          return; // Use cache
-        }
-      }
-    } catch {}
+    const parsed = readPersistentCache<{ items?: AnimeItem[]; _ts?: number }>(CACHE_KEY, {});
+    const cachedItems = Array.isArray(parsed.items) ? parsed.items : [];
+    if (cachedItems.length > 0 && Date.now() - (parsed._ts || 0) < CACHE_DURATION) {
+      setItems((previous) => sameJson(previous, cachedItems) ? previous : cachedItems);
+      setLoading(false);
+      return;
+    }
 
     const load = async () => {
       try {
@@ -46,11 +42,9 @@ export function useAnimeSaltData() {
               episodeCount: typeof item.episodeCount === 'number' ? item.episodeCount : undefined,
             }));
 
-          setItems(converted);
+          setItems((previous) => sameJson(previous, converted) ? previous : converted);
           // Use localStorage for longer cache (survives page reload)
-          try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify({ items: converted, _ts: Date.now() }));
-          } catch {} // Ignore quota errors
+          writePersistentCache(CACHE_KEY, { items: converted, _ts: Date.now() });
         }
       } catch (err) {
         console.error('AnimeSalt load failed:', err);
