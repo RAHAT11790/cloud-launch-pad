@@ -82,6 +82,29 @@ export const readCachedAdminContentList = (kind: AdminContentKind) => {
   }
 };
 
+export const isAdminContentCacheFresh = (kind: AdminContentKind) => {
+  try {
+    const raw = localStorage.getItem(cacheKeyFor(kind));
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ts) return false;
+    if (Date.now() - Number(parsed.ts) > CACHE_TTL_MS) return false;
+    return Array.isArray(parsed.items) && parsed.items.length > 0;
+  } catch {
+    return false;
+  }
+};
+
+export const invalidateAdminContentCache = (kind?: AdminContentKind) => {
+  try {
+    if (kind) localStorage.removeItem(cacheKeyFor(kind));
+    else {
+      localStorage.removeItem(cacheKeyFor("webseries"));
+      localStorage.removeItem(cacheKeyFor("movies"));
+    }
+  } catch {}
+};
+
 export const writeCachedAdminContentList = (kind: AdminContentKind, items: any[]) => {
   try {
     localStorage.setItem(cacheKeyFor(kind), JSON.stringify({ ts: Date.now(), items: stripLegacyAnFromAdminList(items) }));
