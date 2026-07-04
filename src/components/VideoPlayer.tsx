@@ -57,10 +57,7 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
-  // Support ending with = or ?url= or &url=
-  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
-  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
-  // Default: append ?url=
+  // Default: append an opaque src token, not the raw upstream URL.
   else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
   if (apiKey) {
