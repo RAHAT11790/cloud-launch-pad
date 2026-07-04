@@ -3440,21 +3440,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  finally { setFetchingOverlay(false); }
  };
 
- const fetchMovieDetails = async (id: number) => {
- // Check if this TMDB ID already exists
- const existing = moviesData.find(m => m.tmdbId === id || m.tmdbId === String(id));
- if (existing) {
- toast.warning(`"${existing.title}" already exists!`, { duration: 5000 });
- // On second click (confirm), load existing data for editing
- if (movieForm?.tmdbId === id || movieForm?.tmdbId === String(id)) {
- editMovie(existing.id);
- setMovieResults([]);
- return;
- }
- // Set form with TMDB ID so next click loads existing
- setMovieForm({ tmdbId: id });
- return;
- }
+  const fetchMovieDetails = async (id: number) => {
+  // Check if this TMDB ID already exists → jump straight to Edit page.
+  const existing = moviesData.find(m => m.tmdbId === id || m.tmdbId === String(id));
+  if (existing) {
+   toast.warning(`"${existing.title}" is already added — opening edit page`, { duration: 4000 });
+   editMovie(existing.id);
+   setMovieResults([]);
+   setMovieSearch("");
+   return;
+  }
 
  setFetchingOverlay(true);
  try {
