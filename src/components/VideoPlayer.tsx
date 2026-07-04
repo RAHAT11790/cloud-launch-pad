@@ -181,9 +181,9 @@ const isBypassSource = (url: string): boolean => {
   if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
-    // Always keep the raw URL as a diagnostic/failover fallback so the server
-    // scanner can move to the next RS mirror instead of showing a blank player.
-    addCandidate(url);
+    // Never hand raw http:// media to the browser from an HTTPS app. It will be
+    // blocked as mixed content (or fail as a media format error) and can trap the
+    // fallback scanner on a route that has no legal playback path.
     return candidates;
   }
 
