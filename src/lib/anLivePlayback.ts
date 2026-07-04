@@ -3,6 +3,7 @@
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
 import { db, ref, get, set, remove } from "@/lib/firebase";
+import { refreshAnPlaybackRoute } from "@/lib/anPlaybackProxy";
 
 type ApiStream = { url: string; height?: number | string; label?: string; resolution?: string; filename?: string; bandwidth?: number; codecs?: string };
 type ApiAudio = { language?: string; name?: string; uri?: string; url?: string; link?: string };
@@ -271,6 +272,7 @@ export async function resolveAnEpisodePlayback(
   opts?: { seriesSlug?: string },
 ): Promise<EpisodePlayback | null> {
   if (!slug) return null;
+  await refreshAnPlaybackRoute();
   const seriesSlug = opts?.seriesSlug || "";
   // 1) Series bundle — in-memory hit → zero latency.
   if (seriesSlug) {
@@ -303,6 +305,7 @@ export async function resolveAnMoviePlayback(
   slug: string,
 ): Promise<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] } | null> {
   if (!slug) return null;
+  await refreshAnPlaybackRoute();
   try {
     const cached = await readPlaybackCache<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] }>("movie", slug);
     if (cached?.fields?.movieLink) return cached;
