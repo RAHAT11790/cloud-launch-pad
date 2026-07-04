@@ -1,6 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v6 (2026-07-04) — RS LIGHTSPEED: 1MB check size cap for smooth skip. REDEPLOY REQUIRED.
+// 🆕 NEW v7 (2026-07-04) — RS TRUE-RANGE: exact browser range pass-through. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
@@ -25,7 +25,6 @@ const PASS = ["content-type", "content-length", "content-range", "accept-ranges"
 // 1 MB "check size" — cap for open-ended byte-range requests so RS server does
 // not stream huge windows into low-end phones. Small chunks make skip land fast
 // (browser can throw away tiny buffers immediately) and reduce mobile stalls.
-const MEDIA_CHUNK_BYTES = 1 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -152,6 +151,7 @@ Deno.serve(async (req) => {
     "User-Agent": UA,
     Accept: req.headers.get("accept") || "*/*",
     "Accept-Encoding": "identity",
+    "Accept-Language": req.headers.get("accept-language") || "en-US,en;q=0.9",
   };
   for (const key of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
     const value = req.headers.get(key);

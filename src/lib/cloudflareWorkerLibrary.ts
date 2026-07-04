@@ -60,7 +60,7 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
-  entry("video-proxy",     "Video Proxy",     "Universal HLS/video proxy with playlist rewriting, range streaming and multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { badgeText: "UNLIMITED", badgeTone: "emerald" }),
+  entry("video-proxy",     "Video Proxy",     "Universal HLS/video proxy with exact browser Range pass-through, playlist rewriting and multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { badgeText: "UNLIMITED", badgeTone: "emerald" }),
   entry("live-tv-proxy",   "Live TV Proxy",   "Dedicated HLS proxy for Live TV — isolates streaming bandwidth from the main video proxy.", liveTvProxySrc),
   entry("video-download",  "Video Download",  "Hardened attachment-mode download proxy with retries and clean headers.", videoDownloadSrc),
   entry("verify-admin-pin","Verify Admin PIN","Server-side admin PIN verifier. Set ADMIN_PIN secret in this Worker to control the admin panel PIN privately.", verifyAdminPinSrc, ["ADMIN_PIN"]),

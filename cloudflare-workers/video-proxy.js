@@ -1,4 +1,4 @@
-// 🆕 NEW v4 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + background prefetch. REDEPLOY REQUIRED.
+// 🆕 NEW v5 (2026-07-04) — RS TRUE-RANGE: exact browser range pass-through. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router → video-proxy.
 // ============================================================
 // Cloudflare Worker — video-proxy (CF-native port)
@@ -6,7 +6,7 @@
 // Deploy as a Module Worker. Usage:
 //   https://<worker>.<sub>.workers.dev/?url=<ENCODED_VIDEO_URL>
 // Same behavior as Supabase video-proxy: HLS playlist rewriting,
-// range streaming, http+https upstream, safe headers.
+// exact range streaming, http+https upstream, safe headers.
 // No env vars required.
 // ============================================================
 
@@ -15,14 +15,13 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers":
-    "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
+    "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error",
   "Access-Control-Max-Age": "86400",
 };
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024; // 8MB aligned window — fast first byte + high cache hit
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -46,22 +45,37 @@ const fromOpaqueUrlToken = (value) => {
   }
 };
 
-// Align every browser range request to a fixed 8MB window boundary.
-// Effect: seeking to 4:23 and 4:29 map to the SAME upstream fetch → CF cache hit.
-function alignRange(range, u) {
-  if (!range || !isDirectMp4Like(u)) return { range, windowStart: null };
-  const m = range.match(/^bytes=(\d+)-(\d*)$/i);
-  if (!m) return { range, windowStart: null };
-  const start = Number(m[1]);
-  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  const windowStart = Math.floor(start / MEDIA_CHUNK_BYTES) * MEDIA_CHUNK_BYTES;
-  const windowEnd = windowStart + MEDIA_CHUNK_BYTES - 1;
-  return { range: `bytes=${windowStart}-${windowEnd}`, windowStart };
+function clampInvalidContentRange(headers) {
+  const raw = headers.get("content-range") || "";
+  const match = raw.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+  if (!match) return;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(total) || total <= 0) return;
+  const maxEnd = total - 1;
+  if (end <= maxEnd) return;
+  headers.set("content-range", `bytes ${start}-${maxEnd}/${total}`);
+  headers.set("content-length", String(Math.max(0, total - start)));
 }
 
-function capRange(range, u) {
-  const aligned = alignRange(range, u);
-  return aligned.range;
+function fallbackResponse(message, detail = "", upstreamStatus) {
+  return new Response(JSON.stringify({
+    error: "VIDEO_SOURCE_UNAVAILABLE",
+    fallback: true,
+    message,
+    detail,
+    upstreamStatus: upstreamStatus || null,
+  }), {
+    status: 200,
+    headers: {
+      ...cors,
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "x-rs-proxy-fallback": "1",
+      "x-rs-proxy-error": message,
+    },
+  });
 }
 
 function proxyUrl(reqUrl, target) {
@@ -89,8 +103,6 @@ function rewritePlaylist(text, targetUrl, reqUrl) {
   }).join("\n");
 }
 
-const isSegmentLike = (u) => /\.(?:ts|m4s|aac|mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname);
-
 export default {
   async fetch(req, env, ctx) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -106,54 +118,16 @@ export default {
     if (up.protocol !== "http:" && up.protocol !== "https:")
       return new Response("Only http/https supported", { status: 400, headers: cors });
 
-    // ⚡ Aligned-window CF edge cache: every skip within the same 8MB window
-    // becomes a cache HIT, and the next window is warmed in background so the
-    // next sequential range request is already at the edge before the browser asks.
-    const cache = caches.default;
     const rawRange = req.headers.get("range");
-    const aligned = alignRange(rawRange, up);
-    const isCacheable = req.method === "GET" && isSegmentLike(up);
-    const windowKeyPart = aligned.windowStart !== null
-      ? `|w=${aligned.windowStart}`
-      : `|r=${rawRange || ""}`;
-    const cacheKey = new Request(reqUrl.toString() + windowKeyPart, { method: "GET" });
-
-    if (isCacheable) {
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        const h = new Headers(cached.headers);
-        h.set("x-edge-cache", "HIT");
-        // Warm the NEXT window in the background so sequential playback stays hot.
-        if (aligned.windowStart !== null) {
-          const nextStart = aligned.windowStart + MEDIA_CHUNK_BYTES;
-          const nextKey = new Request(reqUrl.toString() + `|w=${nextStart}`, { method: "GET" });
-          ctx?.waitUntil?.((async () => {
-            if (await cache.match(nextKey)) return;
-            try {
-              const r = await fetch(up.toString(), {
-                headers: { "User-Agent": UA, Range: `bytes=${nextStart}-${nextStart + MEDIA_CHUNK_BYTES - 1}`, Referer: `${up.protocol}//${up.host}/` },
-              });
-              if (r.ok || r.status === 206) {
-                const hh = new Headers();
-                for (const k of PASS) { const v = r.headers.get(k); if (v) hh.set(k, v); }
-                hh.set("cache-control", "public, max-age=604800, immutable");
-                await cache.put(nextKey, new Response(await r.arrayBuffer(), { status: r.status, headers: hh }));
-              } else { try { await r.body?.cancel(); } catch {} }
-            } catch {}
-          })());
-        }
-        return new Response(cached.body, { status: cached.status, headers: h });
-      }
-    }
-
     const headers = {
       "User-Agent": UA,
       Accept: req.headers.get("accept") || "*/*",
       "Accept-Encoding": "identity",
+      "Accept-Language": req.headers.get("accept-language") || "en-US,en;q=0.9",
     };
     for (const k of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
       const v = req.headers.get(k);
-      if (v) headers[k] = k === "range" ? (aligned.range || v) : v;
+      if (v) headers[k] = v;
     }
     const origin = `${up.protocol}//${up.host}`;
     const attempts = [
@@ -171,10 +145,15 @@ export default {
         try { await res.body?.cancel(); } catch {}
       } catch (e) { lastErr = e?.message || String(e); res = null; }
     }
-    if (!res) return new Response(`Upstream failed: ${lastErr}`, { status: 502, headers: cors });
+    if (!res) return fallbackResponse("Upstream failed", lastErr || "network error");
+    if (!(res.ok || res.status === 206 || res.status === 304)) {
+      try { await res.body?.cancel(); } catch {}
+      return fallbackResponse("Upstream returned an error", lastErr || `HTTP ${res.status}`, res.status);
+    }
 
     const out = new Headers(cors);
     for (const k of PASS) { const v = res.headers.get(k); if (v) out.set(k, v); }
+    clampInvalidContentRange(out);
     if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
     out.set("content-disposition", "inline");
     out.set("Cross-Origin-Resource-Policy", "cross-origin");
@@ -188,32 +167,8 @@ export default {
       return new Response(body, { status: res.status, headers: out });
     }
 
-    // Cache the aligned window + prefetch the NEXT one for zero-latency sequential playback.
-    if (isCacheable && (res.status === 200 || res.status === 206)) {
+    if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
-      out.set("x-edge-cache", "MISS");
-      const buf = await res.arrayBuffer();
-      if (aligned.windowStart !== null) {
-        const nextStart = aligned.windowStart + MEDIA_CHUNK_BYTES;
-        const nextKey = new Request(reqUrl.toString() + `|w=${nextStart}`, { method: "GET" });
-        ctx?.waitUntil?.((async () => {
-          if (await cache.match(nextKey)) return;
-          try {
-            const r = await fetch(up.toString(), {
-              headers: { "User-Agent": UA, Range: `bytes=${nextStart}-${nextStart + MEDIA_CHUNK_BYTES - 1}`, Referer: `${origin}/` },
-            });
-            if (r.ok || r.status === 206) {
-              const hh = new Headers();
-              for (const k of PASS) { const v = r.headers.get(k); if (v) hh.set(k, v); }
-              hh.set("cache-control", "public, max-age=604800, immutable");
-              await cache.put(nextKey, new Response(await r.arrayBuffer(), { status: r.status, headers: hh }));
-            } else { try { await r.body?.cancel(); } catch {} }
-          } catch {}
-        })());
-      }
-      const cacheHeaders = new Headers(out);
-      ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: cacheHeaders })));
-      return new Response(req.method === "HEAD" ? null : buf, { status: res.status, headers: out });
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
