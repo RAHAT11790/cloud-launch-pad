@@ -42,7 +42,7 @@ interface VideoServerOption {
 }
 
 import { downloadManager } from "@/lib/downloadManager";
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
@@ -5457,10 +5457,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               .filter(Boolean)
               .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
 
-            const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download?"));
-            if (managedAlready) return managedAlready;
+            const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download"));
+            if (managedAlready) {
+              const unwrapped = unwrapManagedVideoUrl(managedAlready);
+              if (unwrapped && isDirectDownloadCandidate(unwrapped)) {
+                return buildVideoDownloadUrl(unwrapped, buildDownloadFileName(String(sub || title), quality)) || unwrapped;
+              }
+            }
 
-            const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
+            const directCandidate = [u, ...candidates]
+              .map((candidate) => String(candidate).includes("/functions/v1/video-") ? unwrapManagedVideoUrl(candidate) : candidate)
+              .find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
             return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
