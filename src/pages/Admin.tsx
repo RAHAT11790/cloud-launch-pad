@@ -7296,59 +7296,130 @@ ${tgBulkFooter}
  })()}
  </div>
 
- {/* ==================== Manual Push Notification ==================== */}
- <div className={`${glassCard} relative z-10 p-4 mt-4`}>
+ </div>
+ )}
+
+ {/* ==================== MANUAL PUSH NOTIFICATION (own section) ==================== */}
+ {activeSection === "manual-push" && (
+ <div>
+ <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
  <Bell size={14} className="text-yellow-400" /> Manual Push Notification
  </h3>
- <p className="text-[11px] text-[#957DAD] mb-3">Select any anime/episode above → optionally edit title & body → send instant FCM push to all users.</p>
+ <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season/episode → send instant FCM push to all users.</p>
 
- {!releaseContent ? (
- <div className="text-[12px] text-yellow-400/80 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
- ⚠️ First pick a content (and season/episode for series) from the "Manage New Episode Releases" card above.
- </div>
- ) : (
+ <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Anime / Movie</label>
+ <div className="relative z-[130] mb-4">
+ <button type="button" onClick={() => setPushDropdownOpen(!pushDropdownOpen)}
+ className={`${selectClass} w-full text-left flex items-center gap-2`}>
+ {pushContent ? (
  <>
- <div className="flex gap-3 items-center bg-[#1A1A2E] border border-purple-500/30 rounded-xl p-3 mb-3">
- <CachedImg src={contentOptions.find(o => o.value === releaseContent)?.poster} alt="" className="w-[46px] h-[66px] rounded-lg object-cover flex-shrink-0" />
- <div className="flex-1 min-w-0">
- <h4 className="text-[13px] font-semibold truncate">{contentOptions.find(o => o.value === releaseContent)?.label}</h4>
- <p className="text-[11px] text-pink-500 mt-0.5">
- {showSeasonEpisode
- ? (releaseSeason !== "" && releaseEpisode !== ""
- ? `${releaseSeasons.find(s => String(s.index) === String(releaseSeason))?.name || "Season"} — ${releaseEpisodes.find(e => String(e.index) === String(releaseEpisode))?.name || "Episode"}`
- : "Pick season & episode above")
- : "Movie"}
- </p>
+ <CachedImg src={contentOptions.find(o => o.value === pushContent)?.poster} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
+ <span className="truncate text-sm">{contentOptions.find(o => o.value === pushContent)?.label}</span>
+ </>
+ ) : <span className="text-[#957DAD]">Select Content</span>}
+ <ChevronDown size={14} className="ml-auto flex-shrink-0" />
+ </button>
+ {pushDropdownOpen && (
+ <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#1A1A2E] border border-purple-500/40 rounded-xl max-h-[320px] overflow-hidden shadow-xl flex flex-col">
+ <div className="p-2 border-b border-white/10 flex-shrink-0">
+ <div className="relative">
+ <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-purple-500" />
+ <input
+ value={pushContentSearch}
+ onChange={e => setPushContentSearch(e.target.value)}
+ className="w-full pl-8 pr-3 py-2 bg-[#151521] border border-white/10 rounded-lg text-white text-[12px] focus:border-purple-500 focus:outline-none placeholder:text-[#957DAD]"
+ placeholder="🔍 search anime / movie..."
+ autoFocus
+ onClick={e => e.stopPropagation()}
+ />
  </div>
  </div>
+ <div className="overflow-y-auto max-h-[260px]">
+ {(() => {
+ const q = pushContentSearch.trim().toLowerCase();
+ const filtered = q ? contentOptions.filter(o => o.label.toLowerCase().includes(q)) : contentOptions;
+ const visible = filtered.slice(0, ADMIN_DROPDOWN_LIMIT);
+ return filtered.length === 0 ? (
+ <p className="text-[#957DAD] text-[11px] text-center py-4">No content found</p>
+ ) : <>
+ {visible.map(o => (
+ <div key={o.value}
+ className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${pushContent === o.value ? "bg-purple-500/30" : ""}`}
+ onClick={async () => {
+ setPushContent(o.value); setPushDropdownOpen(false); setPushContentSearch('');
+ setPushSeason(""); setPushEpisode(""); setPushSeasons([]); setPushEpisodes([]);
+ const [cid, ctype] = o.value.split("|");
+ if (ctype === "webseries") {
+ const c = (await getFullAdminContentItem("webseries", cid)) || webseriesData.find(s => s.id === cid);
+ if (c?.seasons?.length) {
+ setPushSeasons(c.seasons.map((s: any, i: number) => ({ index: i, name: s.name || `Season ${i + 1}` })));
+ setPushShowSeasonEp(true);
+ } else { setPushShowSeasonEp(false); }
+ } else { setPushShowSeasonEp(false); }
+ }}>
+ <CachedImg src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" loading="lazy" decoding="async" />
+ <span className="text-sm truncate">{o.label}</span>
+ </div>
+ ))}
+ {filtered.length > visible.length && <div className="px-3 py-2 text-center text-[10px] text-[#957DAD]">Showing {visible.length}/{filtered.length} — type to narrow</div>}
+ </>;
+ })()}
+ </div>
+ </div>
+ )}
+ </div>
 
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (optional override)</label>
- <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="🎬 auto: New Episode – <title>" />
+ {pushShowSeasonEp && (
+ <div className="grid grid-cols-2 gap-3 mb-4">
+ <div>
+ <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Season</label>
+ <select value={pushSeason} onChange={async e => {
+ const val = e.target.value; setPushSeason(val); setPushEpisode("");
+ if (!pushContent || val === "") { setPushEpisodes([]); return; }
+ const [cid] = pushContent.split("|");
+ const c = (await getFullAdminContentItem("webseries", cid)) || webseriesData.find(s => s.id === cid);
+ const season = c?.seasons?.[parseInt(val)];
+ const eps = (season?.episodes || []).map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}` }));
+ setPushEpisodes(eps);
+ }} className={selectClass}>
+ <option value="">Select Season</option>
+ {pushSeasons.map(s => <option key={s.index} value={s.index}>{s.name}</option>)}
+ </select>
+ </div>
+ <div>
+ <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode</label>
+ <select value={pushEpisode} onChange={e => setPushEpisode(e.target.value)} className={selectClass}>
+ <option value="">Select Episode</option>
+ {pushEpisodes.map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
+ </select>
+ </div>
+ </div>
+ )}
 
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Body (optional override)</label>
- <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={2} className={`${inputClass} mb-3 resize-none`} placeholder="auto: <Season> — Episode <N> is now available!" />
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (optional — auto-fills)</label>
+ <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="🎬 auto: <Title> — New Episode" />
+
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Body (optional — auto-fills)</label>
+ <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={2} className={`${inputClass} mb-4 resize-none`} placeholder="auto: <Season> — Episode <N> is now available!" />
 
  <button
- disabled={pushSending || !releaseContent}
+ disabled={pushSending || !pushContent}
  onClick={async () => {
- if (!releaseContent) return;
- if (showSeasonEpisode && (releaseSeason === "" || releaseEpisode === "")) {
- toast.error("Pick season & episode above"); return;
+ if (!pushContent) { toast.error("Select a content first"); return; }
+ if (pushShowSeasonEp && (pushSeason === "" || pushEpisode === "")) {
+ toast.error("Pick season & episode"); return;
  }
- const [contentId, contentType] = releaseContent.split("|");
- let content: any;
- if (contentType === "webseries") {
- content = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
- } else {
- content = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
- }
+ const [contentId, contentType] = pushContent.split("|");
+ const content = contentType === "webseries"
+ ? ((await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId))
+ : ((await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId));
  if (!content) { toast.error("Content not found"); return; }
 
  let seasonNumber: number | undefined; let episodeNumber: number | undefined;
  let seasonName = "Movie"; let deepLink = `/watch/${contentId}`;
  if (contentType === "webseries") {
- const sIdx = parseInt(releaseSeason); const eIdx = parseInt(releaseEpisode);
+ const sIdx = parseInt(pushSeason); const eIdx = parseInt(pushEpisode);
  const season = content.seasons?.[sIdx];
  const episode = season?.episodes?.[eIdx];
  seasonNumber = sIdx + 1;
@@ -7359,13 +7430,10 @@ ${tgBulkFooter}
 
  const backdrop = content.backdrop || content.poster || "";
  const image = backdrop ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
- const autoTitle = contentType === "webseries"
- ? `🎬 ${content.title} — New Episode`
- : `🎬 ${content.title} — New Movie`;
+ const autoTitle = contentType === "webseries" ? `🎬 ${content.title} — New Episode` : `🎬 ${content.title} — New Movie`;
  const autoBody = contentType === "webseries"
  ? `${seasonName} — Episode ${episodeNumber} is now available!`
  : `${content.title} (${content.year || ""}) is now available!`;
-
  const title = pushTitleOverride.trim() || autoTitle;
  const body = pushBodyOverride.trim() || autoBody;
 
@@ -7391,18 +7459,14 @@ ${tgBulkFooter}
  toast.dismiss(toastId);
  toast.error("Push error: " + (err?.message || String(err)));
  setPushLastResult("Error: " + (err?.message || String(err)));
- } finally {
- setPushSending(false);
- }
+ } finally { setPushSending(false); }
  }}
- className={`${btnPrimary} w-full py-3.5 text-[14px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
+ className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
  >
  <Send size={16} /> {pushSending ? "Sending push…" : "Send Push Notification Now"}
  </button>
  {pushLastResult && (
- <p className="text-[11px] text-center text-[#957DAD] mt-2.5">{pushLastResult}</p>
- )}
- </>
+ <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
  )}
  </div>
  </div>
