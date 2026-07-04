@@ -1,3 +1,5 @@
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+
 // 🆕 NEW v5 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + prefetch. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
@@ -11,7 +13,7 @@
 // ============================================================
 
 const cors: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
