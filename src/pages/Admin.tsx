@@ -3343,7 +3343,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   newId = saveRef.key || "";
   data.createdAt = Date.now();
   }
-  lastSavedSeriesIdRef.current = newId;
+   data.updatedAt = Date.now(); // stamp so the recently-edited card stays at the top
+   lastSavedSeriesIdRef.current = newId;
    try {
    await set(saveRef, data);
    upsertAdminContentListItem("webseries", newId, data);
