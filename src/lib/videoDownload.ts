@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -48,7 +49,7 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
-  return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
+  return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 
 export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string): string[] {
@@ -157,7 +158,7 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   // HTTPS file hosts are most reliable when the browser downloads them directly
   // from the user's own IP/session. Only route http:// or already-proxied links
   // through the download proxy to avoid mixed-content blocks.
-  const preferDirect = unwrapped.startsWith("https://");
+  const preferDirect = false;
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
   const proxiedUrl = proxiedUrls[0] || null;
@@ -181,7 +182,7 @@ export function triggerBulkBackgroundDownloads(
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
       const unwrapped = unwrapManagedVideoUrl(u);
-      const preferDirect = unwrapped.startsWith("https://");
+      const preferDirect = false;
       const direct = buildDirectDownloadUrl(u);
       const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
       const final = preferDirect ? (direct || proxied) : (proxied || direct);
