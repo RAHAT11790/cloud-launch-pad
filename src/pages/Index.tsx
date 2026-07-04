@@ -1624,12 +1624,37 @@ const Index = () => {
       if (playerStateRef.current) setPlayerState(null);
       return;
     }
-    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
+    if (!watchRouteAnimeId || !freeAccessLoaded) return;
 
     const params = new URLSearchParams(location.search);
     const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
     const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
-    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+
+    // Lookup order: RS firebase (allAnime) → AN salt items (as_ prefix)
+    const isSaltLink = watchRouteAnimeId.startsWith("as_");
+    let targetAnime: AnimeItem | undefined;
+    if (isSaltLink) {
+      // Wait until AN data has loaded, otherwise the link would silently die
+      if (saltLoading) return;
+      targetAnime = animeSaltItems.find((item) => item.id === watchRouteAnimeId);
+      // Fallback: construct a minimal stub from the slug so playback flow can
+      // still fetch the episode list on its own (mirrors /anime/ deep-link path)
+      if (!targetAnime) {
+        const slug = watchRouteAnimeId.slice(3);
+        if (slug) {
+          targetAnime = {
+            id: watchRouteAnimeId,
+            title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            poster: "", backdrop: "", year: "", rating: "", language: "",
+            category: "AnimeSalt", type: "webseries", storyline: "",
+            source: "animesalt", slug,
+          } as AnimeItem;
+        }
+      }
+    } else {
+      if (allAnime.length === 0) return;
+      targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    }
     if (!targetAnime) return;
 
     const current = playerStateRef.current;
@@ -1639,7 +1664,8 @@ const Index = () => {
     if (sameAnime && sameSeason && sameEpisode && current) return;
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+  }, [allAnime, animeSaltItems, saltLoading, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
