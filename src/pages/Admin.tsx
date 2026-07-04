@@ -36,6 +36,8 @@ import {
  writeCachedAdminContentList,
  type AdminContentKind,
 } from "@/lib/adminContentIndex";
+import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { isLegacyAnEntry } from "@/lib/legacyAn";
 const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
