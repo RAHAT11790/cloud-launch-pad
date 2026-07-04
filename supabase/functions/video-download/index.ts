@@ -21,8 +21,10 @@
 //   /functions/v1/video-download?src=<opaque-token>&filename=<encoded>
 // ============================================================
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+
+const downloadCorsHeaders: Record<string, string> = {
+  ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers":
     "range, content-type, authorization, apikey, x-client-info, accept, accept-encoding",
@@ -53,6 +55,18 @@ const fromOpaqueUrlToken = (value: string) => {
     const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
     return decodeURIComponent(escape(atob(padded)));
   } catch { return ""; }
+};
+
+const pickTargetFromParams = (params: URLSearchParams) => {
+  for (const key of ["url", "source", "target", "u"]) {
+    const value = String(params.get(key) || "").trim();
+    if (/^https?:\/\//i.test(value)) return value;
+  }
+  const src = String(params.get("src") || "").trim();
+  if (!src) return "";
+  const decoded = fromOpaqueUrlToken(src);
+  if (/^https?:\/\//i.test(decoded)) return decoded;
+  return /^https?:\/\//i.test(src) ? src : "";
 };
 
 const sanitizeFilename = (raw: string) => {
@@ -137,25 +151,25 @@ const isAllowedRequest = (_req: Request) => true;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return new Response(null, { status: 204, headers: downloadCorsHeaders });
   }
   if (!isAllowedRequest(req)) {
     return new Response(
       JSON.stringify({ error: "Access denied", message: "Download only available from the official RS Anime site." }),
-      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 403, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+    return new Response("Method not allowed", { status: 405, headers: downloadCorsHeaders });
   }
 
   const url = new URL(req.url);
-  const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
+  const target = pickTargetFromParams(url.searchParams);
   const filename = sanitizeFilename(url.searchParams.get("filename") || "video.mp4");
   if (!target) {
     return new Response(
-      JSON.stringify({ error: "Missing ?url= parameter" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ error: "Missing ?url= or ?src= parameter" }),
+      { status: 400, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -163,13 +177,13 @@ Deno.serve(async (req) => {
   try { targetUrl = new URL(target); } catch {
     return new Response(JSON.stringify({ error: "Invalid url" }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...downloadCorsHeaders, "Content-Type": "application/json" },
     });
   }
   if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
     return new Response(JSON.stringify({ error: "Only http/https supported" }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...downloadCorsHeaders, "Content-Type": "application/json" },
     });
   }
 
@@ -187,7 +201,7 @@ Deno.serve(async (req) => {
     const msg = (e as Error)?.message || "Upstream unreachable";
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
-      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 502, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
   }
 
@@ -200,12 +214,12 @@ Deno.serve(async (req) => {
         upstreamStatus: upstream.status,
         upstreamStatusText: upstream.statusText,
       }),
-      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 502, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
   }
 
   // Build a clean response. Forward only safe headers.
-  const out = new Headers(corsHeaders);
+  const out = new Headers(downloadCorsHeaders);
   const ct = upstream.headers.get("content-type") || "application/octet-stream";
   out.set("Content-Type", ct);
   const cr = upstream.headers.get("content-range");
