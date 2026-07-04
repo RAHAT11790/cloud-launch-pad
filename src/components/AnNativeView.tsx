@@ -16,11 +16,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
+import { wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number; codecs?: string };
 type Audio  = { language: string; name: string; uri: string };
-
-const AN_PLAYBACK_HLS_PROXY_PREFIX = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback/hls`;
 
 export type AnNativeResolvedData = {
   streams: Stream[];
@@ -49,23 +48,7 @@ interface Props {
 const hlsUrl = (u: string) => {
   const raw = String(u || "").trim();
   if (!raw || raw.startsWith("data:")) return raw;
-  try {
-    const parsed = new URL(raw);
-    if (/\/functions\/v1\/an-playback\/hls$/i.test(parsed.pathname)) return raw;
-    const legacyWrapped = /\/functions\/v1\/(?:an-api\/hls|hls)$/i.test(parsed.pathname)
-      ? parsed.searchParams.get("url")
-      : "";
-    if (legacyWrapped && AN_PLAYBACK_HLS_PROXY_PREFIX) {
-      const params = new URLSearchParams({ url: legacyWrapped });
-      const origin = parsed.searchParams.get("origin") || parsed.searchParams.get("parent") || parsed.searchParams.get("ref") || "";
-      if (origin) params.set("origin", origin);
-      return `${AN_PLAYBACK_HLS_PROXY_PREFIX}?${params.toString()}`;
-    }
-  } catch {}
-  if (/^https?:\/\//i.test(raw) && AN_PLAYBACK_HLS_PROXY_PREFIX) {
-    return `${AN_PLAYBACK_HLS_PROXY_PREFIX}?url=${encodeURIComponent(raw)}`;
-  }
-  return raw;
+  return wrapAnHlsPlaybackUrl(raw);
 };
 // AN subtitle extraction/proxy was removed from the API for stability.
 
