@@ -163,6 +163,40 @@ const adminIdle = (callback: () => void, timeout = 1200) => {
  return () => window.clearTimeout(id);
 };
 
+const getAdminContentTime = (item: any) => Number(item?.updatedAt || item?.createdAt || 0);
+const sortAdminLatestFirst = (items: any[]) => [...items].sort((a: any, b: any) => getAdminContentTime(b) - getAdminContentTime(a));
+const buildSearchBigrams = (s: string) => {
+ const out = new Set<string>();
+ for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
+ return out;
+};
+const adminTitleSimilarity = (title: string, query: string, queryBigrams: Set<string>) => {
+ const t = String(title || "").toLowerCase();
+ if (!t) return 0;
+ if (t.includes(query)) return 1;
+ if (query.length < 2 || t.length < 2) return 0;
+ const titleBigrams = buildSearchBigrams(t);
+ let inter = 0;
+ queryBigrams.forEach(g => { if (titleBigrams.has(g)) inter++; });
+ return (2 * inter) / (queryBigrams.size + titleBigrams.size);
+};
+const filterAdminSeriesList = (items: any[], query: string) => {
+ const latestFirst = sortAdminLatestFirst(items);
+ const q = String(query || "").trim().toLowerCase();
+ if (!q) return latestFirst;
+ const qb = buildSearchBigrams(q);
+ return latestFirst
+  .map((item: any) => ({ item, score: adminTitleSimilarity(item?.title || "", q, qb) }))
+  .filter(x => x.score >= 0.5)
+  .sort((a, b) => b.score - a.score)
+  .map(x => x.item);
+};
+const filterAdminMovieList = (items: any[], query: string) => {
+ const q = String(query || "").trim().toLowerCase();
+ const latestFirst = sortAdminLatestFirst(items);
+ return q ? latestFirst.filter((item: any) => String(item?.title || "").toLowerCase().includes(q)) : latestFirst;
+};
+
 const yieldAdminFrame = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 const AdminSectionLoader = ({ label }: { label: string }) => (
@@ -2130,6 +2164,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [mvListSearch, setMvListSearch] = useState("");
  const deferredWsListSearch = useDeferredValue(wsListSearch);
  const deferredMvListSearch = useDeferredValue(mvListSearch);
+ const filteredWebseriesAdminList = useMemo(() => filterAdminSeriesList(webseriesData, deferredWsListSearch), [webseriesData, deferredWsListSearch]);
+ const filteredMoviesAdminList = useMemo(() => filterAdminMovieList(moviesData, deferredMvListSearch), [moviesData, deferredMvListSearch]);
  const [movieEditId, setMovieEditId] = useState("");
 
  // Notification form
@@ -5688,38 +5724,8 @@ ${tgBulkFooter}
  </div>
  </div>
  {(() => {
- // Latest-first ordering (newest createdAt/updatedAt at top)
- const latestFirst = [...webseriesData].sort((a: any, b: any) => {
- const ta = Number(a?.updatedAt || a?.createdAt || 0);
- const tb = Number(b?.updatedAt || b?.createdAt || 0);
- return tb - ta;
- });
   const q = deferredWsListSearch.trim().toLowerCase();
- let filtered = latestFirst;
- if (q) {
- // 50%-similarity fuzzy match (bigram Dice coefficient) + substring fast path
- const bigrams = (s: string) => {
- const out = new Set<string>();
- for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
- return out;
- };
- const qb = bigrams(q);
- const similarity = (title: string) => {
- const t = title.toLowerCase();
- if (!t) return 0;
- if (t.includes(q)) return 1;
- if (q.length < 2 || t.length < 2) return 0;
- const tb = bigrams(t);
- let inter = 0;
- qb.forEach(g => { if (tb.has(g)) inter++; });
- return (2 * inter) / (qb.size + tb.size);
- };
- filtered = latestFirst
- .map((item: any) => ({ item, score: similarity(item.title || "") }))
- .filter(x => x.score >= 0.5)
- .sort((a, b) => b.score - a.score)
- .map(x => x.item);
- }
+ const filtered = filteredWebseriesAdminList;
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
  adminContentLoading.webseries && !q ? (
@@ -6792,9 +6798,7 @@ ${tgBulkFooter}
  </div>
  </div>
  {(() => {
-  const filtered = deferredMvListSearch.trim()
-  ? moviesData.filter(item => item.title?.toLowerCase().includes(deferredMvListSearch.toLowerCase()))
- : moviesData;
+  const filtered = filteredMoviesAdminList;
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
   adminContentLoading.movies && !deferredMvListSearch.trim() ? (
