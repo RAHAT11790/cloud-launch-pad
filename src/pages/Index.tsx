@@ -2290,7 +2290,39 @@ const Index = () => {
 
     const { seasonIdx: nextSeasonIdx, epIdx: nextEpIdx } = parseWatchRouteIndices(location.search);
     const targetAnime = allAnime.find((item) => matchesAnimeRouteId(item, watchRouteAnimeId));
-    if (!targetAnime) return;
+
+    // 🔗 BACKWARD COMPAT: old Telegram bot share links carry only the series
+    // ID (no ?s= / ?e=). If the ID isn't in allAnime yet (or it's an AN slug
+    // link like /watch/as_naruto), fall back to the same AN-stub construction
+    // as the pendingAnimeId path so the player still opens at the default
+    // episode instead of silently freezing the page.
+    if (!targetAnime) {
+      const isSaltLink = watchRouteAnimeId.startsWith("as_")
+        || watchRouteAnimeId.startsWith("an_")
+        || watchRouteAnimeId.startsWith("an_mv_");
+      if (isSaltLink && !saltLoading) {
+        const slug = watchRouteAnimeId.replace(/^as_|^an_mv_|^an_/, "");
+        if (slug) {
+          const stub: AnimeItem = {
+            id: watchRouteAnimeId,
+            title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            poster: "", backdrop: "", year: "", rating: "", language: "",
+            category: "AnimeSalt",
+            type: watchRouteAnimeId.startsWith("an_mv_") ? "movie" : "webseries",
+            storyline: "", source: "animesalt", slug,
+          };
+          void handleCardClick(stub, nextSeasonIdx, nextEpIdx);
+        }
+        return;
+      }
+      // RS id not indexed yet — bounce to details route so its own loader can
+      // resolve it. If it truly doesn't exist, details page shows a graceful
+      // empty state instead of a blank /watch screen.
+      if (!loading) {
+        navigate(buildAnimeRoute(watchRouteAnimeId), { replace: true });
+      }
+      return;
+    }
 
     const current = playerStateRef.current;
     const sameAnime = !!current?.anime && matchesAnimeRouteId(current.anime, watchRouteAnimeId);
@@ -2304,7 +2336,7 @@ const Index = () => {
     }
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId, saltLoading, loading]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
