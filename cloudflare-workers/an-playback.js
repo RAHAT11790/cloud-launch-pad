@@ -152,6 +152,20 @@ var stdin_default = { async fetch(req, env, ctx) {
     }
     if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
     const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
+
+    // ⚡ CF edge cache for HLS segments — instant on skip/replay.
+    const cache = caches.default;
+    const isSegPath = isLikelySegmentUrl(targetUrl);
+    const cacheKey = new Request(reqUrl.toString() + "|" + (req.headers.get("range") || ""), { method: "GET" });
+    if (req.method === "GET" && isSegPath) {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const h2 = new Headers(cached.headers);
+        h2.set("x-edge-cache", "HIT");
+        return new Response(cached.body, { status: cached.status, headers: h2 });
+      }
+    }
+
     const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
     if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
     const h = new Headers(cors);
@@ -164,7 +178,7 @@ var stdin_default = { async fetch(req, env, ctx) {
     if (isM3u8) {
       h.delete("content-length");
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      h.set("cache-control", "public, max-age=12, stale-while-revalidate=30");
+      h.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
       return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
@@ -172,12 +186,19 @@ var stdin_default = { async fetch(req, env, ctx) {
     if (isSegment) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
       h.set("content-disposition", "inline");
-      if (!h.has("cache-control")) h.set("cache-control", "public, max-age=86400, immutable");
+      h.set("cache-control", "public, max-age=604800, immutable");
     }
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
     if (isSegment) {
-      return new Response(await upstream.arrayBuffer(), { status: upstream.status, statusText: upstream.statusText, headers: h });
+      const buf = await upstream.arrayBuffer();
+      const resp = new Response(buf, { status: upstream.status, statusText: upstream.statusText, headers: h });
+      if (req.method === "GET" && isSegPath && (upstream.status === 200 || upstream.status === 206)) {
+        const cacheHeaders = new Headers(h);
+        cacheHeaders.set("x-edge-cache", "MISS");
+        ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: upstream.status, headers: cacheHeaders })));
+      }
+      return resp;
     }
     return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
   } catch (e) {
