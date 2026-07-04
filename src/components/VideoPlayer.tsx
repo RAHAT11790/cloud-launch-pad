@@ -3113,9 +3113,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
     if (isHlsLikeUrl(activeSourceBaseRef.current)) return;
+    if (!noServerSwitch && isInsecureHttpSource(activeSourceBaseRef.current) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
     setCurrentSrc((prev) => (prev === nextResolved ? prev : nextResolved));
-  }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, resolvePlaybackSrc]);
+  }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, noServerSwitch, effectiveVideoServers.length, videoServersLoaded, resolvePlaybackSrc]);
 
   // If Firebase videoServers arrive after the player has already mounted, rebuild
   // the active URL with that admin server domain. This is critical for HTTP
