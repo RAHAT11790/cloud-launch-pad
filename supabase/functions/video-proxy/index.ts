@@ -1,4 +1,4 @@
-// 🆕 NEW v3 (2026-07-04) — Ultra playback: 16MB chunks + long-cache segments. REDEPLOY REQUIRED.
+// 🆕 NEW v5 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + prefetch. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
@@ -20,7 +20,7 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -57,28 +57,15 @@ function buildUpstreamCandidates(target: URL): URL[] {
 }
 
 
-function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
-  if (!range || !isDirectMp4Like(upstreamUrl)) return range;
+function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
+  if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
   const match = range.match(/^bytes=(\d+)-(\d*)$/i);
-  if (!match) return range;
+  if (!match) return { range, windowStart: null };
   const start = Number(match[1]);
-  const requestedEnd = match[2] ? Number(match[2]) : Number.NaN;
-  if (!Number.isFinite(start) || start < 0) return range;
-
-  const hasExplicitEnd = Boolean(match[2]);
-  const cappedEnd = start + MEDIA_CHUNK_BYTES - 1;
-  // Chrome often asks an HTTP proxy for `bytes=0-<whole file>`. Passing that
-  // through makes Supabase/Cloudflare stream the whole MP4 before the player has
-  // metadata, which looks like a block/stall. Return small byte windows instead;
-  // the browser already knows how to request the next/tail ranges for seeking.
-  // Keep tail/seek requests intact (Chrome uses an open-ended tail range to find
-  // the MP4 moov atom), but cap early open-ended media reads so playback starts
-  // immediately instead of dragging the entire file through the edge function.
-  if (!hasExplicitEnd && start > 8 * 1024 * 1024) return range;
-  if (!Number.isFinite(requestedEnd) || requestedEnd - start + 1 > MEDIA_CHUNK_BYTES) {
-    return `bytes=${start}-${cappedEnd}`;
-  }
-  return range;
+  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
+  const windowStart = Math.floor(start / MEDIA_CHUNK_BYTES) * MEDIA_CHUNK_BYTES;
+  const windowEnd = windowStart + MEDIA_CHUNK_BYTES - 1;
+  return { range: `bytes=${windowStart}-${windowEnd}`, windowStart };
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
@@ -121,6 +108,8 @@ Deno.serve(async (req) => {
   try { upstreamUrl = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
   if (upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") return new Response("Only http/https supported", { status: 400, headers: cors });
 
+  const rawRange = req.headers.get("range");
+  const aligned = alignMediaRange(rawRange, upstreamUrl);
   const baseHeaders: Record<string, string> = {
     "User-Agent": UA,
     Accept: req.headers.get("accept") || "*/*",
@@ -128,7 +117,7 @@ Deno.serve(async (req) => {
   };
   for (const key of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
     const value = req.headers.get(key);
-    if (value) baseHeaders[key] = key === "range" ? capLargeMediaRange(value, upstreamUrl) || value : value;
+    if (value) baseHeaders[key] = key === "range" ? aligned.range || value : value;
   }
 
   const ac = new AbortController();
@@ -140,8 +129,7 @@ Deno.serve(async (req) => {
   for (const candidate of buildUpstreamCandidates(upstreamUrl)) {
     const origin = `${candidate.protocol}//${candidate.host}`;
     const candidateBaseHeaders = { ...baseHeaders };
-    const rawRange = req.headers.get("range");
-    if (rawRange) candidateBaseHeaders.range = capLargeMediaRange(rawRange, candidate) || rawRange;
+    if (rawRange) candidateBaseHeaders.range = alignMediaRange(rawRange, candidate).range || rawRange;
     // IMPORTANT: never forward the browser's own Referer (rsanime03.lovable.app)
     // to upstream — some HTTP mirrors (bot-hosting/render/etc.) reject requests
     // whose Referer is a public site domain, which is what broke Server 2 / the
@@ -178,6 +166,7 @@ Deno.serve(async (req) => {
   out.set("Cross-Origin-Resource-Policy", "cross-origin");
   out.set("Timing-Allow-Origin", "*");
   if (baseHeaders.range && baseHeaders.range !== req.headers.get("range")) out.set("x-rs-proxy-range", baseHeaders.range);
+  if (aligned.windowStart !== null) out.set("x-rs-window", String(aligned.windowStart));
 
   if (req.method !== "HEAD" && up.ok && isM3u8(effectiveUrl.toString(), up.headers.get("content-type"))) {
     const body = rewritePlaylist(await up.text(), effectiveUrl.toString(), reqUrl);

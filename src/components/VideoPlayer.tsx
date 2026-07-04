@@ -46,7 +46,7 @@ import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
-import { toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -64,6 +64,15 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
   }
   return url;
+};
+
+const unwrapProxyPlaybackTarget = (value: string): string => {
+  try {
+    const parsed = new URL(String(value || ""));
+    return parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "") || "";
+  } catch {
+    return "";
+  }
 };
 
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
@@ -141,7 +150,7 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -171,6 +180,10 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    // If no EGD video-proxy is configured yet, do not return an empty source;
+    // keep the raw URL as a diagnostic/failover candidate so the server scanner
+    // can move to the next RS mirror instead of showing a dead blank player.
+    if (!customProxyCandidate) addCandidate(url);
     return candidates;
   }
 
@@ -1257,7 +1270,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       ];
       for (const proxied of proxiedCandidates) {
         try {
-          const r = await fetch(proxied, { method: "HEAD" });
+      if (/video-download/i.test(proxied)) continue;
+      const r = await fetch(proxied, { method: "HEAD" });
           if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
           const len = Number(r.headers.get("content-length") || 0);
           try { await r.body?.cancel(); } catch {}
@@ -3056,8 +3070,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
     if (!/\/functions\/v1\/video-proxy\?/i.test(currentSrc)) return;
-    let nested = "";
-    try { nested = new URL(currentSrc).searchParams.get("url") || ""; } catch {}
+    const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
     const t = window.setTimeout(() => ac.abort(), 6500);
@@ -3831,14 +3844,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     if (!v) return;
 
-    manualSeekUntilRef.current = Date.now() + 2500;
+    manualSeekUntilRef.current = Date.now() + 3500;
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = nextTime;
+    setIsBuffering(true);
     try {
       if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(nextTime);
       else v.currentTime = nextTime;
     } catch {
       v.currentTime = nextTime;
     }
+    if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${(nextTime / v.duration) * 100}%`;
+    if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(nextTime)} / ${formatTime(v.duration)}`;
+    setCurrentTime(nextTime);
 
     showSkipPill(seconds);
     resetHideTimer();
@@ -3915,8 +3935,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    manualSeekUntilRef.current = Date.now() + 3500;
+    const target = getSafeSeekTime(v, pct * v.duration);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    setIsBuffering(true);
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
+    if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${pct * 100}%`;
+    if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
+    setCurrentTime(target);
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
@@ -3931,8 +3962,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    manualSeekUntilRef.current = Date.now() + 3500;
+    const target = getSafeSeekTime(v, pct * v.duration);
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    setIsBuffering(true);
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${pct * 100}%`;
     }
@@ -3947,8 +3986,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
-    manualSeekUntilRef.current = Date.now() + 2500;
-    v.currentTime = target;
+    manualSeekUntilRef.current = Date.now() + 3500;
+    pendingSeek.current = null;
+    mediaRecoverySeekRef.current = null;
+    lastPlaybackPositionRef.current = target;
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch { v.currentTime = target; }
 
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;

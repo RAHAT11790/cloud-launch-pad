@@ -1,4 +1,4 @@
-// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// 🆕 NEW v3 (2026-07-04) — Opaque src token + clean HEAD/GET response. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // Cloudflare Worker — video-download (CF-native)
@@ -70,7 +70,13 @@ export default {
     let res;
     try { res = await tryFetch(up.toString(), headers, req.method); }
     catch (e) { return new Response(`Upstream error: ${e?.message || e}`, { status: 502, headers: cors }); }
-    if (!res.ok && res.status !== 206) return new Response(`Upstream ${res.status}`, { status: 502, headers: cors });
+    if (!res.ok && res.status !== 206) {
+      try { await res.body?.cancel(); } catch {}
+      return new Response(JSON.stringify({ error: "Download source error", upstreamStatus: res.status }), {
+        status: 502,
+        headers: { ...cors, "content-type": "application/json" },
+      });
+    }
 
     const out = new Headers(cors);
     for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {

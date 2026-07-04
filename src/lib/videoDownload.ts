@@ -57,7 +57,8 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
   if (isManagedVideoProxyUrl(trimmedUrl) || isManagedVideoDownloadUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return unique([trimmedUrl, ...buildVideoDownloadUrlCandidates(inner, rawFileName)]);
     } catch {}
     return [trimmedUrl];
@@ -73,7 +74,8 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
   if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
   if (isManagedVideoDownloadUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return buildVideoProxyUrlCandidates(inner);
     } catch {}
   }
@@ -87,7 +89,8 @@ export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): stri
   if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
   if (isManagedVideoProxyUrl(trimmedUrl)) {
     try {
-      const inner = new URL(trimmedUrl).searchParams.get("url");
+      const parsed = new URL(trimmedUrl);
+      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
       if (inner) return buildVideoDownloadUrl(inner, rawFileName);
     } catch {}
   }
