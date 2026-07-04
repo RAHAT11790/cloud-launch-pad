@@ -1,4 +1,4 @@
-// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// 🆕 NEW v3 (2026-07-04) — Ultra playback: long-cache segments + fast playlist SWR. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // an-playback — playback-only AN HLS proxy.
 //
