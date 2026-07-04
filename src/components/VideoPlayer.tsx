@@ -5464,11 +5464,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
           };
 
-          const buildDlId = (q: string, sub: string) =>
-            `${animeId || title}::${sub || "movie"}::${q || "Auto"}`
-              .replace(/\s+/g, "_")
-              .toLowerCase();
-
           const pickEpUrlForQuality = (ep: DownloadEpisodeOption, quality: string): string => {
             return ep.qualityLinks[quality] || "";
           };
@@ -5504,17 +5499,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           };
 
           const startMovieDownload = async (quality: string) => {
-            // Downloads are available for free + premium users. The download
-            // manager handles size/progress and saves the finished MP4 locally.
             if (!isDownloadAllowedForFree(quality)) {
               toast.error("Free downloads are limited to 480P. Buy premium for higher quality.");
               return;
             }
             const movieLabel = String(title || subtitle || "video").trim();
-            const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
-            const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
-            if (!directHttpsUrl) { toast.error("Download not available"); return; }
-            const started = triggerBackgroundVideoDownload(directHttpsUrl, buildDownloadFileName(movieLabel, quality));
+            const browserUrl = getDownloadUrl(src, quality, movieLabel, [src]);
+            if (!browserUrl) { toast.error("Download not available"); return; }
+            const started = triggerBackgroundVideoDownload(browserUrl, buildDownloadFileName(movieLabel, quality));
             if (started) toast.success("Download sent to browser");
             closePanel();
           };
