@@ -29,6 +29,7 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
+import { readPersistentCache, updateCachedState, writePersistentCache } from "@/lib/persistentCache";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -36,6 +37,25 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
   if (epIdx !== undefined) params.set("e", String(epIdx));
   const qs = params.toString();
   return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+};
+
+const ADMIN_CACHE = {
+  categories: "rs_admin_cache_categories_v1",
+  webseries: "rs_admin_cache_webseries_v1",
+  movies: "rs_admin_cache_movies_v1",
+  users: "rs_admin_cache_users_v1",
+  appUsers: "rs_admin_cache_app_users_v1",
+  notifications: "rs_admin_cache_notifications_v1",
+  releases: "rs_admin_cache_releases_v1",
+  comments: "rs_admin_cache_comments_v1",
+  animesaltAll: "rs_admin_cache_animesalt_all_v1",
+  animesaltAllTs: "rs_admin_cache_animesalt_all_ts_v1",
+  animesaltSelected: "rs_admin_cache_animesalt_selected_v1",
+  weeklySchedule: "rs_admin_cache_weekly_schedule_v1",
+  analyticsViews: "rs_admin_cache_analytics_views_v1",
+  activeViewers: "rs_admin_cache_active_viewers_v1",
+  dailyActiveUsers: "rs_admin_cache_daily_active_users_v1",
+  allTimeTotals: "rs_admin_cache_all_time_totals_v1",
 };
 
 type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "adsterra" | "backdrop-ai";
@@ -2010,11 +2030,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [fetchingOverlay, setFetchingOverlay] = useState(false);
 
   // Data state
-  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
-  const [webseriesData, setWebseriesData] = useState<any[]>([]);
-  const [moviesData, setMoviesData] = useState<any[]>([]);
-  const [usersData, setUsersData] = useState<any[]>([]);
-  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
+  const [categoriesData, setCategoriesData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.categories, {}));
+  const [webseriesData, setWebseriesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.webseries, []));
+  const [moviesData, setMoviesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.movies, []));
+  const [usersData, setUsersData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.users, []));
+  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.appUsers, {}));
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   useEffect(() => {
@@ -2031,9 +2051,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       return name.includes(q) || email.includes(q) || id.includes(q);
     });
   }, [usersData, debouncedUserSearch]);
-  const [notificationsData, setNotificationsData] = useState<any[]>([]);
-  const [releasesData, setReleasesData] = useState<any[]>([]);
-  const [commentsData, setCommentsData] = useState<any[]>([]);
+  const [notificationsData, setNotificationsData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.notifications, []));
+  const [releasesData, setReleasesData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.releases, []));
+  const [commentsData, setCommentsData] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.comments, []));
 
   // Form states
   const [categoryInput, setCategoryInput] = useState("");
@@ -2131,13 +2151,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [globalFreeMinutes, setGlobalFreeMinutes] = useState("0");
 
   // Analytics state
-  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
-  const [activeViewers, setActiveViewers] = useState<Record<string, any>>({});
-  const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>({});
-  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>({});
+  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.analyticsViews, {}));
+  const [activeViewers, setActiveViewers] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.activeViewers, {}));
+  const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.dailyActiveUsers, {}));
+  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>(() => readPersistentCache<Record<string, { count: number; title?: string; lastSeen?: number }>>(ADMIN_CACHE.allTimeTotals, {}));
 
   // AnimeSalt selected data for content options
-  const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>({});
+  const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.animesaltSelected, {}));
 
   // Push progress state
   const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
@@ -2462,17 +2482,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const unsubs: (() => void)[] = [];
 
     unsubs.push(onValue(ref(db, "categories"), (snap) => {
-      setCategoriesData(snap.val() || {});
+      updateCachedState(setCategoriesData, ADMIN_CACHE.categories, snap.val() || {});
     }));
 
     unsubs.push(onValue(ref(db, "webseries"), (snap) => {
       const data = snap.val() || {};
-      setWebseriesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
+      updateCachedState(setWebseriesData, ADMIN_CACHE.webseries, Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
     }));
 
     unsubs.push(onValue(ref(db, "movies"), (snap) => {
       const data = snap.val() || {};
-      setMoviesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
+      updateCachedState(setMoviesData, ADMIN_CACHE.movies, Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
     }));
 
     unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
@@ -2530,11 +2550,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
     unsubs.push(onValue(ref(db, "users"), (snap) => {
       const data = snap.val() || {};
-      setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
+      updateCachedState(setUsersData, ADMIN_CACHE.users, Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
     }));
 
     unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
-      setAppUsersGlobal(snap.val() || {});
+      updateCachedState(setAppUsersGlobal, ADMIN_CACHE.appUsers, snap.val() || {});
     }));
 
     // FCM token stats listener removed
@@ -2554,7 +2574,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
       allNotifs.sort((a, b) => b.timestamp - a.timestamp);
-      setNotificationsData(allNotifs);
+      updateCachedState(setNotificationsData, ADMIN_CACHE.notifications, allNotifs);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2566,7 +2586,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       const data = snap.val() || {};
       const arr = Object.entries(data).map(([id, r]: any) => ({ id, ...r }));
       arr.sort((a, b) => b.timestamp - a.timestamp);
-      setReleasesData(arr);
+      updateCachedState(setReleasesData, ADMIN_CACHE.releases, arr);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2575,7 +2595,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   useEffect(() => {
     if (activeSection !== "new-releases" && activeSection !== "notifications" && activeSection !== "dashboard") return;
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
-      setAnimesaltSelectedData(snap.val() || {});
+      updateCachedState(setAnimesaltSelectedData, ADMIN_CACHE.animesaltSelected, snap.val() || {});
     });
     return () => unsub();
   }, [activeSection]);
@@ -2788,7 +2808,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
       allComments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      setCommentsData(allComments);
+      updateCachedState(setCommentsData, ADMIN_CACHE.comments, allComments);
     });
     return () => unsub();
   }, [activeSection]);
@@ -2799,7 +2819,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
       const data = snap.val() || {};
-      setAnalyticsViews(data);
+      updateCachedState(setAnalyticsViews, ADMIN_CACHE.analyticsViews, data);
 
       // 🧹 Auto-cleanup: delete every date bucket older than today.
       // Today's bucket is preserved so the dashboard always shows fresh stats.
@@ -2816,11 +2836,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       } catch {}
     }));
     unsubs.push(onValue(ref(db, "analytics/activeViewers"), (snap) => {
-      setActiveViewers(snap.val() || {});
+      updateCachedState(setActiveViewers, ADMIN_CACHE.activeViewers, snap.val() || {});
     }));
     unsubs.push(onValue(ref(db, "analytics/dailyActive"), (snap) => {
       const data = snap.val() || {};
-      setDailyActiveUsers(data);
+      updateCachedState(setDailyActiveUsers, ADMIN_CACHE.dailyActiveUsers, data);
 
       // 🧹 Cleanup older daily-active buckets too (keep today only)
       try {
@@ -2834,7 +2854,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     }));
     // Subscribe to persistent all-time totals (never reset)
     unsubs.push(onValue(ref(db, "analytics/totals/views"), (snap) => {
-      setAllTimeTotals(snap.val() || {});
+      updateCachedState(setAllTimeTotals, ADMIN_CACHE.allTimeTotals, snap.val() || {});
     }));
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
@@ -3105,11 +3125,27 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Ref to store last saved series ID (for Save+Notify on new series)
   const lastSavedSeriesIdRef = useRef<string>("");
+  const savingSeriesRef = useRef<boolean>(false);
 
-  const saveSeries = () => {
+  const saveSeries = async () => {
     if (!seriesForm) return;
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
+    if (savingSeriesRef.current) { toast.info("Saving in progress…"); return; }
+
+    // Duplicate-title guard when adding a NEW series — auto-redirect to edit
+    if (!seriesEditId) {
+      const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const target = norm(seriesForm.title);
+      const dupe = webseriesData.find((w: any) => norm(w.title) === target);
+      if (dupe) {
+        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
+        savingSeriesRef.current = false;
+        await editSeries(dupe.id);
+        return;
+      }
+    }
+
 
       const nextMap = sanitizeSeasonLanguageMap({
         ...seriesSeasonsByLanguage,
@@ -3117,7 +3153,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       });
       const syncedForm = syncSeriesLanguageSummary(seriesForm, nextMap);
       setSeriesForm(syncedForm);
-      const data = {
+      const data: any = {
       ...syncedForm,
       cast: seriesCast,
       audioTracks: Array.isArray(syncedForm.audioTracks)
@@ -3140,20 +3176,31 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     let newId = seriesEditId || "";
     if (seriesEditId) {
       saveRef = ref(db, `webseries/${seriesEditId}`);
+      // Preserve original createdAt so Recent Content ordering stays stable
+      try {
+        const existingSnap = await get(saveRef);
+        const existing = existingSnap.val() || {};
+        data.createdAt = existing.createdAt || Date.now();
+      } catch {
+        data.createdAt = Date.now();
+      }
     } else {
       saveRef = push(ref(db, "webseries"));
       newId = saveRef.key || "";
       data.createdAt = Date.now();
     }
     lastSavedSeriesIdRef.current = newId;
+    savingSeriesRef.current = true;
     set(saveRef, data)
       .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
         // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
-      .catch(err => toast.error("Error: " + err.message));
+      .catch(err => toast.error("Error: " + err.message))
+      .finally(() => { savingSeriesRef.current = false; });
   };
+
 
   const editSeries = async (id: string) => {
     savedScrollPos.current = window.scrollY;
@@ -3295,13 +3342,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     finally { setFetchingOverlay(false); }
   };
 
-  const saveMovie = () => {
+  const savingMovieRef = useRef<boolean>(false);
+
+  const saveMovie = async () => {
     if (!movieForm) return;
     if (!movieForm.title) { toast.error("Please enter title"); return; }
     if (!movieForm.category) { toast.error("Please select category"); return; }
     if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
+    if (savingMovieRef.current) { toast.info("Saving in progress…"); return; }
 
-    const data = {
+    // Duplicate-title guard for NEW movie — auto-redirect to edit
+    if (!movieEditId) {
+      const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const target = norm(movieForm.title);
+      const dupe = moviesData.find((m: any) => norm(m.title) === target);
+      if (dupe) {
+        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
+        savingMovieRef.current = false;
+        await editMovie(dupe.id);
+        return;
+      }
+    }
+
+
+    const data: any = {
       ...movieForm,
       cast: movieCast,
       audioTracks: Array.isArray(movieForm.audioTracks)
@@ -3317,17 +3381,27 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     let saveRef;
     if (movieEditId) {
       saveRef = ref(db, `movies/${movieEditId}`);
+      try {
+        const existingSnap = await get(saveRef);
+        const existing = existingSnap.val() || {};
+        data.createdAt = existing.createdAt || Date.now();
+      } catch {
+        data.createdAt = Date.now();
+      }
     } else {
       saveRef = push(ref(db, "movies"));
       data.createdAt = Date.now();
     }
+    savingMovieRef.current = true;
     set(saveRef, data)
       .then(() => {
         toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
         setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
       })
-      .catch(err => toast.error("Error: " + err.message));
+      .catch(err => toast.error("Error: " + err.message))
+      .finally(() => { savingMovieRef.current = false; });
   };
+
 
   const editMovie = async (id: string) => {
     savedScrollPos.current = window.scrollY;
@@ -3625,8 +3699,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Computed stats (memoized to prevent recalculation on every render)
   const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
-  const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
-  const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
+
+  // Live "online" is derived from lastSeen freshness (heartbeat is every 30s;
+  // give a 90s grace window so a missed beat doesn't drop the user).
+  // The `online` boolean alone gets stuck at true forever because browsers do
+  // not reliably fire onDisconnect, causing the 991/65 permanent-glitch count.
+  const [presenceTick, setPresenceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setPresenceTick((x) => x + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const ONLINE_WINDOW_MS = 90_000;
+  const onlineUsers = useMemo(() => {
+    const now = Date.now();
+    return usersData.filter((u: any) => {
+      const seen = Number(u?.lastSeen || 0);
+      return seen > 0 && now - seen <= ONLINE_WINDOW_MS;
+    }).length;
+    // presenceTick drives recalculation every 30s
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersData, presenceTick]);
+  const offlineUsers = useMemo(() => Math.max(0, usersData.length - onlineUsers), [usersData.length, onlineUsers]);
+
 
   // Strict guest detection (per user spec):
   // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
@@ -3649,9 +3743,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
 
   // Weekly schedule (for dashboard preview)
-  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
+  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.weeklySchedule, {}));
   useEffect(() => {
-    const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
+    const unsub = onValue(ref(db, "weeklySchedule"), snap => updateCachedState(setWeeklyScheduleData, ADMIN_CACHE.weeklySchedule, snap.val() || {}));
     return () => unsub();
   }, []);
   const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
@@ -9981,9 +10075,9 @@ const AnimeSaltManagerSection = ({
   glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string;
   categoryList: { id: string; name: string }[]; selectClass: string;
 }) => {
-  const [allItems, setAllItems] = useState<any[]>([]);
-  const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(true);
+  const [allItems, setAllItems] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.animesaltAll, []));
+  const [selectedItems, setSelectedItems] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.animesaltSelected, {}));
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "series" | "movies" | "added">("all");
   const [addCategory, setAddCategory] = useState("");
@@ -10066,12 +10160,22 @@ const AnimeSaltManagerSection = ({
     toast.success(next ? "AnimeSalt চালু" : "AnimeSalt বন্ধ");
   };
 
-  const loadItems = async () => {
-    setLoading(true);
+  const loadItems = async (force = false) => {
+    const cachedItems = readPersistentCache<any[]>(ADMIN_CACHE.animesaltAll, []);
+    const cachedAt = readPersistentCache<number>(ADMIN_CACHE.animesaltAllTs, 0);
+    const cacheFresh = cachedItems.length > 0 && Date.now() - cachedAt < 24 * 60 * 60 * 1000;
+    if (!force && cacheFresh) {
+      updateCachedState(setAllItems, ADMIN_CACHE.animesaltAll, cachedItems);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(cachedItems.length === 0);
     try {
       const result = await animeSaltApi.browseAll();
       if (result.success && result.items) {
-        setAllItems(result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
+        updateCachedState(setAllItems, ADMIN_CACHE.animesaltAll, result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
+        try { localStorage.setItem(ADMIN_CACHE.animesaltAllTs, JSON.stringify(Date.now())); } catch {}
       }
     } catch (err) {
       console.error('AnimeSalt load failed:', err);
@@ -10080,20 +10184,24 @@ const AnimeSaltManagerSection = ({
     setLoading(false);
   };
 
-  useEffect(() => { loadItems(); }, []);
+  useEffect(() => { loadItems(false); }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     // Clear cache to force fresh fetch
-    try { localStorage.removeItem('animesalt_all_v3'); } catch {}
-    await loadItems();
+    try {
+      localStorage.removeItem('animesalt_all_v3');
+      localStorage.removeItem(ADMIN_CACHE.animesaltAll);
+      localStorage.removeItem(ADMIN_CACHE.animesaltAllTs);
+    } catch {}
+    await loadItems(true);
     setRefreshing(false);
     toast.success('AnimeSalt ডাটা রিফ্রেশ হয়েছে!');
   };
 
   useEffect(() => {
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
-      setSelectedItems(snap.val() || {});
+      updateCachedState(setSelectedItems, ADMIN_CACHE.animesaltSelected, snap.val() || {});
     });
     return () => unsub();
   }, []);
@@ -10710,7 +10818,10 @@ const AnimeSaltManagerSection = ({
     // Also add to allItems so it shows in the grid
     setAllItems(prev => {
       if (prev.some(i => i.slug === item.slug)) return prev;
-      return [item, ...prev];
+      const next = [item, ...prev];
+      writePersistentCache(ADMIN_CACHE.animesaltAll, next);
+      try { localStorage.setItem(ADMIN_CACHE.animesaltAllTs, JSON.stringify(Date.now())); } catch {}
+      return next;
     });
     setUrlFetchedItem(null);
     setUrlInput("");

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
+import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
 import {
   Calendar, Search, Save, Trash2, Edit, X, Check, AlertTriangle,
   CalendarDays, Film, ChevronRight, Sparkles, Power,
@@ -9,6 +10,7 @@ import {
 const DAYS = [
   "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
 ] as const;
+const LS_WEEKLY_SCHEDULE = "rs_admin_cache_weekly_schedule_v1";
 type Day = typeof DAYS[number];
 
 const SHORT: Record<Day, string> = {
@@ -53,7 +55,7 @@ interface Props {
 export default function WeeklyEpisodeManager({
   webseriesData, glassCard, inputClass, selectClass, btnPrimary, btnSecondary, onEditSeries,
 }: Props) {
-  const [schedules, setSchedules] = useState<Record<string, Schedule>>({});
+  const [schedules, setSchedules] = useState<Record<string, Schedule>>(() => readPersistentCache<Record<string, Schedule>>(LS_WEEKLY_SCHEDULE, {}));
   const [activeDay, setActiveDay] = useState<Day>(todayName());
 
   // Picker state
@@ -71,7 +73,7 @@ export default function WeeklyEpisodeManager({
 
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklySchedule"), snap => {
-      setSchedules(snap.val() || {});
+      updateCachedState(setSchedules, LS_WEEKLY_SCHEDULE, snap.val() || {});
     });
     return () => unsub();
   }, []);

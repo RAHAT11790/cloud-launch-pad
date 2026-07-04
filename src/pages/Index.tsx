@@ -1190,21 +1190,7 @@ const Index = () => {
     return randomSlides;
   }, [allAnime, heroRotation, pinnedHeroPosts]);
 
-  // ALL ANIME: deduplicated, loads incrementally every 10s
-  const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(6);
-  
-  useEffect(() => {
-    if (animeSaltItems.length === 0) return;
-    setAllAnimeVisibleCount(6); // reset on new data
-    const timer = setInterval(() => {
-      setAllAnimeVisibleCount(prev => {
-        const max = animeSaltItems.length;
-        if (prev >= max) { clearInterval(timer); return prev; }
-        return Math.min(prev + 6, max);
-      });
-    }, 10000); // every 10 seconds
-    return () => clearInterval(timer);
-  }, [animeSaltItems.length]);
+  // ALL ANIME: cached, deduplicated, rendered at once — no repeated staged loader.
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
@@ -1624,12 +1610,37 @@ const Index = () => {
       if (playerStateRef.current) setPlayerState(null);
       return;
     }
-    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
+    if (!watchRouteAnimeId || !freeAccessLoaded) return;
 
     const params = new URLSearchParams(location.search);
     const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
     const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
-    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+
+    // Lookup order: RS firebase (allAnime) → AN salt items (as_ prefix)
+    const isSaltLink = watchRouteAnimeId.startsWith("as_");
+    let targetAnime: AnimeItem | undefined;
+    if (isSaltLink) {
+      // Wait until AN data has loaded, otherwise the link would silently die
+      if (saltLoading) return;
+      targetAnime = animeSaltItems.find((item) => item.id === watchRouteAnimeId);
+      // Fallback: construct a minimal stub from the slug so playback flow can
+      // still fetch the episode list on its own (mirrors /anime/ deep-link path)
+      if (!targetAnime) {
+        const slug = watchRouteAnimeId.slice(3);
+        if (slug) {
+          targetAnime = {
+            id: watchRouteAnimeId,
+            title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            poster: "", backdrop: "", year: "", rating: "", language: "",
+            category: "AnimeSalt", type: "webseries", storyline: "",
+            source: "animesalt", slug,
+          } as AnimeItem;
+        }
+      }
+    } else {
+      if (allAnime.length === 0) return;
+      targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    }
     if (!targetAnime) return;
 
     const current = playerStateRef.current;
@@ -1639,7 +1650,8 @@ const Index = () => {
     if (sameAnime && sameSeason && sameEpisode && current) return;
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+  }, [allAnime, animeSaltItems, saltLoading, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -2676,7 +2688,7 @@ const Index = () => {
             <div className="px-4 mb-6">
               <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
               <div className="grid grid-cols-3 gap-2.5">
-                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
+                {allAnimeSaltUnique.map((anime) => (
                   <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
