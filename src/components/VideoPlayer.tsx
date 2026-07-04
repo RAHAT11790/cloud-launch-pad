@@ -3030,7 +3030,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ? nextQualityOptions.find((q) => q.label === savedQualityLabel && (!is4KLabel(q.label) || isPremium))
           : null);
     if (preservedQuality) manualQualitySelectedRef.current = true;
-    const baseRawSrc = preservedQuality?.src || src;
+    // RS direct HTTPS servers often host non-faststart MP4s. Starting Auto on
+    // 720p avoids pulling a huge 1080p open-ended range before metadata lands,
+    // which is the main Server 1 buffering/false-expired trigger on low phones.
+    const autoStartQuality = !preservedQuality && !isAnimeSaltContent
+      ? nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
+        || nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
+        || null
+      : null;
+    const baseRawSrc = preservedQuality?.src || autoStartQuality?.src || src;
     const isFastHlsSource = isHlsLikeUrl(baseRawSrc);
     const hadManualServer = manualServerSelectedRef.current;
     const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
@@ -3061,8 +3069,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
-    currentQualityRef.current = preservedQuality?.label || "Auto";
-    setCurrentQuality(preservedQuality?.label || "Auto");
+    currentQualityRef.current = preservedQuality?.label || autoStartQuality?.label || "Auto";
+    setCurrentQuality(preservedQuality?.label || autoStartQuality?.label || "Auto");
     if (isFastHlsSource || !hadManualServer) {
       manualServerSelectedRef.current = false;
       preferredServerIndexRef.current = null;
@@ -3131,7 +3139,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // direct-MP4 watchdog mark it as expired before hls.js has recovered/retried.
     if (isAnimeSaltContent || isHlsSrc) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
-    const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw) ? 24000 : 12000;
+    const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
+      ? 24000
+      : /^https:\/\//i.test(raw)
+        ? 45000
+        : 12000;
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
@@ -3717,7 +3729,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, 1500);
       if (hardStallTimer) clearTimeout(hardStallTimer);
       const raw = activeSourceBaseRef.current || sourceBaseRef.current || currentSrc;
-      const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw) ? 22000 : 10000;
+      const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
+        ? 22000
+        : /^https:\/\//i.test(raw)
+          ? 45000
+          : 10000;
       hardStallTimer = setTimeout(() => {
         if (v.readyState < 2 && !v.paused) {
           tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
