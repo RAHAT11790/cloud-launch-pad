@@ -208,23 +208,6 @@ Deno.serve(async (req) => {
     if (proxied) {
       upstream = proxied;
     } else {
-    // Some HTTP file hosts (notably bot-hosting/RSFR style servers) accept
-    // HEAD/probe requests but close cloud/Supabase GET streams before sending
-    // bytes. In that case the only working route is the user's own browser/IP.
-    // For real download clicks, redirect to the original URL instead of ending
-    // on a dead JSON error page. Client code also prefers direct HTTP first.
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser",
-          "X-RS-Upstream-Error": msg.slice(0, 180),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -235,18 +218,6 @@ Deno.serve(async (req) => {
   // Any non-OK final upstream → return JSON, never broken bytes.
   if (!upstream.ok && upstream.status !== 206) {
     try { await upstream.body?.cancel(); } catch {}
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser-status",
-          "X-RS-Upstream-Status": String(upstream.status),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({
         error: "Download source error",
