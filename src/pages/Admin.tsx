@@ -4636,6 +4636,10 @@ ${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} 
  }
  });
 
+  const selectedReleaseForPayload = releasesData.find(r => r.id === tgSelectedRelease || r.contentId === tgSelectedAnimeId);
+  const selectedContentTypeForPayload = String(selectedReleaseForPayload?.contentType || (moviesData.some(m => m.id === tgSelectedAnimeId) ? "movies" : "webseries"));
+  const telegramCollectionForPayload = selectedContentTypeForPayload === "movie" || selectedContentTypeForPayload === "movies" ? "movies" : "webseries";
+
   for (const chatId of channelIds) {
   await yieldAdminFrame();
  const payload = {
@@ -4643,6 +4647,8 @@ ${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} 
  caption,
  photoUrl: tgPosterUrl || undefined,
  inlineButtons: inlineButtons.length > 0 ? inlineButtons : undefined,
+  collection: telegramCollectionForPayload,
+  seriesId: tgSelectedAnimeId || selectedReleaseForPayload?.contentId || undefined,
  // Free Access button is controlled ENTIRELY by the global toggle at
  // settings/telegramFreeAccess.enabled (read inside the edge function).
  // Do NOT force-include here — that would bypass the OFF switch.
@@ -4961,7 +4967,8 @@ ${tgBulkFooter}
  // Set button link with deep link to the exact episode when available
  const animeId = release.contentId || release.id;
  const shareSeasonIdx = release.episodeInfo?.type === "movie" ? undefined : Math.max(0, Number(release.episodeInfo?.seasonNumber || 1) - 1);
- const shareEpIdx = release.episodeInfo?.type === "movie" ? undefined : getEpisodeIndexForShare(ws?.seasons?.[shareSeasonIdx ?? 0], release.episodeInfo?.episodeNumber, 0);
+ const shareContent = contentType === "webseries" ? ((await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId)) : null;
+ const shareEpIdx = release.episodeInfo?.type === "movie" ? undefined : getEpisodeIndexForShare(shareContent?.seasons?.[shareSeasonIdx ?? 0], release.episodeInfo?.episodeNumber, 0);
  setTgButtonLink(buildEpisodeShareUrl(animeId, shareSeasonIdx, shareEpIdx));
  setTgSelectedAnimeId(String(animeId));
  // Load saved per-anime custom buttons (if any)
