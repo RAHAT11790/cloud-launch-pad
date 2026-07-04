@@ -2616,13 +2616,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       abrEwmaDefaultEstimate: 6_000_000,
       abrBandWidthFactor: 0.95,
       abrBandWidthUpFactor: 0.9,
-      // Low-memory buffer (1MB check size) — friendly to low-end phones and
-      // slow networks. Prevents huge pre-buffering that stalls skip/seek.
-      backBufferLength: 10,
-      maxBufferLength: 15,
-      maxMaxBufferLength: 30,
-      maxBufferSize: 1 * 1024 * 1024, // 1 MB check size (per user request)
-      maxBufferHole: 0.3,
+      // Ultra buffer — skip lands inside preloaded chunks nearly every time.
+      backBufferLength: 30,
+      maxBufferLength: 180,
+      maxMaxBufferLength: 600,
+      maxBufferSize: 200 * 1024 * 1024,
+      maxBufferHole: 0.5,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 10,
       nudgeOffset: 0.15,
