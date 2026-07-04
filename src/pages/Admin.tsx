@@ -3105,27 +3105,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Ref to store last saved series ID (for Save+Notify on new series)
   const lastSavedSeriesIdRef = useRef<string>("");
-  const savingSeriesRef = useRef<boolean>(false);
 
-  const saveSeries = async () => {
+  const saveSeries = () => {
     if (!seriesForm) return;
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
-    if (savingSeriesRef.current) { toast.info("Saving in progress…"); return; }
-
-    // Duplicate-title guard when adding a NEW series — auto-redirect to edit
-    if (!seriesEditId) {
-      const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
-      const target = norm(seriesForm.title);
-      const dupe = webseriesData.find((w: any) => norm(w.title) === target);
-      if (dupe) {
-        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
-        savingSeriesRef.current = false;
-        await editSeries(dupe.id);
-        return;
-      }
-    }
-
 
       const nextMap = sanitizeSeasonLanguageMap({
         ...seriesSeasonsByLanguage,
@@ -3133,7 +3117,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       });
       const syncedForm = syncSeriesLanguageSummary(seriesForm, nextMap);
       setSeriesForm(syncedForm);
-      const data: any = {
+      const data = {
       ...syncedForm,
       cast: seriesCast,
       audioTracks: Array.isArray(syncedForm.audioTracks)
@@ -3156,31 +3140,20 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     let newId = seriesEditId || "";
     if (seriesEditId) {
       saveRef = ref(db, `webseries/${seriesEditId}`);
-      // Preserve original createdAt so Recent Content ordering stays stable
-      try {
-        const existingSnap = await get(saveRef);
-        const existing = existingSnap.val() || {};
-        data.createdAt = existing.createdAt || Date.now();
-      } catch {
-        data.createdAt = Date.now();
-      }
     } else {
       saveRef = push(ref(db, "webseries"));
       newId = saveRef.key || "";
       data.createdAt = Date.now();
     }
     lastSavedSeriesIdRef.current = newId;
-    savingSeriesRef.current = true;
     set(saveRef, data)
       .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
         // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
-      .catch(err => toast.error("Error: " + err.message))
-      .finally(() => { savingSeriesRef.current = false; });
+      .catch(err => toast.error("Error: " + err.message));
   };
-
 
   const editSeries = async (id: string) => {
     savedScrollPos.current = window.scrollY;
@@ -3322,30 +3295,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     finally { setFetchingOverlay(false); }
   };
 
-  const savingMovieRef = useRef<boolean>(false);
-
-  const saveMovie = async () => {
+  const saveMovie = () => {
     if (!movieForm) return;
     if (!movieForm.title) { toast.error("Please enter title"); return; }
     if (!movieForm.category) { toast.error("Please select category"); return; }
     if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
-    if (savingMovieRef.current) { toast.info("Saving in progress…"); return; }
 
-    // Duplicate-title guard for NEW movie — auto-redirect to edit
-    if (!movieEditId) {
-      const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
-      const target = norm(movieForm.title);
-      const dupe = moviesData.find((m: any) => norm(m.title) === target);
-      if (dupe) {
-        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
-        savingMovieRef.current = false;
-        await editMovie(dupe.id);
-        return;
-      }
-    }
-
-
-    const data: any = {
+    const data = {
       ...movieForm,
       cast: movieCast,
       audioTracks: Array.isArray(movieForm.audioTracks)
@@ -3361,27 +3317,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     let saveRef;
     if (movieEditId) {
       saveRef = ref(db, `movies/${movieEditId}`);
-      try {
-        const existingSnap = await get(saveRef);
-        const existing = existingSnap.val() || {};
-        data.createdAt = existing.createdAt || Date.now();
-      } catch {
-        data.createdAt = Date.now();
-      }
     } else {
       saveRef = push(ref(db, "movies"));
       data.createdAt = Date.now();
     }
-    savingMovieRef.current = true;
     set(saveRef, data)
       .then(() => {
         toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
         setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
       })
-      .catch(err => toast.error("Error: " + err.message))
-      .finally(() => { savingMovieRef.current = false; });
+      .catch(err => toast.error("Error: " + err.message));
   };
-
 
   const editMovie = async (id: string) => {
     savedScrollPos.current = window.scrollY;
@@ -3679,28 +3625,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Computed stats (memoized to prevent recalculation on every render)
   const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
-
-  // Live "online" is derived from lastSeen freshness (heartbeat is every 30s;
-  // give a 90s grace window so a missed beat doesn't drop the user).
-  // The `online` boolean alone gets stuck at true forever because browsers do
-  // not reliably fire onDisconnect, causing the 991/65 permanent-glitch count.
-  const [presenceTick, setPresenceTick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setPresenceTick((x) => x + 1), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  const ONLINE_WINDOW_MS = 90_000;
-  const onlineUsers = useMemo(() => {
-    const now = Date.now();
-    return usersData.filter((u: any) => {
-      const seen = Number(u?.lastSeen || 0);
-      return seen > 0 && now - seen <= ONLINE_WINDOW_MS;
-    }).length;
-    // presenceTick drives recalculation every 30s
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usersData, presenceTick]);
-  const offlineUsers = useMemo(() => Math.max(0, usersData.length - onlineUsers), [usersData.length, onlineUsers]);
-
+  const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
+  const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
 
   // Strict guest detection (per user spec):
   // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
