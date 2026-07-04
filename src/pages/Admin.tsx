@@ -3161,21 +3161,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  finally { setFetchingOverlay(false); }
  };
 
- const fetchSeriesDetails = async (id: number) => {
- // Check if this TMDB ID already exists
- const existing = webseriesData.find(s => s.tmdbId === id || s.tmdbId === String(id));
- if (existing) {
- toast.warning(`"${existing.title}" already exists!`, { duration: 5000 });
- // On second click (confirm), load existing data for editing
- if (seriesForm?.tmdbId === id || seriesForm?.tmdbId === String(id)) {
- editSeries(existing.id);
- setSeriesResults([]);
- return;
- }
- // Set form with TMDB ID so next click loads existing
- setSeriesForm({ tmdbId: id });
- return;
- }
+  const fetchSeriesDetails = async (id: number) => {
+  // Check if this TMDB ID already exists → jump straight to Edit page.
+  const existing = webseriesData.find(s => s.tmdbId === id || s.tmdbId === String(id));
+  if (existing) {
+   toast.warning(`"${existing.title}" is already added — opening edit page`, { duration: 4000 });
+   editSeries(existing.id);
+   setSeriesResults([]);
+   setSeriesSearch("");
+   return;
+  }
 
  setFetchingOverlay(true);
  try {
