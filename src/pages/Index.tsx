@@ -1190,21 +1190,7 @@ const Index = () => {
     return randomSlides;
   }, [allAnime, heroRotation, pinnedHeroPosts]);
 
-  // ALL ANIME: deduplicated, loads incrementally every 10s
-  const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(6);
-  
-  useEffect(() => {
-    if (animeSaltItems.length === 0) return;
-    setAllAnimeVisibleCount(6); // reset on new data
-    const timer = setInterval(() => {
-      setAllAnimeVisibleCount(prev => {
-        const max = animeSaltItems.length;
-        if (prev >= max) { clearInterval(timer); return prev; }
-        return Math.min(prev + 6, max);
-      });
-    }, 10000); // every 10 seconds
-    return () => clearInterval(timer);
-  }, [animeSaltItems.length]);
+  // ALL ANIME: cached, deduplicated, rendered at once — no repeated staged loader.
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
@@ -2702,7 +2688,7 @@ const Index = () => {
             <div className="px-4 mb-6">
               <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
               <div className="grid grid-cols-3 gap-2.5">
-                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
+                {allAnimeSaltUnique.map((anime) => (
                   <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
