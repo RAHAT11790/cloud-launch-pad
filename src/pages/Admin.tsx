@@ -11608,7 +11608,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
  type="text"
  value={newProxyUrl}
  onChange={e => setNewProxyUrl(e.target.value)}
- placeholder="প্রক্সি URL (such as: https://xxx.supabase.co/functions/v1/rs-video-proxy?url=)"
+  placeholder="প্রক্সি URL (such as: https://xxx.workers.dev/video-proxy)"
  className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-cyan-500 outline-none"
  />
  <input
@@ -11619,8 +11619,8 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
  className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-yellow-500 outline-none"
  />
  <p className="text-[10px] text-zinc-500 leading-relaxed">
- ✨ Key থাকলে: <code className="text-cyan-400">proxy?url=VIDEO&apikey=KEY</code><br/>
- ✨ Key No থাকলে: <code className="text-cyan-400">proxy?url=VIDEO</code>
+  ✨ Key থাকলে: <code className="text-cyan-400">proxy?src=TOKEN&apikey=KEY</code><br/>
+  ✨ Key No থাকলে: <code className="text-cyan-400">proxy?src=TOKEN</code>
  </p>
  <div className="flex gap-2">
  <button onClick={addCustomProxy} className="flex-1 py-2 text-xs bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors">
