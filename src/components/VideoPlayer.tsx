@@ -2086,6 +2086,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return true;
     }
 
+    // Proxy upstream is down/closed (for example bot-hosting 502). Do not call
+    // any hidden/bypass URL; move to the next admin-configured RS server using
+    // the same episode path/query. This keeps EGD Router as the single source
+    // of truth while avoiding a blank player on one dead origin.
+    if (effectiveVideoServers.length > 1 && !manualServerSelectedRef.current) {
+      failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
+      for (let offset = 1; offset < effectiveVideoServers.length; offset += 1) {
+        const nextIndex = (activeServerIndex + offset) % effectiveVideoServers.length;
+        const nextServer = effectiveVideoServers[nextIndex];
+        if (!nextServer || (nextServer.locked && !isPremium)) continue;
+        if (failedSrcsRef.current.has(`__server_failover_${nextIndex}`)) continue;
+        const nextRaw = getServerScopedSource(sourceBaseRef.current || activeSourceBaseRef.current, nextIndex);
+        const nextResolved = buildPlaybackCandidates(
+          nextRaw,
+          cdnEnabled,
+          proxyUrl || undefined,
+          proxyApiKey || undefined,
+          preferProxy
+        )[0];
+        if (!nextResolved || failedSrcsRef.current.has(nextResolved)) continue;
+        pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
+        activeSourceBaseRef.current = nextRaw;
+        setActiveServerIndex(nextIndex);
+        setCurrentSrc(nextResolved);
+        setVideoError(false);
+        setIsBuffering(true);
+        retryAttemptsRef.current.clear();
+        return true;
+      }
+    }
+
     // No alternate route left. Before declaring the link expired, give the
     // current URL a couple of soft reload attempts — RS/direct-MP4 URLs often
     // fail once on a transient CDN/proxy hiccup (429, cold cache miss, network
@@ -2113,7 +2144,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
-  }, [cdnEnabled, currentQuality, currentSrc, isAnimeSaltContent, preferProxy, proxyApiKey, proxyUrl]);
+  }, [activeServerIndex, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
