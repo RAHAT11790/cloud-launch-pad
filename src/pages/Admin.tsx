@@ -3741,9 +3741,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
 
   // Weekly schedule (for dashboard preview)
-  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
+  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.weeklySchedule, {}));
   useEffect(() => {
-    const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
+    const unsub = onValue(ref(db, "weeklySchedule"), snap => updateCachedState(setWeeklyScheduleData, ADMIN_CACHE.weeklySchedule, snap.val() || {}));
     return () => unsub();
   }, []);
   const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
