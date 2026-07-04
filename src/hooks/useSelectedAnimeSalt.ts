@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db, ref, onValue } from '@/lib/firebase';
 import type { AnimeItem } from '@/data/animeData';
-import { readPersistentCache, updateCachedState } from '@/lib/persistentCache';
-
-const LS_ANIME_SALT_SELECTED = 'rs_cache_animesalt_selected_v1';
 
 const normalizeUrl = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 export function useSelectedAnimeSalt() {
-  const [items, setItems] = useState<AnimeItem[]>(() => readPersistentCache<AnimeItem[]>(LS_ANIME_SALT_SELECTED, []));
-  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<AnimeItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
@@ -41,7 +38,7 @@ export function useSelectedAnimeSalt() {
       });
 
       converted.sort((a, b) => b.sortAt - a.sortAt);
-      updateCachedState(setItems, LS_ANIME_SALT_SELECTED, converted.map((entry) => entry.anime));
+      setItems(converted.map((entry) => entry.anime));
       setLoading(false);
     });
 

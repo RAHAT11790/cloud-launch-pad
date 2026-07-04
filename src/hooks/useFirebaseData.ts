@@ -1,17 +1,30 @@
 import { useState, useEffect, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
-import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
 
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
 
+const readCache = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch { return fallback; }
+};
+const writeCache = (key: string, value: unknown) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
 export function useFirebaseData() {
-  const [webseries, setWebseries] = useState<AnimeItem[]>(() => readPersistentCache<AnimeItem[]>(LS_WS, []));
-  const [movies, setMovies] = useState<AnimeItem[]>(() => readPersistentCache<AnimeItem[]>(LS_MOV, []));
-  const [categories, setCategories] = useState<string[]>(() => readPersistentCache<string[]>(LS_CATS, []));
-  const [loading, setLoading] = useState(false);
+  const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
+  const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
+  const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
+  const [loading, setLoading] = useState(() => {
+    // If we already have cached data, treat as ready immediately for zero-latency UI
+    return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
+  });
 
   useEffect(() => {
     let loadedCount = 0;
@@ -28,7 +41,8 @@ export function useFirebaseData() {
       Object.values(data).forEach((cat: any) => {
         if (cat.name) cats.push(cat.name);
       });
-      updateCachedState(setCategories, LS_CATS, cats);
+      setCategories(cats);
+      writeCache(LS_CATS, cats);
       checkLoaded();
     });
 
@@ -129,7 +143,8 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      updateCachedState(setWebseries, LS_WS, publicItems);
+      setWebseries(publicItems);
+      writeCache(LS_WS, publicItems);
       checkLoaded();
     });
 
@@ -178,7 +193,8 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      updateCachedState(setMovies, LS_MOV, publicItems);
+      setMovies(publicItems);
+      writeCache(LS_MOV, publicItems);
       checkLoaded();
     });
 
