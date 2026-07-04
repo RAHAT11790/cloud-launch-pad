@@ -9,11 +9,38 @@ import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
-  if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
-  if (epIdx !== undefined) params.set("e", String(epIdx));
+  if (seasonIdx !== undefined) params.set("s", String(seasonIdx + 1));
+  if (epIdx !== undefined) params.set("e", String(epIdx + 1));
   const qs = params.toString();
   return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
+
+const parseWatchRouteIndices = (search: string) => {
+  const params = new URLSearchParams(search);
+  const sRaw = params.get("s");
+  const eRaw = params.get("e") ?? params.get("ep");
+  const legacyZeroBased = sRaw !== null && Number(sRaw) <= 0;
+  const parseIdx = (raw: string | null, legacy = false) => {
+    if (raw === null) return undefined;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return undefined;
+    if (legacy) return Math.max(0, Math.floor(n));
+    return Math.max(0, Math.floor(n) - 1);
+  };
+  return {
+    seasonIdx: parseIdx(sRaw, legacyZeroBased),
+    epIdx: parseIdx(eRaw, legacyZeroBased),
+  };
+};
+
+const isAnimeSaltRouteItem = (anime?: AnimeItem | null) => !!anime && (
+  anime.source === "animesalt"
+  || String(anime.id || "").startsWith("as_")
+  || String(anime.id || "").startsWith("an_")
+  || String(anime.id || "").startsWith("an_mv_")
+  || !!anime.anSlug
+  || !!anime.animeSaltSlug
+);
 
 const AN_API_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api`;
 const AN_PLAYBACK_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback`;
@@ -1134,8 +1161,8 @@ const Index = () => {
   const buildAnimeRoute = useCallback((animeId: string) => `/anime/${encodeURIComponent(animeId)}`, []);
   const buildWatchRoute = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     const params = new URLSearchParams();
-    if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
-    if (epIdx !== undefined) params.set("e", String(epIdx));
+    if (seasonIdx !== undefined) params.set("s", String(seasonIdx + 1));
+    if (epIdx !== undefined) params.set("e", String(epIdx + 1));
     const qs = params.toString();
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
@@ -1540,21 +1567,7 @@ const Index = () => {
     // Deep-link from Telegram / share URLs: read ?s= and ?e= so we open
     // the player DIRECTLY at the requested episode instead of bouncing
     // through the details page (kills the 10-15s perceived latency).
-    let deepSIdx: number | undefined;
-    let deepEIdx: number | undefined;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const s = params.get("s");
-      const e = params.get("e") ?? params.get("ep");
-      if (s !== null) {
-        const n = Number(s);
-        if (Number.isFinite(n) && n >= 0) deepSIdx = n;
-      }
-      if (e !== null) {
-        const n = Number(e);
-        if (Number.isFinite(n) && n >= 0) deepEIdx = n;
-      }
-    } catch {}
+    const { seasonIdx: deepSIdx, epIdx: deepEIdx } = parseWatchRouteIndices(window.location.search);
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
@@ -2294,9 +2307,7 @@ const Index = () => {
     }
     if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
 
-    const params = new URLSearchParams(location.search);
-    const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
-    const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
+    const { seasonIdx: nextSeasonIdx, epIdx: nextEpIdx } = parseWatchRouteIndices(location.search);
     const targetAnime = allAnime.find((item) => matchesAnimeRouteId(item, watchRouteAnimeId));
     if (!targetAnime) return;
 
@@ -2305,6 +2316,11 @@ const Index = () => {
     const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
     const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
     if (sameAnime && sameSeason && sameEpisode && current) return;
+
+    if (isAnimeSaltRouteItem(targetAnime)) {
+      void handleCardClick(targetAnime, nextSeasonIdx, nextEpIdx);
+      return;
+    }
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
   }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
@@ -2317,8 +2333,7 @@ const Index = () => {
     if (!legacyAnimeId) return;
 
     if (legacySeason !== null || legacyEpisode !== null) {
-      const sIdx = legacySeason !== null ? Number(legacySeason) : undefined;
-      const eIdx = legacyEpisode !== null ? Number(legacyEpisode) : undefined;
+      const { seasonIdx: sIdx, epIdx: eIdx } = parseWatchRouteIndices(location.search);
       navigate(buildWatchRoute(legacyAnimeId, sIdx, eIdx), { replace: true });
       return;
     }
