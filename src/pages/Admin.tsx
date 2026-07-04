@@ -7373,44 +7373,77 @@ ${tgBulkFooter}
  </div>
 
  {pushShowSeasonEp && (
- <div className="grid grid-cols-2 gap-3 mb-4">
- <div>
+ <>
+ <div className="mb-3">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Season</label>
  <select value={pushSeason} onChange={async e => {
- const val = e.target.value; setPushSeason(val); setPushEpisode("");
+ const val = e.target.value; setPushSeason(val); setPushEpisode(""); setPushEpisodeEnd("");
  if (!pushContent || val === "") { setPushEpisodes([]); return; }
  const [cid] = pushContent.split("|");
  const c = (await getFullAdminContentItem("webseries", cid)) || webseriesData.find(s => s.id === cid);
  const season = c?.seasons?.[parseInt(val)];
- const eps = (season?.episodes || []).map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}` }));
+ const eps = (season?.episodes || []).map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}`, num: ep.episodeNumber || i + 1 }));
  setPushEpisodes(eps);
  }} className={selectClass}>
  <option value="">Select Season</option>
  {pushSeasons.map(s => <option key={s.index} value={s.index}>{s.name}</option>)}
  </select>
  </div>
+ <div className="grid grid-cols-2 gap-3 mb-4">
  <div>
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode</label>
- <select value={pushEpisode} onChange={e => setPushEpisode(e.target.value)} className={selectClass}>
- <option value="">Select Episode</option>
+ <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode Start</label>
+ <select value={pushEpisode} onChange={e => { setPushEpisode(e.target.value); if (pushEpisodeEnd !== "" && parseInt(pushEpisodeEnd) < parseInt(e.target.value)) setPushEpisodeEnd(e.target.value); }} className={selectClass}>
+ <option value="">Start</option>
  {pushEpisodes.map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
  </select>
  </div>
+ <div>
+ <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode End</label>
+ <select value={pushEpisodeEnd} onChange={e => setPushEpisodeEnd(e.target.value)} className={selectClass} disabled={pushEpisode === ""}>
+ <option value="">End (= Start if empty)</option>
+ {pushEpisodes.filter(ep => pushEpisode === "" || ep.index >= parseInt(pushEpisode)).map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
+ </select>
  </div>
+ </div>
+ </>
  )}
 
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (optional — auto-fills)</label>
- <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="🎬 auto: <Title> — New Episode" />
+ {/* Live auto-preview */}
+ {pushContent && (() => {
+ const opt = contentOptions.find(o => o.value === pushContent);
+ const [, ctype] = pushContent.split("|");
+ const seasonName = pushShowSeasonEp && pushSeason !== "" ? (pushSeasons.find(s => String(s.index) === pushSeason)?.name || `Season ${parseInt(pushSeason) + 1}`) : "";
+ const startEpNum = pushShowSeasonEp && pushEpisode !== "" ? (pushEpisodes.find(e => String(e.index) === pushEpisode)?.num || parseInt(pushEpisode) + 1) : null;
+ const endIdx = pushEpisodeEnd !== "" ? pushEpisodeEnd : pushEpisode;
+ const endEpNum = pushShowSeasonEp && endIdx !== "" ? (pushEpisodes.find(e => String(e.index) === endIdx)?.num || parseInt(endIdx) + 1) : null;
+ const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
+ const autoTitle = ctype === "webseries"
+ ? `🎬 ${opt?.label || ""} — New Episode${startEpNum && endEpNum && endEpNum !== startEpNum ? "s" : ""}`
+ : `🎬 ${opt?.label || ""} — New Movie`;
+ const autoDesc = ctype === "webseries"
+ ? `${opt?.label || ""} — ${seasonName}${epRange ? ` • ${epRange}` : ""} is now live!\n▶ Tap to watch instantly on RS Anime.`
+ : `${opt?.label || ""} is now streaming on RS Anime.\n▶ Tap to watch in HD.`;
+ return (
+ <div className="bg-[#0F0F1A] border border-yellow-500/25 rounded-xl p-3 mb-4 space-y-1.5">
+ <p className="text-[10px] uppercase tracking-wide text-yellow-500/70 font-semibold">Auto preview</p>
+ <p className="text-[13px] font-semibold text-white truncate">{pushTitleOverride.trim() || autoTitle}</p>
+ <p className="text-[11.5px] text-[#D1C4E9] whitespace-pre-line leading-snug">{pushBodyOverride.trim() || autoDesc}</p>
+ </div>
+ );
+ })()}
 
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Body (optional — auto-fills)</label>
- <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={2} className={`${inputClass} mb-4 resize-none`} placeholder="auto: <Season> — Episode <N> is now available!" />
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (leave empty for auto)</label>
+ <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="Auto-detected from anime title" />
+
+ <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Short Description (leave empty for auto)</label>
+ <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={3} className={`${inputClass} mb-4 resize-none`} placeholder="Auto: anime name, season, episode range + tap-to-watch line" />
 
  <button
  disabled={pushSending || !pushContent}
  onClick={async () => {
  if (!pushContent) { toast.error("Select a content first"); return; }
  if (pushShowSeasonEp && (pushSeason === "" || pushEpisode === "")) {
- toast.error("Pick season & episode"); return;
+ toast.error("Pick season and start episode"); return;
  }
  const [contentId, contentType] = pushContent.split("|");
  const content = contentType === "webseries"
@@ -7420,22 +7453,32 @@ ${tgBulkFooter}
 
  let seasonNumber: number | undefined; let episodeNumber: number | undefined;
  let seasonName = "Movie"; let deepLink = `/watch/${contentId}`;
+ let startEpNum: number | null = null; let endEpNum: number | null = null;
  if (contentType === "webseries") {
- const sIdx = parseInt(pushSeason); const eIdx = parseInt(pushEpisode);
+ const sIdx = parseInt(pushSeason);
+ const startIdx = parseInt(pushEpisode);
+ const endIdx = pushEpisodeEnd !== "" ? parseInt(pushEpisodeEnd) : startIdx;
  const season = content.seasons?.[sIdx];
- const episode = season?.episodes?.[eIdx];
+ const startEp = season?.episodes?.[startIdx];
+ const endEp = season?.episodes?.[endIdx];
  seasonNumber = sIdx + 1;
- episodeNumber = episode?.episodeNumber || eIdx + 1;
+ episodeNumber = startEp?.episodeNumber || startIdx + 1;
+ startEpNum = startEp?.episodeNumber || startIdx + 1;
+ endEpNum = endEp?.episodeNumber || endIdx + 1;
  seasonName = season?.name || `Season ${seasonNumber}`;
- deepLink = `/watch/${contentId}?s=${sIdx}&e=${eIdx}`;
+ // Notification click → load START episode
+ deepLink = `/watch/${contentId}?s=${sIdx}&e=${startIdx}`;
  }
 
  const backdrop = content.backdrop || content.poster || "";
  const image = backdrop ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
- const autoTitle = contentType === "webseries" ? `🎬 ${content.title} — New Episode` : `🎬 ${content.title} — New Movie`;
+ const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
+ const autoTitle = contentType === "webseries"
+ ? `🎬 ${content.title} — New Episode${startEpNum && endEpNum && endEpNum !== startEpNum ? "s" : ""}`
+ : `🎬 ${content.title} — New Movie`;
  const autoBody = contentType === "webseries"
- ? `${seasonName} — Episode ${episodeNumber} is now available!`
- : `${content.title} (${content.year || ""}) is now available!`;
+ ? `${content.title} — ${seasonName}${epRange ? ` • ${epRange}` : ""} is now live!\n▶ Tap to watch instantly on RS Anime.`
+ : `${content.title} (${content.year || ""}) is now streaming on RS Anime.\n▶ Tap to watch in HD.`;
  const title = pushTitleOverride.trim() || autoTitle;
  const body = pushBodyOverride.trim() || autoBody;
 
@@ -7465,7 +7508,7 @@ ${tgBulkFooter}
  }}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
  >
- <Send size={16} /> {pushSending ? "Sending push…" : "Send Push Notification Now"}
+ <Send size={16} /> {pushSending ? "Sending push…" : "Send Synced Notification"}
  </button>
  {pushLastResult && (
  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
