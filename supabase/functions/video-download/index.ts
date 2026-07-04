@@ -208,11 +208,9 @@ Deno.serve(async (req) => {
   const out = new Headers(corsHeaders);
   const ct = upstream.headers.get("content-type") || "application/octet-stream";
   out.set("Content-Type", ct);
-  const cl = upstream.headers.get("content-length");
-  if (cl) out.set("Content-Length", cl);
   const cr = upstream.headers.get("content-range");
-  if (cr) out.set("Content-Range", cr);
-  out.set("Accept-Ranges", upstream.headers.get("accept-ranges") || "bytes");
+  const acceptRanges = (upstream.headers.get("accept-ranges") || "bytes").toLowerCase();
+  out.set("Accept-Ranges", acceptRanges || "bytes");
   out.set("Cache-Control", "no-store");
 
   // Force attachment with custom filename (UTF-8 safe).
@@ -222,9 +220,122 @@ Deno.serve(async (req) => {
     `attachment; filename="${asciiFilename.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
   );
 
-  return new Response(req.method === "HEAD" ? null : upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText || "OK",
-    headers: out,
+  // Figure out total size + start offset (for resumable-style chunked assembly).
+  const clHeader = upstream.headers.get("content-length");
+  let totalSize = clHeader ? Number(clHeader) : NaN;
+  let startOffset = 0;
+  let endOffset = Number.isFinite(totalSize) && totalSize > 0 ? totalSize - 1 : -1;
+  if (cr) {
+    // e.g. "bytes 0-1048575/12345678"
+    const m = /bytes\s+(\d+)-(\d+)\/(\d+|\*)/i.exec(cr);
+    if (m) {
+      startOffset = Number(m[1]);
+      endOffset = Number(m[2]);
+      if (m[3] !== "*") totalSize = Number(m[3]);
+      out.set("Content-Range", `bytes ${startOffset}-${endOffset}/${m[3]}`);
+    }
+  }
+
+  const status = upstream.status;
+  const statusText = upstream.statusText || "OK";
+
+  // HEAD: return headers only.
+  if (req.method === "HEAD") {
+    if (Number.isFinite(totalSize) && totalSize > 0) out.set("Content-Length", String(totalSize));
+    try { await upstream.body?.cancel(); } catch {}
+    return new Response(null, { status, statusText, headers: out });
+  }
+
+  // If upstream doesn't advertise range support OR we don't know the total size,
+  // fall back to a single-shot pipe (best-effort).
+  const canChunk =
+    acceptRanges === "bytes" &&
+    Number.isFinite(totalSize) && totalSize > 0 &&
+    endOffset >= startOffset;
+
+  if (!canChunk) {
+    if (Number.isFinite(totalSize) && totalSize > 0) out.set("Content-Length", String(totalSize));
+    return new Response(upstream.body, { status, statusText, headers: out });
+  }
+
+  // Chunked assembly: consume the first upstream response we already opened,
+  // then keep requesting successive Range windows so a single upstream drop
+  // never kills the whole download. Each window is retried independently.
+  const CHUNK_BYTES = 2 * 1024 * 1024; // 2MB per upstream slab
+  const finalLength = endOffset - startOffset + 1;
+  out.set("Content-Length", String(finalLength));
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let cursor = startOffset;
+      let currentReader: ReadableStreamDefaultReader<Uint8Array> | null =
+        upstream.body ? upstream.body.getReader() : null;
+      let currentEnd = endOffset; // upstream may have returned the full remainder
+
+      const drainReader = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value && value.byteLength) {
+            controller.enqueue(value);
+            cursor += value.byteLength;
+          }
+        }
+      };
+
+      try {
+        if (currentReader) {
+          try {
+            await drainReader(currentReader);
+          } catch {
+            try { currentReader.cancel(); } catch {}
+          }
+          currentReader = null;
+        }
+
+        while (cursor <= endOffset) {
+          const chunkEnd = Math.min(cursor + CHUNK_BYTES - 1, endOffset);
+          let ok = false;
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              const res = await fetchWithRetry(
+                targetUrl,
+                "GET",
+                `bytes=${cursor}-${chunkEnd}`,
+                ac.signal,
+              );
+              if (!res.ok && res.status !== 206) {
+                try { await res.body?.cancel(); } catch {}
+                if (attempt < MAX_RETRIES) { await sleep(RETRY_DELAY_MS * (attempt + 1)); continue; }
+                throw new Error(`Chunk ${cursor}-${chunkEnd} upstream ${res.status}`);
+              }
+              const reader = res.body!.getReader();
+              try {
+                await drainReader(reader);
+                ok = true;
+                break;
+              } catch (e) {
+                try { reader.cancel(); } catch {}
+                // partial chunk — cursor already advanced; retry the rest.
+                if (attempt < MAX_RETRIES) { await sleep(RETRY_DELAY_MS * (attempt + 1)); continue; }
+                throw e;
+              }
+            } catch (e) {
+              if (attempt >= MAX_RETRIES) throw e;
+              await sleep(RETRY_DELAY_MS * (attempt + 1));
+            }
+          }
+          if (!ok && cursor <= endOffset) throw new Error("Chunk assembly failed");
+        }
+        controller.close();
+      } catch (err) {
+        try { controller.error(err); } catch {}
+      }
+    },
+    cancel() {
+      try { ac.abort(); } catch {}
+    },
   });
+
+  return new Response(stream, { status, statusText, headers: out });
 });
