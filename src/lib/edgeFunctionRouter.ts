@@ -125,6 +125,10 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
       } else if (currentFn !== fnName && (KNOWN_FUNCTION_NAMES.has(currentFn) || parts.length === fnIdx + 1)) {
         parts[fnIdx] = fnName;
       }
+      // Admin sometimes pastes a source/deploy URL ending in `/index.ts` or a
+      // route suffix. Function base URLs must stop at `/functions/v1/<name>`;
+      // query params are appended later by callers.
+      parts.splice(fnIdx + 1);
       url.pathname = `/${parts.join("/")}`;
       url.search = "";
       url.hash = "";
