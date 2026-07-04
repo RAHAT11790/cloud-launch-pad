@@ -1010,7 +1010,7 @@ Deno.serve(async (req) => {
 
     if (path === "/" || path === "") return json(API_ENDPOINTS);
     if (path === "/raw") {
-  const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
+      const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
       if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       return json({ success: true, html: await fetchText(target) });
     }
@@ -1041,7 +1041,7 @@ Deno.serve(async (req) => {
       return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1" || url.searchParams.get("refresh") === "1"));
     }
     if (path === "/hls") {
-      const target = url.searchParams.get("url") || "";
+      const target = url.searchParams.get("url") || fromOpaqueUrlToken(url.searchParams.get("src") || "");
       if (!target) return json({ success: false, error: "missing ?url=" }, 200);
       const playback = new URL(`${publicProtocol}//${url.host}${normalizedPrefix}/an-playback/hls`.replace(/([^:]\/)\/+/g, "$1"));
       playback.searchParams.set("src", toOpaqueUrlToken(target));
