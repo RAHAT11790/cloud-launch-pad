@@ -174,31 +174,20 @@ const isBypassSource = (url: string): boolean => {
   }
 
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
-  // Server 1/2/3/Premium can each be either http:// or https:// depending on
-  // what admin saved. isInsecureHttpSource() reads the actual scheme, so the
-  // right proxy path is chosen automatically per URL.
+  // HTTPS media must stay direct inside the native <video> tag. Only insecure
+  // http:// sources need video-proxy, because an HTTPS app cannot play raw HTTP.
   const isHttp = isInsecureHttpSource(url);
-  // HTTP (mixed-content) URLs MUST be rescued onto HTTPS via the admin-configured
-  // `video-proxy` — that's the RS Server 2/3 path.
-  // Server 1 (HuggingFace / hf.space etc.) is HTTPS but buffers hard when the
-  // browser pulls giant MKV/MP4 slabs direct from the origin. Route those
-  // through the same proxy so the 1MB "check size" cap applies and skip stays
-  // snappy on low-end phones. HLS playlists and embed pages skip this.
-  const lower = url.toLowerCase();
-  const isHfLike = /(?:^|\/\/|\.)(hf\.space|huggingface\.co|huggingface\.io)(?:[/:?#]|$)/i.test(lower);
-  const isMediaFile = /\.(?:mp4|m4v|mkv|mov|webm)(?:[?#]|$)/i.test(lower);
-  const shouldProxyHttps = !isHttp && !!proxyUrl && isMediaFile && (preferProxy || isHfLike);
 
-  if (isHttp || shouldProxyHttps) {
+  if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
-    // Always keep the raw URL as a diagnostic/failover fallback so the server
-    // scanner can move to the next RS mirror instead of showing a blank player.
-    addCandidate(url);
+    // Never hand raw http:// media to the browser from an HTTPS app. It will be
+    // blocked as mixed content (or fail as a media format error) and can trap the
+    // fallback scanner on a route that has no legal playback path.
     return candidates;
   }
 
-  // https:// URL — always direct.
+  // https:// URL — always direct, no proxy.
   addCandidate(url);
   return candidates;
 };
@@ -473,6 +462,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>(() => readCachedVideoServers());
+  const [videoServersLoaded, setVideoServersLoaded] = useState(() => readCachedVideoServers().length > 0);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const manualServerSelectedRef = useRef(false);
@@ -484,6 +474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const servers = normalizeVideoServersValue(snap.val());
       setVideoServers(servers);
+      setVideoServersLoaded(true);
       try { localStorage.setItem(VIDEO_SERVERS_CACHE_KEY, JSON.stringify(servers)); } catch {}
     });
     return () => unsub();
@@ -511,13 +502,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (u.protocol === "http:" || u.protocol === "https:") origins.add(u.origin);
       } catch {}
     };
-    // Do not preconnect to raw RS media hosts when an admin proxy is active —
-    // that leaks source domains in the Network panel and bypasses the router.
+    addOrigin(src);
+    effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
     if (proxyUrl) addOrigin(proxyUrl);
-    else {
-      addOrigin(src);
-      effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
-    }
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -660,16 +647,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy,
-  // saved from EGD Router after the admin deploys their own `video-proxy`.
-  // No hard-coded proxy in code, no EGD Manager duplicate URL field.
-  // The proxy itself decides what to do with each upstream URL:
-  //   • http://  → proxy fetches the upstream and streams it to the browser
-  //                (browsers can't play mixed-content http inside an https page)
-  //                AND enforces the domain allow-list.
-  //   • https:// → proxy passes the bytes through ONLY to enforce the domain
-  //                allow-list (anti-hotlink protection). If no proxy URL is set
-  //                we play https sources directly from the <video> tag.
+  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
+  // It is used only for http:// playback rescue. HTTPS servers play directly
+  // through the native <video> tag and never go through video-proxy.
   useEffect(() => {
     let cancelled = false;
     let routerBase = "";
@@ -3033,6 +3013,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const lastEpisodeKeyRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
+    if (!noServerSwitch && !isHlsLikeUrl(src) && isInsecureHttpSource(src) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const episodeKey = `${(anime as any)?.id ?? ""}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
     const nextFingerprint = `${src}__${episodeKey}`;
     if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
@@ -3052,7 +3033,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ? nextQualityOptions.find((q) => q.label === savedQualityLabel && (!is4KLabel(q.label) || isPremium))
           : null);
     if (preservedQuality) manualQualitySelectedRef.current = true;
-    const baseRawSrc = preservedQuality?.src || src;
+    // RS direct HTTPS servers often host non-faststart MP4s. Starting Auto on
+    // the lightest available stream avoids pulling a huge 1080p/720p open-ended
+    // range before metadata lands, which is the main Server 1 buffering trigger
+    // on low phones. Users can still switch quality manually after playback starts.
+    const autoStartQuality = !preservedQuality && !isAnimeSaltContent
+      ? nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
+        || nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
+        || null
+      : null;
+    const baseRawSrc = preservedQuality?.src || autoStartQuality?.src || src;
     const isFastHlsSource = isHlsLikeUrl(baseRawSrc);
     const hadManualServer = manualServerSelectedRef.current;
     const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
@@ -3083,8 +3073,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
-    currentQualityRef.current = preservedQuality?.label || "Auto";
-    setCurrentQuality(preservedQuality?.label || "Auto");
+    currentQualityRef.current = preservedQuality?.label || autoStartQuality?.label || "Auto";
+    setCurrentQuality(preservedQuality?.label || autoStartQuality?.label || "Auto");
     if (isFastHlsSource || !hadManualServer) {
       manualServerSelectedRef.current = false;
       preferredServerIndexRef.current = null;
@@ -3119,14 +3109,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, anime, isAnimeSaltContent]);
+  }, [src, qualityOptions, noProxy, noServerSwitch, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, videoServersLoaded, anime, isAnimeSaltContent]);
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
     if (isHlsLikeUrl(activeSourceBaseRef.current)) return;
+    if (!noServerSwitch && isInsecureHttpSource(activeSourceBaseRef.current) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
     setCurrentSrc((prev) => (prev === nextResolved ? prev : nextResolved));
-  }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, resolvePlaybackSrc]);
+  }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, noServerSwitch, effectiveVideoServers.length, videoServersLoaded, resolvePlaybackSrc]);
 
   // If Firebase videoServers arrive after the player has already mounted, rebuild
   // the active URL with that admin server domain. This is critical for HTTP
@@ -3153,7 +3144,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // direct-MP4 watchdog mark it as expired before hls.js has recovered/retried.
     if (isAnimeSaltContent || isHlsSrc) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
-    const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw) ? 24000 : 12000;
+    const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
+      ? 24000
+      : /^https:\/\//i.test(raw)
+        ? 45000
+        : 12000;
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
@@ -3739,7 +3734,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, 1500);
       if (hardStallTimer) clearTimeout(hardStallTimer);
       const raw = activeSourceBaseRef.current || sourceBaseRef.current || currentSrc;
-      const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw) ? 22000 : 10000;
+      const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
+        ? 22000
+        : /^https:\/\//i.test(raw)
+          ? 45000
+          : 10000;
       hardStallTimer = setTimeout(() => {
         if (v.readyState < 2 && !v.paused) {
           tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);

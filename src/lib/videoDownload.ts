@@ -97,6 +97,10 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
 export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
+  // Playback proxy is only for insecure http:// media rescue. HTTPS media hosts
+  // must stay direct in the browser/video tag and must not be routed through
+  // video-proxy for probing/download fallback.
+  if (!/^http:\/\//i.test(trimmedUrl)) return [];
   if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
   if (isManagedVideoDownloadUrl(trimmedUrl)) {
     try {
