@@ -1,3 +1,5 @@
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+
 // 🆕 NEW v5 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + prefetch. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
@@ -11,10 +13,10 @@
 // ============================================================
 
 const cors: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
-  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
+  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error, x-rs-proxy-range, x-rs-window",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -24,6 +26,28 @@ const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
+
+function fallbackResponse(message: string, detail = "", upstreamStatus?: number) {
+  return new Response(JSON.stringify({
+    error: "VIDEO_SOURCE_UNAVAILABLE",
+    fallback: true,
+    message,
+    detail,
+    upstreamStatus: upstreamStatus || null,
+  }), {
+    // Keep this 200 so the browser/runtime does not report the edge call itself
+    // as a fatal 502/5xx. The player reads x-rs-proxy-fallback/json and moves
+    // to the next configured route/server instead of leaving a blank screen.
+    status: 200,
+    headers: {
+      ...cors,
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "x-rs-proxy-fallback": "1",
+      "x-rs-proxy-error": message,
+    },
+  });
+}
 
 const toOpaqueUrlToken = (value: string) => {
   try {
@@ -157,7 +181,11 @@ Deno.serve(async (req) => {
     if (up && (up.ok || up.status === 206 || up.status === 304)) break;
   }
 
-  if (!up) return new Response(`Upstream failed: ${lastError || "network error"}`, { status: 502, headers: cors });
+  if (!up) return fallbackResponse("Upstream failed", lastError || "network error");
+  if (!(up.ok || up.status === 206 || up.status === 304)) {
+    try { await up.body?.cancel(); } catch {}
+    return fallbackResponse("Upstream returned an error", lastError || `HTTP ${up.status}`, up.status);
+  }
 
   const out = new Headers(cors);
   for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }

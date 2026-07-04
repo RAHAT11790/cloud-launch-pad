@@ -143,36 +143,10 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
   }
 }
 
-export function isBackendFunctionUrl(rawUrl: string): boolean {
-  const value = String(rawUrl || "").trim();
-  if (!/^https?:\/\//i.test(value)) return false;
-  try {
-    const url = new URL(value);
-    return /\.supabase\.co$/i.test(url.hostname) && /\/functions\/v1\//i.test(url.pathname);
-  } catch {
-    return false;
-  }
-}
-
 export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): string {
   const base = String(baseUrl || "").trim().replace(/\/+$/, "");
   if (!base || !/^https?:\/\//i.test(base)) return "";
   return normalizeFunctionEndpointUrl(fnName, `${base}/${fnName}`);
-}
-
-export function deriveSiblingWorkerFunctionUrl(fnName: string, routes: Record<string, any> | undefined | null): string {
-  const values = Object.values(routes || {});
-  for (const row of values) {
-    const raw = String((row as any)?.customUrl || (row as any)?.url || "").trim();
-    if (!/^https?:\/\//i.test(raw)) continue;
-    try {
-      const url = new URL(raw);
-      const match = url.hostname.match(/^[a-z0-9-]+\.([a-z0-9-]+)\.workers\.dev$/i);
-      if (!match) continue;
-      return `https://${fnName}.${match[1]}.workers.dev`;
-    } catch {}
-  }
-  return "";
 }
 
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
