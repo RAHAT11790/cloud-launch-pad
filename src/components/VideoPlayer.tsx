@@ -73,9 +73,17 @@ const unwrapProxyPlaybackTarget = (value: string): string => {
   }
 };
 
-const isVideoProxyPlaybackUrl = (value: string): boolean => {
+const isVideoProxyPlaybackUrl = (value: string, configuredBase?: string): boolean => {
   const raw = String(value || "");
-  return /\/functions\/v1\/video-proxy\?/i.test(raw) || /\/video-proxy\?/i.test(raw) || /video-proxy\.[^/]+\.workers\.dev\//i.test(raw);
+  if (/\/functions\/v1\/video-proxy\?/i.test(raw) || /\/video-proxy\?/i.test(raw) || /video-proxy\.[^/]+\.workers\.dev\//i.test(raw)) return true;
+  try {
+    if (!configuredBase) return false;
+    const u = new URL(raw);
+    const b = new URL(configuredBase);
+    return u.origin === b.origin
+      && u.pathname.replace(/\/+$/, "") === b.pathname.replace(/\/+$/, "")
+      && (u.searchParams.has("url") || u.searchParams.has("src"));
+  } catch { return false; }
 };
 
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
@@ -172,9 +180,16 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
+  if (isHlsLikeUrl(url)) {
+    addCandidate(url);
+    return candidates;
+  }
+
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
-  // HTTPS media must stay direct inside the native <video> tag. Only insecure
-  // http:// sources need video-proxy, because an HTTPS app cannot play raw HTTP.
+  // http:// sources must use video-proxy because an HTTPS app cannot play raw HTTP.
+  // https:// RS files also get a proxy route when CDN/proxy is enabled, so slow
+  // Server 1 origins can stream through the same optimized range bridge instead
+  // of being trapped on the direct host only.
   const isHttp = isInsecureHttpSource(url);
 
   if (isHttp) {
@@ -186,8 +201,10 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  // https:// URL — always direct, no proxy.
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  if (customProxyCandidate && (_cdnEnabled || preferProxy)) addCandidate(customProxyCandidate);
   addCandidate(url);
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
   return candidates;
 };
 
@@ -3157,7 +3174,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
-    if (!isVideoProxyPlaybackUrl(currentSrc)) return;
+    if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
     const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
@@ -3183,7 +3200,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
 
   // If the active admin server resolves to http:// but no EGD Router video-proxy
   // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
