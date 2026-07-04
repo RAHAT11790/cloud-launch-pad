@@ -220,41 +220,22 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   }
 
   const config = await getEdgeRouterConfig();
-  const selfHostedFromBase = buildSelfHostedFunctionUrl(fnName, config.cloudflareBaseUrl || config.denoBaseUrl || "");
-  let siblingWorkerFromRoutes = "";
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) {
-    try {
-      const routesSnap = await get(ref(db, "settings/functionOverrides"));
-      siblingWorkerFromRoutes = deriveSiblingWorkerFunctionUrl(fnName, routesSnap.val() || {});
-    } catch {}
-  }
 
-  // Check per-function override from Firebase. For self-deployed media/router
-  // functions, a stale Lovable-hosted default must not win over the configured
-  // Cloudflare/Deno base; otherwise Network shows the backend path instead of
-  // the admin's deployed route.
+  // Per-function override from Firebase — whatever admin saved wins, no bypass.
   try {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
     const customUrl = String(override?.customUrl || override?.url || "").trim();
     if (customUrl && override?.enabled !== false) {
-      const normalized = normalizeFunctionEndpointUrl(fnName, customUrl);
-      if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && isBackendFunctionUrl(normalized) && selfHostedFromBase) {
-        return siblingWorkerFromRoutes || selfHostedFromBase;
-      }
-      return normalized;
+      return normalizeFunctionEndpointUrl(fnName, customUrl);
     }
   } catch {}
 
-  // User-deployable functions must stay under admin control. They only route to
-  // a custom/default URL when the EGD Router row is explicitly saved, or when a
-  // legacy Edge Router base URL is configured below.
-
-  // Check dynamic functions first
+  // Check dynamic functions
   const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
   if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));
-  if (siblingWorkerFromRoutes) return siblingWorkerFromRoutes;
+
   const built = buildFunctionUrl(fnName, config);
   if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
