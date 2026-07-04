@@ -1801,16 +1801,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // where episode 2 (or a different anime) continued from the previous
   // episode's timestamp.
   const prevEpKeyRef = useRef<string>("");
+  const initialMountKeyRef = useRef<string>("");
   useEffect(() => {
     const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    if (!initialMountKeyRef.current) initialMountKeyRef.current = key;
+    const isFirstMount = !prevEpKeyRef.current;
     const changed = prevEpKeyRef.current && prevEpKeyRef.current !== key;
     prevEpKeyRef.current = key;
-    if (!changed) return;
-    const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
-    if (hasExplicitResume) return;
-    // Zero EVERY resume source. Otherwise repairUnexpectedReset() will pull
-    // the previous episode's 22-min mark from mediaRecoverySeekRef /
-    // lastPlaybackPositionRef and seek the new episode there.
+    if (isFirstMount || !changed) return;
+    // Episode changed via Next button (or season/episode switch). ALWAYS start
+    // from 0 — stale `initialSeekTime` from the previous episode must NOT
+    // resume the new episode at the same timestamp.
     pendingSeek.current = 0;
     mediaRecoverySeekRef.current = 0;
     lastPlaybackPositionRef.current = 0;
@@ -1820,7 +1821,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     } catch {}
     const v = videoRef.current;
     if (v) { try { v.currentTime = 0; } catch {} }
-  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx]);
 
   // Per-anime isolation: when switching to a DIFFERENT anime, reset the
   // quality / manual-selection state so preferences from the previous anime
@@ -1849,13 +1850,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-  // Restore watch position (per-account)
+  // Restore watch position (per-account) — ONLY on first mount for this
+  // episode. When the user hits Next, we start the new episode at 0.
   useEffect(() => {
     if (!animeId) return;
-    pendingSeek.current = typeof initialSeekTime === "number" ? Math.max(0, initialSeekTime) : 0;
-    if (typeof initialSeekTime === "number" && initialSeekTime > 0) {
-      pendingSeek.current = initialSeekTime;
-    }
+    const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    // "First mount" = the very first episode key this player instance saw.
+    // Any later episode change (Next/Prev/season switch) is a fresh switch and
+    // must start at 0 — never re-apply the previous episode's initialSeekTime.
+    const isFreshEpisodeSwitch = initialMountKeyRef.current !== "" && initialMountKeyRef.current !== key;
+    const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
+    pendingSeek.current = hasExplicitResume && !isFreshEpisodeSwitch
+      ? initialSeekTime!
+      : 0;
+    if (isFreshEpisodeSwitch) return;
     try {
       const user = localStorage.getItem("rsanime_user");
       if (!user) return;
@@ -1866,13 +1874,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         fbGet(histRef).then((snap: any) => {
           if (snap.exists()) {
             const data = snap.val();
-            const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
             const storedSeasonIdx = data?.episodeInfo?.seasonIdx ?? (typeof data?.episodeInfo?.season === "number" ? data.episodeInfo.season - 1 : undefined);
             const storedEpisodeIdx = data?.episodeInfo?.epIdx ?? (typeof data?.episodeInfo?.episode === "number" ? data.episodeInfo.episode - 1 : undefined);
             const episodeMatches = currentSeasonIdx === undefined && currentEpisodeIdx === undefined
               ? storedSeasonIdx === undefined && storedEpisodeIdx === undefined
               : storedSeasonIdx === currentSeasonIdx && storedEpisodeIdx === currentEpisodeIdx;
-            const resumeFrom = hasExplicitResume ? initialSeekTime : (episodeMatches ? data.currentTime : 0);
+            const resumeFrom = hasExplicitResume ? initialSeekTime! : (episodeMatches ? data.currentTime : 0);
             if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
             }
