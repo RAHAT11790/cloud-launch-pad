@@ -2516,38 +2516,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       enableWorker: true,
       lowLatencyMode: false,
       // Fast but stable ABR: allow real bandwidth testing instead of forcing a
-      // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
-      // player appear to "sip" only 200-300KB and never build a healthy buffer.
+      // guessed 8 Mbps path.
       testBandwidth: true,
-      abrEwmaDefaultEstimate: 4_500_000,
-      abrBandWidthFactor: 0.9,
-      abrBandWidthUpFactor: 0.8,
-      // Bigger forward buffer → seeking/skipping lands inside already-loaded
-      // chunks ~95% of the time. Back buffer kept tight to free memory.
-      backBufferLength: 20,
-      maxBufferLength: 90,
-      maxMaxBufferLength: 180,
-      // Give AN HLS enough room to build a real forward buffer. The old 12MB
-      // cap made the player request tiny bursts and stall on preview/mobile.
-      maxBufferSize: 80 * 1024 * 1024,
-      maxBufferHole: 0.45,
+      abrEwmaDefaultEstimate: 6_000_000,
+      abrBandWidthFactor: 0.95,
+      abrBandWidthUpFactor: 0.9,
+      // Ultra buffer — skip lands inside preloaded chunks nearly every time.
+      backBufferLength: 30,
+      maxBufferLength: 180,
+      maxMaxBufferLength: 600,
+      maxBufferSize: 200 * 1024 * 1024,
+      maxBufferHole: 0.5,
       highBufferWatchdogPeriod: 1,
-      nudgeMaxRetry: 8,
-      // Start mid-tier (auto picks higher if bw allows) — avoids 480p lock-in.
+      nudgeMaxRetry: 10,
+      nudgeOffset: 0.15,
+      maxFragLookUpTolerance: 0.25,
       startLevel: -1,
       startFragPrefetch: true,
       progressive: true,
-      // Aggressive but bounded retries so a single dead fragment never stalls
-      // playback for tens of seconds.
+      // Aggressive but bounded retries.
       manifestLoadingTimeOut: 7000,
       manifestLoadingMaxRetry: 8,
-      manifestLoadingRetryDelay: 180,
+      manifestLoadingRetryDelay: 150,
       levelLoadingTimeOut: 7000,
       levelLoadingMaxRetry: 8,
-      levelLoadingRetryDelay: 180,
-      fragLoadingTimeOut: 16000,
-      fragLoadingMaxRetry: 10,
-      fragLoadingRetryDelay: 180,
+      levelLoadingRetryDelay: 150,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 12,
+      fragLoadingRetryDelay: 150,
+      appendErrorMaxRetry: 6,
       capLevelToPlayerSize: false,
       renderTextTracksNatively: false,
     });

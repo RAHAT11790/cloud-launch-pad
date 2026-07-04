@@ -1,4 +1,4 @@
-// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// 🆕 NEW v3 (2026-07-04) — Ultra playback: 16MB chunks + long-cache segments. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
@@ -20,7 +20,7 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -183,8 +183,13 @@ Deno.serve(async (req) => {
     const body = rewritePlaylist(await up.text(), effectiveUrl.toString(), reqUrl);
     out.delete("content-length");
     out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-    out.set("cache-control", "no-store");
+    out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
     return new Response(body, { status: up.status, statusText: up.statusText, headers: out });
+  }
+
+  // Long cache for immutable media chunks — lets any downstream CDN/browser skip instantly.
+  if (isDirectMp4Like(effectiveUrl) && (up.status === 200 || up.status === 206)) {
+    out.set("cache-control", "public, max-age=604800, immutable");
   }
 
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });

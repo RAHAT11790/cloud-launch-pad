@@ -1,4 +1,4 @@
-// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// 🆕 NEW v3 (2026-07-04) — Ultra playback: long-cache segments + fast playlist SWR. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // an-playback — playback-only AN HLS proxy.
 //
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
     if (isM3u8) {
       h.delete("content-length");
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      h.set("cache-control", "public, max-age=12, stale-while-revalidate=30");
+      h.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
       return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
     }
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     if (isSegment) {
       h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
       h.set("content-disposition", "inline");
-      if (!h.has("cache-control")) h.set("cache-control", "public, max-age=86400, immutable");
+      h.set("cache-control", "public, max-age=604800, immutable");
     }
     if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
     if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
