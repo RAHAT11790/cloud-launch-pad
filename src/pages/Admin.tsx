@@ -568,7 +568,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  };
 
  const ping = async (slug: string) => {
- const u = (urls[slug] || "").trim();
+  const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
  if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
@@ -600,7 +600,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   {ROUTER_FUNCTIONS.map(({ slug, label, isNew, badgeText, badgeTone, defaultUrl }) => {
  const res = testResult[slug];
  const isVideoProxy = slug === "video-proxy";
- const isDefault = (urls[slug] || "").trim() === defaultUrl;
+  const isDefault = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim()) === defaultUrl;
  const badgeClass = badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
    : badgeTone === "amber" ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
