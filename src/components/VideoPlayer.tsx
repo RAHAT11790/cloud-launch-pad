@@ -45,7 +45,7 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
-import { buildSelfHostedFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { buildSelfHostedFunctionUrl, deriveSiblingWorkerFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
@@ -431,7 +431,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
-  const [playbackRouteReady, setPlaybackRouteReady] = useState(true);
+  const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
@@ -660,11 +660,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   //                allow-list (anti-hotlink protection). If no proxy URL is set
   //                we play https sources directly from the <video> tag.
   useEffect(() => {
-    setPlaybackRouteReady(true);
-
     let cancelled = false;
     let routerBase = "";
     let overrideRaw: any = null;
+    let siblingWorkerUrl = "";
 
     const applyProxyRoute = () => {
       if (cancelled) return;
@@ -673,10 +672,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
       const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
       const finalUrl = enabled
-        ? (isBackendFunctionUrl(overrideUrl) && selfHostedUrl ? selfHostedUrl : overrideUrl)
-        : selfHostedUrl;
+        ? (isBackendFunctionUrl(overrideUrl) ? (siblingWorkerUrl || selfHostedUrl || overrideUrl) : overrideUrl)
+        : (siblingWorkerUrl || selfHostedUrl);
       setProxyUrl(finalUrl);
       setProxyApiKey('');
+      setPlaybackRouteReady(true);
       try {
         if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
         else localStorage.removeItem(VIDEO_PROXY_CACHE_KEY);
@@ -703,7 +703,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyProxyRoute();
     });
 
-    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
+    const unsub4 = onValue(ref(db, "settings/functionOverrides"), (snap) => {
+      siblingWorkerUrl = deriveSiblingWorkerFunctionUrl("video-proxy", snap.val() || {});
+      applyProxyRoute();
+    });
+
+    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);

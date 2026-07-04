@@ -156,6 +156,21 @@ export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): st
   return normalizeFunctionEndpointUrl(fnName, `${base}/${fnName}`);
 }
 
+export function deriveSiblingWorkerFunctionUrl(fnName: string, routes: Record<string, any> | undefined | null): string {
+  const values = Object.values(routes || {});
+  for (const row of values) {
+    const raw = String((row as any)?.customUrl || (row as any)?.url || "").trim();
+    if (!/^https?:\/\//i.test(raw)) continue;
+    try {
+      const url = new URL(raw);
+      const match = url.hostname.match(/^[a-z0-9-]+\.([a-z0-9-]+)\.workers\.dev$/i);
+      if (!match) continue;
+      return `https://${fnName}.${match[1]}.workers.dev`;
+    } catch {}
+  }
+  return "";
+}
+
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
 function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
@@ -202,6 +217,13 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
 
   const config = await getEdgeRouterConfig();
   const selfHostedFromBase = buildSelfHostedFunctionUrl(fnName, config.cloudflareBaseUrl || config.denoBaseUrl || "");
+  let siblingWorkerFromRoutes = "";
+  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) {
+    try {
+      const routesSnap = await get(ref(db, "settings/functionOverrides"));
+      siblingWorkerFromRoutes = deriveSiblingWorkerFunctionUrl(fnName, routesSnap.val() || {});
+    } catch {}
+  }
 
   // Check per-function override from Firebase. For self-deployed media/router
   // functions, a stale Lovable-hosted default must not win over the configured
@@ -215,7 +237,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     if (customUrl && override?.enabled !== false) {
       const normalized = normalizeFunctionEndpointUrl(fnName, customUrl);
       if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && isBackendFunctionUrl(normalized) && selfHostedFromBase) {
-        return selfHostedFromBase;
+        return siblingWorkerFromRoutes || selfHostedFromBase;
       }
       return normalized;
     }
@@ -228,6 +250,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
   if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));
+  if (siblingWorkerFromRoutes) return siblingWorkerFromRoutes;
   const built = buildFunctionUrl(fnName, config);
   if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
