@@ -606,8 +606,14 @@ const fromOpaqueUrlToken = (value) => {
 function wrapHlsUrl(raw, baseUrl, proxyPrefix, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
-  if (/\/an-api\/hls\?url=/i.test(value)) return value;
-  const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  let abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  try {
+    const existing = new URL(abs);
+    if (/\/(?:an-api|an-playback|hls)(?:\/hls)?$/i.test(existing.pathname) || /\/functions\/v1\/(?:an-api|an-playback|hls)(?:\/hls)?$/i.test(existing.pathname)) {
+      abs = existing.searchParams.get("url") || fromOpaqueUrlToken(existing.searchParams.get("src") || "") || abs;
+    }
+  } catch {
+  }
   const params = new URLSearchParams({ src: toOpaqueUrlToken(abs) });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
