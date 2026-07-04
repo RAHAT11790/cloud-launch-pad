@@ -2576,32 +2576,43 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   startTransition(() => setCategoriesData(snap.val() || {}));
   }));
 
- const loadContentList = async (kind: AdminContentKind, opts?: { force?: boolean }) => {
-   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-   const cached = readCachedAdminContentList(kind);
-   if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
-   // Skip network fetch entirely when the cache is fresh — prevents the
-   // card-list flicker every time the admin panel is (re)opened. Manual
-   // "Refresh Data" (or a save that invalidates the cache) still refetches.
-   if (!opts?.force && isAdminContentCacheFresh(kind)) return;
-   try {
-    const [indexed, recent] = await Promise.all([
-     fetchAdminContentIndex(kind).catch(() => []),
-     fetchRecentAdminContentList(kind).catch(() => []),
-    ]);
-    const merged = mergeAdminContentLists(cached, indexed, recent);
-     startTransition(() => setter(merged));
-    writeCachedAdminContentList(kind, merged);
-    if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
-   } catch (err) {
-    console.warn(`[Admin] ${kind} light index load failed`, err);
-   }
+  // Firebase-first: subscribe live to the tiny `adminContentIndex/{kind}` node.
+  // No polling, no repeated REST fetches — Firebase pushes updates, cards stay
+  // in sync automatically, and we render every item that exists in Firebase.
+  // The local cache is only used to paint instantly on first mount.
+  const subscribeContentList = (kind: AdminContentKind) => {
+    const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+    const cached = readCachedAdminContentList(kind);
+    if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
+
+    const indexRef = ref(db, `adminContentIndex/${kind}`);
+    const unsub = onValue(indexRef, async (snap) => {
+      const data = snap.val() || {};
+      let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
+      // Backfill: if the index is empty (legacy DB), hydrate once from the
+      // real Firebase collection so nothing is missing, and repopulate the
+      // index so future opens are instant.
+      if (!items.length) {
+        try {
+          const recent = await fetchRecentAdminContentList(kind, 1000);
+          if (recent.length) {
+            items = recent;
+            primeAdminContentIndexFromList(kind, recent).catch(() => {});
+          }
+        } catch {}
+      }
+      const merged = mergeAdminContentLists(items);
+      startTransition(() => setter(merged));
+      writeCachedAdminContentList(kind, merged);
+    });
+    unsubs.push(unsub);
   };
 
-  adminLoadContentListRef.current = loadContentList;
+  // Kept for the "Refresh Data" button + save flows that still call this ref.
+  adminLoadContentListRef.current = async () => {};
 
-  loadContentList("webseries");
-  loadContentList("movies");
+  subscribeContentList("webseries");
+  subscribeContentList("movies");
 
   let countsCancelled = false;
   Promise.all([
