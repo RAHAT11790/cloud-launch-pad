@@ -106,15 +106,42 @@ export default {
     if (up.protocol !== "http:" && up.protocol !== "https:")
       return new Response("Only http/https supported", { status: 400, headers: cors });
 
-    // ⚡ CF edge cache: repeat/skip playback lands on the edge instead of upstream.
+    // ⚡ Aligned-window CF edge cache: every skip within the same 8MB window
+    // becomes a cache HIT, and the next window is warmed in background so the
+    // next sequential range request is already at the edge before the browser asks.
     const cache = caches.default;
-    const cacheKey = new Request(reqUrl.toString() + "|" + (req.headers.get("range") || ""), { method: "GET" });
+    const rawRange = req.headers.get("range");
+    const aligned = alignRange(rawRange, up);
     const isCacheable = req.method === "GET" && isSegmentLike(up);
+    const windowKeyPart = aligned.windowStart !== null
+      ? `|w=${aligned.windowStart}`
+      : `|r=${rawRange || ""}`;
+    const cacheKey = new Request(reqUrl.toString() + windowKeyPart, { method: "GET" });
+
     if (isCacheable) {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const h = new Headers(cached.headers);
         h.set("x-edge-cache", "HIT");
+        // Warm the NEXT window in the background so sequential playback stays hot.
+        if (aligned.windowStart !== null) {
+          const nextStart = aligned.windowStart + MEDIA_CHUNK_BYTES;
+          const nextKey = new Request(reqUrl.toString() + `|w=${nextStart}`, { method: "GET" });
+          ctx?.waitUntil?.((async () => {
+            if (await cache.match(nextKey)) return;
+            try {
+              const r = await fetch(up.toString(), {
+                headers: { "User-Agent": UA, Range: `bytes=${nextStart}-${nextStart + MEDIA_CHUNK_BYTES - 1}`, Referer: `${up.protocol}//${up.host}/` },
+              });
+              if (r.ok || r.status === 206) {
+                const hh = new Headers();
+                for (const k of PASS) { const v = r.headers.get(k); if (v) hh.set(k, v); }
+                hh.set("cache-control", "public, max-age=604800, immutable");
+                await cache.put(nextKey, new Response(await r.arrayBuffer(), { status: r.status, headers: hh }));
+              } else { try { await r.body?.cancel(); } catch {} }
+            } catch {}
+          })());
+        }
         return new Response(cached.body, { status: cached.status, headers: h });
       }
     }
@@ -126,7 +153,7 @@ export default {
     };
     for (const k of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
       const v = req.headers.get(k);
-      if (v) headers[k] = k === "range" ? (capRange(v, up) || v) : v;
+      if (v) headers[k] = k === "range" ? (aligned.range || v) : v;
     }
     const origin = `${up.protocol}//${up.host}`;
     const attempts = [
@@ -161,15 +188,32 @@ export default {
       return new Response(body, { status: res.status, headers: out });
     }
 
-    // Store immutable media chunks in CF edge cache for near-instant re-serve.
+    // Cache the aligned window + prefetch the NEXT one for zero-latency sequential playback.
     if (isCacheable && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
       out.set("x-edge-cache", "MISS");
-      const [a, b] = res.body.tee();
-      const responseForClient = new Response(req.method === "HEAD" ? null : a, { status: res.status, headers: out });
-      const responseForCache = new Response(b, { status: res.status, headers: out });
-      ctx?.waitUntil?.(cache.put(cacheKey, responseForCache));
-      return responseForClient;
+      const buf = await res.arrayBuffer();
+      if (aligned.windowStart !== null) {
+        const nextStart = aligned.windowStart + MEDIA_CHUNK_BYTES;
+        const nextKey = new Request(reqUrl.toString() + `|w=${nextStart}`, { method: "GET" });
+        ctx?.waitUntil?.((async () => {
+          if (await cache.match(nextKey)) return;
+          try {
+            const r = await fetch(up.toString(), {
+              headers: { "User-Agent": UA, Range: `bytes=${nextStart}-${nextStart + MEDIA_CHUNK_BYTES - 1}`, Referer: `${origin}/` },
+            });
+            if (r.ok || r.status === 206) {
+              const hh = new Headers();
+              for (const k of PASS) { const v = r.headers.get(k); if (v) hh.set(k, v); }
+              hh.set("cache-control", "public, max-age=604800, immutable");
+              await cache.put(nextKey, new Response(await r.arrayBuffer(), { status: r.status, headers: hh }));
+            } else { try { await r.body?.cancel(); } catch {} }
+          } catch {}
+        })());
+      }
+      const cacheHeaders = new Headers(out);
+      ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: cacheHeaders })));
+      return new Response(req.method === "HEAD" ? null : buf, { status: res.status, headers: out });
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
