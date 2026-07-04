@@ -2584,7 +2584,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    }
   };
 
-  (loadContentList as any).__ref = loadContentList;
   adminLoadContentListRef.current = loadContentList;
 
   loadContentList("webseries");
