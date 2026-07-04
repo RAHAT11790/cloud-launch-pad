@@ -78,6 +78,11 @@ const unwrapProxyPlaybackTarget = (value: string): string => {
   }
 };
 
+const isVideoProxyPlaybackUrl = (value: string): boolean => {
+  const raw = String(value || "");
+  return /\/functions\/v1\/video-proxy\?/i.test(raw) || /\/video-proxy\?/i.test(raw) || /video-proxy\.[^/]+\.workers\.dev\//i.test(raw);
+};
+
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
 
@@ -3093,7 +3098,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
-    if (!/\/functions\/v1\/video-proxy\?/i.test(currentSrc)) return;
+    if (!isVideoProxyPlaybackUrl(currentSrc)) return;
     const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
