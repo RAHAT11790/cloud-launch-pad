@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
-import { buildSelfHostedFunctionUrl, deriveSiblingWorkerFunctionUrl, isBackendFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -25,27 +25,20 @@ let playbackProxyEnabled = false;
 let routerBaseUrl = "";
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
-let allOverrides: Record<string, any> = {};
 
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
-  const siblingWorker = deriveSiblingWorkerFunctionUrl("video-download", allOverrides);
   const enabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
-  overrideBaseUrl = enabled
-    ? (isBackendFunctionUrl(overrideUrl) ? (selfHosted || overrideUrl) : overrideUrl)
-    : (siblingWorker || selfHosted);
+  overrideBaseUrl = enabled ? overrideUrl : selfHosted;
   overrideEnabled = Boolean(overrideBaseUrl);
 };
 
 const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
-  const siblingWorker = deriveSiblingWorkerFunctionUrl("video-proxy", allOverrides);
   const enabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
-  playbackProxyBaseUrl = enabled
-    ? (isBackendFunctionUrl(overrideUrl) ? (siblingWorker || selfHosted || overrideUrl) : overrideUrl)
-    : (siblingWorker || selfHosted);
+  playbackProxyBaseUrl = enabled ? overrideUrl : selfHosted;
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
 };
 try {
@@ -61,11 +54,6 @@ try {
     onValue(ref(db, "settings/edgeRouter"), (snap) => {
       const v = snap.val() || {};
       routerBaseUrl = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
-      applyDownloadRoute();
-      applyProxyRoute();
-    });
-    onValue(ref(db, "settings/functionOverrides"), (snap) => {
-      allOverrides = snap.val() || {};
       applyDownloadRoute();
       applyProxyRoute();
     });
