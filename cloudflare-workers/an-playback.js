@@ -24,6 +24,23 @@ const deepDecodeUrl = (value) => {
   }
   return out;
 };
+const toOpaqueUrlToken = (value) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
+};
+const fromOpaqueUrlToken = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
+    return decodeURIComponent(escape(atob(padded)));
+  } catch {
+    return "";
+  }
+};
 const resolveUrl = (value, baseUrl) => {
   const raw = decode(value);
   if (!raw) return "";
@@ -47,7 +64,7 @@ function wrapHlsUrl(raw, baseUrl, proxyPrefix, parentOrigin = "") {
   if (!value || value.startsWith("data:")) return value;
   if (/\/an-playback\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value) || /\/functions\/v1\/hls\?url=/i.test(value)) return value;
   const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
-  const params = new URLSearchParams({ url: abs });
+  const params = new URLSearchParams({ src: toOpaqueUrlToken(abs) });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
   return `${proxyPrefix}?${params.toString()}`;
@@ -117,7 +134,7 @@ var stdin_default = { async fetch(req, env, ctx) {
     const reqUrl = new URL(req.url);
     const path = reqUrl.pathname.includes("/an-playback") ? reqUrl.pathname.split("/an-playback")[1] || "/" : reqUrl.pathname;
     if (path !== "/" && path !== "/hls") return new Response(JSON.stringify({ ok: true, endpoint: "/hls?url=..." }), { headers: { ...cors, "Content-Type": "application/json" } });
-    const target = reqUrl.searchParams.get("url") || "";
+    const target = reqUrl.searchParams.get("url") || fromOpaqueUrlToken(reqUrl.searchParams.get("src") || "");
     if (!target) return new Response(JSON.stringify({ error: "missing ?url=" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     let targetUrl;
     try {
