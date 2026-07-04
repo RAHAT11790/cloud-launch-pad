@@ -36,6 +36,8 @@ import {
  writeCachedAdminContentList,
  type AdminContentKind,
 } from "@/lib/adminContentIndex";
+import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { isLegacyAnEntry } from "@/lib/legacyAn";
 const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
@@ -2589,18 +2591,34 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const unsub = onValue(indexRef, async (snap) => {
       const data = snap.val() || {};
       let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
-      // Backfill: if the index is empty (legacy DB), hydrate once from the
-      // real Firebase collection so nothing is missing, and repopulate the
-      // index so future opens are instant.
-      if (!items.length) {
-        try {
-          const recent = await fetchRecentAdminContentList(kind, 1000);
-          if (recent.length) {
-            items = recent;
-            primeAdminContentIndexFromList(kind, recent).catch(() => {});
+      // Reconcile against the real collection: `adminContentIndex` may be
+      // partially populated (legacy rows never got indexed). Whenever the
+      // actual Firebase collection has more items than the index, hydrate
+      // the missing ones and prime the index so it stays complete.
+      try {
+        const allKeys = await firebaseRestShallowKeys(kind);
+        const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
+        const indexedIds = new Set(items.map((it: any) => String(it.id)));
+        const missing = cleanKeys.filter((k) => !indexedIds.has(k));
+        if (missing.length) {
+          const chunkSize = 8;
+          const hydrated: any[] = [];
+          for (let i = 0; i < missing.length; i += chunkSize) {
+            const chunk = missing.slice(i, i + chunkSize);
+            const rows = await Promise.all(chunk.map(async (id) => {
+              try {
+                const item = await firebaseRestGet<any>(`${kind}/${id}`);
+                return item ? buildAdminContentIndexItem(id, item, kind) : null;
+              } catch { return null; }
+            }));
+            rows.forEach((r) => { if (r) hydrated.push(r); });
           }
-        } catch {}
-      }
+          if (hydrated.length) {
+            items = [...items, ...hydrated];
+            primeAdminContentIndexFromList(kind, hydrated).catch(() => {});
+          }
+        }
+      } catch {}
       const merged = mergeAdminContentLists(items);
       startTransition(() => setter(merged));
       writeCachedAdminContentList(kind, merged);
