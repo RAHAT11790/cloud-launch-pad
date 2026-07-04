@@ -1801,16 +1801,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // where episode 2 (or a different anime) continued from the previous
   // episode's timestamp.
   const prevEpKeyRef = useRef<string>("");
+  const episodeMountKeyRef = useRef<string>("");
   useEffect(() => {
     const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
+    const isFirstMount = !prevEpKeyRef.current;
     const changed = prevEpKeyRef.current && prevEpKeyRef.current !== key;
     prevEpKeyRef.current = key;
+    if (isFirstMount) {
+      episodeMountKeyRef.current = key;
+      return;
+    }
     if (!changed) return;
-    const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
-    if (hasExplicitResume) return;
-    // Zero EVERY resume source. Otherwise repairUnexpectedReset() will pull
-    // the previous episode's 22-min mark from mediaRecoverySeekRef /
-    // lastPlaybackPositionRef and seek the new episode there.
+    episodeMountKeyRef.current = key;
+    // Episode changed via Next button (or season/episode switch). ALWAYS start
+    // from 0 — the stale `initialSeekTime` prop from the previous episode must
+    // NOT resume the new episode at the same timestamp. Explicit resume only
+    // applies on the first mount of a player instance.
     pendingSeek.current = 0;
     mediaRecoverySeekRef.current = 0;
     lastPlaybackPositionRef.current = 0;
@@ -1820,7 +1826,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     } catch {}
     const v = videoRef.current;
     if (v) { try { v.currentTime = 0; } catch {} }
-  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx]);
 
   // Per-anime isolation: when switching to a DIFFERENT anime, reset the
   // quality / manual-selection state so preferences from the previous anime
