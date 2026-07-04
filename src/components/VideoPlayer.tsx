@@ -2110,11 +2110,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     }
 
-    // Proxy upstream is down/closed (for example bot-hosting 502). Do not call
-    // any hidden/bypass URL; move to the next admin-configured RS server using
-    // the same episode path/query. This keeps EGD Router as the single source
-    // of truth while avoiding a blank player on one dead origin.
-    if (effectiveVideoServers.length > 1 && !manualServerSelectedRef.current) {
+    // Proxy/direct upstream is down/closed (for example bot-hosting silently
+    // closes old Telegram file IDs). Even if the user manually tapped that
+    // server, don't trap playback on a dead origin and show "Link expired" —
+    // move through the next admin-configured RS servers with the same episode
+    // path/query. This is explicit server failover, not hidden mirror swapping.
+    if (effectiveVideoServers.length > 1) {
       failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
       for (let offset = 1; offset < effectiveVideoServers.length; offset += 1) {
         const nextIndex = (activeServerIndex + offset) % effectiveVideoServers.length;
