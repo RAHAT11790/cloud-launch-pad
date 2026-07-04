@@ -87,6 +87,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
+  entry("send-fcm",       "Send FCM (Push)", "🔔 Firebase Admin push notification sender (FCM v1 API). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL. Requires FIREBASE_SERVICE_ACCOUNT_KEY (full JSON) + FIREBASE_DB_URL secrets.", sendFcmSource, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v1", badgeTone: "amber" }),
   entry("video-boost",    "Video Boost",    "🚀 Alpha professional playback proxy — 8MB aligned windows, immutable long-cache segments, Referer/Origin anti-theft (set ALLOWED_ORIGINS secret, comma-separated, wildcards ok). Sits in front of every RS/Telegram URL.", videoBoostSource, [], { isNew: true, badgeText: "LIGHTSPEED", badgeTone: "emerald" }),
   entry("video-proxy",    "Video Proxy",    "Universal RS video/HLS proxy with HTTP+HTTPS support, playlist rewriting, range streaming, and RS mirror fallback.", videoProxySource, [], { isNew: true }),
   entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
