@@ -2153,10 +2153,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [releaseContentSearch, setReleaseContentSearch] = useState("");
  const deferredReleaseContentSearch = useDeferredValue(releaseContentSearch);
 
- // Manual Push Notification (own section, independent from New Release)
+ // Synced Notification (own section, independent from New Release)
  const [pushContent, setPushContent] = useState("");
  const [pushSeason, setPushSeason] = useState("");
- const [pushEpisode, setPushEpisode] = useState("");
+ const [pushEpisode, setPushEpisode] = useState("");        // start ep index
+ const [pushEpisodeEnd, setPushEpisodeEnd] = useState("");  // end ep index (inclusive)
  const [pushSeasons, setPushSeasons] = useState<any[]>([]);
  const [pushEpisodes, setPushEpisodes] = useState<any[]>([]);
  const [pushShowSeasonEp, setPushShowSeasonEp] = useState(false);
