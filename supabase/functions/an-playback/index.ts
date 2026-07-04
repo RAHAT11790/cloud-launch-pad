@@ -69,8 +69,13 @@ function getSafeOrigin(value?: string | null) {
 function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
-  if (/\/an-playback\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value) || /\/functions\/v1\/hls\?url=/i.test(value)) return value;
-  const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  let abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
+  try {
+    const existing = new URL(abs);
+    if (/\/(?:an-playback|an-api|hls)(?:\/hls)?$/i.test(existing.pathname) || /\/functions\/v1\/(?:an-playback|an-api|hls)(?:\/hls)?$/i.test(existing.pathname)) {
+      abs = existing.searchParams.get("url") || fromOpaqueUrlToken(existing.searchParams.get("src") || "") || abs;
+    }
+  } catch {}
   const params = new URLSearchParams({ src: toOpaqueUrlToken(abs) });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
   if (inheritedOrigin) params.set("origin", inheritedOrigin);
