@@ -97,14 +97,12 @@ function buildUpstreamCandidates(target: URL): URL[] {
 
 
 function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
-  if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
-  const match = range.match(/^bytes=(\d+)-(\d*)$/i);
-  if (!match) return { range, windowStart: null };
-  const start = Number(match[1]);
-  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  const windowStart = Math.floor(start / MEDIA_CHUNK_BYTES) * MEDIA_CHUNK_BYTES;
-  const windowEnd = windowStart + MEDIA_CHUNK_BYTES - 1;
-  return { range: `bytes=${windowStart}-${windowEnd}`, windowStart };
+  // Do NOT rewrite browser Range requests. The previous 8MB-aligned window
+  // optimization returned a different Content-Range start than Chromium asked
+  // for (especially when it probes MP4 metadata near EOF), so the upstream sent
+  // 206 but the native <video> element still raised MEDIA_ERR_SRC_NOT_SUPPORTED.
+  // Exact pass-through is the reliable path for playback and seeking.
+  return { range, windowStart: null };
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
