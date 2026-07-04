@@ -12119,19 +12119,20 @@ const LinkCheckerSection = ({
  const buildPlaybackCandidates = (url: string): string[] => {
  if (!url) return [];
  const encoded = encodeURIComponent(url);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(url));
  const candidates: string[] = [];
  const addCandidate = (candidate?: string | null) => {
  if (!candidate || candidates.includes(candidate)) return;
  candidates.push(candidate);
  };
 
- const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
+ const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?src=${opaque}`;
  const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
  ? (proxyUrl.includes('{url}')
  ? proxyUrl.split('{url}').join(encoded)
  : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
  ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`)
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`)
  : null;
 
  if (cdnEnabled) {
@@ -12750,10 +12751,11 @@ const WsInlineLinkChecker = ({
  const cdnEnabled = settings.cdnEnabled !== false;
  const proxyUrl = settings.proxyServer?.url || '';
  const encoded = encodeURIComponent(url);
+ const opaque = encodeURIComponent(toOpaqueUrlToken(url));
  const candidates: string[] = [];
 
  if (cdnEnabled) {
- candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`);
+ candidates.push(`${CLOUDFLARE_CDN}/video-proxy?src=${opaque}`);
  } else if (url.startsWith('http://')) {
  if (proxyUrl) {
  candidates.push(
@@ -12761,7 +12763,7 @@ const WsInlineLinkChecker = ({
  ? proxyUrl.split('{url}').join(encoded)
  : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
  ? `${proxyUrl}${encoded}`
- : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+  : `${proxyUrl.replace(/\/$/, '')}?src=${opaque}`
  );
  }
  } else {
