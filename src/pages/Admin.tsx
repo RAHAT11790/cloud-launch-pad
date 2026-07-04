@@ -3331,16 +3331,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
     if (savingMovieRef.current) { toast.info("Saving in progress…"); return; }
 
-    // Duplicate-title guard for NEW movie
+    // Duplicate-title guard for NEW movie — auto-redirect to edit
     if (!movieEditId) {
       const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
       const target = norm(movieForm.title);
       const dupe = moviesData.find((m: any) => norm(m.title) === target);
       if (dupe) {
-        const ok = confirm(`"${dupe.title}" নামে একটা মুভি আগে থেকেই আছে। আরেকটা duplicate তৈরি করবে?\n\nCancel = বাতিল, OK = তবুও তৈরি করব।`);
-        if (!ok) return;
+        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
+        savingMovieRef.current = false;
+        await editMovie(dupe.id);
+        return;
       }
     }
+
 
     const data: any = {
       ...movieForm,
