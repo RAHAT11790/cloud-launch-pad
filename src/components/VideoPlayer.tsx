@@ -5465,7 +5465,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               }
             }
 
-            const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
+            const directCandidate = [u, ...candidates]
+              .map((candidate) => String(candidate).includes("/functions/v1/video-") ? unwrapManagedVideoUrl(candidate) : candidate)
+              .find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
             return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
