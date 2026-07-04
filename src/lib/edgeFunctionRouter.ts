@@ -96,6 +96,45 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "verify-admin-pin",
 ]);
 
+const KNOWN_FUNCTION_NAMES = new Set([
+  ...SELF_DEPLOYED_FUNCTIONS,
+  "generate-backdrop",
+  "lovable-backdrop",
+  "rs-bot",
+  "send-otp-email",
+  "process-email-queue",
+  "episode",
+  "hls",
+]);
+
+export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): string {
+  const trimmed = String(rawUrl || "").trim();
+  if (!/^https?:\/\//i.test(trimmed)) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const functionsIdx = parts.findIndex((part, idx) => part === "functions" && parts[idx + 1] === "v1");
+
+    if (functionsIdx >= 0) {
+      const fnIdx = functionsIdx + 2;
+      const currentFn = parts[fnIdx] || "";
+      if (!currentFn) {
+        parts[fnIdx] = fnName;
+      } else if (currentFn !== fnName && (KNOWN_FUNCTION_NAMES.has(currentFn) || parts.length === fnIdx + 1)) {
+        parts[fnIdx] = fnName;
+      }
+      url.pathname = `/${parts.join("/")}`;
+      url.hash = "";
+      return url.toString().replace(/\/+$/, "");
+    }
+
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed;
+  }
+}
+
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
 function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
@@ -105,12 +144,6 @@ function supabaseFallbackUrl(fnName: string): string {
     "rs-bot",
     "send-otp-email",
     "process-email-queue",
-    // Playback critical defaults: EGD Router may point to the user's own
-    // deployment, but preview/runtime must still have a working backup.
-    "an-api",
-    "an-playback",
-    "video-proxy",
-    "verify-admin-pin",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
@@ -151,24 +184,24 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
-    const customUrl = String(override?.customUrl || "").trim();
-    if (override?.enabled === true && customUrl) return customUrl;
+    const customUrl = String(override?.customUrl || override?.url || "").trim();
+    if (customUrl && override?.enabled !== false) return normalizeFunctionEndpointUrl(fnName, customUrl);
   } catch {}
 
-  // User-deployable functions normally come from EGD Router. Playback-critical
-  // functions still fall back to the project default so AN/HTTP playback does
-  // not go dead when the custom deployment is missing or credits run out.
-  const selfDeployedFallback = supabaseFallbackUrl(fnName);
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && !selfDeployedFallback) return "";
+  // User-deployable functions must stay under admin control. They only route to
+  // a custom/default URL when the EGD Router row is explicitly saved, or when a
+  // legacy Edge Router base URL is configured below.
 
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
-  const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
-  if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
+  const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
+  if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));
   const built = buildFunctionUrl(fnName, config);
-  if (built) return built;
+  if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
-  return selfDeployedFallback || supabaseFallbackUrl(fnName);
+  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
+
+  return supabaseFallbackUrl(fnName);
 }
 
 /** Call a cloud function */

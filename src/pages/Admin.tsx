@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
-import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import {
  buildAdminContentIndexItem,
  fetchAdminCount,
@@ -514,9 +514,9 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // Every library function is ALSO deployed on Lovable Cloud (this project). The
 // "Default" button pastes the Lovable-hosted URL so admin can fall back when
 // self-hosted credits run out, and switch back to their own URL anytime.
-const LOVABLE_DEFAULT_BASE = "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1";
+const LOVABLE_DEFAULT_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1` : "";
 const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: `${LOVABLE_DEFAULT_BASE}/${e.slug}` })
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
 );
 
 
@@ -532,9 +532,9 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const v = snap.val() || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
- ROUTER_FUNCTIONS.forEach(({ slug }) => {
- u[slug] = String(v?.[slug]?.customUrl || "");
- e[slug] = v?.[slug]?.enabled === true;
+  ROUTER_FUNCTIONS.forEach(({ slug }) => {
+  u[slug] = normalizeFunctionEndpointUrl(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
+  e[slug] = Boolean(u[slug]) && v?.[slug]?.enabled !== false;
  });
  setUrls(u);
  setEnabled(e);
@@ -545,7 +545,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   const save = async (slug: string) => {
    setSaving(slug);
    try {
-   const url = (urls[slug] || "").trim();
+    const url = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
     if (url && !/^https?:\/\//i.test(url)) { toast.error("Paste a valid http/https function URL"); return; }
      const active = Boolean(url) && enabled[slug] === true;
    await set(ref(db, `settings/functionOverrides/${slug}`), {
@@ -568,7 +568,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  };
 
  const ping = async (slug: string) => {
- const u = (urls[slug] || "").trim();
+  const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
  if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
@@ -600,7 +600,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   {ROUTER_FUNCTIONS.map(({ slug, label, isNew, badgeText, badgeTone, defaultUrl }) => {
  const res = testResult[slug];
  const isVideoProxy = slug === "video-proxy";
- const isDefault = (urls[slug] || "").trim() === defaultUrl;
+  const isDefault = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim()) === defaultUrl;
  const badgeClass = badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
    : badgeTone === "amber" ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
@@ -649,7 +649,8 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  </button>
  <button
    onClick={() => {
-     setUrls((p) => ({ ...p, [slug]: defaultUrl }));
+      if (!defaultUrl) { toast.error("Default URL unavailable"); return; }
+      setUrls((p) => ({ ...p, [slug]: normalizeFunctionEndpointUrl(slug, defaultUrl) }));
      setEnabled((p) => ({ ...p, [slug]: true }));
      toast.success("Default URL pasted — hit Save to activate");
    }}

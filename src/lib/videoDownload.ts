@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
+import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -24,25 +25,16 @@ try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
       const v = snap.val() || {};
-      overrideBaseUrl = String(v.customUrl || "").trim();
-      overrideEnabled = v.enabled === true;
+      overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", String(v.customUrl || v.url || "").trim());
+      overrideEnabled = Boolean(overrideBaseUrl) && v.enabled !== false;
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const v = snap.val() || {};
-      playbackProxyBaseUrl = String(v.customUrl || v.url || "").trim();
-      playbackProxyEnabled = v.enabled === true;
+      playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", String(v.customUrl || v.url || "").trim());
+      playbackProxyEnabled = Boolean(playbackProxyBaseUrl) && v.enabled !== false;
     });
   }
 } catch {}
-
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || "";
-const DEFAULT_DOWNLOAD_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-download` : "";
-const DEFAULT_PLAYBACK_PROXY_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-proxy` : "";
-
-const resolveBaseSync = (): string => {
-  if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
-  return DEFAULT_DOWNLOAD_BASE;
-};
 
 const unique = (items: string[]) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
 
@@ -70,11 +62,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return [trimmedUrl];
   }
 
-  const bases = unique([
-    resolveBaseSync(),
-    DEFAULT_DOWNLOAD_BASE,
-    overrideEnabled && overrideBaseUrl ? overrideBaseUrl : "",
-  ]);
+  const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
   return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
 }
 
@@ -88,10 +76,7 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
       if (inner) return buildVideoProxyUrlCandidates(inner);
     } catch {}
   }
-  const bases = unique([
-    playbackProxyEnabled && playbackProxyBaseUrl ? playbackProxyBaseUrl : "",
-    DEFAULT_PLAYBACK_PROXY_BASE,
-  ]);
+  const bases = playbackProxyEnabled && playbackProxyBaseUrl ? [playbackProxyBaseUrl] : [];
   return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
 }
 
