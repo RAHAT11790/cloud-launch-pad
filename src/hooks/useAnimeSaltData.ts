@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import type { AnimeItem } from '@/data/animeData';
-import { readPersistentCache, updateCachedState, writePersistentCache } from '@/lib/persistentCache';
+import { readPersistentCache, sameJson, writePersistentCache } from '@/lib/persistentCache';
 
 const CACHE_KEY = 'animesalt_all_v3';
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -14,7 +14,7 @@ export function useAnimeSaltData() {
     const parsed = readPersistentCache<{ items?: AnimeItem[]; _ts?: number }>(CACHE_KEY, {});
     const cachedItems = Array.isArray(parsed.items) ? parsed.items : [];
     if (cachedItems.length > 0 && Date.now() - (parsed._ts || 0) < CACHE_DURATION) {
-      updateCachedState(setItems, CACHE_KEY, cachedItems);
+      setItems((previous) => sameJson(previous, cachedItems) ? previous : cachedItems);
       setLoading(false);
       return;
     }
@@ -42,7 +42,7 @@ export function useAnimeSaltData() {
               episodeCount: typeof item.episodeCount === 'number' ? item.episodeCount : undefined,
             }));
 
-          updateCachedState(setItems, CACHE_KEY, converted);
+          setItems((previous) => sameJson(previous, converted) ? previous : converted);
           // Use localStorage for longer cache (survives page reload)
           writePersistentCache(CACHE_KEY, { items: converted, _ts: Date.now() });
         }
