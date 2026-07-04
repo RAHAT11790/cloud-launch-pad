@@ -1,5 +1,5 @@
-// 🆕 NEW v3 (2026-07-04) — Ultra playback: CF edge cache + 16MB chunks. REDEPLOY REQUIRED.
-// After deploy, paste this URL back into Admin → EGD Router.
+// 🆕 NEW v4 (2026-07-04) — RS LIGHTSPEED: aligned 8MB windows + background prefetch. REDEPLOY REQUIRED.
+// After deploy, paste this URL back into Admin → EGD Router → video-proxy.
 // ============================================================
 // Cloudflare Worker — video-proxy (CF-native port)
 // ============================================================
