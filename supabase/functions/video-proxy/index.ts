@@ -183,8 +183,13 @@ Deno.serve(async (req) => {
     const body = rewritePlaylist(await up.text(), effectiveUrl.toString(), reqUrl);
     out.delete("content-length");
     out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-    out.set("cache-control", "no-store");
+    out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
     return new Response(body, { status: up.status, statusText: up.statusText, headers: out });
+  }
+
+  // Long cache for immutable media chunks — lets any downstream CDN/browser skip instantly.
+  if (isDirectMp4Like(effectiveUrl) && (up.status === 200 || up.status === 206)) {
+    out.set("cache-control", "public, max-age=604800, immutable");
   }
 
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });
