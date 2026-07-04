@@ -2654,12 +2654,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const unsubs: (() => void)[] = [];
 
- unsubs.push(onValue(query(ref(db, "users"), limitToLast(1000)), (snap) => {
+ unsubs.push(onValue(query(ref(db, "users"), limitToLast(5000)), (snap) => {
  const data = snap.val() || {};
   startTransition(() => setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user }))));
  }));
 
- unsubs.push(onValue(query(ref(db, "appUsers"), limitToLast(1000)), (snap) => {
+ unsubs.push(onValue(query(ref(db, "appUsers"), limitToLast(5000)), (snap) => {
   startTransition(() => setAppUsersGlobal(snap.val() || {}));
  }));
 
