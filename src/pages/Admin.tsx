@@ -2157,7 +2157,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [pushTitleOverride, setPushTitleOverride] = useState("");
  const [pushBodyOverride, setPushBodyOverride] = useState("");
  const [pushSending, setPushSending] = useState(false);
- const [pushLastResult, setPushLastResult] = useState<string>("");
 
  // Redeem code state
  const [redeemCodesData, setRedeemCodesData] = useState<any[]>([]);
