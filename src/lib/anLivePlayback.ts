@@ -1,4 +1,4 @@
-// Resolve AN playback from short-lived Firebase + localStorage cache first,
+// Resolve AN playback from short-lived memory/localStorage cache first,
 // then refresh through the fetch API only when the signed links expire.
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
@@ -25,9 +25,6 @@ export async function pruneExpiredPlaybackCache() {
   lastPrune = now;
   try {
     for (const [key, hit] of Array.from(mem.entries())) if (!hit?.expiresAt || hit.expiresAt <= now) mem.delete(key);
-    for (const kind of ["episode", "movie", "series"] as const) {
-      void kind;
-    }
   } catch {}
 }
 
@@ -160,10 +157,10 @@ const pickPayload = (r: any) => r?.data || r;
 // ============================================================================
 // SERIES BUNDLE CACHE
 // ----------------------------------------------------------------------------
-// One Firebase document per series that maps { episodeSlug -> playback }. On
-// series open we load the bundle once (1 RTT), mirror to memory + localStorage,
-// then background-fill any missing episodes with high concurrency. All later
-// episode/season clicks become pure in-memory lookups — zero latency.
+// One client-local bundle per series maps { episodeSlug -> playback }. On
+// series open we load memory/localStorage, then background-fill any missing
+// episodes with high concurrency. All later episode/season clicks become
+// pure in-memory lookups — zero latency without leaking URLs through DB reads.
 // ============================================================================
 
 type EpisodePlayback = Partial<Episode>;
@@ -172,7 +169,6 @@ const BUNDLE_TTL_MS = 180 * 60 * 1000; // 3h — matches AnimeSalt signed-URL wi
 const bundleMem = new Map<string, SeriesBundle>();
 const bundleLoadInflight = new Map<string, Promise<SeriesBundle>>();
 const bundleLsKey = (slug: string) => `rs_an_bundle_v10_codecs:${safeKey(slug)}`;
-const bundleFbPath = (slug: string) => `${BUNDLE_FB_ROOT}/${safeKey(slug)}`;
 
 const pendingBundleSaves = new Set<string>();
 let bundleSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -211,7 +207,7 @@ export function getEpisodeFromBundle(seriesSlug: string, epSlug: string): Episod
   return ep?.link ? ep : null;
 }
 
-/** Load a series bundle from mem → localStorage → Firebase (1 RTT max). */
+/** Load a series bundle from mem → localStorage only. */
 export async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBundle> {
   const now = Date.now();
   if (!seriesSlug) return { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
