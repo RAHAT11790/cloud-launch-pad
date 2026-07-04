@@ -1855,13 +1855,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (!animeId) return;
     const key = `${animeId ?? "-"}::${currentSeasonIdx ?? "-"}::${currentEpisodeIdx ?? "-"}`;
-    const isFreshEpisodeSwitch = episodeMountKeyRef.current === key && prevEpKeyRef.current === key;
-    // On explicit Next/Prev switches we never re-apply stale initialSeekTime.
+    // "First mount" = the very first episode key this player instance saw.
+    // Any later episode change (Next/Prev/season switch) is a fresh switch and
+    // must start at 0 — never re-apply the previous episode's initialSeekTime.
+    const isFreshEpisodeSwitch = initialMountKeyRef.current !== "" && initialMountKeyRef.current !== key;
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
     pendingSeek.current = hasExplicitResume && !isFreshEpisodeSwitch
       ? initialSeekTime!
       : 0;
-    // Only look up firebase resume when we didn't just switch episodes.
     if (isFreshEpisodeSwitch) return;
     try {
       const user = localStorage.getItem("rsanime_user");
