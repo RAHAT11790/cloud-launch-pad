@@ -1868,6 +1868,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = 0;
     mediaRecoverySeekRef.current = 0;
     lastPlaybackPositionRef.current = 0;
+    rsSoftRetriesRef.current = 0;
+    hlsFatalRetriesRef.current = 0;
   }, [animeId]);
 
 
@@ -2071,10 +2073,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return true;
     }
 
-    // Do NOT cascade through every quality/server on a single media error.
-    // That old scanner made one bad/proxy-blocked URL poison every configured
-    // server and visibly jumped through the list. Keep failure scoped to the
-    // current selected server; the user can manually pick another server.
+    // No alternate route left. Before declaring the link expired, give the
+    // current URL a couple of soft reload attempts — RS/direct-MP4 URLs often
+    // fail once on a transient CDN/proxy hiccup (429, cold cache miss, network
+    // stall) and recover on the very next request. Marking them expired on the
+    // first failure is what caused RS "Link expired" to appear even on healthy
+    // links.
+    rsSoftRetriesRef.current = (rsSoftRetriesRef.current || 0) + 1;
+    if (rsSoftRetriesRef.current <= 2 && videoRef.current) {
+      const v = videoRef.current;
+      const resumeAt = lastKnownTime || v.currentTime || 0;
+      pendingSeek.current = resumeAt;
+      // Force the video element to re-request the same URL. Clear the failed
+      // key so buildPlaybackCandidates can re-consider it after the retry.
+      failedSrcsRef.current.delete(failedKey);
+      const delay = 400 * rsSoftRetriesRef.current;
+      window.setTimeout(() => {
+        try {
+          v.load();
+          v.play().catch(() => {});
+        } catch {}
+      }, delay);
+      return true;
+    }
+
+    // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
   }, [cdnEnabled, currentQuality, currentSrc, isAnimeSaltContent, preferProxy, proxyApiKey, proxyUrl]);
@@ -2099,6 +2122,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [captionVerticalOffset, setCaptionVerticalOffset] = useState(10);
   const hlsRef = useRef<Hls | null>(null);
   const hlsFatalRetriesRef = useRef(0);
+  const rsSoftRetriesRef = useRef(0);
   const hlsSubtitleMetaRef = useRef<HlsSubtitleOption[]>([]);
   const subtitleCueListRef = useRef<Array<{ start: number; end: number; text: string }>>([]);
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -2491,6 +2515,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // and immediately trigger fallback, which looked like the player was
     // "switching back" to 480p even when the selected URL was healthy.
     hlsFatalRetriesRef.current = 0;
+    rsSoftRetriesRef.current = 0;
 
     const hls = new Hls({
       enableWorker: true,
