@@ -48,6 +48,8 @@ const ADMIN_CACHE = {
   notifications: "rs_admin_cache_notifications_v1",
   releases: "rs_admin_cache_releases_v1",
   comments: "rs_admin_cache_comments_v1",
+  animesaltAll: "rs_admin_cache_animesalt_all_v1",
+  animesaltAllTs: "rs_admin_cache_animesalt_all_ts_v1",
   animesaltSelected: "rs_admin_cache_animesalt_selected_v1",
   weeklySchedule: "rs_admin_cache_weekly_schedule_v1",
   analyticsViews: "rs_admin_cache_analytics_views_v1",
@@ -10073,9 +10075,9 @@ const AnimeSaltManagerSection = ({
   glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string;
   categoryList: { id: string; name: string }[]; selectClass: string;
 }) => {
-  const [allItems, setAllItems] = useState<any[]>([]);
-  const [selectedItems, setSelectedItems] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(true);
+  const [allItems, setAllItems] = useState<any[]>(() => readPersistentCache<any[]>(ADMIN_CACHE.animesaltAll, []));
+  const [selectedItems, setSelectedItems] = useState<Record<string, any>>(() => readPersistentCache<Record<string, any>>(ADMIN_CACHE.animesaltSelected, {}));
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "series" | "movies" | "added">("all");
   const [addCategory, setAddCategory] = useState("");
@@ -10158,12 +10160,22 @@ const AnimeSaltManagerSection = ({
     toast.success(next ? "AnimeSalt চালু" : "AnimeSalt বন্ধ");
   };
 
-  const loadItems = async () => {
-    setLoading(true);
+  const loadItems = async (force = false) => {
+    const cachedItems = readPersistentCache<any[]>(ADMIN_CACHE.animesaltAll, []);
+    const cachedAt = readPersistentCache<number>(ADMIN_CACHE.animesaltAllTs, 0);
+    const cacheFresh = cachedItems.length > 0 && Date.now() - cachedAt < 24 * 60 * 60 * 1000;
+    if (!force && cacheFresh) {
+      updateCachedState(setAllItems, ADMIN_CACHE.animesaltAll, cachedItems);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(cachedItems.length === 0);
     try {
       const result = await animeSaltApi.browseAll();
       if (result.success && result.items) {
-        setAllItems(result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
+        updateCachedState(setAllItems, ADMIN_CACHE.animesaltAll, result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
+        try { localStorage.setItem(ADMIN_CACHE.animesaltAllTs, JSON.stringify(Date.now())); } catch {}
       }
     } catch (err) {
       console.error('AnimeSalt load failed:', err);
@@ -10172,20 +10184,20 @@ const AnimeSaltManagerSection = ({
     setLoading(false);
   };
 
-  useEffect(() => { loadItems(); }, []);
+  useEffect(() => { loadItems(false); }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     // Clear cache to force fresh fetch
     try { localStorage.removeItem('animesalt_all_v3'); } catch {}
-    await loadItems();
+    await loadItems(true);
     setRefreshing(false);
     toast.success('AnimeSalt ডাটা রিফ্রেশ হয়েছে!');
   };
 
   useEffect(() => {
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
-      setSelectedItems(snap.val() || {});
+      updateCachedState(setSelectedItems, ADMIN_CACHE.animesaltSelected, snap.val() || {});
     });
     return () => unsub();
   }, []);
