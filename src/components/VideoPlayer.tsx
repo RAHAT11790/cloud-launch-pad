@@ -92,13 +92,6 @@ const readCachedVideoServers = (): VideoServerOption[] => {
   } catch { return []; }
 };
 
-const readCachedProxyUrl = (): string => {
-  try {
-    if (typeof localStorage === "undefined") return "";
-    return String(localStorage.getItem(VIDEO_PROXY_CACHE_KEY) || "").trim();
-  } catch { return ""; }
-};
-
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
@@ -435,7 +428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const manualQualitySelectedRef = useRef(false);
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
-  const [proxyUrl, setProxyUrl] = useState<string>(() => readCachedProxyUrl());
+  const [proxyUrl, setProxyUrl] = useState<string>("");
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(true);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
