@@ -462,6 +462,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>(() => readCachedVideoServers());
+  const [videoServersLoaded, setVideoServersLoaded] = useState(() => readCachedVideoServers().length > 0);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const manualServerSelectedRef = useRef(false);
@@ -473,6 +474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const servers = normalizeVideoServersValue(snap.val());
       setVideoServers(servers);
+      setVideoServersLoaded(true);
       try { localStorage.setItem(VIDEO_SERVERS_CACHE_KEY, JSON.stringify(servers)); } catch {}
     });
     return () => unsub();
@@ -3011,6 +3013,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const lastEpisodeKeyRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
+    if (!noServerSwitch && !isHlsLikeUrl(src) && isInsecureHttpSource(src) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const episodeKey = `${(anime as any)?.id ?? ""}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
     const nextFingerprint = `${src}__${episodeKey}`;
     if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
@@ -3105,7 +3108,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, anime, isAnimeSaltContent]);
+  }, [src, qualityOptions, noProxy, noServerSwitch, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, videoServersLoaded, anime, isAnimeSaltContent]);
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
