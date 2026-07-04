@@ -71,9 +71,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return [trimmedUrl];
   }
 
-  const bases = overrideEnabled && overrideBaseUrl
-    ? [overrideBaseUrl]
-    : unique([resolveBaseSync(), DEFAULT_DOWNLOAD_BASE]);
+  const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
   return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
 }
 
@@ -87,9 +85,7 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
       if (inner) return buildVideoProxyUrlCandidates(inner);
     } catch {}
   }
-  const bases = playbackProxyEnabled && playbackProxyBaseUrl
-    ? [playbackProxyBaseUrl]
-    : unique([DEFAULT_PLAYBACK_PROXY_BASE]);
+  const bases = playbackProxyEnabled && playbackProxyBaseUrl ? [playbackProxyBaseUrl] : [];
   return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
 }
 
