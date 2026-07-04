@@ -3085,6 +3085,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  users: "Users",
  notifications: "Notifications",
  "new-releases": "New Releases",
+ "manual-push": "Manual Push",
  "tmdb-fetch": "TMDB Fetch",
  "add-content": "Add Content",
  "redeem-codes": "Redeem Codes",
