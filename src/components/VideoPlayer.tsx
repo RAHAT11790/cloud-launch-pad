@@ -46,6 +46,7 @@ import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -60,7 +61,7 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
   else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
   // Default: append ?url=
-  else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
   if (apiKey) {
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
