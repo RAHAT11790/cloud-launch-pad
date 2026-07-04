@@ -3679,8 +3679,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Computed stats (memoized to prevent recalculation on every render)
   const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
-  const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
-  const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
+
+  // Live "online" is derived from lastSeen freshness (heartbeat is every 30s;
+  // give a 90s grace window so a missed beat doesn't drop the user).
+  // The `online` boolean alone gets stuck at true forever because browsers do
+  // not reliably fire onDisconnect, causing the 991/65 permanent-glitch count.
+  const [presenceTick, setPresenceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setPresenceTick((x) => x + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const ONLINE_WINDOW_MS = 90_000;
+  const onlineUsers = useMemo(() => {
+    const now = Date.now();
+    return usersData.filter((u: any) => {
+      const seen = Number(u?.lastSeen || 0);
+      return seen > 0 && now - seen <= ONLINE_WINDOW_MS;
+    }).length;
+    // presenceTick drives recalculation every 30s
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersData, presenceTick]);
+  const offlineUsers = useMemo(() => Math.max(0, usersData.length - onlineUsers), [usersData.length, onlineUsers]);
+
 
   // Strict guest detection (per user spec):
   // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
