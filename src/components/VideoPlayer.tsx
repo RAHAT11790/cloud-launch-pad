@@ -2086,6 +2086,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return true;
     }
 
+    // Auto mode must not die on the default/1080 file when lower qualities for
+    // the same episode are still present. Some RS Server 2 files return a valid
+    // HEAD/content-length but close the GET stream; when that happens, try the
+    // next playable quality on the SAME configured server before showing expired.
+    if (!manualQualitySelectedRef.current && availableQualities.length > 1) {
+      const qualityRank = (label: string) => {
+        const value = label.toLowerCase();
+        if (value.includes("720")) return 1;
+        if (value.includes("480") || value.includes("360")) return 2;
+        if (value.includes("1080")) return 3;
+        if (is4KLabel(label)) return 4;
+        return 9;
+      };
+      const qualityFallback = availableQualities
+        .filter((option) => option.label !== "Auto" && option.src && (!is4KLabel(option.label) || isPremium))
+        .sort((a, b) => qualityRank(a.label) - qualityRank(b.label))
+        .find((option) => {
+          const raw = getServerScopedSource(option.src, activeServerIndex);
+          const resolved = buildPlaybackCandidates(raw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+          return !!resolved
+            && resolved !== currentSrc
+            && resolved !== failedKey
+            && raw !== activeSourceBaseRef.current
+            && !failedSrcsRef.current.has(resolved)
+            && !failedSrcsRef.current.has(raw);
+        });
+
+      if (qualityFallback) {
+        const nextRaw = getServerScopedSource(qualityFallback.src, activeServerIndex);
+        const nextResolved = buildPlaybackCandidates(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+        if (nextResolved) {
+          pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
+          sourceBaseRef.current = qualityFallback.src;
+          activeSourceBaseRef.current = nextRaw;
+          currentQualityRef.current = qualityFallback.label;
+          setCurrentQuality(qualityFallback.label);
+          setCurrentSrc(nextResolved);
+          setVideoError(false);
+          setIsBuffering(true);
+          retryAttemptsRef.current.clear();
+          rsSoftRetriesRef.current = 0;
+          return true;
+        }
+      }
+    }
+
     // Proxy upstream is down/closed (for example bot-hosting 502). Do not call
     // any hidden/bypass URL; move to the next admin-configured RS server using
     // the same episode path/query. This keeps EGD Router as the single source
@@ -2144,7 +2190,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
-  }, [activeServerIndex, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
