@@ -2153,7 +2153,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [releaseContentSearch, setReleaseContentSearch] = useState("");
  const deferredReleaseContentSearch = useDeferredValue(releaseContentSearch);
 
- // Manual Push Notification (below New Release)
+ // Manual Push Notification (own section, independent from New Release)
+ const [pushContent, setPushContent] = useState("");
+ const [pushSeason, setPushSeason] = useState("");
+ const [pushEpisode, setPushEpisode] = useState("");
+ const [pushSeasons, setPushSeasons] = useState<any[]>([]);
+ const [pushEpisodes, setPushEpisodes] = useState<any[]>([]);
+ const [pushShowSeasonEp, setPushShowSeasonEp] = useState(false);
+ const [pushDropdownOpen, setPushDropdownOpen] = useState(false);
+ const [pushContentSearch, setPushContentSearch] = useState("");
  const [pushTitleOverride, setPushTitleOverride] = useState("");
  const [pushBodyOverride, setPushBodyOverride] = useState("");
  const [pushLastResult, setPushLastResult] = useState<string>("");
