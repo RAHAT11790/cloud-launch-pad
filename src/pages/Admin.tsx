@@ -6457,12 +6457,16 @@ ${tgBulkFooter}
   // straight to /watch/<seriesId>?s=<season>&e=<episodeIdx> and auto-plays.
   try {
     const pushMod = await import("@/lib/pushNotifications");
-    const pushTitle = `🎬 ${ctxForm.title} — New Episode`;
-    const pushBody = rangesToPublish.length > 1
-      ? `Multiple new episodes are live!`
-      : (rangesToPublish[0].endEp !== rangesToPublish[0].startEp
-          ? `${rangesToPublish[0].seasonName} — EP ${rangesToPublish[0].startEp}–${rangesToPublish[0].endEp} is out!`
-          : `${rangesToPublish[0].seasonName} — Episode ${rangesToPublish[0].startEp} is now available!`);
+    const isRange = rangesToPublish.length === 1 && rangesToPublish[0].endEp !== rangesToPublish[0].startEp;
+    const isMulti = rangesToPublish.length > 1;
+    const pushTitle = `🎬 ${ctxForm.title} — New Episode${isRange || isMulti ? "s" : ""}`;
+    const firstR = rangesToPublish[0];
+    const epLine = isMulti
+      ? `Multiple new episodes across seasons`
+      : (isRange
+        ? `${firstR.seasonName} • Episode ${firstR.startEp}–${firstR.endEp}`
+        : `${firstR.seasonName} • Episode ${firstR.startEp}`);
+    const pushBody = `${ctxForm.title} — ${epLine} is now live!\n▶ Tap to watch instantly on RS Anime.`;
     const backdrop = ctxForm.backdrop || ctxForm.poster || "";
     const image = backdrop
       ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/')
