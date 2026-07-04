@@ -781,6 +781,10 @@ const Index = () => {
   const brandingConfig = useBranding();
   const displaySiteName = brandingConfig.siteName || "RS ANIME";
 
+  useEffect(() => {
+    ensureAnPlaybackRouteWatcher();
+  }, []);
+
   // --- Splash hold ---
   // Always show the original splash on a fresh website entry/reload, then
   // release after the first visible assets are warm. Route/page navigation does
