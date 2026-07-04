@@ -26,7 +26,7 @@ const PASS = ["content-type", "content-length", "content-range", "accept-ranges"
 // answer with the whole remaining file (often 40MB-2GB), which makes Server 1
 // feel slow and causes Server 2/HTTP proxy requests to hang. Bounded ranges let
 // the browser request exactly the next piece it needs and keep seeking snappy.
-const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -116,6 +116,66 @@ function requestedOpenEndedRange(range: string | null) {
 function browserRangeResponseHeaders(headers: Headers, originalRange: string | null) {
   if (!requestedOpenEndedRange(originalRange)) return;
   if (!headers.has("content-range")) headers.delete("content-length");
+}
+
+function parseContentRange(value: string | null) {
+  const m = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
+  if (!m) return null;
+  const start = Number(m[1]);
+  const end = Number(m[2]);
+  const total = m[3] === "*" ? NaN : Number(m[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return { start, end, total };
+}
+
+async function drainReader(reader: ReadableStreamDefaultReader<Uint8Array>, controller: ReadableStreamDefaultController<Uint8Array>) {
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value && value.byteLength) controller.enqueue(value);
+  }
+}
+
+function streamOpenEndedRange(target: URL, method: string, firstResponse: Response, out: Headers, rawRange: string | null, headers: Record<string, string>, signal: AbortSignal) {
+  if (method === "HEAD" || !requestedOpenEndedRange(rawRange)) return null;
+  const firstRange = parseContentRange(firstResponse.headers.get("content-range"));
+  const requestedStart = Number(String(rawRange || "").match(/^bytes=(\d+)-$/i)?.[1] || NaN);
+  if (!firstRange || !Number.isFinite(firstRange.total) || firstRange.total <= 0 || firstRange.start !== requestedStart) return null;
+
+  out.set("content-range", `bytes ${firstRange.start}-${firstRange.total - 1}/${firstRange.total}`);
+  out.set("content-length", String(firstRange.total - firstRange.start));
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let cursor = firstRange.start;
+      try {
+        const firstReader = firstResponse.body?.getReader();
+        if (firstReader) {
+          await drainReader(firstReader, controller);
+          cursor = firstRange.end + 1;
+        }
+        while (cursor < firstRange.total) {
+          const chunkEnd = Math.min(cursor + MEDIA_CHUNK_BYTES - 1, firstRange.total - 1);
+          const nextHeaders = { ...headers, range: `bytes=${cursor}-${chunkEnd}` };
+          const res = await fetch(target.toString(), { method: "GET", headers: nextHeaders, redirect: "follow", signal });
+          if (!(res.ok || res.status === 206)) {
+            try { await res.body?.cancel(); } catch {}
+            throw new Error(`Upstream chunk ${cursor}-${chunkEnd} failed: ${res.status}`);
+          }
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error("Upstream chunk body missing");
+          await drainReader(reader, controller);
+          cursor = chunkEnd + 1;
+        }
+        controller.close();
+      } catch (e) {
+        try { controller.error(e); } catch {}
+      }
+    },
+    cancel() {
+      try { firstResponse.body?.cancel(); } catch {}
+    },
+  });
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
@@ -236,6 +296,11 @@ Deno.serve(async (req) => {
   // Long cache for immutable media chunks — lets any downstream CDN/browser skip instantly.
   if (isDirectMp4Like(effectiveUrl) && (up.status === 200 || up.status === 206)) {
     out.set("cache-control", "public, max-age=604800, immutable");
+  }
+
+  const assembledOpenRange = streamOpenEndedRange(effectiveUrl, req.method, up, out, rawRange, baseHeaders, ac.signal);
+  if (assembledOpenRange) {
+    return new Response(assembledOpenRange, { status: up.status, statusText: up.statusText, headers: out });
   }
 
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });

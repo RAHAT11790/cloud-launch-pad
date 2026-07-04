@@ -22,7 +22,7 @@ const cors = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -95,6 +95,69 @@ function requestedOpenEndedRange(range) {
 function browserRangeResponseHeaders(headers, originalRange) {
   if (!requestedOpenEndedRange(originalRange)) return;
   if (!headers.has("content-range")) headers.delete("content-length");
+}
+
+function parseContentRange(value) {
+  const m = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
+  if (!m) return null;
+  const start = Number(m[1]);
+  const end = Number(m[2]);
+  const total = m[3] === "*" ? NaN : Number(m[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return { start, end, total };
+}
+
+async function drainReader(reader, controller) {
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value && value.byteLength) controller.enqueue(value);
+  }
+}
+
+function streamOpenEndedRange(target, method, firstResponse, out, rawRange, headers) {
+  if (method === "HEAD" || !requestedOpenEndedRange(rawRange)) return null;
+  const firstRange = parseContentRange(firstResponse.headers.get("content-range"));
+  const requestedStart = Number(String(rawRange || "").match(/^bytes=(\d+)-$/i)?.[1] || NaN);
+  if (!firstRange || !Number.isFinite(firstRange.total) || firstRange.total <= 0 || firstRange.start !== requestedStart) return null;
+
+  out.set("content-range", `bytes ${firstRange.start}-${firstRange.total - 1}/${firstRange.total}`);
+  out.set("content-length", String(firstRange.total - firstRange.start));
+
+  return new ReadableStream({
+    async start(controller) {
+      let cursor = firstRange.start;
+      try {
+        const firstReader = firstResponse.body?.getReader();
+        if (firstReader) {
+          await drainReader(firstReader, controller);
+          cursor = firstRange.end + 1;
+        }
+        while (cursor < firstRange.total) {
+          const chunkEnd = Math.min(cursor + MEDIA_CHUNK_BYTES - 1, firstRange.total - 1);
+          const res = await fetch(target.toString(), {
+            method: "GET",
+            headers: { ...headers, range: `bytes=${cursor}-${chunkEnd}` },
+            redirect: "follow",
+          });
+          if (!(res.ok || res.status === 206)) {
+            try { await res.body?.cancel(); } catch {}
+            throw new Error(`Upstream chunk ${cursor}-${chunkEnd} failed: ${res.status}`);
+          }
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error("Upstream chunk body missing");
+          await drainReader(reader, controller);
+          cursor = chunkEnd + 1;
+        }
+        controller.close();
+      } catch (e) {
+        try { controller.error(e); } catch {}
+      }
+    },
+    cancel() {
+      try { firstResponse.body?.cancel(); } catch {}
+    },
+  });
 }
 
 function proxyUrl(reqUrl, target) {
@@ -190,6 +253,10 @@ export default {
 
     if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
+    }
+    const assembledOpenRange = streamOpenEndedRange(up, req.method, res, out, rawRange, headers);
+    if (assembledOpenRange) {
+      return new Response(assembledOpenRange, { status: res.status, headers: out });
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
