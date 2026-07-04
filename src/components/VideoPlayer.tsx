@@ -165,25 +165,16 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   // what admin saved. isInsecureHttpSource() reads the actual scheme, so the
   // right proxy path is chosen automatically per URL.
   const isHttp = isInsecureHttpSource(url);
-  const isHttpLike = /^https?:\/\//i.test(url);
-  // Admin-configured proxy (from Firebase settings). Optional — only used when
-  // available. When configured, route both HTTP and HTTPS through it so browser
-  // network never requests RS media hosts directly.
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (customProxyCandidate) {
-    addCandidate(customProxyCandidate);
-    return candidates;
-  }
-
+  // HTTPS URLs play directly from the <video> tag — fastest path, no proxy.
+  // Only HTTP (mixed-content) URLs need to be rescued onto HTTPS via the
+  // admin-configured `video-proxy`.
   if (isHttp) {
-    // http:// URL — must be rescued onto https via the admin-selected EGD
-    // Router video-proxy. Do not silently spend default backend credits here;
-    // the Default button is the only way to opt into the project-hosted proxy.
-    addCandidate(customProxyCandidate);
+    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  // https:// URL without an admin proxy — only then play direct.
+  // https:// URL — always direct.
   addCandidate(url);
   return candidates;
 };
