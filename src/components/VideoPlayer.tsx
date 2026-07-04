@@ -2037,6 +2037,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
     if (isAnimeSaltContent) {
+      // Do NOT immediately show "Link expired" on AN — the synthetic HLS master
+      // with separate audio/video playlists can throw transient network errors
+      // during startup that hls.js recovers from on its own. Only surface the
+      // error banner after multiple fatal retries have already been consumed.
+      // A single transient fetch failure is not proof the link is dead.
+      if (hlsFatalRetriesRef.current < 3) {
+        // Let hls.js keep retrying; do not poison the UI.
+        return false;
+      }
       setVideoError(true);
       return false;
     }
