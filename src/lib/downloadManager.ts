@@ -1,4 +1,4 @@
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload } from "./videoDownload";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
