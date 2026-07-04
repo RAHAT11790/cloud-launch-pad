@@ -1,24 +1,13 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db, ref, onValue, update } from "@/lib/firebase";
-import { toast } from "sonner";
-import { fuzzyMatch } from "@/lib/fuzzyMatch";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; }
 
-type Item = {
-  id: string;
-  title: string;
-  backdrop?: string;
-  logo?: string;
-  year?: string | number;
-  type: "webseries" | "movies";
-  category?: string;
-  storyline?: string;
-  genres?: string[];
-  addedAt?: number;
-};
+type Item = { id: string; title: string; backdrop?: string; logo?: string; year?: string | number; type: "webseries" | "movies"; category?: string; storyline?: string; genres?: string[]; };
 type Mode = "backdrop" | "logo";
+type Provider = "lovable" | "flux";
 
 const DEFAULT_BACKDROP_PROMPT = `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "{title}" IN ULTRA DETAILED 4K HDR QUALITY.
 
@@ -32,46 +21,18 @@ The final result must look like an OFFICIAL anime poster remastered into a premi
 
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
 
-const callGenerateBackdrop = async (body: Record<string, any>) => {
-  const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
-  if (error) {
-    const err = new Error(error.message || "Lovable AI call failed") as any;
-    err.status = (error as any)?.context?.status;
-    throw err;
-  }
-  if (data?.error) {
-    const err = new Error(data.error) as any;
-    err.status = data.status;
-    throw err;
-  }
-  return data;
-};
-
-
 const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
   const [items, setItems] = useState<Item[]>([]);
   const [filter, setFilter] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("backdrop");
+  const [provider, setProvider] = useState<Provider>("lovable");
   const [customPrompt, setCustomPrompt] = useState("");
   const [usePromptOverride, setUsePromptOverride] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [activeFunctionUrl, setActiveFunctionUrl] = useState("");
-
-  const [lovableStatus, setLovableStatus] = useState<{
-    state: "unknown" | "checking" | "online" | "offline";
-    model?: string;
-    message?: string;
-    checkedAt?: number;
-  }>({ state: "unknown" });
-  const [lastResult, setLastResult] = useState<{
-    model?: string; at?: number;
-  } | null>(null);
-  const [lastError, setLastError] = useState<{
-    message?: string; status?: number; at?: number;
-  } | null>(null);
+  const [useReference, setUseReference] = useState(true);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "webseries"), (snap) => {
@@ -81,7 +42,6 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: v[id]?.year, type: "webseries" as const,
         category: v[id]?.category, storyline: v[id]?.storyline,
         genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
-        addedAt: Number(v[id]?.addedAt || v[id]?.createdAt || v[id]?.updatedAt || 0),
       }));
       setItems((prev) => [...ws, ...prev.filter((p) => p.type !== "webseries")]);
     });
@@ -92,19 +52,16 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: v[id]?.year, type: "movies" as const,
         category: v[id]?.category, storyline: v[id]?.storyline,
         genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
-        addedAt: Number(v[id]?.addedAt || v[id]?.createdAt || v[id]?.updatedAt || 0),
       }));
       setItems((prev) => [...prev.filter((p) => p.type !== "movies"), ...mv]);
     });
     return () => { u1(); u2(); };
   }, []);
 
-  const visible = useMemo(() => {
-    const q = filter.trim();
-    const scored = items.filter((i) => fuzzyMatch(q, i.title, 0.5)).slice();
-    scored.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
-    return scored;
-  }, [items, filter]);
+  const visible = useMemo(
+    () => items.filter((i) => i.title.toLowerCase().includes(filter.toLowerCase())),
+    [items, filter]
+  );
 
   const activeItem = useMemo(() => {
     if (!activeId) return null;
@@ -112,12 +69,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     return items.find((i) => i.type === t && i.id === id) || null;
   }, [activeId, items]);
 
-  useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode]);
-
   useEffect(() => {
-    setActiveFunctionUrl("lovable-backdrop (Lovable Cloud)");
-  }, []);
-
+    setPreviewUrl(null);
+    setProgress(0);
+  }, [activeId, mode, provider]);
 
   useEffect(() => {
     if (usePromptOverride && !customPrompt) {
@@ -126,37 +81,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePromptOverride, mode]);
 
-  const checkLovable = useCallback(async (silent = false) => {
-    setLovableStatus((s) => ({ ...s, state: "checking" }));
-    try {
-      const data = await callGenerateBackdrop({ action: "check-lovable" });
-      const l = data?.lovable || {};
-      setLovableStatus(l?.ok
-        ? { state: "online", model: l.model, message: l.message || "Gateway reachable", checkedAt: Date.now() }
-        : { state: "offline", message: l?.error || "Probe failed", checkedAt: Date.now() });
-      if (!silent) {
-        if (l?.ok) toast.success(`Lovable AI ✓ (${l.model || "ready"})`);
-        else toast.error(`Lovable AI offline — out of credits or not configured`);
-      }
-    } catch (e: any) {
-      setLovableStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
-      if (!silent) toast.error(e?.message || "Probe failed");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (lovableStatus.state === "unknown") void checkLovable(true);
-  }, [lovableStatus.state, checkLovable]);
-
   const generate = async () => {
     if (!activeItem || busy) return;
-    if (mode === "backdrop" && !activeItem.backdrop) {
-      toast.error("This title has no reference backdrop. Add one first so AI can edit the correct anime image.");
-      return;
-    }
     setBusy(true);
     setProgress(8);
-    setLastError(null);
     const tick = setInterval(() => {
       setProgress((p) => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2)));
     }, 500);
@@ -167,9 +95,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         type: activeItem.type,
         year: activeItem.year,
         mode,
-        provider: "lovable",
-        referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
-        useReference: mode === "backdrop",
+        provider,
+        // Image-to-image grounding: TMDB/IMDB backdrop + genre + overview
+        referenceImageUrl: mode === "backdrop" && useReference ? activeItem.backdrop : undefined,
+        useReference: mode === "backdrop" ? useReference : false,
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
@@ -178,18 +107,23 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           .replace(/\{title\}/gi, activeItem.title)
           .replace(/\[WRITE ANIME NAME HERE\]/gi, activeItem.title);
       }
-      const data = await callGenerateBackdrop(payload);
+      const { data, error } = await supabase.functions.invoke("generate-backdrop", { body: payload });
+      if (error) throw error;
       if (!data?.url) throw new Error(data?.error || "no url");
       setProgress(100);
       setPreviewUrl(data.url as string);
-      setLastResult({ model: data.model, at: Date.now() });
-      toast.success(`Preview ready · ${data.model || "lovable"}`);
+      toast.success(`Preview ready (${data.engine})`);
     } catch (e: any) {
       const msg = e?.message || String(e);
-      setLastError({ message: msg, status: e?.status, at: Date.now() });
-      toast.error(e?.status === 429
-        ? "Lovable AI rate-limited or out of credits. It will resume automatically when credits refill."
-        : msg);
+      if (provider === "lovable" && /(404|FunctionsHttpError|Failed to send a request|non-2xx|Edge Function returned a non-2xx status code)/i.test(msg)) {
+        setProvider("flux");
+        toast.info("Lovable AI generator unavailable. Switched to Flux automatically.");
+        return;
+      }
+      toast.error(
+        msg.includes("PAYMENT") ? "Lovable AI credits exhausted — try Flux v1" :
+        msg.includes("RATE") ? "Rate limited — try again shortly" : msg
+      );
     } finally {
       clearInterval(tick);
       setBusy(false);
@@ -208,12 +142,6 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     }
   };
 
-  const lovDot =
-    lovableStatus.state === "online" ? "bg-emerald-400" :
-    lovableStatus.state === "offline" ? "bg-rose-400" :
-    lovableStatus.state === "checking" ? "bg-amber-400 animate-pulse" :
-    "bg-white/30";
-
   return (
     <div className={glassCard + " space-y-4 overflow-hidden"}>
       <div className="space-y-1.5">
@@ -222,7 +150,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13px] font-bold text-white tracking-wide">Backdrop & Logo AI Generator</h3>
         </div>
         <p className="text-[10.5px] text-white/55 leading-relaxed break-words">
-          Powered by Lovable AI Gateway. Works while Lovable credits are available; pauses automatically when they run out.
+          Pick an anime → preview → regenerate or save. Two engines available — Lovable AI &amp; Flux v1.
         </p>
       </div>
 
@@ -231,36 +159,31 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Search anime title… (fuzzy, 50% match)"
+            placeholder="Search anime title…"
             className={inputClass + " w-full"}
           />
-          <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1 -mr-1">
+          <div className="grid grid-cols-1 gap-1.5 max-h-[520px] overflow-y-auto pr-1">
             {visible.map((it) => (
               <button
                 key={it.type + it.id}
                 onClick={() => setActiveId(`${it.type}:${it.id}`)}
-                className="group w-full text-left rounded-xl p-2 pr-3 border border-white/8 bg-gradient-to-br from-white/[0.04] to-white/[0.015] hover:from-white/[0.08] hover:to-white/[0.03] hover:border-white/15 flex gap-3 items-center transition-all duration-150 min-w-0 active:scale-[0.99]"
+                className="w-full text-left bg-white/5 hover:bg-white/10 rounded-lg p-2.5 border border-white/5 flex gap-3 items-center transition min-w-0"
               >
-                <div className="relative w-[88px] h-12 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-white/10 bg-black/40">
-                  {it.backdrop ? (
-                    <img src={it.backdrop} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-full h-full grid place-items-center text-[9px] text-white/40">no art</div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0 py-0.5">
-                  <div className="text-[12.5px] font-semibold text-white truncate leading-tight">{it.title}</div>
-                  <div className="text-[10px] text-white/45 mt-0.5 flex items-center gap-1.5">
-                    <span className="px-1.5 py-px rounded bg-white/8 uppercase tracking-wide text-[9px]">{it.type}</span>
-                    {it.year ? <span>{it.year}</span> : null}
-                    {it.logo ? <span className="text-emerald-400/80">• logo</span> : null}
+                {it.backdrop ? (
+                  <img src={it.backdrop} alt="" className="w-20 h-[44px] object-cover rounded flex-shrink-0" />
+                ) : (
+                  <div className="w-20 h-[44px] bg-white/5 rounded grid place-items-center text-[9px] text-white/40 flex-shrink-0">no bd</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-white truncate">{it.title}</div>
+                  <div className="text-[10px] text-white/50">
+                    {it.type} {it.year ? `• ${it.year}` : ""} {it.logo ? "• logo ✓" : ""}
                   </div>
                 </div>
-                <span className="text-white/30 group-hover:text-white/60 text-[14px] transition">›</span>
               </button>
             ))}
             {visible.length === 0 && (
-              <div className="text-center text-white/40 text-xs py-8">No items match the filter.</div>
+              <div className="text-center text-white/40 text-xs py-6">No items match the filter.</div>
             )}
           </div>
         </>
@@ -286,93 +209,86 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </button>
           </div>
 
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Type</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(["backdrop", "logo"] as Mode[]).map((m) => (
+          <div className="space-y-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Type</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(["backdrop", "logo"] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
+                      mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-white/70 border-white/10"
+                    }`}
+                  >
+                    {m === "backdrop" ? "Backdrop 16:9" : "Logo 1:1"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine</div>
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  key={m}
-                  onClick={() => setMode(m)}
+                  onClick={() => setProvider("lovable")}
                   className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
-                    mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-white/70 border-white/10"
+                    provider === "lovable" ? "bg-amber-500 text-black border-amber-400" : "bg-white/5 text-white/70 border-white/10"
                   }`}
                 >
-                  {m === "backdrop" ? "Backdrop 16:9" : "Logo 1:1"}
+                  Lovable AI
                 </button>
-              ))}
+                <button
+                  onClick={() => setProvider("flux")}
+                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
+                    provider === "flux" ? "bg-fuchsia-500 text-black border-fuchsia-400" : "bg-white/5 text-white/70 border-white/10"
+                  }`}
+                >
+                  Flux v1
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Lovable Gateway status card — the ONLY engine */}
-          <div className="rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.06] to-pink-500/[0.04] overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.03]">
-              <span className={`w-2 h-2 rounded-full ${lovDot}`} />
-              <div className="text-[11px] font-bold text-white tracking-wide">Lovable AI Gateway</div>
-              <span className={
-                "ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md " +
-                (lovableStatus.state === "online" ? "bg-emerald-500/15 text-emerald-300" :
-                 lovableStatus.state === "offline" ? "bg-rose-500/15 text-rose-300" :
-                 lovableStatus.state === "checking" ? "bg-amber-500/15 text-amber-300" :
-                 "bg-white/10 text-white/50")
-              }>{lovableStatus.state}</span>
-            </div>
-            <div className="px-3 py-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10.5px]">
-              <div className="text-white/50">Model</div>
-              <div className="text-white/90 truncate text-right">{lovableStatus.model || "google/gemini-3.1-flash-image-preview"}</div>
-              <div className="text-white/50">Last check</div>
-              <div className="text-white/90 text-right">{lovableStatus.checkedAt ? new Date(lovableStatus.checkedAt).toLocaleTimeString() : "—"}</div>
-              {lovableStatus.message && (<><div className="text-white/50">Message</div><div className="text-white/70 text-right break-words">{lovableStatus.message}</div></>)}
-            </div>
-            <div className="px-3 pb-3 flex items-center gap-2">
-              <button
-                onClick={() => checkLovable(false)}
-                disabled={lovableStatus.state === "checking"}
-                className={btnSecondary + " flex-1 !text-[11px] !py-1.5 disabled:opacity-40"}
-              >
-                {lovableStatus.state === "checking" ? "Testing…" : "Test Connection"}
-              </button>
-            </div>
-            <div className="px-3 pb-3 text-[10px] text-fuchsia-200/80 leading-relaxed">
-              🔒 Calls only your EGD-deployed <code className="text-white/70 bg-white/10 px-1 rounded">generate-backdrop</code> URL. Works while Lovable credits last and pauses when they run out — no extra setup needed.
-              <div className="mt-1 text-[9.5px] text-fuchsia-100/60 break-all">Active URL: {activeFunctionUrl || "Not configured"}</div>
-            </div>
+          {/* Engine info card */}
+          <div className="text-[10px] text-white/55 leading-relaxed bg-white/[0.04] border border-white/10 rounded-lg p-2">
+            {provider === "lovable" ? (
+              <>
+                <span className="text-amber-300 font-semibold">Lovable AI</span> · ultra-realistic, follows official character anatomy
+                closely. Credit limited (Lovable AI gateway). Best for hero backdrops.
+              </>
+            ) : (
+              <>
+                <span className="text-fuchsia-300 font-semibold">Flux v1</span> · unlimited free tier but lower character fidelity.
+                Guided with strict size + style prompt so output stays in correct aspect ratio.
+              </>
+            )}
           </div>
 
-          {(lastResult || lastError) && (
-            <div className={`rounded-xl border overflow-hidden ${lastError ? "border-rose-500/30 bg-rose-500/[0.05]" : "border-emerald-500/25 bg-emerald-500/[0.05]"}`}>
-              <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
-                <span className="text-[11px] font-bold text-white">
-                  {lastError ? "❌ Last Error" : "✅ Last Generation"}
-                </span>
-                <span className="ml-auto text-[9.5px] text-white/50">
-                  {new Date((lastError?.at || lastResult?.at) as number).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="px-3 py-2 grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-[10.5px]">
-                {lastResult && (<><div className="text-white/50">Model</div><div className="text-white/90 break-all">{lastResult.model}</div></>)}
-                {lastError && (
-                  <>
-                    <div className="text-white/50">Status</div><div className="text-rose-200">{lastError.status || "?"}</div>
-                    <div className="text-white/50">Message</div><div className="text-rose-100 break-words">{lastError.message}</div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {mode === "backdrop" && (
+          {mode === "backdrop" && provider === "lovable" && (
             <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2.5 space-y-1.5">
-              <div className="text-[11px] text-white/85 leading-relaxed">
-                <span className="text-emerald-300 font-semibold">Reference required</span> — Lovable AI always edits the current backdrop so it cannot return a random unrelated image.
-              </div>
-              {!activeItem.backdrop && (
-                <div className="text-[10px] text-amber-300">⚠ No reference backdrop on this title. Generation is blocked until a backdrop is added.</div>
+              <label className="flex items-start gap-2 text-[11px] text-white/85 leading-relaxed cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={useReference}
+                  onChange={(e) => setUseReference(e.target.checked)}
+                />
+                <span className="min-w-0 break-words">
+                  <span className="text-emerald-300 font-semibold">Use TMDB reference image (recommended)</span> — AI analyzes the
+                  current backdrop, preserves the EXACT characters, and remasters it. Respects genre ({activeItem.genres?.join(", ") || activeItem.category || "auto"}) so romance doesn't become action.
+                </span>
+              </label>
+              {useReference && !activeItem.backdrop && (
+                <div className="text-[10px] text-amber-300 pl-5">⚠ No reference backdrop on this title. Will fall back to text-to-image.</div>
               )}
-              {activeItem.backdrop && (
+              {useReference && activeItem.backdrop && (
                 <img src={activeItem.backdrop} alt="ref" className="w-full rounded border border-emerald-500/30 mt-1" />
               )}
             </div>
           )}
+
+
+
 
           <div className="bg-white/[0.03] border border-white/10 rounded-lg p-2.5">
             <label className="flex items-start gap-2 text-[11px] text-white/80 leading-relaxed cursor-pointer">
@@ -406,9 +322,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               />
             ) : busy ? (
               <div className="w-full px-3 py-6 text-center">
-                <div className="text-[11px] text-white/70 mb-2">Generating with Lovable AI…</div>
+                <div className="text-[11px] text-white/70 mb-2">Generating with {provider === "lovable" ? "Lovable AI" : "Flux v1"}…</div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mx-auto max-w-[280px]">
-                  <div className="h-full bg-gradient-to-r from-fuchsia-400 to-pink-400 transition-all" style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="text-[10px] text-white/40 mt-1">{Math.round(progress)}%</div>
               </div>

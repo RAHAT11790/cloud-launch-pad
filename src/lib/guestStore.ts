@@ -57,7 +57,7 @@ export const guestStore = {
   continue: {
     list(): GuestContinueItem[] { return gGet<GuestContinueItem[]>("continueWatching", []); },
     upsert(item: GuestContinueItem) {
-      const list = guestStore.continue.list().filter(x => x.animeId !== item.animeId);
+      const list = guestStore.continue.list().filter(x => !(x.animeId === item.animeId && x.seasonIdx === item.seasonIdx && x.epIdx === item.epIdx));
       list.unshift(item);
       gSet("continueWatching", list.slice(0, 50));
     },

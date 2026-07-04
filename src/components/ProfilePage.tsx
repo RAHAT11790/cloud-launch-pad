@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Bell, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins } from "lucide-react";
-import { usePremium } from "@/hooks/usePremium";
+import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Bell, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
@@ -15,12 +13,8 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
-import { optimizedImageUrl } from "@/lib/imageCache";
-import { getTodayRemaining } from "@/lib/premiumAccess";
 
 import VideoPlayer from "@/components/VideoPlayer";
-import InviteFriendCard from "@/components/InviteFriendCard";
 
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
@@ -72,13 +66,12 @@ const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloaded
 interface ProfilePageProps {
   onClose: () => void;
   allAnime?: AnimeItem[];
-  onCardClick?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
-  onContinueWatching?: (item: any) => void;
+  onCardClick?: (anime: AnimeItem) => void;
   onLogout?: () => void;
   onLoginClick?: () => void;
 }
 
-const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
 const PAYMENT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const AccessTimer = () => {
@@ -174,16 +167,15 @@ const AccessTimer = () => {
     return () => clearInterval(interval);
   }, [globalFree, userFreeExpiry]);
 
-  if (!hasAccess && !paused) return null;
   return (
-    <div className="mb-1">
+    <div className="mb-5">
       <div className={`glass-card p-4 rounded-xl flex items-center gap-3 ${hasAccess ? "border-primary/30 bg-primary/5" : "border-accent/30 bg-accent/5"}`}>
         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasAccess ? "gradient-primary" : "bg-muted"}`}>
           <Clock className={`w-5 h-5 ${hasAccess ? "text-primary-foreground" : "text-muted-foreground"}`} />
         </div>
         <div className="flex-1">
           <p className="text-xs text-muted-foreground">
-            {paused ? "⏸ Timer Paused (Maintenance)" : globalFree?.active ? "Global Free Access Remaining" : hasAccess ? "Free Access Remaining" : "No Active Access"}
+            {paused ? "⏸ Timer Paused (Maintenance)" : hasAccess ? "Free Access Remaining" : "No Active Access"}
           </p>
           {paused && hasAccess ? (
             <p className="text-lg font-bold font-mono text-yellow-400 tracking-wider">{timeLeft} ⏸</p>
@@ -293,21 +285,8 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   const formatSize = (bytes: number) => {
-    if (!bytes || bytes <= 0) return "Size unknown";
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const formatQueueSize = (loadedMB: number, totalMB: number) => {
-    const fmt = (mb: number) => {
-      if (!mb || mb <= 0) return "";
-      if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
-      return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
-    };
-    if (loadedMB > 0 && totalMB > 0) return `${fmt(loadedMB)} / ${fmt(totalMB)}`;
-    if (totalMB > 0) return fmt(totalMB);
-    if (loadedMB > 0) return fmt(loadedMB);
-    return "Preparing size...";
   };
 
   return (
@@ -373,9 +352,6 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
                     <p className="text-xs font-semibold text-foreground truncate">{item.subtitle || item.title}</p>
                     <p className="text-[10px] text-muted-foreground">
                       {item.status === "queued" ? `Queued • ${item.queueIndex}/${item.totalInBatch}` : item.status === "downloading" ? `Downloading • ${item.percent}%` : item.status === "paused" ? "Paused" : item.status}
-                    </p>
-                    <p className="text-[10px] text-primary/80 mt-0.5">
-                      {formatQueueSize(item.loadedMB, item.totalMB)}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -464,33 +440,23 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatching, onLogout, onLoginClick }: ProfilePageProps) => {
-  const navigate = useNavigate();
+const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLoginClick }: ProfilePageProps) => {
   const isGuestUser = (() => {
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      const email = String(u?.email || "");
-      return !u?.id || u?.guest || email === "guest@rsanime.com" || email.endsWith("@guest.local");
+      return !(u?.id && u?.email);
     } catch { return true; }
   })();
   const brandingCfg = useBranding();
-  const { wallet: coinWallet, settings: premiumSettings } = usePremium();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
-    try {
-      const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;
-      return readProfilePhoto(uid);
-    } catch { return null; }
+    try { return localStorage.getItem("rs_profile_photo"); } catch { return null; }
   });
   const [displayName, setDisplayName] = useState(() => {
-    try {
-      const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;
-      return readDisplayName(uid) || "Guest User";
-    } catch { return "Guest User"; }
+    try { return localStorage.getItem("rs_display_name") || "Guest User"; } catch { return "Guest User"; }
   });
   const [tempName, setTempName] = useState(displayName);
   const fileRef = useRef<HTMLInputElement>(null);
-  const profilePhotoStampRef = useRef(0);
 
   // Settings state
   const [selectedLanguage, setSelectedLanguage] = useState(() => {
@@ -501,12 +467,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   });
 
   // Watchlist & History from Firebase
-  const [watchlist, setWatchlist] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem("rs_watchlistCache") || "[]"); } catch { return []; }
-  });
-  const [watchHistory, setWatchHistory] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem("rs_continueCache") || "[]"); } catch { return []; }
-  });
+  const [watchlist, setWatchlist] = useState<any[]>([]);
+  const [watchHistory, setWatchHistory] = useState<any[]>([]);
   const [viewAllMode, setViewAllMode] = useState<null | "history" | "watchlist">(null);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
@@ -561,47 +523,32 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     return null;
   };
 
-  const getLocalAuthUser = (): { id?: string; email?: string; name?: string } => {
-    try { return JSON.parse(localStorage.getItem("rsanime_user") || "{}"); } catch { return {}; }
-  };
-
   const userId = getUserId();
   const premiumDaysLeft = premiumExpiry ? Math.max(0, Math.ceil((premiumExpiry - Date.now()) / 86400000)) : 0;
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
-  const dailyCoinCap = Math.max(1, Number(premiumSettings.dailyAdCap || 5));
-  const remainingCoinAds = getTodayRemaining(coinWallet, dailyCoinCap);
 
   useEffect(() => {
     if (!userId) return;
-    const localUser = getLocalAuthUser();
-    const localEmail = String(localUser.email || "").trim();
-    const emailAlias = buildEmailAliasKey(localEmail);
-    const applyRemoteProfile = (data: any) => {
-      if (!data || typeof data !== "object") return;
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
+      const data = snap.val() || {};
       const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-      const remotePhotoAt = Number(data.photoUpdatedAt || 0);
-      const remoteName = String(data.name || localUser.name || "").trim();
+      const remoteName = String(data.name || "").trim();
 
       if (remotePhoto) {
-        if (remotePhotoAt && remotePhotoAt < profilePhotoStampRef.current) return;
-        if (remotePhotoAt) profilePhotoStampRef.current = remotePhotoAt;
         setProfilePhoto(remotePhoto);
-        writeProfilePhoto(remotePhoto, userId);
+        try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+      } else {
+        setProfilePhoto(null);
+        try { localStorage.removeItem("rs_profile_photo"); } catch {}
       }
       if (remoteName && remoteName !== "Guest User") {
         setDisplayName(remoteName);
         setTempName(remoteName);
-        writeDisplayName(remoteName, userId);
+        try { localStorage.setItem("rs_display_name", remoteName); } catch {}
       }
-    };
+    });
 
-    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => applyRemoteProfile(snap.val() || {}));
-    let unsubAlias: (() => void) | undefined;
-    if (emailAlias && emailAlias !== userId) {
-      unsubAlias = onValue(ref(db, `users/${emailAlias}`), (snap) => applyRemoteProfile(snap.val() || {}));
-    }
-
-    return () => { unsubUser(); unsubAlias?.(); };
+    return () => unsubUser();
   }, [userId]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
@@ -655,9 +602,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
     Promise.all([get(wlRef), get(whRef)]).then(([wlSnap, whSnap]) => {
       const wlData = wlSnap.val() || {};
-      const wlItems = Object.values(wlData);
-      setWatchlist(wlItems);
-      try { localStorage.setItem("rs_watchlistCache", JSON.stringify(wlItems.slice(0, 80))); } catch {}
+      setWatchlist(Object.values(wlData));
 
       const whData = whSnap.val() || {};
       const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -667,7 +612,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         .filter((i: any) => !i.watchedAt || (now - i.watchedAt) <= THIRTY_DAYS);
       items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
       setWatchHistory(items);
-      try { localStorage.setItem("rs_continueCache", JSON.stringify(items.slice(0, 50))); } catch {}
     }).catch(() => {});
 
     const idle = window.setTimeout(() => {
@@ -738,118 +682,46 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    e.target.value = "";
-    if (file.size > MAX_PHOTO_SIZE) { toast.error("Image must be under 10MB"); return; }
-    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB!"); return; }
+    if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     setPhotoUploading(true);
     try {
-      // Compress to a small square JPEG so we can store the data URL locally
-      // (instant preview, works for guests). For logged-in users we also push
-      // a permanent ImgBB URL into users/{uid} so the photo follows the account
-      // across devices — works identically for Google + email/password logins.
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => {
-            try {
-              const SIZE = 256;
-              const canvas = document.createElement("canvas");
-              canvas.width = SIZE; canvas.height = SIZE;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) return reject(new Error("canvas"));
-              const ratio = Math.max(SIZE / img.width, SIZE / img.height);
-              const w = img.width * ratio;
-              const h = img.height * ratio;
-              ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
-              resolve(canvas.toDataURL("image/jpeg", 0.85));
-            } catch (err) { reject(err as any); }
-          };
-          img.onerror = () => reject(new Error("image"));
-          img.src = String(reader.result || "");
-        };
-        reader.onerror = () => reject(new Error("read"));
-        reader.readAsDataURL(file);
-      });
-
-      // Instant local preview (guests + logged-in users)
-      setProfilePhoto(dataUrl);
-      writeProfilePhoto(dataUrl, userId);
-
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const url = await uploadToImgbb(file);
+      setProfilePhoto(url);
+      localStorage.setItem("rs_profile_photo", url);
       if (userId) {
-        const localUser = getLocalAuthUser();
-        const email = String(localUser.email || "").trim();
-        const emailAlias = buildEmailAliasKey(email);
-        // Permanent host upload so other devices can fetch it. Fall back to
-        // the inline data URL if the host upload fails — Firebase RTDB accepts
-        // values up to 10MB, and our 256×256 JPEG is ~25KB so it always fits.
-        let finalUrl = dataUrl;
-        try {
-          const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-          finalUrl = await uploadToImgbb(file);
-        } catch (err) {
-          console.warn("[profile-photo] ImgBB failed, using inline copy", err);
-        }
-        try {
-          const photoSavedAt = Date.now();
-          profilePhotoStampRef.current = photoSavedAt;
-          const photoPayload = {
-            profilePhoto: finalUrl,
-            photoUrl: finalUrl,
-            avatar: finalUrl,
-            photoUpdatedAt: photoSavedAt,
-          };
-          const writes: Promise<any>[] = [
-            update(ref(db, `users/${userId}`), photoPayload),
-          ];
-          if (emailAlias) {
-            writes.push(update(ref(db, `users/${emailAlias}`), { ...photoPayload, id: userId, email }));
-            writes.push(update(ref(db, `appUsers/${emailAlias}`), photoPayload));
-          }
-          await Promise.all(writes);
-          if (finalUrl !== dataUrl) {
-            setProfilePhoto(finalUrl);
-            writeProfilePhoto(finalUrl, userId);
-          }
-          try {
-            const rawUser = localStorage.getItem("rsanime_user");
-            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
-            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, profilePhoto: finalUrl, photoUrl: finalUrl, avatar: finalUrl }));
-            window.dispatchEvent(new Event("rs_auth_changed"));
-          } catch {}
-        } catch (err) {
-          console.error("[profile-photo] Firebase write failed", err);
-          throw err;
-        }
+        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
       }
-      toast.success("✅ Profile photo saved — synced across all your devices");
+      toast.success("✅ Profile photo uploaded!");
     } catch {
-      toast.error("Could not process image. Try a different photo.");
+      // Fallback to base64 if imgbb fails
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result as string;
+        setProfilePhoto(result);
+        localStorage.setItem("rs_profile_photo", result);
+        if (userId) {
+          update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
+        }
+      };
+      reader.readAsDataURL(file);
+      toast.error("ImgBB failed, saved locally");
     }
     setPhotoUploading(false);
   };
 
   const removePhoto = () => {
     setProfilePhoto(null);
-    removeProfilePhoto(userId);
+    localStorage.removeItem("rs_profile_photo");
     if (userId) {
-      const localUser = getLocalAuthUser();
-      const emailAlias = buildEmailAliasKey(localUser.email);
-      const photoRemovedAt = Date.now();
-      profilePhotoStampRef.current = photoRemovedAt;
-      const payload = { profilePhoto: null, photoUrl: null, avatar: null, photoUpdatedAt: photoRemovedAt };
-      const writes: Promise<any>[] = [update(ref(db, `users/${userId}`), payload).catch(() => {})];
-      if (emailAlias) {
-        writes.push(update(ref(db, `users/${emailAlias}`), payload).catch(() => {}));
-        writes.push(update(ref(db, `appUsers/${emailAlias}`), payload).catch(() => {}));
-      }
-      Promise.all(writes).catch(() => {});
+      update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
   };
 
   const saveName = () => {
     setDisplayName(tempName);
-    writeDisplayName(tempName, userId);
+    localStorage.setItem("rs_display_name", tempName);
     if (userId && tempName.trim()) {
       update(ref(db, `users/${userId}`), { name: tempName.trim() }).catch(() => {});
     }
@@ -872,28 +744,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const qualities = ["Auto", "1080p", "720p", "480p", "360p"];
 
   const handleAnimeClick = (item: any) => {
-    // Watch-history items resume from saved position via continue-watching flow.
-    const hasProgress = Number(item?.currentTime) > 0 && Number(item?.duration) > 0;
-    if (hasProgress && onContinueWatching) {
-      onClose();
-      setTimeout(() => onContinueWatching(item), 100);
-      return;
-    }
     if (!onCardClick) return;
     const anime = allAnime.find(a => a.id === item.id);
     if (anime) {
-      const seasonIdx = typeof item?.episodeInfo?.seasonIdx === "number"
-        ? item.episodeInfo.seasonIdx
-        : typeof item?.episodeInfo?.season === "number"
-          ? Math.max(0, item.episodeInfo.season - 1)
-          : undefined;
-      const epIdx = typeof item?.episodeInfo?.epIdx === "number"
-        ? item.episodeInfo.epIdx
-        : typeof item?.episodeInfo?.episode === "number"
-          ? Math.max(0, item.episodeInfo.episode - 1)
-          : undefined;
       onClose();
-      setTimeout(() => onCardClick(anime, seasonIdx, epIdx), 100);
+      setTimeout(() => onCardClick(anime), 100);
     }
   };
 
@@ -1671,12 +1526,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 {initial}
               </div>
             )}
-            <button disabled={photoUploading} onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg disabled:opacity-70">
-              {photoUploading ? <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" /> : <Camera className="w-4 h-4 text-primary-foreground" />}
+            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+              <Camera className="w-4 h-4 text-primary-foreground" />
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">Max 10MB • JPG, PNG, WebP</p>
+          <p className="text-[10px] text-muted-foreground mt-2">Max 2MB • JPG, PNG, WebP</p>
         </div>
         <div className="mb-6">
           <label className="text-xs text-muted-foreground mb-2 block">Display Name</label>
@@ -1700,7 +1555,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
+      transition={{ type: "tween", duration: 0.4 }}>
       <button onClick={onClose} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-5 h-5" />
         <span className="font-medium">Back</span>
@@ -1731,47 +1586,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </span>
         )}
         <p className="text-sm text-secondary-foreground">
-          {(() => {
-            try {
-              const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-              const email = String(u.email || "");
-              return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
-            } catch { return "Guest Profile"; }
-          })()}
+          {(() => { try { const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}"); return u.email || "guest@rsanime.com"; } catch { return "guest@rsanime.com"; } })()}
         </p>
       </div>
 
-
-      {/* Free / Global Access Timer */}
-      <AccessTimer />
-
-      {/* Get Free Coins — daily tasks entry (permanent) */}
-      <button
-        type="button"
-        onClick={() => navigate("/daily-tasks")}
-        className="w-full mb-7 rounded-2xl p-4 text-left border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/5 active:scale-[0.99] transition-transform relative overflow-hidden group"
-      >
-        <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
-        <div className="flex items-center gap-3 relative">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/25">
-            <Coins className="w-6 h-6 text-black" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-black text-amber-200 leading-none">Get Free Coins</p>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 uppercase tracking-wider">Daily</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
-              5 daily tasks • Earn coins • Redeem Premium — Balance: <b className="text-amber-300">{coinWallet.coins || 0}</b>
-            </p>
-          </div>
-          <span className="text-amber-300 text-xl font-black flex-shrink-0">›</span>
-        </div>
-      </button>
-
-
-
-
+      {/* Access Timer */}
+      {!isPremium && <AccessTimer />}
 
       {/* Watch History */}
       <div className="mb-7">
@@ -1797,7 +1617,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <div className="absolute bottom-1 left-1 right-1">
                     <p className="text-[9px] font-semibold leading-tight line-clamp-2">{item.title}</p>
@@ -1838,7 +1658,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <button onClick={(e) => { e.stopPropagation(); removeFromWatchlist(item.id); }}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center">
@@ -1901,7 +1721,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                       className="cursor-pointer relative"
                     >
                       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 55%)" }} />
                         {viewAllMode === "watchlist" && (
                           <button
@@ -2023,11 +1843,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             </p>
           </>
         ) : null}
-
-        {/* Invite Friends — prominent section at the very bottom of profile */}
-        <div className="mt-5">
-          <InviteFriendCard variant="full" siteName={brandingCfg.siteName || SITE_NAME} />
-        </div>
       </div>
     </motion.div>
   );

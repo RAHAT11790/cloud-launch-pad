@@ -1,25 +1,21 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
+import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
 import {
   Calendar, Search, Save, Trash2, Edit, X, Check, AlertTriangle,
   CalendarDays, Film, ChevronRight, Sparkles, Power,
 } from "lucide-react";
 
 const DAYS = [
-  "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "AllDay",
+  "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
 ] as const;
+const LS_WEEKLY_SCHEDULE = "rs_admin_cache_weekly_schedule_v1";
 type Day = typeof DAYS[number];
 
 const SHORT: Record<Day, string> = {
   Saturday: "Sat", Sunday: "Sun", Monday: "Mon", Tuesday: "Tue",
-  Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", AllDay: "All Day",
-};
-
-const LONG_LABEL: Record<Day, string> = {
-  Saturday: "Saturday", Sunday: "Sunday", Monday: "Monday", Tuesday: "Tuesday",
-  Wednesday: "Wednesday", Thursday: "Thursday", Friday: "Friday",
-  AllDay: "All Day (every day)",
+  Wednesday: "Wed", Thursday: "Thu", Friday: "Fri",
 };
 
 const DAY_GRADIENT: Record<Day, string> = {
@@ -30,7 +26,6 @@ const DAY_GRADIENT: Record<Day, string> = {
   Wednesday: "from-violet-500 to-purple-600",
   Thursday: "from-fuchsia-500 to-pink-600",
   Friday: "from-indigo-500 to-cyan-600",
-  AllDay: "from-yellow-400 via-orange-500 to-red-500",
 };
 
 function todayName(): Day {
@@ -60,13 +55,12 @@ interface Props {
 export default function WeeklyEpisodeManager({
   webseriesData, glassCard, inputClass, selectClass, btnPrimary, btnSecondary, onEditSeries,
 }: Props) {
-  const [schedules, setSchedules] = useState<Record<string, Schedule>>({});
+  const [schedules, setSchedules] = useState<Record<string, Schedule>>(() => readPersistentCache<Record<string, Schedule>>(LS_WEEKLY_SCHEDULE, {}));
   const [activeDay, setActiveDay] = useState<Day>(todayName());
 
   // Picker state
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
-  const deferredPickerSearch = useDeferredValue(pickerSearch);
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [selectedDay, setSelectedDay] = useState<Day>(todayName());
 
@@ -79,7 +73,7 @@ export default function WeeklyEpisodeManager({
 
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklySchedule"), snap => {
-      startTransition(() => setSchedules(snap.val() || {}));
+      updateCachedState(setSchedules, LS_WEEKLY_SCHEDULE, snap.val() || {});
     });
     return () => unsub();
   }, []);
@@ -90,51 +84,28 @@ export default function WeeklyEpisodeManager({
     return map;
   }, [webseriesData]);
 
-  const countEpisodes = (s: any) => {
-    if (!s) return 0;
-    const fromIndex = Number(s?.episodeCount);
-    if (Number.isFinite(fromIndex) && fromIndex > 0) return fromIndex;
-    const values = (v: any) => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : []);
-    const sumSeasons = (seasons: any) => values(seasons).reduce((n: number, se: any) => n + values(se?.episodes).length, 0);
-    const direct = sumSeasons(s?.seasons);
-    if (direct > 0) return direct;
-    const custom = sumSeasons(s?.customSeasons);
-    if (custom > 0) return custom;
-    if (s?.seasonsByLanguage && typeof s.seasonsByLanguage === "object") {
-      const lang = Math.max(0, ...Object.values(s.seasonsByLanguage).map(sumSeasons));
-      if (lang > 0) return lang;
-    }
-    const declared = Number(s?.totalEpisodes || s?.numberOfEpisodes || 0);
-    return Number.isFinite(declared) && declared > 0 ? declared : 0;
-  };
+  const countEpisodes = (s: any) =>
+    (s?.seasons || []).reduce((acc: number, se: any) => acc + (se?.episodes?.length || 0), 0);
 
-
-  const scheduledIds = useMemo(() => Object.keys(schedules), [schedules]);
+  const scheduledIds = Object.keys(schedules);
   const availableSeries = useMemo(() => {
-    const q = deferredPickerSearch.trim().toLowerCase();
     return webseriesData
       .filter(s => !scheduledIds.includes(s.id))
-      .filter(s => !q || s.title?.toLowerCase().includes(q))
-      .slice(0, 80);
-  }, [webseriesData, scheduledIds, deferredPickerSearch]);
+      .filter(s => !pickerSearch.trim() || s.title?.toLowerCase().includes(pickerSearch.toLowerCase()));
+  }, [webseriesData, scheduledIds, pickerSearch]);
 
   const dayCounts = useMemo(() => {
     const counts: Record<Day, number> = {
-      Saturday: 0, Sunday: 0, Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, AllDay: 0,
+      Saturday: 0, Sunday: 0, Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0,
     };
     Object.values(schedules).forEach(s => { if (counts[s.day] !== undefined) counts[s.day]++; });
     return counts;
   }, [schedules]);
 
-  // "All Day" anime are visible on EVERY day's tab as well as their own tab.
   const visibleList = useMemo(() => {
     return Object.values(schedules)
-      .filter(s => {
-        if (activeDay === "AllDay") return s.day === "AllDay";
-        return s.day === activeDay || s.day === "AllDay";
-      })
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .slice(0, 120);
+      .filter(s => s.day === activeDay)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }, [schedules, activeDay]);
 
   async function saveSchedule(seriesId: string, day: Day, opts?: { silent?: boolean }) {
@@ -238,7 +209,7 @@ export default function WeeklyEpisodeManager({
                         onClick={() => { setSelectedSeriesId(s.id); setPickerSearch(s.title); }}
                         className="w-full flex items-center gap-2.5 p-2 hover:bg-white/5 transition-colors text-left"
                       >
-                        <img src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]" loading="lazy" decoding="async"
+                        <img src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]"
                           onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                         <span className="text-[12px] text-white truncate flex-1">{s.title}</span>
                       </button>
@@ -247,7 +218,7 @@ export default function WeeklyEpisodeManager({
                 )}
                 {selectedSeriesId && (
                   <div className="mt-2 flex items-center gap-2 bg-indigo-600/15 border border-indigo-500/30 rounded-lg p-2">
-                    <img src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover" loading="lazy" decoding="async"
+                    <img src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover"
                       onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-semibold truncate">{seriesById[selectedSeriesId]?.title}</p>
@@ -263,7 +234,7 @@ export default function WeeklyEpisodeManager({
               <div>
                 <label className="text-[11px] text-zinc-400 mb-1.5 block font-medium">Release Day</label>
                 <select value={selectedDay} onChange={e => setSelectedDay(e.target.value as Day)} className={selectClass}>
-                  {DAYS.map(d => <option key={d} value={d}>{LONG_LABEL[d]}</option>)}
+                  {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
 
@@ -287,7 +258,7 @@ export default function WeeklyEpisodeManager({
         <div className="flex items-center gap-2 mb-2.5 px-1">
           <CalendarDays size={13} className="text-indigo-400" />
           <h3 className="text-[12px] font-semibold text-white">Days of the week</h3>
-          <span className="text-[10px] text-zinc-500 ml-auto">Today: {LONG_LABEL[todayName()]}</span>
+          <span className="text-[10px] text-zinc-500 ml-auto">Today: {todayName()}</span>
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
           {DAYS.map(d => {
@@ -326,7 +297,7 @@ export default function WeeklyEpisodeManager({
               <Film size={14} className="text-white" />
             </div>
             <div>
-              <h3 className="text-sm font-bold">{LONG_LABEL[activeDay]}</h3>
+              <h3 className="text-sm font-bold">{activeDay}</h3>
               <p className="text-[10.5px] text-zinc-500">{visibleList.length} anime scheduled</p>
             </div>
           </div>
@@ -335,7 +306,7 @@ export default function WeeklyEpisodeManager({
         {visibleList.length === 0 ? (
           <div className="text-center py-10 text-zinc-500">
             <Calendar size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-[12px]">No anime scheduled for {LONG_LABEL[activeDay]}</p>
+            <p className="text-[12px]">No anime scheduled for {activeDay}</p>
             <p className="text-[10.5px] mt-1 text-zinc-600">Use the picker above to add one.</p>
           </div>
         ) : (
@@ -360,7 +331,7 @@ export default function WeeklyEpisodeManager({
                   className="bg-[#141422] border border-white/8 rounded-xl p-3 hover:border-indigo-500/40 transition-all">
                   <div className="flex gap-3">
                     <div className="relative flex-shrink-0">
-                      <img src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover" loading="lazy" decoding="async"
+                      <img src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover"
                         onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/64x88/141422/6366f1?text=N"; }} />
                       {isComplete && (
                         <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
@@ -372,7 +343,7 @@ export default function WeeklyEpisodeManager({
                       <h4 className="text-[13px] font-semibold truncate">{live.title}</h4>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r ${DAY_GRADIENT[item.day]} text-white`}>
-                          {LONG_LABEL[item.day]}
+                          {item.day}
                         </span>
                         <span className="text-[10px] text-zinc-400">
                           {totalAvailable}{expected ? `/${expected}` : ""} eps
@@ -386,7 +357,7 @@ export default function WeeklyEpisodeManager({
                         <div className="flex gap-1.5 mt-2">
                           <select value={editingDay} onChange={e => setEditingDay(e.target.value as Day)}
                             className={`${selectClass} flex-1 py-1.5 text-[11px]`}>
-                            {DAYS.map(d => <option key={d} value={d}>{LONG_LABEL[d]}</option>)}
+                            {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
                           </select>
                           <button onClick={() => changeDay(item.seriesId, editingDay)}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 rounded-lg">

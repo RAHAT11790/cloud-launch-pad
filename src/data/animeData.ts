@@ -12,19 +12,10 @@ export interface AudioTrack {
   language: string;
   label: string;
   link: string;
-  audioUrl?: string;
-  rawAudioUrl?: string;
   link480?: string;
   link720?: string;
   link1080?: string;
   link4k?: string;
-  isDefault?: boolean;
-}
-
-export interface SubtitleTrack {
-  language?: string;
-  label: string;
-  url: string;
 }
 
 export interface Episode {
@@ -36,7 +27,6 @@ export interface Episode {
   link1080?: string;
   link4k?: string;
   audioTracks?: AudioTrack[];
-  subtitleTracks?: SubtitleTrack[];
 }
 
 export interface Season {
@@ -55,8 +45,6 @@ export interface AnimeItem {
   category: string;
   type: "webseries" | "movie";
   storyline: string;
-  overview?: string;
-  description?: string;
   seasons?: Season[];
   movieLink?: string;
   movieLink480?: string;
@@ -67,10 +55,6 @@ export interface AnimeItem {
   createdAt?: number;
   updatedAt?: number;
   source?: "firebase" | "animesalt" | "moviebox";
-  sourceName?: string;
-  anSlug?: string;
-  animeSaltSlug?: string;
-  displayAs?: "an" | "rs" | string;
   slug?: string;
   dubType?: "official" | "fandub";
   baseLanguage?: string;
@@ -78,12 +62,7 @@ export interface AnimeItem {
   seasonsByLanguage?: Record<string, Season[]>;
   episodeCount?: number;
   audioTracks?: AudioTrack[];
-  tmdbId?: number | string;
-  genres?: string[];
-  directors?: string[];
-  cast?: { name: string; character?: string; photo?: string }[];
-  premium?: boolean;
-  premiumEpisodes?: Record<string, boolean>;
+  cast?: { name: string; character?: string; photo: string }[];
 }
 
 export const categories = ["Action", "Romance", "Fantasy", "Sci-Fi", "Horror", "Comedy"];

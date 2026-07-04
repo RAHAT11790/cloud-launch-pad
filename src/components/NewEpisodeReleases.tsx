@@ -1,11 +1,9 @@
 import { useState, useEffect, forwardRef, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { Zap, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
-import { optimizedImageUrl } from "@/lib/imageCache";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
@@ -35,23 +33,11 @@ interface EpisodeRelease {
 
 interface NewEpisodeReleasesProps {
   allAnime: AnimeItem[];
-  onCardClick: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
+  onCardClick: (anime: AnimeItem) => void;
 }
 
-const RELEASE_CACHE_KEY = "rs_cache_newReleases_v1";
-const readReleaseCache = (): EpisodeRelease[] => {
-  try {
-    const raw = localStorage.getItem(RELEASE_CACHE_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
-};
-
 const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
-  // Seed from localStorage so the section paints instantly on first load
-  // instead of waiting 3-5s for Firebase's first onValue snapshot.
-  const [releases, setReleases] = useState<EpisodeRelease[]>(() => readReleaseCache());
+  const [releases, setReleases] = useState<EpisodeRelease[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -71,11 +57,9 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       });
       items.sort((a, b) => b.timestamp - a.timestamp);
       setReleases(items);
-      try { localStorage.setItem(RELEASE_CACHE_KEY, JSON.stringify(items)); } catch {}
     });
     return () => unsub();
   }, []);
-
 
   // Live countdown tick every 60s — also triggers cleanup re-evaluation
   useEffect(() => {
@@ -150,113 +134,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const handleClick = (release: EpisodeRelease, startEpisode?: number) => {
+  const handleClick = (release: EpisodeRelease) => {
     const content = getContent(release.contentId);
-    if (content) {
-      const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
-      const eIdx = typeof startEpisode === "number" ? Math.max(0, startEpisode - 1) : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
-      onCardClick(content, sIdx, eIdx);
-    }
+    if (content) onCardClick(content);
   };
-
-  const releaseModal = (
-    <AnimatePresence>
-      {showModal && (
-        <motion.div
-          key="new-release-view-all"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.14, ease: "easeOut" }}
-          onClick={() => setShowModal(false)}
-          className="fixed inset-0 z-[5000] flex items-center justify-center px-3 py-4 overflow-hidden"
-          style={{ willChange: "opacity", touchAction: "manipulation", background: "hsl(var(--background) / 0.94)" }}
-          data-no-swipe="true"
-        >
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-label="All New Releases"
-            initial={{ y: 18, opacity: 0, scale: 0.985 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 14, opacity: 0, scale: 0.985 }}
-            transition={{ type: "tween", duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col shadow-2xl border border-border/70 transform-gpu overflow-hidden"
-            style={{ willChange: "transform, opacity", contain: "layout paint", background: "hsl(var(--card))" }}
-          >
-            <div className="relative shrink-0 px-4 py-3 border-b border-border/40" style={{ background: "hsl(var(--secondary))" }}>
-              <div className="min-w-0 pr-12">
-                <h3 className="text-base font-bold flex items-center gap-2 leading-tight">
-                  <span className="inline-flex w-8 h-8 rounded-xl bg-primary/15 items-center justify-center border border-primary/25">
-                    <Zap className="w-4 h-4 text-accent" />
-                  </span>
-                  All New Releases
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {groupedReleases.length} {groupedReleases.length === 1 ? "release" : "releases"}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-background/70 border border-border/60 flex items-center justify-center hover:bg-secondary active:scale-95 shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain" style={{ background: "hsl(var(--background) / 0.35)" }}>
-              {groupedReleases.length === 0 ? (
-                <div className="py-12 text-center text-sm text-muted-foreground">
-                  No new releases yet — check back soon.
-                </div>
-              ) : (
-                groupedReleases.map(({ latest: release, minEp, maxEp }) => {
-                  const content = getContent(release.contentId);
-                  const title = content?.title || release.title || "Unknown";
-                  const poster = content?.poster || release.poster || "";
-                  const fallbackEp = getEpStart(release);
-                  const epStr = minEp && maxEp && minEp !== maxEp
-                    ? `Episode ${minEp}-${maxEp}`
-                    : fallbackEp ? `Episode ${fallbackEp}` : "New";
-                  const seasonLabel = getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season");
-                  return (
-                    <button
-                      type="button"
-                      key={release.id}
-                      onClick={() => { handleClick(release, minEp); setShowModal(false); }}
-                      className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/45 cursor-pointer text-left transition-transform hover:bg-secondary active:scale-[0.985] overflow-hidden"
-                      style={{ background: "hsl(var(--card))" }}
-                    >
-                      {poster ? (
-                        <img
-                          src={optimizedImageUrl(poster, "poster")}
-                          alt={title}
-                          className="w-[58px] h-[82px] rounded-lg object-cover flex-shrink-0 bg-muted border border-border/35"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="w-[58px] h-[82px] rounded-lg bg-muted flex-shrink-0 border border-border/35" />
-                      )}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <h4 className="text-sm font-semibold mb-1 line-clamp-1" style={getAnimeTitleStyle(title)}>{title}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {seasonLabel} • {epStr}
-                        </p>
-                        <span className="text-[10px] text-primary/80 mt-1 inline-flex w-fit rounded-md bg-primary/10 px-1.5 py-0.5">{timeAgo(release.timestamp)}</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground self-center shrink-0" />
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
 
   return (
     <>
@@ -308,19 +189,18 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             return (
               <div
                 key={release.id}
-                data-anime-card="true"
                 className="relative flex-shrink-0 w-[124px] cursor-pointer group"
-                onClick={() => handleClick(release, minEp)}
+                onClick={() => handleClick(release)}
               >
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
+                <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card shadow-md transition-transform group-hover:scale-[1.03]">
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
-                  <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+                  <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-                    {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
+                    {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white backdrop-blur-sm">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>
@@ -355,7 +235,57 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
       </div>
 
-      {typeof document !== "undefined" ? createPortal(releaseModal, document.body) : releaseModal}
+      {/* View All Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-5"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-card rounded-2xl w-full max-w-[500px] max-h-[80vh] overflow-hidden"
+            >
+              <div className="flex justify-between items-center px-5 py-4 border-b border-border/30">
+                <h3 className="text-lg font-bold">All New Episode Releases</h3>
+                <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[60vh] p-5 space-y-2.5">
+                {groupedReleases.map(({ latest: release, minEp, maxEp }) => {
+                  const content = getContent(release.contentId);
+                  if (!content) return null;
+                  const fallbackEp = getEpStart(release);
+                  const epStr = minEp && maxEp && minEp !== maxEp
+                    ? `Episode ${minEp}-${maxEp}`
+                    : fallbackEp ? `Episode ${fallbackEp}` : "New";
+                  return (
+                    <div
+                      key={release.id}
+                      onClick={() => { handleClick(release); setShowModal(false); }}
+                      className="flex gap-4 p-3 rounded-xl bg-foreground/5 cursor-pointer transition-all hover:bg-primary/20 hover:translate-x-1"
+                    >
+                      <img src={content.poster} alt={content.title} className="w-[60px] h-[80px] rounded-lg object-cover flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold mb-1" style={getAnimeTitleStyle(content.title)}>{content.title}</h4>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season")} • {epStr}
+                        </p>
+                        <span className="text-[10px] text-primary/70">{timeAgo(release.timestamp)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 });

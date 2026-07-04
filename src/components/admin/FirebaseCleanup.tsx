@@ -38,9 +38,6 @@ const ACTIVE_ROOTS = new Set<string>([
   "users",
   "webseries",
   "weeklyPending",
-  "weeklySchedule",
-  "adminContentIndex",
-  "animesaltSelected",
   "XNXANIKPAY",
 ]);
 
@@ -169,35 +166,6 @@ export default function FirebaseCleanupSection({
     }
   };
 
-  const purgeLegacyAn = async () => {
-    if (!confirm("পুরনো AN (AnimeSalt) Firebase data সব ডিলিট হবে — webseries/movies/newEpisodeReleases থেকে AN tagged entries + animesaltCache root। নিশ্চিত?")) return;
-    setBusyKey("__legacy_an__");
-    try {
-      const isAn = (v: any) =>
-        !!v?.anSlug || !!v?.animeSaltSlug || v?.sourceName === "AnimeSalt" ||
-        v?.source === "animesalt" || v?.displayAs === "an";
-      let deleted = 0;
-      for (const root of ["webseries", "movies", "newEpisodeReleases"]) {
-        const snap = await get(ref(db, root));
-        const val = snap.val() || {};
-        const keys = Object.entries<any>(val).filter(([k, v]) => isAn(v) || k.startsWith("an_") || k.startsWith("an_mv_"));
-        await Promise.all(keys.map(([k]) => remove(ref(db, `${root}/${k}`))));
-        deleted += keys.length;
-      }
-      // Nuke legacy AN cache roots entirely
-      for (const root of ["animesaltCache", "anSeries", "anMovies", "animesalt"]) {
-        try { await remove(ref(db, root)); } catch {}
-      }
-      toast.success(`🧹 ${deleted} টি legacy AN entry ডিলিট + cache roots cleared`);
-      scan();
-    } catch (e: any) {
-      toast.error("Purge failed: " + (e?.message || e));
-    } finally {
-      setBusyKey(null);
-    }
-  };
-
-
   const orphans = roots.filter((r) => !r.active);
   const totalBytes = roots.reduce((s, r) => s + r.bytes, 0);
   const orphanBytes = orphans.reduce((s, r) => s + r.bytes, 0);
@@ -257,15 +225,6 @@ export default function FirebaseCleanupSection({
           {busyKey === "__orphans__" ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
           Delete All Orphans ({orphans.length})
         </button>
-        <button
-          onClick={purgeLegacyAn}
-          disabled={busyKey === "__legacy_an__"}
-          className={`${btnPrimary} text-xs flex items-center gap-1.5`}
-          style={{ background: "linear-gradient(135deg, #8b5cf6, #ec4899)" }}>
-          {busyKey === "__legacy_an__" ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-          Purge Legacy AN Data
-        </button>
-
       </div>
 
       {/* Root keys list */}

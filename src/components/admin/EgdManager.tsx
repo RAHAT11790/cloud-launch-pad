@@ -2,14 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bot, Copy, Loader2, Plus, RefreshCw, Rocket, Trash2, X, FileCode2, KeyRound,
   Link as LinkIcon, ExternalLink, Settings, CheckCircle2, AlertCircle, Download,
-  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
-import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
-
-// Library is curated to admin self-deployable functions only.
 
 /**
  * EGD MANAGER
@@ -163,7 +159,6 @@ export default function EgdManager({
   const [savedDeployerUrl, setSavedDeployerUrl] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  // (Player Proxy URL moved to EGD Router — single source of truth there.)
 
   // --- Function editor state ---
   const [list, setList] = useState<FnRow[]>([]);
@@ -184,11 +179,6 @@ export default function EgdManager({
   const [logStartAt, setLogStartAt] = useState("");
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
-  const [selectedProjectSecret, setSelectedProjectSecret] = useState<string>("");
-  const [projectSecretDraft, setProjectSecretDraft] = useState<string>("");
-  const [showProjectSecretValues, setShowProjectSecretValues] = useState(false);
-  const [savingProjectSecret, setSavingProjectSecret] = useState<string | null>(null);
-  const [deletingProjectSecret, setDeletingProjectSecret] = useState<string | null>(null);
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
@@ -201,15 +191,8 @@ export default function EgdManager({
     });
   }, []);
 
-  // ---------- (Player proxy URL is configured in EGD Router) ----------
-
-
-
-
-
   const appendError = (msg: string) =>
     setErrorLog((prev) => `[${new Date().toLocaleTimeString()}] ${msg}\n` + prev);
-
 
   // ---------- Call deployer endpoint ----------
   const callDeployer = async (action: string, body: any = {}) => {
@@ -282,13 +265,7 @@ export default function EgdManager({
     try {
       const d = await callDeployer("secrets");
       if (d?.ok) {
-        const names = Array.isArray(d.names) ? d.names : [];
-        setProjectSecrets(names);
-        // If the currently-selected secret was removed, clear selection
-        if (selectedProjectSecret && !names.includes(selectedProjectSecret)) {
-          setSelectedProjectSecret("");
-          setProjectSecretDraft("");
-        }
+        setProjectSecrets(Array.isArray(d.names) ? d.names : []);
       } else {
         appendError("Secrets failed: " + JSON.stringify(d?.error || d));
       }
@@ -298,54 +275,6 @@ export default function EgdManager({
       setLoadingSecrets(false);
     }
   };
-
-  const saveProjectSecretValue = async () => {
-    const name = selectedProjectSecret;
-    const value = projectSecretDraft.trim();
-    if (!name) { toast.error("Pick a secret first"); return; }
-    if (!value) { toast.error(`Paste a new value for ${name}`); return; }
-    setSavingProjectSecret(name);
-    try {
-      const d = await callDeployer("secret-update", { name, value });
-      if (d?.ok) {
-        toast.success(`${name} updated`);
-        setProjectSecretDraft("");
-        await loadProjectSecrets();
-      } else {
-        toast.error("Secret update failed");
-        appendError("Secret update failed: " + JSON.stringify(d?.error || d));
-      }
-    } catch (e: any) {
-      toast.error("Secret update failed");
-      appendError("Secret update network: " + (e?.message || String(e)));
-    } finally { setSavingProjectSecret(null); }
-  };
-
-  const deleteProjectSecretValue = async (name: string) => {
-    if (!confirm(`Delete project secret "${name}"? The functions using it may stop working until you add it again.`)) return;
-    setDeletingProjectSecret(name);
-    try {
-      const d = await callDeployer("secret-delete", { names: [name] });
-      if (d?.ok) {
-        toast.success(`${name} deleted`);
-        if (selectedProjectSecret === name) {
-          setSelectedProjectSecret("");
-          setProjectSecretDraft("");
-        }
-        await loadProjectSecrets();
-      } else {
-        toast.error("Secret delete failed");
-        appendError("Secret delete failed: " + JSON.stringify(d?.error || d));
-      }
-    } catch (e: any) {
-      toast.error("Secret delete failed");
-      appendError("Secret delete network: " + (e?.message || String(e)));
-    } finally { setDeletingProjectSecret(null); }
-  };
-
-
-
-
 
   useEffect(() => {
     if (!savedDeployerUrl) return;
@@ -415,7 +344,6 @@ export default function EgdManager({
       if (d?.ok) {
         toast.success("Deployed ✔");
         setResultUrl(d.url || "");
-        if (d.url) toast.success("Copy this URL and paste it in EGD Router to activate it.");
         await loadList();
         await loadProjectSecrets();
       } else {
@@ -445,26 +373,7 @@ export default function EgdManager({
   const newDraft = () => {
     setSelected(""); setSlug(""); setCode(STARTER);
     setSecrets([{ name: "", value: "" }]); setResultUrl(""); setErrorLog("");
-    setLogs([]); setSourceHint("Blank draft — pick a function name and paste code, then Deploy.");
-    toast.success("New draft ready");
-    if (typeof window !== "undefined") {
-      setTimeout(() => {
-        document
-          .querySelector('[data-egd-editor-anchor="true"]')
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
-    }
-  };
-
-  const openSetup = () => {
-    setShowSetup(true);
-    if (typeof window !== "undefined") {
-      setTimeout(() => {
-        document
-          .querySelector('[data-egd-setup-anchor="true"]')
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
-    }
+    setLogs([]); setSourceHint("");
   };
 
   const loadLogs = async (targetSlug = selected, minutes = logsWindow, startAt = logStartAt, endAt = logEndAt) => {
@@ -513,7 +422,7 @@ export default function EgdManager({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => (showSetup ? setShowSetup(false) : openSetup())}
+              onClick={() => setShowSetup((v) => !v)}
               className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}
             >
               <Settings size={14} /> Setup
@@ -541,10 +450,9 @@ export default function EgdManager({
         </div>
       </div>
 
-
-      {/* Setup card — sits directly under header so the Setup button reveals it instantly */}
+      {/* Setup card */}
       {showSetup && (
-        <div data-egd-setup-anchor="true" className={glassCard + " p-4 sm:p-6 space-y-4 border border-amber-500/30"}>
+        <div className={glassCard + " p-4 sm:p-6 space-y-4 border border-amber-500/30"}>
           <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm sm:text-base">
             <Settings size={16} /> One-time Deployer Setup
           </h3>
@@ -560,19 +468,19 @@ export default function EgdManager({
           {/* Deployer code box */}
           <div className="min-w-0">
             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-              <label className="text-xs text-zinc-400">Deployer source (index.ts) — latest</label>
+              <label className="text-xs text-zinc-400">Deployer source (index.ts)</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => copyText(EGD_DEPLOYER_CODE, "Deployer code copied")}
-                  className={btnPrimary + " inline-flex items-center gap-1.5 !px-3 !py-1.5 text-[11px]"}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 inline-flex items-center gap-1"
                 >
-                  <Copy size={12} /> Copy code
+                  <Copy size={11} /> Copy
                 </button>
                 <button
                   onClick={downloadDeployerCode}
-                  className={btnSecondary + " inline-flex items-center gap-1.5 !px-3 !py-1.5 text-[11px]"}
+                  className="text-[11px] text-zinc-400 hover:text-amber-300 inline-flex items-center gap-1"
                 >
-                  <Download size={12} /> Download
+                  <Download size={11} /> Download
                 </button>
               </div>
             </div>
@@ -613,86 +521,10 @@ export default function EgdManager({
         </div>
       )}
 
-      {/* (Player Proxy URL lives in EGD Router → Video Proxy field.) */}
-
-
-
-      {/* ===== Code Library — one click loads source + secret slots ===== */}
-
-      <div className={glassCard + " p-4 sm:p-5"}>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
-            <Library size={16} className="text-amber-400" /> Code Library
-          </h3>
-          <span className="text-[10px] text-zinc-500">
-            Tap → loads source + required secret fields below.
-          </span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {EDGE_FUNCTION_LIBRARY.map((entry) => {
-            return (
-            <button
-              key={entry.slug}
-              type="button"
-              onClick={() => {
-                setSelected("");
-                setSlug(entry.slug);
-                setCode(entry.source);
-                setSecrets(
-                  entry.secrets.length > 0
-                    ? entry.secrets.map((name) => ({
-                        name,
-                        value: "",
-                      }))
-                    : [{ name: "", value: "" }],
-                );
-                setResultUrl("");
-                setErrorLog("");
-                setSourceHint(
-                  entry.secrets.length === 0
-                    ? `Loaded "${entry.label}" — no secrets required.`
-                    : `Loaded "${entry.label}" — fill ${entry.secrets.length} secret(s) below, then Deploy.`,
-                );
-                toast.success(`Loaded: ${entry.label}`);
-                if (typeof window !== "undefined") {
-                  setTimeout(() => {
-                    document
-                      .querySelector('[data-egd-editor-anchor="true"]')
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }, 50);
-                }
-              }}
-              className="relative text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:bg-amber-500/5 hover:border-amber-400/60 transition p-3 min-w-0 overflow-hidden"
-            >
-              <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
-              {(entry.badgeText || entry.isNew) && (
-                <div className={`absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${
-                  entry.badgeTone === "cyan" ? "border border-cyan-400/50 bg-cyan-500/15 text-cyan-200" :
-                  entry.badgeTone === "amber" ? "border border-amber-400/50 bg-amber-500/15 text-amber-200" :
-                  "border border-emerald-400/50 bg-emerald-500/15 text-emerald-200"
-                }`}>
-                  {entry.badgeText || "NEW"}
-                </div>
-              )}
-              <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
-              <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
-              {entry.secrets.length > 0 && (
-                <div className="mt-1.5 inline-flex items-center gap-1 text-[9px] text-amber-300/90">
-                  <KeyRound size={9} /> {entry.secrets.length} secret{entry.secrets.length > 1 ? "s" : ""}
-                </div>
-              )}
-            </button>
-            );
-          })}
-        </div>
-
-      </div>
-
-
       {/* Editor + List */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         {/* Editor card */}
-        <div data-egd-editor-anchor="true" className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
+        <div className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
           {/* Name */}
           <div className="min-w-0">
             <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
@@ -749,148 +581,67 @@ export default function EgdManager({
               </button>
             </div>
             <div className="space-y-2">
-              {secrets.map((s, i) => {
-                return (
-                  <div key={i} className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1 min-w-0 relative">
-                      <input
-                        className={inputClass + " w-full"}
-                        placeholder="SECRET_NAME"
-                        value={s.name}
-                        onChange={(e) => updateSecret(i, "name", e.target.value)}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        className={inputClass + " flex-1 min-w-0"}
-                        placeholder="value"
-                        type="password"
-                        value={s.value}
-                        onChange={(e) => updateSecret(i, "value", e.target.value)}
-                      />
-                      <button
-                        onClick={() => removeSecretRow(i)}
-                        className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0 disabled:opacity-40"
-                        title="Remove"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
+              {secrets.map((s, i) => (
+                <div key={i} className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    className={inputClass + " flex-1 min-w-0"}
+                    placeholder="SECRET_NAME"
+                    value={s.name}
+                    onChange={(e) => updateSecret(i, "name", e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass + " flex-1 min-w-0"}
+                      placeholder="value"
+                      type="password"
+                      value={s.value}
+                      onChange={(e) => updateSecret(i, "value", e.target.value)}
+                    />
+                    <button
+                      onClick={() => removeSecretRow(i)}
+                      className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0"
+                      title="Remove"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
             <p className="text-[11px] text-zinc-500 mt-1 break-words">
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
             </p>
 
-
-            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-3 min-w-0">
+            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-2 min-w-0">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <div className="text-xs text-zinc-300">Project secrets</div>
+                  <div className="text-xs text-zinc-300">Project secret names</div>
                   <div className="text-[10px] text-zinc-500 break-words">
-                    Tap a secret → editor opens below. Paste a new value to update, or delete.
+                    Backend secret values stay hidden for security.
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowProjectSecretValues((v) => !v)}
-                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
-                  >
-                    {showProjectSecretValues ? "Hide" : "Show"}
-                  </button>
-                  <button
-                    onClick={loadProjectSecrets}
-                    disabled={loadingSecrets}
-                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
-                  >
-                    {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
-                    Refresh
-                  </button>
-                </div>
+                <button
+                  onClick={loadProjectSecrets}
+                  disabled={loadingSecrets}
+                  className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                >
+                  {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                  Refresh
+                </button>
               </div>
 
               {projectSecrets.length === 0 ? (
                 <div className="text-[11px] text-zinc-500">No project secrets found.</div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {projectSecrets.map((name) => {
-                    const active = selectedProjectSecret === name;
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => {
-                          setSelectedProjectSecret(name);
-                          setProjectSecretDraft("");
-                        }}
-                        className={
-                          "text-left rounded-xl border p-2.5 transition min-w-0 overflow-hidden " +
-                          (active
-                            ? "border-amber-400/70 bg-amber-500/10"
-                            : "border-zinc-700/60 bg-zinc-900/50 hover:border-amber-400/40 hover:bg-amber-500/5")
-                        }
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <KeyRound size={11} className="text-amber-300 shrink-0" />
-                          <code className="text-[10px] text-amber-200 font-semibold break-all leading-tight">{name}</code>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Selected secret editor — Code-Library style */}
-              {selectedProjectSecret && (
-                <div className="rounded-lg border border-amber-400/50 bg-amber-500/5 p-3 space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-zinc-400 uppercase tracking-wide">Editing secret</div>
-                      <code className="text-[12px] text-amber-200 font-semibold break-all">{selectedProjectSecret}</code>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => deleteProjectSecretValue(selectedProjectSecret)}
-                        disabled={deletingProjectSecret === selectedProjectSecret || savingProjectSecret === selectedProjectSecret}
-                        className="rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
-                        title="Delete this secret"
-                      >
-                        {deletingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => { setSelectedProjectSecret(""); setProjectSecretDraft(""); }}
-                        className="rounded-md bg-zinc-700/40 text-zinc-300 hover:bg-zinc-700/70 px-2 py-1.5 text-[11px] inline-flex items-center"
-                        title="Close editor"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-zinc-500 break-words">
-                    Existing value is hidden by Supabase for security — it can't be read back. Paste a new value here to overwrite it.
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      className={inputClass + " flex-1 min-w-0 !text-[11px] font-mono"}
-                      placeholder={`new value for ${selectedProjectSecret}`}
-                      type={showProjectSecretValues ? "text" : "password"}
-                      value={projectSecretDraft}
-                      onChange={(e) => setProjectSecretDraft(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button
-                      onClick={saveProjectSecretValue}
-                      disabled={savingProjectSecret === selectedProjectSecret || deletingProjectSecret === selectedProjectSecret || !projectSecretDraft.trim()}
-                      className={btnPrimary + " !px-4 !py-2 text-[11px] shrink-0 disabled:opacity-50 inline-flex items-center gap-1.5"}
+                <div className="flex flex-wrap gap-2">
+                  {projectSecrets.map((name) => (
+                    <span
+                      key={name}
+                      className="rounded-md border border-zinc-700/70 bg-zinc-900/60 px-2.5 py-1 text-[10px] text-zinc-300 break-all"
                     >
-                      {savingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}
-                      Save value
-                    </button>
-                  </div>
+                      {name}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>

@@ -2,12 +2,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Crop, Monitor, Search, Maximize, Minimize, ChevronDown, Play } from "lucide-react";
 import { toast } from "sonner";
 import type { AnimeItem } from "@/data/animeData";
-import AdsterraAdManager from "@/components/AdsterraAdManager";
-import AnNativeView from "@/components/AnNativeView";
-import type { AnNativeResolvedData } from "@/components/AnNativeView";
-import { db, ref, onValue } from "@/lib/firebase"; // user-account reads only (premium, watch-history) — never for AN media
-
-
 
 interface SaltPlayerState {
   embedUrl: string;
@@ -23,16 +17,13 @@ interface SaltPlayerState {
   cropW?: number;
   cropH?: number;
   loading?: boolean;
-  /** Seconds to resume playback from (continue-watching). */
-  resumeTime?: number;
-  /** Pre-extracted AN HLS data so player opens with Hindi already selected. */
-  anNativeData?: AnNativeResolvedData | null;
 }
 
 interface SaltPlayerProps {
   saltPlayerState: SaltPlayerState;
   setSaltPlayerState: (state: SaltPlayerState | null) => void;
   getCleanEmbedUrl: (url: string) => string;
+  animeSaltApi: any;
   addToWatchHistory: (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress?: boolean) => void;
   onRequireUnlock?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => Promise<boolean>;
   suggestedAnime?: AnimeItem[];
@@ -53,7 +44,7 @@ const CROP_PRESETS = [
   { label: "21:9", w: 21, h: 9 },
 ];
 
-export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
+export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
   const [epSearch, setEpSearch] = useState("");
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState<number>(saltPlayerState.seasonIdx ?? 0);
   const [showCropPanel, setShowCropPanel] = useState(false);
@@ -61,48 +52,9 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  // Native HLS playback (no iframe). Resets per embed; falls back to iframe on failure.
-  const [nativeFailed, setNativeFailed] = useState(false);
-  useEffect(() => { setNativeFailed(false); }, [saltPlayerState.embedUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track latest playback position so server-switch resumes from the same point.
-  const lastPosRef = useRef<number>(0);
-
-  // The AN details toast lives in Index.tsx. When this player shell is on
-  // screen, details are no longer loading, even if the video source is still
-  // buffering. Force-close prevents cached Continue Watching clicks from
-  // leaving "Loading details..." permanently stuck.
-  useEffect(() => {
-    if (!saltPlayerState.embedUrl) return;
-    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-  }, [saltPlayerState.embedUrl]);
-
-  const notifyDetailsLoaded = useCallback(() => {
-    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-  }, []);
-
-  const handleNativeFail = useCallback((reason: string) => {
-    console.warn('[AnNative] native extraction failed:', reason);
-    notifyDetailsLoaded();
-    setNativeFailed(true);
-  }, [notifyDetailsLoaded]);
-
-
-  // Premium status — disables ads for paid users.
-  const [isPremium, setIsPremium] = useState<boolean | null>(null);
-  useEffect(() => {
-    let uid: string | null = null;
-    try { const u = localStorage.getItem("rsanime_user"); if (u) uid = JSON.parse(u).id; } catch {}
-    if (!uid) { setIsPremium(false); return; }
-    const unsub = onValue(ref(db, `users/${uid}/premium`), (snap) => {
-      const d = snap.val();
-      setIsPremium(!!(d && d.active === true && d.expiresAt > Date.now()));
-    });
-    return () => unsub();
-  }, []);
-
 
   // Auto-hide controls timer
   const startHideTimer = useCallback(() => {
@@ -265,9 +217,36 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
     return {};
   };
 
-  const handleEpisodeClick = async (_ep: any, _season: any, _sIdx: number, _eIdx: number) => {
-    // AN episode switching is driven by the parent (Index.tsx) which calls the
-    // live API to resolve a fresh HLS link. No Firebase lookup here.
+  const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
+    const epSrc = ep.link;
+    if (epSrc?.startsWith("animesalt://")) {
+      if (saltPlayerState.anime && onRequireUnlock) {
+        const hasAccess = await onRequireUnlock(saltPlayerState.anime, sIdx, eIdx);
+        if (!hasAccess) return;
+      }
+      const epSlug = epSrc.replace("animesalt://", "");
+      try {
+        const result = await animeSaltApi.getEpisode(epSlug);
+        if (result.embedUrl) {
+          if (saltPlayerState.anime) {
+            addToWatchHistory(saltPlayerState.anime, sIdx, eIdx, true);
+          }
+          setSaltPlayerState({
+            ...saltPlayerState,
+            embedUrl: result.embedUrl,
+            cleanEmbedUrl: getCleanEmbedUrl(result.embedUrl),
+            subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
+            seasonIdx: sIdx,
+            epIdx: eIdx,
+            allEmbeds: result.allEmbeds || [result.embedUrl],
+            currentEmbedIdx: 0,
+            loading: false,
+          });
+        }
+      } catch {
+        toast.error("Failed to load");
+      }
+    }
   };
 
   // Filter episodes
@@ -302,40 +281,26 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
     }
   };
 
-  // Close player — unmount IMMEDIATELY so home screen reappears with zero
-  // perceived latency. Fullscreen exit + orientation unlock are kicked off
-  // in parallel (fire-and-forget) instead of awaited.
-  const handleClose = useCallback(() => {
-    // Stage 1: if we're fullscreen / landscape, just exit fullscreen first
-    // so the user lands back on the half-screen portrait view instantly.
-    // Stage 2 (second press): actually close the player and go home.
-    if (isFullscreen || document.fullscreenElement) {
+  // Close player
+  const handleClose = () => {
+    if (document.fullscreenElement) {
       try { (screen.orientation as any).unlock?.(); } catch {}
-      try { document.exitFullscreen?.().catch(() => {}); } catch {}
-      return;
+      document.exitFullscreen().catch(() => {});
     }
-    // Clear timers first so nothing fires post-unmount.
-    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
-    // Unmount synchronously — React swaps to home in the same frame.
     setSaltPlayerState(null);
-    // Release orientation lock in the background.
-    queueMicrotask(() => {
-      try { (screen.orientation as any).unlock?.(); } catch {}
-    });
-  }, [isFullscreen, setSaltPlayerState]);
+  };
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden">
       {/* Close button - auto-hides with controls in fullscreen */}
       <button
-        onPointerDown={(e) => { e.preventDefault(); handleClose(); }}
-        aria-label="Close player"
-        className={`absolute top-3 right-3 z-[60] w-9 h-9 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-destructive/80 active:scale-90 transition-all duration-200 shadow-lg ${
-          isFullscreen && !showControls ? 'opacity-0 pointer-events-none -translate-y-2' : 'opacity-100 translate-y-0'
+        onClick={handleClose}
+        className={`absolute top-3 right-3 z-[60] w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-destructive/80 transition-all duration-300 shadow-lg ${
+          isFullscreen && !showControls ? 'opacity-0 pointer-events-none -translate-y-4' : 'opacity-100 translate-y-0'
         }`}
-        style={{ pointerEvents: isFullscreen && !showControls ? 'none' : 'auto', touchAction: 'manipulation' }}
+        style={{ pointerEvents: isFullscreen && !showControls ? 'none' : 'auto' }}
       >
-        <X className="w-[18px] h-[18px] text-white" strokeWidth={2.4} />
+        <X className="w-5 h-5 text-white" />
       </button>
 
       {/* Top bar - toggles on tap */}
@@ -351,24 +316,13 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           <p className="text-sm font-semibold text-foreground truncate">{saltPlayerState.title}</p>
           <p className="text-xs text-muted-foreground truncate">{saltPlayerState.subtitle}</p>
         </div>
-        {/* Unified control cluster — every pill is the same size/shape so
-            nothing looks crooked next to the close button on the right. */}
-        <div className="flex items-center gap-1.5 mr-12">
-          {!nativeFailed && (
-            <span className="h-9 px-2.5 inline-flex items-center rounded-xl bg-primary/15 text-primary text-[10px] font-bold tracking-wider border border-primary/30">
-              HLS
-            </span>
-          )}
+        <div className="flex items-center gap-1.5 mr-10">
           <button
             onClick={(e) => { e.stopPropagation(); setShowCropPanel(!showCropPanel); resetHideTimer(); }}
-            aria-label="Crop"
-            className={`relative w-9 h-9 rounded-xl flex items-center justify-center border transition-all active:scale-90 ${
-              showCropPanel || cropLabel
-                ? 'bg-primary/20 text-primary border-primary/40'
-                : 'bg-secondary border-border/40 hover:bg-primary/15 hover:border-primary/30'
-            }`}
+            className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showCropPanel || cropLabel ? 'bg-primary/20 text-primary' : 'bg-secondary hover:bg-primary/20'}`}
+            title="Crop"
           >
-            <Crop className="w-[18px] h-[18px]" />
+            <Crop className="w-4 h-4" />
             {cropLabel && (
               <span className="absolute -bottom-1 -right-1 text-[8px] bg-primary text-primary-foreground rounded px-0.5 font-bold leading-none py-0.5">
                 {cropLabel}
@@ -386,27 +340,23 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                   currentEmbedIdx: nextIdx,
                   loading: false,
                   cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
-                  resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
                 });
                 toast.info(`Server ${nextIdx + 1}`);
                 resetHideTimer();
               }}
-              aria-label="Switch server"
-              className="w-9 h-9 rounded-xl bg-secondary border border-border/40 flex items-center justify-center hover:bg-primary/15 hover:border-primary/30 active:scale-90 transition-all"
+              className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-primary/20 transition-colors"
             >
-              <Monitor className="w-[18px] h-[18px] text-foreground" />
+              <Monitor className="w-4 h-4 text-foreground" />
             </button>
           )}
           <button
             onClick={() => { toggleFullscreen(); resetHideTimer(); }}
-            aria-label="Fullscreen"
-            className="w-9 h-9 rounded-xl bg-secondary border border-border/40 flex items-center justify-center hover:bg-primary/15 hover:border-primary/30 active:scale-90 transition-all"
+            className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-primary/20 transition-colors"
           >
-            {isFullscreen ? <Minimize className="w-[18px] h-[18px] text-foreground" /> : <Maximize className="w-[18px] h-[18px] text-foreground" />}
+            {isFullscreen ? <Minimize className="w-4 h-4 text-foreground" /> : <Maximize className="w-4 h-4 text-foreground" />}
           </button>
         </div>
       </div>
-
 
       {/* Crop panel */}
       {showCropPanel && (
@@ -468,72 +418,22 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       >
         <div className={isFullscreen ? 'w-full h-full overflow-hidden' : 'overflow-hidden'} style={isFullscreen ? {} : { paddingBottom: getAspectPadding(), position: 'relative' }}>
           {saltPlayerState.loading && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
-              <div className="player-loader-shell" aria-hidden="true">
-                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
-              </div>
+            <div className="absolute inset-0 flex items-center justify-center z-20">
+              <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           )}
-          {saltPlayerState.embedUrl && !nativeFailed && (
-            <AnNativeView
-              embedUrl={saltPlayerState.embedUrl}
-              initialData={saltPlayerState.anNativeData}
-              resumeTime={saltPlayerState.resumeTime}
-              videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
-              videoStyle={getIframeStyle()}
-              onFail={handleNativeFail}
-              onReady={notifyDetailsLoaded}
-              onTimeUpdate={(currentTime, duration) => {
-                lastPosRef.current = currentTime;
-                if (saltPlayerState.anime) {
-                  try {
-                    const uid = JSON.parse(localStorage.getItem("rsanime_user") || "null")?.id;
-                    if (uid) {
-                      import("@/lib/firebase").then(({ db: fdb, ref: fref, update: fupdate }) => {
-                        const animeId = saltPlayerState.anime!.id;
-                        fupdate(fref(fdb, `users/${uid}/watchHistory/${animeId}`), {
-                          currentTime, duration, watchedAt: Date.now(),
-                        }).catch(() => {});
-                      });
-                    } else {
-                      // Guest mode — localStorage only
-                      import("@/lib/guestStore").then(({ guestStore }) => {
-                        guestStore.continue.upsert({
-                          animeId: saltPlayerState.anime!.id,
-                          seasonIdx: saltPlayerState.seasonIdx,
-                          epIdx: saltPlayerState.epIdx,
-                          position: currentTime,
-                          duration,
-                          title: saltPlayerState.anime!.title,
-                          poster: saltPlayerState.anime!.poster,
-                          updatedAt: Date.now(),
-                        });
-                      });
-                    }
-                  } catch {}
-                }
-              }}
-            />
-          )}
-          {nativeFailed && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black text-center px-6">
-              <p className="text-white text-sm font-semibold mb-1">Server unavailable</p>
-              <p className="text-white/60 text-[11px] mb-3">This episode source could not be extracted. Try another episode.</p>
-              <button
-                onClick={() => setNativeFailed(false)}
-                className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-
-          {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
-          <AdsterraAdManager isPremium={isPremium} videoEl={null} />
+          <iframe
+            src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
+            className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
+            style={{ ...getIframeStyle(), pointerEvents: 'none' }}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+          />
+          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open */}
+          <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
         </div>
       </div>
-
 
       {/* Season selector + Episode list + Suggested (only when not fullscreen) */}
       {!isFullscreen && (

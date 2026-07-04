@@ -2,24 +2,3 @@ project_id = "kqxpzqegtvaiwgdusrin"
 
 [functions.stream-proxy]
 verify_jwt = false
-
-[functions.an-api]
-verify_jwt = false
-
-[functions.hls]
-verify_jwt = false
-
-[functions.episode]
-verify_jwt = false
-
-[functions.an-playback]
-verify_jwt = false
-
-[functions.verify-admin-pin]
-verify_jwt = false
-
-[functions.video-download]
-verify_jwt = false
-
-[functions.video-proxy]
-verify_jwt = false

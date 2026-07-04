@@ -5,7 +5,6 @@ import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
-import { readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
@@ -37,10 +36,9 @@ interface HeaderProps {
   animeTitles?: string[];
   onLogoClick?: () => void;
   chatOpen?: boolean;
-  showSearch?: boolean;
 }
 
-const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen, showSearch = true }: HeaderProps) => {
+const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen }: HeaderProps) => {
   const branding = useBranding();
   const logoSrc = branding.logoUrl ;
   const [userId, setUserId] = useState<string | undefined>(undefined);
@@ -77,62 +75,72 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     return () => clearInterval(interval);
   }, [displayTitles.length]);
 
-  // Track current logged-in user id (reacts instantly to login/logout)
   useEffect(() => {
-    const syncId = () => {
+    let userUnsub: (() => void) | null = null;
+
+    const syncLocalUser = () => {
       const id = getExistingUserId();
-      setUserId((prev) => (prev === id ? prev : id));
+      setUserId(id);
       try {
-        const photo = readProfilePhoto(id);
-        setProfilePhoto((prev) => (prev === photo ? prev : photo));
+        const photo = localStorage.getItem("rs_profile_photo");
+        setProfilePhoto(photo);
       } catch {}
+
+      userUnsub?.();
+      userUnsub = null;
+      if (!id) return;
+
+      userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
+        if (remotePhoto) {
+          try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+          setProfilePhoto(remotePhoto);
+        }
+        if (remoteName && remoteName !== "Guest User") {
+          try {
+            localStorage.setItem("rs_display_name", remoteName);
+            const rawUser = localStorage.getItem("rsanime_user");
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
+          } catch {}
+        }
+      });
     };
-    syncId();
-    const poll = setInterval(syncId, 800);
-    window.addEventListener("storage", syncId);
-    window.addEventListener("rs_auth_changed", syncId as EventListener);
+
+    syncLocalUser();
+    const interval = setInterval(syncLocalUser, 2000);
+    window.addEventListener("storage", syncLocalUser);
+
+    const id = getExistingUserId();
+    if (id) {
+      const updateOnline = () => {
+        update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
+      };
+      updateOnline();
+      const heartbeat = setInterval(updateOnline, 30000);
+      
+      const onUnload = () => {
+        update(ref(db, `users/${id}`), { online: false, lastSeen: Date.now() }).catch(() => {});
+      };
+      window.addEventListener("beforeunload", onUnload);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("storage", syncLocalUser);
+        clearInterval(heartbeat);
+        userUnsub?.();
+        window.removeEventListener("beforeunload", onUnload);
+      };
+    }
+
     return () => {
-      clearInterval(poll);
-      window.removeEventListener("storage", syncId);
-      window.removeEventListener("rs_auth_changed", syncId as EventListener);
+      clearInterval(interval);
+      window.removeEventListener("storage", syncLocalUser);
+      userUnsub?.();
     };
   }, []);
-
-  // Firebase profile + online status — re-bound whenever userId changes
-  useEffect(() => {
-    if (!userId) return;
-    const userUnsub = onValue(ref(db, `users/${userId}`), (snap) => {
-      const data = snap.val() || {};
-      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-      const remoteName = String(data.name || "").trim();
-      if (remotePhoto) {
-        writeProfilePhoto(remotePhoto, userId);
-        setProfilePhoto(remotePhoto);
-      }
-      if (remoteName && remoteName !== "Guest User") {
-        try {
-          writeDisplayName(remoteName, userId);
-          const rawUser = localStorage.getItem("rsanime_user");
-          const parsedUser = rawUser ? JSON.parse(rawUser) : {};
-          localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
-        } catch {}
-      }
-    });
-    const updateOnline = () => {
-      update(ref(db, `users/${userId}`), { online: true, lastSeen: Date.now() }).catch(() => {});
-    };
-    updateOnline();
-    const heartbeat = setInterval(updateOnline, 30000);
-    const onUnload = () => {
-      update(ref(db, `users/${userId}`), { online: false, lastSeen: Date.now() }).catch(() => {});
-    };
-    window.addEventListener("beforeunload", onUnload);
-    return () => {
-      clearInterval(heartbeat);
-      userUnsub();
-      window.removeEventListener("beforeunload", onUnload);
-    };
-  }, [userId]);
 
   const currentPlaceholder = displayTitles[placeholderIdx] || "Search...";
 
@@ -155,27 +163,25 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         </div>
       )}
 
-      {showSearch && (
-        <div className="relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
-          <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
-            style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
-            <span
-              className={`text-muted-foreground text-sm block whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-300 ${animating ? "opacity-0" : "opacity-100"}`}
-              style={{ width: '100%' }}
-            >
-              {currentPlaceholder}
-            </span>
-          </div>
+      <div className="relative flex-1 mx-3 cursor-pointer" onClick={onSearchClick} style={{ maxWidth: 200, minWidth: 120 }}>
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
+        <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
+          style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
+          <span
+            className={`text-muted-foreground text-sm block whitespace-nowrap overflow-hidden text-ellipsis transition-opacity duration-300 ${animating ? "opacity-0" : "opacity-100"}`}
+            style={{ width: '100%' }}
+          >
+            {currentPlaceholder}
+          </span>
         </div>
-      )}
-      <div className="flex items-center gap-1 flex-shrink-0">
+      </div>
+      <div className="flex items-center gap-1.5">
         <ThemeToggle />
         <NotificationPanel userId={userId} onOpenContent={onOpenContent} />
         {userId ? (
           <button
             onClick={onProfileClick}
-            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110 flex-shrink-0"
+            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
             style={{ boxShadow: "var(--neu-shadow-sm)" }}
             aria-label="Open profile"
           >
@@ -190,7 +196,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         ) : (
           <button
             onClick={onProfileClick}
-            className="h-9 px-2.5 sm:px-3.5 rounded-full bg-primary text-primary-foreground text-[11px] sm:text-[12px] font-bold uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 transition-all hover:scale-105 active:scale-95 flex-shrink-0 whitespace-nowrap"
+            className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
             style={{ boxShadow: "0 4px 14px hsl(var(--primary) / 0.35)" }}
             aria-label="Sign in"
           >

@@ -21,11 +21,4 @@ if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-s
   } catch {}
 })();
 
-// Register image-cache service worker (persists posters across sessions)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
-}
-
 createRoot(document.getElementById("root")!).render(<App />);

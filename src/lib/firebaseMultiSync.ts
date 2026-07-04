@@ -54,84 +54,27 @@ export const DEFAULT_RTDB_RULES = `{
   }
 }`;
 
-const appCache = new Map<string, { app: FirebaseApp; db: Database; url: string }>();
+const appCache = new Map<string, { app: FirebaseApp; db: Database }>();
 
 function instanceName(id: string) { return `extra-fb-${id}`; }
 
-/**
- * Clean up a database URL so SDK calls always target the RTDB root.
- * Admins sometimes paste URLs with path/query/hash fragments, which causes
- * false "Invalid token in path" errors even when the database is healthy.
- */
-function normalizeUrl(url: string | undefined): string {
-  if (!url) return "";
-  let s = url.trim();
-  if (!s) return "";
-  s = s.replace(/\/+$/, "");
-  if (s && !s.startsWith("http")) s = "https://" + s;
-  try {
-    const u = new URL(s);
-    u.hash = "";
-    u.search = "";
-    u.pathname = "/";
-    return u.toString().replace(/\/+$/, "");
-  } catch {
-    s = s.replace(/[?#].*$/, "").replace(/\/\.json$/i, "").replace(/\/+$/, "");
-  }
-  return s;
-}
-
-/**
- * Extract the root of an RTDB URL (origin only).
- * Necessary because .info paths only work at the REAL database root.
- */
-function getRootUrl(url: string): string {
-  try {
-    const u = new URL(normalizeUrl(url));
-    return u.origin;
-  } catch {
-    return normalizeUrl(url);
-  }
-}
-
 function ensureApp(cfg: ExtraFirebaseConfig): { app: FirebaseApp; db: Database } {
-  const normUrl = normalizeUrl(cfg.databaseURL);
   const cached = appCache.get(cfg.id);
-
-  // If URL changed in config, kill old app instance to avoid stale connection
-  if (cached && cached.url !== normUrl) {
-    disposeExtraFirebase(cfg);
-  } else if (cached) {
-    return cached;
-  }
+  if (cached) return cached;
 
   // Re-use if already initialized in this session
-  const name = instanceName(cfg.id);
-  const existing = getApps().find(a => a.name === name);
-  
-  if (existing) {
-    if ((existing as any).options.databaseURL !== normUrl) {
-      try { deleteApp(existing); } catch {}
-    } else {
-      const db = getDatabase(existing, normUrl);
-      const entry = { app: existing, db, url: normUrl };
-      appCache.set(cfg.id, entry);
-      return entry;
-    }
-  }
-
-  const app = initializeApp({
+  const existing = getApps().find(a => a.name === instanceName(cfg.id));
+  const app = existing || initializeApp({
     apiKey: cfg.apiKey,
     authDomain: cfg.authDomain,
     projectId: cfg.projectId,
-    databaseURL: normUrl,
+    databaseURL: cfg.databaseURL,
     storageBucket: cfg.storageBucket,
     messagingSenderId: cfg.messagingSenderId,
     appId: cfg.appId,
-  }, name);
-
-  const db = getDatabase(app, normUrl);
-  const entry = { app, db, url: normUrl };
+  }, instanceName(cfg.id));
+  const db = getDatabase(app, cfg.databaseURL);
+  const entry = { app, db };
   appCache.set(cfg.id, entry);
   return entry;
 }
@@ -141,13 +84,6 @@ export async function disposeExtraFirebase(cfg: ExtraFirebaseConfig) {
   if (cached) {
     try { await deleteApp(cached.app); } catch { /* ignore */ }
     appCache.delete(cfg.id);
-  } else {
-    // Check global state too
-    const name = instanceName(cfg.id);
-    const existing = getApps().find(a => a.name === name);
-    if (existing) {
-      try { await deleteApp(existing); } catch { /* ignore */ }
-    }
   }
 }
 
@@ -178,37 +114,18 @@ export async function updateSections(id: string, sections: string[]) {
 
 // ----------------- Connection ops -----------------
 
-/**
- * Ping an RTDB. If primary fails and mirror exists, try mirror.
- * We probe a normal root node instead of /.info/* because pasted custom URLs
- * with path fragments can make the SDK throw a misleading path-token error.
- */
 export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean; ms: number; error?: string }> {
   const t0 = performance.now();
-  
-  const attemptPing = async (url: string) => {
-    const { app } = ensureApp(cfg);
-    const rootUrl = getRootUrl(url);
-    const rootDb = getDatabase(app, rootUrl);
-    
-    await Promise.race([
-      rGet(rRef(rootDb, "/admin")),
+  try {
+    const { db } = ensureApp(cfg);
+    // Reading .info/connected can take a moment; race with a 5s timeout.
+    const result = await Promise.race([
+      rGet(rRef(db, ".info/serverTimeOffset")),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
     ]);
-  };
-
-  try {
-    await attemptPing(cfg.databaseURL);
+    void result;
     return { ok: true, ms: Math.round(performance.now() - t0) };
   } catch (e: any) {
-    if (cfg.mirrorURL) {
-      try {
-        await attemptPing(cfg.mirrorURL);
-        return { ok: true, ms: Math.round(performance.now() - t0), error: "(via mirror)" };
-      } catch (me: any) {
-        return { ok: false, ms: Math.round(performance.now() - t0), error: `Primary: ${e?.message}; Mirror: ${me?.message}` };
-      }
-    }
     return { ok: false, ms: Math.round(performance.now() - t0), error: e?.message || String(e) };
   }
 }
@@ -236,10 +153,12 @@ export async function pushSection(
   const snap = await mainGet(mainRef(mainDb, section));
   const val = snap.val();
   if (val == null) {
+    // empty section → set null in replica too
     await rSet(rRef(extraDb, section), null);
     onProgress?.({ doneNodes: 0, totalNodes: 0, currentSection: section, phase: "done" });
     return { nodes: 0 };
   }
+  // If value is primitive or array (no top-level children to chunk), just set whole.
   if (typeof val !== "object" || Array.isArray(val)) {
     await rSet(rRef(extraDb, section), val);
     onProgress?.({ doneNodes: 1, totalNodes: 1, currentSection: section, phase: "done" });
@@ -248,6 +167,7 @@ export async function pushSection(
   const keys = Object.keys(val);
   const total = keys.length;
   let done = 0;
+  // Wipe section first so deleted nodes get removed in the replica too.
   await rSet(rRef(extraDb, section), null);
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
@@ -267,6 +187,7 @@ export async function pushSection(
   return { nodes: total };
 }
 
+/** Push multiple sections sequentially, aggregating progress. */
 export async function pushAllSelectedSections(
   cfg: ExtraFirebaseConfig,
   sections: string[],
@@ -277,27 +198,20 @@ export async function pushAllSelectedSections(
   }
 }
 
+/** Pull a section from extra DB → return JSON object. */
 export async function pullSectionJson(cfg: ExtraFirebaseConfig, section: string): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
-  try {
-    const snap = await rGet(rRef(extraDb, section));
-    return snap.val();
-  } catch (e) {
-    if (cfg.mirrorURL) {
-      const { app } = ensureApp(cfg);
-      const mirrorDb = getDatabase(app, normalizeUrl(cfg.mirrorURL));
-      const snap = await rGet(rRef(mirrorDb, section));
-      return snap.val();
-    }
-    throw e;
-  }
+  const snap = await rGet(rRef(extraDb, section));
+  return snap.val();
 }
 
+/** Upload a section JSON object → write to extra DB (full overwrite). */
 export async function uploadSectionJson(cfg: ExtraFirebaseConfig, section: string, data: any) {
   const { db: extraDb } = ensureApp(cfg);
   await rSet(rRef(extraDb, section), data);
 }
 
+/** Helper for browser download. */
 export function triggerJsonDownload(filename: string, data: any) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -355,36 +269,29 @@ export async function streamJsonDownload(
 
   const fileStreamApi = (window as any).showSaveFilePicker;
   if (typeof fileStreamApi === "function") {
-    try {
-      const handle = await fileStreamApi({
-        suggestedName: filename,
-        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+    const handle = await fileStreamApi({
+      suggestedName: filename,
+      types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+    });
+    const writable = await handle.createWritable();
+    const chunkSize = 256 * 1024;
+    let writtenBytes = 0;
+    for (let i = 0; i < json.length; i += chunkSize) {
+      const chunk = json.slice(i, i + chunkSize);
+      const encoded = encoder.encode(chunk);
+      await writable.write(encoded);
+      writtenBytes += encoded.length;
+      onProgress?.({
+        stage: "writing",
+        progress: totalBytes > 0 ? Math.min(99, Math.round((writtenBytes / totalBytes) * 100)) : 100,
+        writtenBytes,
+        totalBytes,
       });
-      const writable = await handle.createWritable();
-      const chunkSize = 256 * 1024;
-      let writtenBytes = 0;
-      for (let i = 0; i < json.length; i += chunkSize) {
-        const chunk = json.slice(i, i + chunkSize);
-        const encoded = encoder.encode(chunk);
-        await writable.write(encoded);
-        writtenBytes += encoded.length;
-        onProgress?.({
-          stage: "writing",
-          progress: totalBytes > 0 ? Math.min(99, Math.round((writtenBytes / totalBytes) * 100)) : 100,
-          writtenBytes,
-          totalBytes,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-      await writable.close();
-      onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
-      return;
-    } catch (e: any) {
-      if (e?.name === "AbortError") {
-        onProgress?.({ stage: "done", progress: 0, writtenBytes: 0, totalBytes: 0 });
-        return;
-      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
+    await writable.close();
+    onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
+    return;
   }
 
   triggerJsonDownload(filename, data);
@@ -392,37 +299,35 @@ export async function streamJsonDownload(
 }
 
 // ============================================================
-// FULL-DB operations
+// FULL-DB operations (entire RTDB tree)
 // ============================================================
 
+/** Download the entire MAIN Firebase RTDB tree as JSON. */
 export async function pullMainFullJson(): Promise<any> {
   const snap = await mainGet(mainRef(mainDb, "/"));
   return snap.val();
 }
 
+/** Download the entire EXTRA Firebase RTDB tree as JSON. */
 export async function pullExtraFullJson(cfg: ExtraFirebaseConfig): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
-  try {
-    const snap = await rGet(rRef(extraDb, "/"));
-    return snap.val();
-  } catch (e) {
-    if (cfg.mirrorURL) {
-      const { app } = ensureApp(cfg);
-      const mirrorDb = getDatabase(app, normalizeUrl(cfg.mirrorURL));
-      const snap = await rGet(rRef(mirrorDb, "/"));
-      return snap.val();
-    }
-    throw e;
-  }
+  const snap = await rGet(rRef(extraDb, "/"));
+  return snap.val();
 }
 
+/**
+ * Upload a full JSON tree to MAIN Firebase. MERGES at root level (safer than overwrite).
+ * Top-level keys present in `data` replace those subtrees; keys not in `data` are preserved.
+ */
 export async function uploadMainFullJson(data: any) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Full JSON must be a plain object with top-level sections.");
   }
+  // Use update to merge top-level children rather than wiping entire DB.
   await mainUpdate(mainRef(mainDb, "/"), data);
 }
 
+/** Upload a full JSON tree to an EXTRA Firebase (merge at root). */
 export async function uploadExtraFullJson(cfg: ExtraFirebaseConfig, data: any) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Full JSON must be a plain object with top-level sections.");
@@ -432,7 +337,7 @@ export async function uploadExtraFullJson(cfg: ExtraFirebaseConfig, data: any) {
 }
 
 // ============================================================
-// Storage analytics
+// Storage analytics — estimate RTDB usage from JSON byte size
 // ============================================================
 
 export interface StorageStats {
@@ -479,6 +384,11 @@ export async function analyzeExtraStorage(cfg: ExtraFirebaseConfig): Promise<Sto
   const data = await pullExtraFullJson(cfg);
   return analyzeTree(data);
 }
+
+// ============================================================
+// Auto-mirror config (per-extra interval push from MAIN → extra)
+// Stored alongside extra config: cfg.autoMirrorMinutes (0 = off)
+// ============================================================
 
 export async function setAutoMirror(id: string, minutes: number) {
   await mainUpdate(mainRef(mainDb, `admin/extraFirebases/${id}`), {
