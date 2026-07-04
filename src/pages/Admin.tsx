@@ -2618,6 +2618,35 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
             primeAdminContentIndexFromList(kind, hydrated).catch(() => {});
           }
         }
+
+        // Repair: older index rows were written with seasonCount=0 for
+        // webseries even when the source had real seasons. Re-hydrate those
+        // stale rows from source and re-prime the index so counts are right.
+        if (kind === "webseries") {
+          const stale = items.filter((it: any) => !Number(it?.seasonCount) && !isLegacyAnEntry(it.id, it));
+          if (stale.length) {
+            const chunkSize = 8;
+            const repaired: any[] = [];
+            for (let i = 0; i < stale.length; i += chunkSize) {
+              const chunk = stale.slice(i, i + chunkSize);
+              const rows = await Promise.all(chunk.map(async (it: any) => {
+                try {
+                  const item = await firebaseRestGet<any>(`${kind}/${it.id}`);
+                  if (!item) return null;
+                  const rebuilt = buildAdminContentIndexItem(it.id, item, kind);
+                  return Number(rebuilt.seasonCount) > 0 ? rebuilt : null;
+                } catch { return null; }
+              }));
+              rows.forEach((r) => { if (r) repaired.push(r); });
+            }
+            if (repaired.length) {
+              const byId = new Map(items.map((it: any) => [String(it.id), it]));
+              repaired.forEach((r) => byId.set(String(r.id), r));
+              items = Array.from(byId.values());
+              primeAdminContentIndexFromList(kind, repaired).catch(() => {});
+            }
+          }
+        }
       } catch {}
       const merged = mergeAdminContentLists(items);
       startTransition(() => setter(merged));
