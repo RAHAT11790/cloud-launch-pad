@@ -57,10 +57,21 @@ const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
- if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
- if (epIdx !== undefined) params.set("e", String(epIdx));
+ if (seasonIdx !== undefined) params.set("s", String(Math.max(0, seasonIdx) + 1));
+ if (epIdx !== undefined) params.set("e", String(Math.max(0, epIdx) + 1));
  const qs = params.toString();
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+};
+
+const getEpisodeIndexForShare = (season: any, episodeNumber: unknown, fallbackIdx = 0) => {
+ const num = Number(episodeNumber);
+ const episodes = Array.isArray(season?.episodes) ? season.episodes : [];
+ if (Number.isFinite(num) && num > 0) {
+  const exactIdx = episodes.findIndex((ep: any) => Number(ep?.episodeNumber) === num);
+  if (exactIdx >= 0) return exactIdx;
+  return Math.max(0, Math.floor(num) - 1);
+ }
+ return Math.max(0, fallbackIdx);
 };
 
 const TG_DUB_TAGS = {
@@ -2299,8 +2310,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setTgButtonLink(buildEpisodeShareUrl(tgSelectedAnimeId));
  return;
  }
- setTgButtonLink(buildEpisodeShareUrl(tgSelectedAnimeId, Math.max(0, seasonNum - 1), Math.max(0, epStart - 1)));
- }, [tgSelectedAnimeId, tgSeason, tgNewEpAdded]);
+ const content = webseriesData.find(s => s.id === tgSelectedAnimeId);
+ const seasonIdx = Math.max(0, seasonNum - 1);
+ const epIdx = getEpisodeIndexForShare(content?.seasons?.[seasonIdx], epStart, Math.max(0, epStart - 1));
+ setTgButtonLink(buildEpisodeShareUrl(tgSelectedAnimeId, seasonIdx, epIdx));
+ }, [tgSelectedAnimeId, tgSeason, tgNewEpAdded, webseriesData]);
 
  // Load saved TG footer links from Firebase
  useEffect(() => {
@@ -4622,6 +4636,10 @@ ${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} 
  }
  });
 
+  const selectedReleaseForPayload = releasesData.find(r => r.id === tgSelectedRelease || r.contentId === tgSelectedAnimeId);
+  const selectedContentTypeForPayload = String(selectedReleaseForPayload?.contentType || (moviesData.some(m => m.id === tgSelectedAnimeId) ? "movies" : "webseries"));
+  const telegramCollectionForPayload = selectedContentTypeForPayload === "movie" || selectedContentTypeForPayload === "movies" ? "movies" : "webseries";
+
   for (const chatId of channelIds) {
   await yieldAdminFrame();
  const payload = {
@@ -4629,6 +4647,8 @@ ${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} 
  caption,
  photoUrl: tgPosterUrl || undefined,
  inlineButtons: inlineButtons.length > 0 ? inlineButtons : undefined,
+  collection: telegramCollectionForPayload,
+  seriesId: tgSelectedAnimeId || selectedReleaseForPayload?.contentId || undefined,
  // Free Access button is controlled ENTIRELY by the global toggle at
  // settings/telegramFreeAccess.enabled (read inside the edge function).
  // Do NOT force-include here — that would bypass the OFF switch.
@@ -4947,7 +4967,8 @@ ${tgBulkFooter}
  // Set button link with deep link to the exact episode when available
  const animeId = release.contentId || release.id;
  const shareSeasonIdx = release.episodeInfo?.type === "movie" ? undefined : Math.max(0, Number(release.episodeInfo?.seasonNumber || 1) - 1);
- const shareEpIdx = release.episodeInfo?.type === "movie" ? undefined : Math.max(0, Number(release.episodeInfo?.episodeNumber || 1) - 1);
+ const shareContent = contentType === "webseries" ? ((await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId)) : null;
+ const shareEpIdx = release.episodeInfo?.type === "movie" ? undefined : getEpisodeIndexForShare(shareContent?.seasons?.[shareSeasonIdx ?? 0], release.episodeInfo?.episodeNumber, 0);
  setTgButtonLink(buildEpisodeShareUrl(animeId, shareSeasonIdx, shareEpIdx));
  setTgSelectedAnimeId(String(animeId));
  // Load saved per-anime custom buttons (if any)
@@ -6446,7 +6467,7 @@ ${tgBulkFooter}
   }));
   startTransition(() => {
   if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
-  setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), parseInt(wsNotifyEpisode)));
+  setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode))));
   setTgSelectedAnimeId(String(ctxSeriesId));
   });
  // Load any saved per-anime custom buttons
@@ -6533,7 +6554,14 @@ ${tgBulkFooter}
   } catch {} })();
  if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
- setTgButtonLink(buildEpisodeShareUrl(seriesId));
+  const latestRelease = releasesData.find(r => r.contentId === seriesId);
+  if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
+   const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
+   const eIdx = getEpisodeIndexForShare(ws?.seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, sIdx, eIdx));
+  } else {
+   setTgButtonLink(buildEpisodeShareUrl(seriesId));
+  }
  setTgSelectedAnimeId(String(seriesId));
  (async () => {
  try {
@@ -7654,7 +7682,14 @@ ${tgBulkFooter}
   // Genres from TMDB only — never from local category.
   if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
   setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
-  setTgButtonLink(buildEpisodeShareUrl(r.id));
+   const latestRelease = releasesData.find(rel => rel.contentId === r.id);
+   if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
+    const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
+    const eIdx = getEpisodeIndexForShare((fullData as any).seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
+    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx));
+   } else {
+    setTgButtonLink(buildEpisodeShareUrl(r.id));
+   }
   setTgSelectedAnimeId(String(r.id));
   try {
   const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
