@@ -76,7 +76,18 @@ export const wrapAnHlsPlaybackUrl = (value: string, explicitPrefix?: string): st
   } catch {}
 
   if (/^https?:\/\//i.test(raw) && prefix) {
-    return `${prefix}?url=${encodeURIComponent(raw)}`;
+    return `${prefix}?src=${encodeURIComponent(toOpaqueUrlToken(raw))}`;
   }
   return raw;
+};
+
+export const toOpaqueUrlToken = (value: string) => {
+  try {
+    return btoa(unescape(encodeURIComponent(String(value || ""))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
 };
