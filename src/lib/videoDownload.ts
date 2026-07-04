@@ -116,6 +116,8 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
+  if (/^https:\/\//i.test(trimmedUrl)) return [trimmedUrl];
+
   const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
   return unique([
     ...bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)),
