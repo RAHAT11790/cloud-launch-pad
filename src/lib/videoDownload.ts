@@ -43,7 +43,7 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
   const fileName = buildSafeFileName(rawFileName);
-  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(rawUrl)}`;
+  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
