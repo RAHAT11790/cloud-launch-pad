@@ -2120,6 +2120,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [captionVerticalOffset, setCaptionVerticalOffset] = useState(10);
   const hlsRef = useRef<Hls | null>(null);
   const hlsFatalRetriesRef = useRef(0);
+  const rsSoftRetriesRef = useRef(0);
   const hlsSubtitleMetaRef = useRef<HlsSubtitleOption[]>([]);
   const subtitleCueListRef = useRef<Array<{ start: number; end: number; text: string }>>([]);
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
