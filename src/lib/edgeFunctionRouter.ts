@@ -144,12 +144,6 @@ function supabaseFallbackUrl(fnName: string): string {
     "rs-bot",
     "send-otp-email",
     "process-email-queue",
-    // Playback critical defaults: EGD Router may point to the user's own
-    // deployment, but preview/runtime must still have a working backup.
-    "an-api",
-    "an-playback",
-    "video-proxy",
-    "verify-admin-pin",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
