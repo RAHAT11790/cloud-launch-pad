@@ -679,9 +679,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
       const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
       const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      const finalUrl = enabled
-        ? (isBackendFunctionUrl(overrideUrl) ? (siblingWorkerUrl || selfHostedUrl || overrideUrl) : overrideUrl)
-        : (siblingWorkerUrl || selfHostedUrl);
+      // Whatever admin saved in EGD Router wins — no bypass.
+      const finalUrl = enabled ? overrideUrl : selfHostedUrl;
       setProxyUrl(finalUrl);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
@@ -711,12 +710,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyProxyRoute();
     });
 
-    const unsub4 = onValue(ref(db, "settings/functionOverrides"), (snap) => {
-      siblingWorkerUrl = deriveSiblingWorkerFunctionUrl("video-proxy", snap.val() || {});
-      applyProxyRoute();
-    });
-
-    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); unsub4(); };
+    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
