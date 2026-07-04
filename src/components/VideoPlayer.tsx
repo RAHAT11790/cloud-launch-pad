@@ -46,7 +46,7 @@ import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
-import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -832,12 +832,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const meta = clean.slice(0, comma).toLowerCase();
           const payload = clean.slice(comma + 1);
           const decoded = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
-          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(decoded)))}`;
+          const remasked = isAnimeSaltContent
+            ? decoded
+                .split(/\r?\n/)
+                .map((line) => {
+                  const trimmed = line.trim();
+                  if (!trimmed) return line;
+                  if (trimmed.startsWith("#")) {
+                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri)}"`);
+                  }
+                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed) : line;
+                })
+                .join("\n")
+            : decoded;
+          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(remasked)))}`;
         }
       } catch {}
     }
     return clean;
-  }, []);
+  }, [isAnimeSaltContent]);
 
   const currentLangLabel = useMemo(() => {
     // AnimeSalt: lock to Hindi as the visible label whenever AN content is
