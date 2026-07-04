@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
-import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -99,7 +99,8 @@ export function unwrapManagedVideoUrl(value: string): string {
   if (!trimmed) return "";
   if (isManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
     try {
-      return new URL(trimmed).searchParams.get("url") || trimmed;
+      const parsed = new URL(trimmed);
+      return parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "") || trimmed;
     } catch {
       return trimmed;
     }
