@@ -42,9 +42,6 @@ const isAnimeSaltRouteItem = (anime?: AnimeItem | null) => !!anime && (
   || !!anime.animeSaltSlug
 );
 
-const AN_API_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api`;
-const AN_PLAYBACK_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback`;
-const AN_API_HLS_PROXY_PREFIX = `${AN_PLAYBACK_BASE || AN_API_BASE}/hls`;
 const AN_AUDIO_LANGUAGE_PREF_KEY = "rs_an_audio_language_pref";
 
 const getSavedAnAudioLanguagePref = () => {
@@ -68,28 +65,7 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
-const buildAnHlsPlaybackUrl = (url: string) => {
-  const raw = String(url || "").trim();
-  if (!raw) return raw;
-  if (raw.startsWith("data:application/vnd.apple.mpegurl")) return raw;
-  try {
-    const parsed = new URL(raw);
-    if (/\/functions\/v1\/an-playback\/hls$/i.test(parsed.pathname)) return raw;
-    if (/\/functions\/v1\/(?:an-api\/hls|hls)$/i.test(parsed.pathname)) {
-      const wrapped = parsed.searchParams.get("url") || "";
-      if (wrapped && AN_API_HLS_PROXY_PREFIX) {
-        const params = new URLSearchParams({ url: wrapped });
-        const origin = parsed.searchParams.get("origin") || parsed.searchParams.get("parent") || parsed.searchParams.get("ref") || "";
-        if (origin) params.set("origin", origin);
-        return `${AN_API_HLS_PROXY_PREFIX}?${params.toString()}`;
-      }
-    }
-  } catch {}
-  // Firebase stores raw AnimeSalt video/audio URLs, but Android/desktop hls.js
-  // cannot read AnimeSalt CDN directly because those playlists do not expose
-  // CORS headers. Playback therefore wraps only at runtime; storage stays raw.
-  return AN_API_HLS_PROXY_PREFIX ? `${AN_API_HLS_PROXY_PREFIX}?url=${encodeURIComponent(raw)}` : raw;
-};
+const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url);
 
 const isAnPlayableHlsUrl = (url?: string | null) => {
   const raw = String(url || "").trim();
