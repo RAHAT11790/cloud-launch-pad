@@ -16,7 +16,7 @@ import {
   getMessaging, getToken, onMessage, deleteToken, isSupported,
 } from "firebase/messaging";
 import { toast } from "sonner";
-import { resolveEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
@@ -78,7 +78,7 @@ async function ensureMessaging() {
 }
 
 async function postRegister(userId: string, token: string) {
-  const endpoint = resolveEdgeFunctionUrl("send-fcm");
+  const endpoint = getEdgeFunctionUrl("send-fcm");
   if (!endpoint) return; // router not configured — skip silently
   const url = endpoint.replace(/\/+$/, "") + "/register";
   try {
@@ -178,7 +178,7 @@ export async function unregisterPushNotifications() {
     const userId = localStorage.getItem(LS_USER_ID) || "";
     const token = localStorage.getItem(LS_LAST_TOKEN) || "";
     if (userId && token) {
-      const endpoint = resolveEdgeFunctionUrl("send-fcm");
+      const endpoint = getEdgeFunctionUrl("send-fcm");
       if (endpoint) {
         await fetch(endpoint.replace(/\/+$/, "") + "/unregister", {
           method: "POST",
@@ -210,7 +210,7 @@ export async function sendPushNotification(payload: {
   episodeNumber?: number | string;
   userIds?: string[];
 }): Promise<{ ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; error?: string }> {
-  const endpoint = resolveEdgeFunctionUrl("send-fcm");
+  const endpoint = getEdgeFunctionUrl("send-fcm");
   if (!endpoint) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured in EGD Router" };
   const url = endpoint.replace(/\/+$/, "") + "/send";
   try {
