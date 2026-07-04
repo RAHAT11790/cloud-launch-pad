@@ -125,7 +125,8 @@ function streamOpenEndedRange(target, method, firstResponse, out, rawRange, head
   out.set("content-length", String(firstRange.total - firstRange.start));
 
   return new ReadableStream({
-    async start(controller) {
+    start(controller) {
+      (async () => {
       let cursor = firstRange.start;
       try {
         const firstReader = firstResponse.body?.getReader();
@@ -153,6 +154,7 @@ function streamOpenEndedRange(target, method, firstResponse, out, rawRange, head
       } catch (e) {
         try { controller.error(e); } catch {}
       }
+      })();
     },
     cancel() {
       try { firstResponse.body?.cancel(); } catch {}
@@ -219,11 +221,11 @@ export default {
       { ...headers, Referer: `${origin}/`, Origin: origin },
     ];
 
-    let res = null, lastErr = "";
+    let res = null, lastErr = "", effectiveHeaders = headers;
     for (const h of attempts) {
       try {
         res = await fetch(up.toString(), { method: req.method, headers: h, redirect: "follow" });
-        if (res.ok || res.status === 206 || res.status === 304) break;
+        if (res.ok || res.status === 206 || res.status === 304) { effectiveHeaders = h; break; }
         lastErr = `HTTP ${res.status}`;
         try { await res.body?.cancel(); } catch {}
       } catch (e) { lastErr = e?.message || String(e); res = null; }
@@ -254,7 +256,7 @@ export default {
     if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
-    const assembledOpenRange = streamOpenEndedRange(up, req.method, res, out, rawRange, headers);
+    const assembledOpenRange = streamOpenEndedRange(up, req.method, res, out, rawRange, effectiveHeaders);
     if (assembledOpenRange) {
       return new Response(assembledOpenRange, { status: res.status, headers: out });
     }

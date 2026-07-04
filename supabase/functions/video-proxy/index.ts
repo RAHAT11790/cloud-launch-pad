@@ -146,7 +146,8 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
   out.set("content-length", String(firstRange.total - firstRange.start));
 
   return new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start(controller) {
+      (async () => {
       let cursor = firstRange.start;
       try {
         const firstReader = firstResponse.body?.getReader();
@@ -171,6 +172,7 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
       } catch (e) {
         try { controller.error(e); } catch {}
       }
+      })();
     },
     cancel() {
       try { firstResponse.body?.cancel(); } catch {}
@@ -237,6 +239,7 @@ Deno.serve(async (req) => {
   let up: Response | null = null;
   let lastError = "";
   let effectiveUrl = upstreamUrl;
+  let effectiveHeaders: Record<string, string> = { ...baseHeaders };
   for (const candidate of buildUpstreamCandidates(upstreamUrl)) {
     const origin = `${candidate.protocol}//${candidate.host}`;
     const candidateBaseHeaders = { ...baseHeaders };
@@ -256,6 +259,7 @@ Deno.serve(async (req) => {
         up = await fetch(candidate.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
         if (up.ok || up.status === 206 || up.status === 304) {
           effectiveUrl = candidate;
+          effectiveHeaders = headers;
           break;
         }
         lastError = `HTTP ${up.status}`;
@@ -298,7 +302,7 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  const assembledOpenRange = streamOpenEndedRange(effectiveUrl, req.method, up, out, rawRange, baseHeaders, ac.signal);
+  const assembledOpenRange = streamOpenEndedRange(effectiveUrl, req.method, up, out, rawRange, effectiveHeaders, ac.signal);
   if (assembledOpenRange) {
     return new Response(assembledOpenRange, { status: up.status, statusText: up.statusText, headers: out });
   }
