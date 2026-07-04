@@ -2053,8 +2053,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
- const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
- const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
+  const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
+  const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
+  const adminLoadContentListRef = useRef<((kind: AdminContentKind, opts?: { force?: boolean }) => Promise<void>) | null>(null);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
   const listItem = buildAdminContentIndexItem(id, item, kind);
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
