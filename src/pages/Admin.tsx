@@ -3839,10 +3839,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ==================== EXPORT / REFRESH ====================
- const refreshData = () => {
- toast.info("Data is auto-synced with Firebase!");
- setDropdownOpen(false);
- };
+  const refreshData = async () => {
+   setDropdownOpen(false);
+   invalidateAdminContentCache();
+   toast.info("Refreshing series & movies…");
+   const load = adminLoadContentListRef.current;
+   if (!load) { toast.error("Refresh unavailable"); return; }
+   try {
+     await Promise.all([load("webseries", { force: true }), load("movies", { force: true })]);
+     toast.success("Refreshed ✓");
+   } catch { toast.error("Refresh failed"); }
+  };
 
  const exportData = async () => {
  try {
