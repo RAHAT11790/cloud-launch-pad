@@ -252,12 +252,9 @@ export function triggerBulkBackgroundDownloads(
     return 0;
   }
 
-  const [head, ...rest] = valid;
-  openDownloadLink(head.final, head.fn);
-
-  rest.forEach((entry, idx) => {
-    setTimeout(() => openDownloadViaIframe(entry.final), 80 * (idx + 1));
-  });
+  // Fire every anchor immediately from the user's click handler so the browser's
+  // native downloader receives the request; do not queue/fetch inside the app.
+  valid.forEach((entry) => openDownloadLink(entry.final, entry.fn));
 
   return valid.length;
 }
