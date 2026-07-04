@@ -1,17 +1,97 @@
 import { useState, useEffect, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
-import { readPersistentCache, updateCachedState } from "@/lib/persistentCache";
+import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
+import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { isLegacyAnEntry, stripLegacyAnItems } from "@/lib/legacyAn";
 
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
+const BACKFILL_PAGE_SIZE = 4;
+const BACKFILL_CACHE_LIMIT = 500;
+const MAX_CACHE_BYTES = 2_500_000;
+
+// AN (AnimeSalt) now runs 100% via live API. Any legacy AN entry that lingers in
+// Firebase or localStorage cache must be stripped at the source so it can never
+// leak into the user UI, regardless of which render path consumes it.
+const stripLegacy = <T,>(arr: T[] | undefined | null): T[] =>
+  stripLegacyAnItems(arr);
+
+const readCache = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    if (raw.length > MAX_CACHE_BYTES) {
+      localStorage.removeItem(key);
+      return fallback;
+    }
+    return JSON.parse(raw) as T;
+  } catch { return fallback; }
+};
+const writeCache = (key: string, value: unknown) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
+
+const scheduleIdle = (callback: () => void) => {
+  const idle = (window as any).requestIdleCallback;
+  if (typeof idle === "function") {
+    const id = idle(callback, { timeout: 2500 });
+    return () => { try { (window as any).cancelIdleCallback?.(id); } catch {} };
+  }
+  const id = window.setTimeout(callback, 650);
+  return () => window.clearTimeout(id);
+};
+
+const newestFirst = (a: AnimeItem, b: AnimeItem) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+
+const mergeById = (cached: AnimeItem[], fresh: AnimeItem[]) => {
+  const map = new Map<string, AnimeItem>();
+  cached.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
+  fresh.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
+  return Array.from(map.values()).sort(newestFirst).slice(0, BACKFILL_CACHE_LIMIT);
+};
+
+
+const loadBackfillCards = async (
+  path: "webseries" | "movies",
+  currentIds: Set<string>,
+  mapper: (id: string, item: any, opts?: { full?: boolean }) => AnimeItem,
+  apply: (items: AnimeItem[]) => void,
+  cancelled: () => boolean,
+) => {
+  try {
+    const keys = await firebaseRestShallowKeys(path);
+    if (cancelled()) return;
+    const reversed = keys.slice(-BACKFILL_CACHE_LIMIT).reverse();
+    const refresh = currentIds.size ? reversed.filter((id) => currentIds.has(id)).slice(0, 4) : [];
+    const missing = reversed.filter((id) => !currentIds.has(id));
+    const workKeys = Array.from(new Set([...refresh, ...missing]));
+    for (let i = 0; i < workKeys.length && !cancelled(); i += BACKFILL_PAGE_SIZE) {
+      const chunk = workKeys.slice(i, i + BACKFILL_PAGE_SIZE);
+      const rows = await Promise.all(chunk.map(async (id) => {
+        try {
+          const item = await firebaseRestGet<any>(`${path}/${id}`);
+          if (!item || item.visibility === "private") return null;
+          return mapper(id, item, { full: false });
+        } catch { return null; }
+      }));
+      const mapped = rows.filter(Boolean) as AnimeItem[];
+      if (mapped.length && !cancelled()) apply(mapped);
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+    }
+  } catch {}
+};
 
 export function useFirebaseData() {
-  const [webseries, setWebseries] = useState<AnimeItem[]>(() => readPersistentCache<AnimeItem[]>(LS_WS, []));
-  const [movies, setMovies] = useState<AnimeItem[]>(() => readPersistentCache<AnimeItem[]>(LS_MOV, []));
-  const [categories, setCategories] = useState<string[]>(() => readPersistentCache<string[]>(LS_CATS, []));
-  const [loading, setLoading] = useState(false);
+  const [webseries, setWebseries] = useState<AnimeItem[]>(() => stripLegacy(readCache<AnimeItem[]>(LS_WS, [])));
+  const [movies, setMovies] = useState<AnimeItem[]>(() => stripLegacy(readCache<AnimeItem[]>(LS_MOV, [])));
+  const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
+  const [loading, setLoading] = useState(() => {
+    return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
+  });
+
 
   useEffect(() => {
     let loadedCount = 0;
@@ -20,7 +100,6 @@ export function useFirebaseData() {
       if (loadedCount >= 3) setLoading(false);
     };
 
-    // Load categories
     const catsRef = ref(db, "categories");
     const unsubCats = onValue(catsRef, (snapshot) => {
       const data = snapshot.val() || {};
@@ -28,164 +107,72 @@ export function useFirebaseData() {
       Object.values(data).forEach((cat: any) => {
         if (cat.name) cats.push(cat.name);
       });
-      updateCachedState(setCategories, LS_CATS, cats);
+      setCategories(cats);
+      writeCache(LS_CATS, cats);
       checkLoaded();
     });
 
-    // Load webseries
-    const wsRef = ref(db, "webseries");
-    const unsubWs = onValue(wsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item.visibility === "private") return; // skip private content
-        const mappedItem: AnimeItem = {
-          id,
-          source: "firebase" as const,
-          title: item.title || "",
-          poster: item.poster || "",
-          backdrop: item.backdrop || "",
-          year: item.year || "",
-          rating: item.rating || "",
-          language: item.language || "",
-          baseLanguage: item.baseLanguage || item.language || "",
-          availableLanguages: Array.isArray(item.availableLanguages) ? item.availableLanguages : undefined,
-          seasonsByLanguage: item.seasonsByLanguage && typeof item.seasonsByLanguage === "object"
-            ? Object.fromEntries(
-                Object.entries(item.seasonsByLanguage).map(([lang, seasons]: [string, any]) => [
-                  lang,
-                  Array.isArray(seasons)
-                    ? seasons.map((s: any) => ({
-                        name: s.name || "",
-                        episodes: s.episodes
-                          ? Object.values(s.episodes).map((ep: any) => ({
-                              episodeNumber: ep.episodeNumber || 0,
-                              title: ep.title || "",
-                              link: ep.link || "",
-                              link480: ep.link480 || undefined,
-                              link720: ep.link720 || undefined,
-                              link1080: ep.link1080 || undefined,
-                              link4k: ep.link4k || undefined,
-                              audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
-                                language: at.language || "",
-                                label: at.label || "",
-                                link: at.link || "",
-                                link480: at.link480 || undefined,
-                                link720: at.link720 || undefined,
-                                link1080: at.link1080 || undefined,
-                                link4k: at.link4k || undefined,
-                              })) : undefined,
-                            }))
-                          : [],
-                      }))
-                    : [],
-                ]),
-              )
-            : undefined,
-          category: item.category || "",
-          type: "webseries",
-          storyline: item.storyline || "",
-          cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
-          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
-            language: at.language || "",
-            label: at.label || at.language || "",
-            link: at.link || "",
-            link480: at.link480 || undefined,
-            link720: at.link720 || undefined,
-            link1080: at.link1080 || undefined,
-            link4k: at.link4k || undefined,
-          })) : undefined,
-          dubType: item.dubType || "official",
-          seasons: item.seasons
-            ? Object.values(item.seasons).map((s: any) => ({
-                name: s.name || "",
-                episodes: s.episodes
-                  ? Object.values(s.episodes).map((ep: any) => ({
-                      episodeNumber: ep.episodeNumber || 0,
-                      title: ep.title || "",
-                      link: ep.link || "",
-                      link480: ep.link480 || undefined,
-                      link720: ep.link720 || undefined,
-                      link1080: ep.link1080 || undefined,
-                      link4k: ep.link4k || undefined,
-                      audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
-                        language: at.language || "",
-                        label: at.label || "",
-                        link: at.link || "",
-                        link480: at.link480 || undefined,
-                        link720: at.link720 || undefined,
-                        link1080: at.link1080 || undefined,
-                        link4k: at.link4k || undefined,
-                      })) : undefined,
-                    }))
-                  : [],
-              }))
-            : undefined,
-          trailer: item.trailer || undefined,
-          movieLink: undefined,
-          createdAt: item.createdAt || 0,
-          updatedAt: item.updatedAt || 0,
-        };
-        publicItems.push(mappedItem);
-      });
-      publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      updateCachedState(setWebseries, LS_WS, publicItems);
-      checkLoaded();
-    });
+    let cancelled = false;
+    const cancelIdle = scheduleIdle(async () => {
+      // 1. Try to load index first (Fast path for all cards)
+      try {
+        const [idxWs, idxMov] = await Promise.all([
+          firebaseRestGet<Record<string, any>>("adminContentIndex/webseries"),
+          firebaseRestGet<Record<string, any>>("adminContentIndex/movies")
+        ]);
+        if (!cancelled) {
+          if (idxWs) {
+            const items = Object.entries(idxWs).map(([id, item]: [string, any]) => ({ ...item, id }));
+            setWebseries(prev => {
+              const merged = mergeById(prev, items as any[]);
+              writeCache(LS_WS, merged);
+              return merged;
+            });
+          }
+          if (idxMov) {
+            const items = Object.entries(idxMov).map(([id, item]: [string, any]) => ({ ...item, id }));
+            setMovies(prev => {
+              const merged = mergeById(prev, items as any[]);
+              writeCache(LS_MOV, merged);
+              return merged;
+            });
+          }
+        }
+      } catch { /* cached cards/backfill keep the UI usable when the index endpoint is temporarily blocked */ }
 
-    // Load movies
-    const movRef = ref(db, "movies");
-    const unsubMov = onValue(movRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item.visibility === "private") return; // skip private content
-        const mappedItem: AnimeItem = {
-          id,
-          source: "firebase" as const,
-          title: item.title || "",
-          poster: item.poster || "",
-          backdrop: item.backdrop || "",
-          year: item.year || "",
-          rating: item.rating || "",
-          language: item.language || "",
-          baseLanguage: item.baseLanguage || item.language || "",
-          availableLanguages: Array.isArray(item.availableLanguages) ? item.availableLanguages : undefined,
-          category: item.category || "",
-          type: "movie",
-          storyline: item.storyline || "",
-          cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
-          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
-            language: at.language || "",
-            label: at.label || at.language || "",
-            link: at.link || "",
-            link480: at.link480 || undefined,
-            link720: at.link720 || undefined,
-            link1080: at.link1080 || undefined,
-            link4k: at.link4k || undefined,
-          })) : undefined,
-          dubType: item.dubType || "official",
-          movieLink: item.movieLink || "",
-          movieLink480: item.movieLink480 || undefined,
-          movieLink720: item.movieLink720 || undefined,
-          movieLink1080: item.movieLink1080 || undefined,
-          movieLink4k: item.movieLink4k || undefined,
-          trailer: item.trailer || undefined,
-          seasons: undefined,
-          createdAt: item.createdAt || 0,
-          updatedAt: item.updatedAt || 0,
-        };
-        publicItems.push(mappedItem);
-      });
-      publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      updateCachedState(setMovies, LS_MOV, publicItems);
       checkLoaded();
+      checkLoaded();
+
+      // 2. Do the backfill to get fresh full cards for the latest few
+      await loadBackfillCards(
+        "webseries",
+        new Set(readCache<AnimeItem[]>(LS_WS, []).map((item) => item.id)),
+        mapFirebaseWebseriesItem,
+        (items) => setWebseries((prev) => {
+          const merged = mergeById(prev, items);
+          writeCache(LS_WS, merged);
+          return merged;
+        }),
+        () => cancelled,
+      );
+      if (cancelled) return;
+      await loadBackfillCards(
+        "movies",
+        new Set(readCache<AnimeItem[]>(LS_MOV, []).map((item) => item.id)),
+        mapFirebaseMovieItem,
+        (items) => setMovies((prev) => {
+          const merged = mergeById(prev, items);
+          writeCache(LS_MOV, merged);
+          return merged;
+        }),
+        () => cancelled,
+      );
     });
 
     return () => {
+      cancelled = true;
+      cancelIdle();
       unsubCats();
-      unsubWs();
-      unsubMov();
     };
   }, []);
 

@@ -1,0 +1,1 @@
+Always reply to the user in Bengali (বাংলা). Never give English examples or English prose in chat responses, even short ones. Code, file contents, identifiers, commit messages, and inline code comments stay in English — only the chat reply text is Bengali. This preference is permanent.

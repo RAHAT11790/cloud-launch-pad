@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Play, Info, Star } from "lucide-react";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
-import { motion, AnimatePresence } from "framer-motion";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 export interface HeroSlide {
   id: string;
@@ -15,8 +15,8 @@ export interface HeroSlide {
   description?: string;
   titleColor?: string;
   titleFont?: string;
-  episodeInfo?: string;  // e.g. "12 EP", "3S · 36 EP", "Movie"
-  languageInfo?: string; // e.g. "Hindi", "Multi"
+  episodeInfo?: string;
+  languageInfo?: string;
 }
 
 interface HeroSliderProps {
@@ -25,37 +25,90 @@ interface HeroSliderProps {
   onInfo: (index: number) => void;
 }
 
+const SLIDE_DURATION = 6000;
+
 const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
-  const [[current, direction], setSlide] = useState([0, 1]);
-  const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
+  const [current, setCurrent] = useState(0);
+  const [progressKey, setProgressKey] = useState(0); // forces progress restart
+  const [paused, setPaused] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
-  const SLIDE_DURATION = 6000;
-
-  const resetAutoPlay = useCallback(() => {
-    if (autoTimer.current) clearInterval(autoTimer.current);
-    if (slides.length <= 1) return;
-    autoTimer.current = setInterval(() => {
-      setSlide(([c]) => [(c + 1) % slides.length, 1]);
-    }, SLIDE_DURATION);
-  }, [slides.length]);
-
+  // Clamp current if slides change
   useEffect(() => {
-    if (slides.length === 0) return;
-    resetAutoPlay();
-    return () => { if (autoTimer.current) clearInterval(autoTimer.current); };
-  }, [slides.length, resetAutoPlay]);
-
-  useEffect(() => {
-    if (slides.length > 0 && current >= slides.length) {
-      setSlide([0, 1]);
-    }
+    if (slides.length > 0 && current >= slides.length) setCurrent(0);
   }, [slides.length, current]);
 
-  const goTo = useCallback((idx: number, dir: number) => {
-    setSlide([idx, dir]);
-    resetAutoPlay();
-  }, [resetAutoPlay]);
+  // Schedule next slide — only when visible & not paused
+  const scheduleNext = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (slides.length <= 1) return;
+    if (paused) return;
+    if (typeof document !== "undefined" && document.hidden) return;
+    timerRef.current = setTimeout(() => {
+      setCurrent((c) => (c + 1) % slides.length);
+      setProgressKey((k) => k + 1);
+    }, SLIDE_DURATION);
+  }, [slides.length, paused]);
+
+  useEffect(() => {
+    scheduleNext();
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [scheduleNext, current, progressKey]);
+
+  // Pause on tab hidden / blur; resume on focus
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      } else {
+        // restart progress + timer cleanly
+        setProgressKey((k) => k + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", () => { if (timerRef.current) clearTimeout(timerRef.current); });
+    window.addEventListener("focus", () => setProgressKey((k) => k + 1));
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
+  // Preload neighbor backdrops for snappy swipe
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const next = slides[(current + 1) % slides.length];
+    const prev = slides[(current - 1 + slides.length) % slides.length];
+    [next, prev].forEach((s) => {
+      if (!s?.backdrop) return;
+      const i = new Image();
+      i.decoding = "async";
+      i.src = optimizedImageUrl(s.backdrop, "backdrop");
+    });
+  }, [current, slides]);
+
+  const goTo = useCallback((idx: number) => {
+    setCurrent(((idx % slides.length) + slides.length) % slides.length);
+    setProgressKey((k) => k + 1);
+  }, [slides.length]);
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.changedTouches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
+    setPaused(true);
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    const touch = event.changedTouches[0];
+    touchStartRef.current = null;
+    setPaused(false);
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    goTo(dx > 0 ? current - 1 : current + 1);
+  };
 
   if (slides.length === 0) {
     return (
@@ -68,175 +121,118 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const slide = slides[current];
   if (!slide) return null;
 
-  const slideVariants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? "100%" : "-100%",
-      scale: 1.15,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      scale: 1,
-      opacity: 1,
-      transition: {
-        x: { duration: 0.7, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-        scale: { duration: 6, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
-        opacity: { duration: 0.4 },
-      },
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? "-30%" : "30%",
-      scale: 1.05,
-      opacity: 0,
-      transition: {
-        duration: 0.5,
-        ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
-      },
-    }),
-  };
-
   return (
     <div
       data-no-swipe="true"
-      className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl"
+      className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl bg-black"
       style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)", touchAction: "pan-y pinch-zoom" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
-      {/* Background with cinematic zoom-out effect */}
-      <AnimatePresence initial={false} custom={direction} mode="popLayout">
-        <motion.div
-          key={slide.id + current}
-          custom={direction}
-          variants={slideVariants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          className="absolute inset-0 will-change-transform"
-          style={{ touchAction: "pan-y" }}
-        >
-          <img
-            src={slide.backdrop}
-            alt={slide.title}
-            className="w-full h-full object-cover"
-            draggable={false}
-          />
-        </motion.div>
-      </AnimatePresence>
+      {/* Cross-fade backdrops — single layer per slide, pure CSS opacity */}
+      {slides.map((s, i) => (
+        <img
+          key={s.id + i}
+          src={optimizedImageUrl(s.backdrop, "backdrop")}
+          alt={s.title}
+          aria-hidden={i !== current}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{
+            opacity: i === current ? 1 : 0,
+            transition: "opacity 600ms ease",
+            willChange: i === current ? "opacity" : undefined,
+          }}
+          loading={i === current ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+        />
+      ))}
 
       {/* Gradient overlays */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background: `
           linear-gradient(to top, hsl(var(--background)) 0%, hsla(var(--background)/0.5) 25%, transparent 55%),
           linear-gradient(to bottom, hsla(var(--background)/0.3) 0%, transparent 20%)
-        `
+        `,
       }} />
 
       {/* Content */}
-      <div className="absolute bottom-[80px] left-0 right-0 px-5 z-10">
-        <AnimatePresence mode="wait">
-          <motion.div key={slide.id + "-" + current + "-info"} className="max-w-lg">
-            <motion.h1
-              initial={{ opacity: 0, y: 40, filter: "blur(10px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -20, filter: "blur(6px)" }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
-              style={{
-                ...getAnimeTitleStyle(slide.title),
-                ...(slide.titleColor ? { color: slide.titleColor } : { color: "white" }),
-                ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-              }}
-            >
-              {slide.title}
-            </motion.h1>
+      <div key={`info-${slide.id}-${current}`} className="absolute bottom-[80px] left-0 right-0 px-5 z-10 pointer-events-none hero-fade-in">
+        <div className="max-w-lg">
+          <h1
+            className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] pointer-events-auto"
+            style={{
+              ...getAnimeTitleStyle(slide.title),
+              ...(slide.titleColor ? { color: slide.titleColor } : { color: "white" }),
+              ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
+            }}
+          >
+            {slide.title}
+          </h1>
 
-            {!slide.isCustom ? (
-              <motion.div
-                className="flex items-center gap-2 text-xs flex-wrap mb-4"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, delay: 0.25 }}
-              >
-                {slide.rating && (
-                  <span className="gradient-primary px-2.5 py-1 rounded-md text-[11px] font-bold text-primary-foreground flex items-center gap-1"
-                    style={{ boxShadow: "0 2px 10px hsla(42,80%,50%,0.4)" }}>
-                    <Star className="w-3 h-3" /> {slide.rating}
-                  </span>
-                )}
-                {slide.year && <span className="text-white/80 font-medium">{slide.year}</span>}
-                {slide.subtitle && <><span className="text-white/60">•</span><span className="text-white/80 font-medium">{slide.subtitle}</span></>}
-                <span className="bg-white/20 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
-                  {slide.type === "webseries" ? "Series" : "Movie"}
+          {!slide.isCustom ? (
+            <div className="flex items-center gap-2 text-xs flex-wrap mb-4 pointer-events-auto">
+              {slide.rating && (
+                <span className="gradient-primary px-2.5 py-1 rounded-md text-[11px] font-bold text-primary-foreground flex items-center gap-1"
+                  style={{ boxShadow: "0 2px 10px hsla(42,80%,50%,0.4)" }}>
+                  <Star className="w-3 h-3" /> {slide.rating}
                 </span>
-                {slide.episodeInfo && (
-                  <span className="bg-primary/85 text-primary-foreground px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
-                    {slide.episodeInfo}
-                  </span>
-                )}
-                {slide.languageInfo && (
-                  <span className="bg-black/55 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
-                    {slide.languageInfo}
-                  </span>
-                )}
-              </motion.div>
-            ) : slide.description ? (
-              <motion.p
-                className="text-white/80 text-xs mb-4 line-clamp-2 max-w-[280px]"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, delay: 0.25 }}
-              >
-                {slide.description}
-              </motion.p>
-            ) : null}
+              )}
+              {slide.year && <span className="text-white/80 font-medium">{slide.year}</span>}
+              {slide.subtitle && <><span className="text-white/60">•</span><span className="text-white/80 font-medium">{slide.subtitle}</span></>}
+              <span className="bg-white/20 text-white px-2.5 py-1 rounded-md text-[10px] font-bold">
+                {slide.type === "webseries" ? "Series" : "Movie"}
+              </span>
+              {slide.episodeInfo && (
+                <span className="bg-primary/85 text-primary-foreground px-2.5 py-1 rounded-md text-[10px] font-bold">
+                  {slide.episodeInfo}
+                </span>
+              )}
+              {slide.languageInfo && (
+                <span className="bg-black/55 text-white px-2.5 py-1 rounded-md text-[10px] font-bold">
+                  {slide.languageInfo}
+                </span>
+              )}
+            </div>
+          ) : slide.description ? (
+            <p className="text-white/80 text-xs mb-4 line-clamp-2 max-w-[280px] pointer-events-auto">
+              {slide.description}
+            </p>
+          ) : null}
 
-            <motion.div
-              className="flex gap-3"
-              initial={{ opacity: 0, y: 25 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4, delay: 0.35 }}
+          <div className="flex gap-3 pointer-events-auto">
+            <button
+              onClick={() => slide.isCustom ? onInfo(current) : onPlay(current)}
+              className="gradient-primary text-primary-foreground px-7 py-3 rounded-xl font-bold text-sm flex items-center gap-2 btn-glow active:scale-95 transition-transform"
             >
-              <motion.button
-                onClick={() => slide.isCustom ? onInfo(current) : onPlay(current)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="gradient-primary text-primary-foreground px-7 py-3 rounded-xl font-bold text-sm flex items-center gap-2 btn-glow"
-              >
-                {slide.isCustom ? <><Info className="w-4 h-4" /> View</> : <><Play className="w-4 h-4 fill-current" /> Play Now</>}
-              </motion.button>
-              <motion.button
-                onClick={() => onInfo(current)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-white/20 text-white px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 backdrop-blur-lg hover:bg-white/30 transition-colors"
-              >
-                <Info className="w-4 h-4" /> Details
-              </motion.button>
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
+              {slide.isCustom ? <><Info className="w-4 h-4" /> View</> : <><Play className="w-4 h-4 fill-current" /> Play Now</>}
+            </button>
+            <button
+              onClick={() => onInfo(current)}
+              className="bg-white/20 text-white px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 hover:bg-white/30 active:scale-95 transition-all"
+            >
+              <Info className="w-4 h-4" /> Details
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Slide indicators with progress */}
+      {/* Slide indicators with CSS progress (auto-pauses with the timer because key resets) */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
         {slides.map((_, i) => (
           <button
             key={i}
-            onClick={() => goTo(i, i > current ? 1 : -1)}
+            onClick={() => goTo(i)}
             className="relative h-[6px] rounded-full overflow-hidden transition-all duration-500"
             style={{ width: i === current ? 32 : 8 }}
+            aria-label={`Go to slide ${i + 1}`}
           >
-            <div className={`absolute inset-0 rounded-full transition-colors duration-300 ${i === current ? "bg-white/40" : "bg-white/25"}`} />
-            {i === current && (
-              <motion.div
-                ref={progressRef}
-                className="absolute inset-0 rounded-full gradient-primary"
-                initial={{ scaleX: 0, originX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: SLIDE_DURATION / 1000, ease: "linear" }}
-                key={`prog-${current}`}
+            <div className={`absolute inset-0 rounded-full ${i === current ? "bg-white/40" : "bg-white/25"}`} />
+            {i === current && !paused && (
+              <div
+                key={`prog-${current}-${progressKey}`}
+                className="absolute inset-0 rounded-full gradient-primary hero-progress-bar"
+                style={{ animationDuration: `${SLIDE_DURATION}ms` }}
               />
             )}
           </button>
@@ -246,4 +242,4 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   );
 };
 
-export default HeroSlider;
+export default memo(HeroSlider);

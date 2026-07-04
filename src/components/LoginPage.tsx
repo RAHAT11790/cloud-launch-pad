@@ -3,17 +3,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
+import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
+import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
   onGuest?: () => void;
 }
 
-const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
+const PARTICLE_SEEDS = Array.from({ length: 0 }, (_, i) => ({
   id: i,
   x: ((i * 73) % 100) / 100,
   y: ((i * 47) % 100) / 100,
@@ -62,7 +64,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showContent, setShowContent] = useState(false);
+  const [showContent, setShowContent] = useState(true);
   const [deviceLimitError, setDeviceLimitError] = useState<{
     message: string;
     deviceNames: string[];
@@ -86,16 +88,37 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
 
-  // Intro animation sequence
+  const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
+    const aliasKey = buildEmailAliasKey(email);
+    let safePayload = { ...payload };
+    const incomingPhoto = String(safePayload.profilePhoto || safePayload.photoUrl || safePayload.avatar || "").trim();
+    if (!incomingPhoto) {
+      const paths = [`users/${userId}`, aliasKey ? `users/${aliasKey}` : "", aliasKey ? `appUsers/${aliasKey}` : ""].filter(Boolean);
+      for (const path of paths) {
+        try {
+          const snap = await get(ref(db, path));
+          const data = snap.val() || {};
+          const existingPhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+          if (existingPhoto) {
+            safePayload = { ...safePayload, profilePhoto: existingPhoto, photoUrl: existingPhoto, avatar: existingPhoto };
+            break;
+          }
+        } catch {}
+      }
+    }
+    const writes: Promise<any>[] = [
+      update(ref(db, `users/${userId}`), safePayload).catch(() => {}),
+    ];
+    if (aliasKey) {
+      writes.push(update(ref(db, `users/${aliasKey}`), { ...safePayload, id: userId }).catch(() => {}));
+    }
+    await Promise.all(writes);
+  };
+
+  // Keep login instant and typing smooth — no delayed intro/audio work.
   useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 800);
-    try {
-      const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgipGTfWBVW3GGhHhqZW55foB7c21udn+EgXx3dHZ7foGAe3h3eHx/gIB+e3l5e36AgH97eXl7fn+Af3t5eXt+f4B/e3l5e35/gH97eXl7fn+Af3t5eXt+f4B/e3l5e35/gH97eXl7fn+Af3t5");
-      audio.volume = 0.3;
-      audio.play().catch(() => {});
-      audioRef.current = audio;
-    } catch {}
-    return () => { clearTimeout(timer); audioRef.current?.pause(); };
+    setShowContent(true);
+    return () => { audioRef.current?.pause(); };
   }, []);
 
   const checkAndRegisterDevice = async (userId: string): Promise<boolean> => {
@@ -158,22 +181,25 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           createdAt: existingData?.createdAt || Date.now(),
         });
         try {
-          await set(ref(db, `users/${commaKey}`), {
-            id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
-            lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
-          });
-          // Also update users/${uid} to fix "Guest User" display
-          if (uid !== commaKey) {
-            await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
-            }).catch(() => {});
-          }
+          await syncCanonicalUserNode(uid, {
+            name: gName,
+            email: gEmail,
+            online: true,
+            authProvider: "google",
+            googleAuth: true,
+            lastSeen: Date.now(),
+            createdAt: existingData?.createdAt || Date.now(),
+            profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
+            photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
+            avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+          }, gEmail);
         } catch (e) {}
 
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", gName);
-        if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+        writeDisplayName(gName, uid);
+        if (gPhoto) writeProfilePhoto(gPhoto, uid);
         toast.success(`Welcome, ${gName}!`);
         onLogin(uid);
       } else {
@@ -209,21 +235,25 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         createdAt: existingData?.createdAt || Date.now(),
       });
       try {
-        await set(ref(db, `users/${commaKey}`), {
-          id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
-          lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
-        });
-        if (uid !== commaKey) {
-          await update(ref(db, `users/${uid}`), {
-            name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
-          }).catch(() => {});
-        }
+        await syncCanonicalUserNode(uid, {
+          name: gName,
+          email: gEmail,
+          online: true,
+          authProvider: "google",
+          googleAuth: true,
+          lastSeen: Date.now(),
+          createdAt: existingData?.createdAt || Date.now(),
+          profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
+          photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
+          avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+        }, gEmail);
       } catch (e) {}
 
-      localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+      try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-      localStorage.setItem("rs_display_name", gName);
-      if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+      writeDisplayName(gName, uid);
+      if (gPhoto) writeProfilePhoto(gPhoto, uid);
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
@@ -377,10 +407,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setDeviceLimitError(null);
-    const loginInput = isRegister ? email.trim() : name.trim();
-    if (!loginInput || !password.trim()) { toast.error("Please fill in all fields"); return; }
-    if (isRegister && !name.trim()) { toast.error("Please enter a username"); return; }
-    if (password.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const formEmail = String(formData.get("email") || "").trim();
+    const formName = String(formData.get("name") || "").trim();
+    const formPassword = String(formData.get("password") || "");
+    const loginInput = isRegister ? formEmail : formName;
+    if (!loginInput || !formPassword.trim()) { toast.error("Please fill in all fields"); return; }
+    if (isRegister && !formName) { toast.error("Please enter a username"); return; }
+    if (formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
 
     setLoading(true);
     try {
@@ -439,36 +473,32 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
       if (isRegister) {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
-        const emailKey = email.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+        const emailKey = formEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
         const userId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
         
         await registerDeviceAfterLogin(userId);
 
         await set(ref(db, `appUsers/${emailKey}`), {
-          id: userId, name: name.trim(), email: email.trim(), password: password, createdAt: Date.now(),
+          id: userId, name: formName, email: formEmail, password: formPassword, createdAt: Date.now(),
         });
-        await set(ref(db, `users/${emailKey}`), {
-          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
-        });
-        await update(ref(db, `users/${userId}`), {
+        await syncCanonicalUserNode(userId, {
           id: userId,
-          name: name.trim(),
-          email: email.trim(),
+          name: formName,
+          email: formEmail,
+          createdAt: Date.now(),
           online: true,
           lastSeen: Date.now(),
           authProvider: "email",
-          profilePhoto: null,
-          photoUrl: null,
-          avatar: null,
-        }).catch(() => {});
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
+        }, formEmail);
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== userId) { const r = await transferGuestCoinsToUser(prev.id, userId); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: formName, email: formEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", name.trim());
+        writeDisplayName(formName, userId);
         toast.success("Account created successfully!");
         onLogin(userId);
       } else {
         if (!anyMatch) { toast.error("User not found!"); setLoading(false); return; }
-        if (finalUserData.password && finalUserData.password !== password) { toast.error("Wrong password!"); setLoading(false); return; }
+        if (finalUserData.password && finalUserData.password !== formPassword) { toast.error("Wrong password!"); setLoading(false); return; }
 
         const uid = finalUserId || commaKey;
         const deviceOk = await checkAndRegisterDevice(uid);
@@ -481,31 +511,26 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           try {
             await set(ref(db, `appUsers/${commaKey}`), {
               id: finalUserId || commaKey, name: finalUserData.name || input,
-              password: password, createdAt: finalUserData.createdAt || Date.now(),
+              password: formPassword, createdAt: finalUserData.createdAt || Date.now(),
             });
           } catch (e) {}
         }
         const displayName = finalUserData.name || input;
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
+        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", displayName);
+        writeDisplayName(displayName, uid);
         try {
-          await update(ref(db, `users/${uid}`), {
+          await syncCanonicalUserNode(uid, {
             name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
-          });
+            profilePhoto: finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "",
+            photoUrl: finalUserData.photoUrl || finalUserData.profilePhoto || finalUserData.avatar || "",
+            avatar: finalUserData.avatar || finalUserData.profilePhoto || finalUserData.photoUrl || "",
+          }, loginEmail);
           const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
           if (currentPhoto) {
-            await update(ref(db, `users/${uid}`), {
-              profilePhoto: currentPhoto,
-              photoUrl: currentPhoto,
-              avatar: currentPhoto,
-            }).catch(() => {});
-          }
-          if (currentPhoto) {
-            localStorage.setItem("rs_profile_photo", currentPhoto);
-          } else {
-            localStorage.removeItem("rs_profile_photo");
+            writeProfilePhoto(currentPhoto, uid);
           }
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
@@ -753,17 +778,13 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     >
       {/* Animated background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
+        <div
           className="absolute top-[-30%] left-[-20%] w-[80%] h-[80%] rounded-full"
           style={{ background: "radial-gradient(circle, hsla(176,65%,48%,0.08) 0%, transparent 70%)" }}
-          animate={{ scale: [1, 1.2, 1], rotate: [0, 30, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
           className="absolute bottom-[-30%] right-[-20%] w-[80%] h-[80%] rounded-full"
           style={{ background: "radial-gradient(circle, hsla(38,90%,55%,0.06) 0%, transparent 70%)" }}
-          animate={{ scale: [1.2, 1, 1.2], rotate: [0, -30, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
@@ -816,11 +837,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className="relative">
-              <motion.div
+              <div
                 className="absolute -inset-[2px] rounded-3xl opacity-60"
                 style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--primary)))" }}
-                animate={{ backgroundPosition: ["0% 50%", "200% 50%"] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
               />
               
               <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
@@ -836,12 +855,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <motion.img 
+                  <img 
                     src={logoSrc} 
                     alt={branding.loginTitle} 
                     className="w-16 h-16 mx-auto mb-3 rounded-2xl"
                     style={{ boxShadow: "0 10px 40px hsla(176,65%,48%,0.3)" }}
-                    whileHover={{ scale: 1.1, rotate: 5 }}
                   />
                   <h1 className="text-2xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif", textShadow: "0 0 30px hsla(176,65%,48%,0.4)" }}>
                     {branding.loginTitle}
@@ -903,7 +921,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       >
                         <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} maxLength={100}
+                          <input name="email" type="email" placeholder="Email" defaultValue={email} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                         </div>
                       </motion.div>
@@ -913,7 +931,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
                     <div className="relative">
                       <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input type="text" placeholder={isRegister ? "Username" : "Email or Username"} value={name} onChange={e => setName(e.target.value)} maxLength={100}
+                      <input name="name" type="text" placeholder={isRegister ? "Username" : "Email or Username"} defaultValue={name} maxLength={100}
                         className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                     </div>
                   </motion.div>
@@ -921,7 +939,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 }}>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
+                      <input name="password" type={showPassword ? "text" : "password"} placeholder="Password" defaultValue={password}
                         className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
                         {showPassword ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
@@ -960,7 +978,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 {/* Continue as Guest */}
                 <motion.button
                   type="button"
-                  onClick={() => onGuest?.()}
+                  onClick={() => { ensureGuestUser(); onGuest?.(); }}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="w-full mt-3 py-3 rounded-xl bg-transparent border border-dashed border-foreground/20 text-foreground/80 font-medium text-sm flex items-center justify-center gap-2 hover:bg-foreground/5 hover:text-foreground transition-all relative z-10"

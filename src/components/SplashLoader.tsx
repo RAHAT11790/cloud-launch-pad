@@ -1,166 +1,181 @@
-import { useEffect, useMemo, useState } from "react";
-import logoImg from "@/assets/logo.png";
-import { useBranding, getBrandingSync } from "@/hooks/useBranding";
+import { useBranding } from "@/hooks/useBranding";
 
 /**
- * Splash loader — clean, premium, zero-lag.
- * - Pure dark backdrop (no admin-uploaded background image — controlled here).
- * - Single GPU transform ring + soft halo. No conic, no SVG noise.
- * - Logo is warmed via CacheStorage for instant repaint.
+ * Anime-style splash loader — ultra optimized.
+ * - No top-falling animations.
+ * - Background: anime-style mesh/grid + dot scatter + soft drifting glows.
+ * - Center: RGB conic spinner around logo.
+ * - Title + tagline with RGB cycling glow for readability.
  */
 
-const BG_CACHE = "rs-branding-assets-v1";
-
-async function warmAsset(url: string): Promise<string> {
-  if (!url || typeof window === "undefined") return url;
-  if (!/^https?:/i.test(url) || !("caches" in window)) return url;
-  try {
-    const cache = await window.caches.open(BG_CACHE);
-    let res = await cache.match(url);
-    if (!res) {
-      res = await fetch(url, { mode: "cors", cache: "force-cache" });
-      if (res.ok) await cache.put(url, res.clone());
-    }
-    if (res?.ok) {
-      const blob = await res.blob();
-      return URL.createObjectURL(blob);
-    }
-  } catch { /* fallthrough */ }
-  return url;
-}
+const LOGO_SIZE = 96;
+const RING_SIZE = 132;
 
 const SplashLoader = () => {
   const branding = useBranding();
-  const initial = getBrandingSync();
-
-  const logoSrc = useMemo(() => branding.logoUrl || initial.logoUrl || logoImg, [branding.logoUrl, initial.logoUrl]);
-  const [resolvedLogo, setResolvedLogo] = useState(logoSrc);
-
-  const displayName = (branding.splashText || initial.splashText || branding.siteName || initial.siteName || "").trim();
-  const tagline = (branding.siteTagline || initial.siteTagline || "").trim();
-
-  useEffect(() => {
-    let cancelled = false;
-    let objUrl: string | null = null;
-    (async () => {
-      const out = await warmAsset(logoSrc);
-      if (cancelled) return;
-      if (out !== logoSrc) objUrl = out;
-      setResolvedLogo(out);
-    })();
-    return () => { cancelled = true; if (objUrl) URL.revokeObjectURL(objUrl); };
-  }, [logoSrc]);
+  const title = branding.siteName || "";
+  const tagline = branding.siteTagline || branding.splashText || "";
+  const logo = branding.logoUrl || "";
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden">
-      {/* Pure dark backdrop with subtle radial wash */}
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 40%, rgba(120,40,180,0.22), transparent 60%), radial-gradient(ellipse at 12% 88%, rgba(255,40,120,0.14), transparent 55%), radial-gradient(ellipse at 88% 14%, rgba(40,180,255,0.16), transparent 55%), linear-gradient(180deg, #05030c 0%, #0d0418 55%, #03020a 100%)",
+        animation: "splFadeIn 0.35s ease-out",
+      }}
+    >
+      {/* Anime mesh/grid background */}
       <div
-        aria-hidden
-        className="absolute inset-0"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          background:
-            "radial-gradient(60% 50% at 50% 40%, #1a1a22 0%, #0b0b10 55%, #050507 100%)",
+          backgroundImage:
+            "linear-gradient(rgba(255,90,180,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(120,200,255,0.08) 1px, transparent 1px)",
+          backgroundSize: "44px 44px, 44px 44px",
+          maskImage: "radial-gradient(ellipse at center, black 25%, transparent 80%)",
+          WebkitMaskImage: "radial-gradient(ellipse at center, black 25%, transparent 80%)",
+          animation: "bgGridDrift 18s linear infinite",
+          willChange: "background-position",
         }}
       />
-      {/* Soft ambient blobs for depth (transform-only, GPU friendly) */}
+
+      {/* Dot scatter (ছিটা-ফুটা) */}
       <div
-        aria-hidden
-        className="absolute -top-20 -left-20 w-[300px] h-[300px] rounded-full splash-blob-a"
-        style={{ background: "radial-gradient(circle, rgba(120,90,255,0.18), transparent 70%)", filter: "blur(40px)" }}
-      />
-      <div
-        aria-hidden
-        className="absolute -bottom-24 -right-16 w-[320px] h-[320px] rounded-full splash-blob-b"
-        style={{ background: "radial-gradient(circle, rgba(255,90,160,0.16), transparent 70%)", filter: "blur(46px)" }}
+        className="absolute inset-0 pointer-events-none opacity-70"
+        style={{
+          backgroundImage:
+            "radial-gradient(rgba(255,255,255,0.55) 1px, transparent 1.4px), radial-gradient(rgba(255,120,200,0.45) 1px, transparent 1.4px)",
+          backgroundSize: "26px 26px, 38px 38px",
+          backgroundPosition: "0 0, 13px 19px",
+          maskImage: "radial-gradient(ellipse at center, black 15%, transparent 75%)",
+          WebkitMaskImage: "radial-gradient(ellipse at center, black 15%, transparent 75%)",
+        }}
       />
 
-      <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Logo with single smooth ring */}
-        <div className="relative w-[150px] h-[150px] flex items-center justify-center">
-          {/* Soft halo */}
-          <div
-            aria-hidden
-            className="absolute inset-[-18px] rounded-full splash-halo"
-            style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 65%)",
-              filter: "blur(12px)",
-            }}
-          />
-          {/* Rotating SVG ring */}
-          <svg
-            className="absolute inset-0 splash-spin"
-            viewBox="0 0 100 100"
-            style={{ willChange: "transform", transform: "translateZ(0)" }}
-          >
-            <defs>
-              <linearGradient id="splashRing" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0)" />
-                <stop offset="55%" stopColor="rgba(255,255,255,0.55)" />
-                <stop offset="100%" stopColor="#ffffff" />
-              </linearGradient>
-            </defs>
-            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
-            <circle cx="50" cy="50" r="46" fill="none" stroke="url(#splashRing)" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="120 220" />
-          </svg>
-          {/* Logo */}
+      {/* Diagonal anime speed lines, very subtle */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.07] mix-blend-screen"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(115deg, rgba(255,255,255,0.9) 0 1px, transparent 1px 7px)",
+        }}
+      />
+
+      {/* Soft drifting color glows — stay behind spinner, no outward emission */}
+      <div
+        className="absolute pointer-events-none rounded-full"
+        style={{
+          width: 360, height: 360,
+          left: "50%", top: "50%",
+          transform: "translate(-50%,-50%)",
+          background: "radial-gradient(circle, rgba(255,90,180,0.25), transparent 65%)",
+          filter: "blur(30px)",
+          animation: "auraBreath 5s ease-in-out infinite",
+          willChange: "transform, opacity",
+        }}
+      />
+      <div
+        className="absolute pointer-events-none rounded-full"
+        style={{
+          width: 280, height: 280,
+          left: "50%", top: "50%",
+          transform: "translate(-50%,-50%)",
+          background: "radial-gradient(circle, rgba(90,200,255,0.22), transparent 65%)",
+          filter: "blur(24px)",
+          animation: "auraBreath 6.5s ease-in-out 0.8s infinite",
+          willChange: "transform, opacity",
+        }}
+      />
+
+      {/* Spinner + logo */}
+      <div className="relative flex items-center justify-center" style={{ width: RING_SIZE, height: RING_SIZE }}>
+        <div
+          className="absolute rounded-full"
+          style={{
+            inset: 0,
+            background:
+              "conic-gradient(from 0deg, #ff0055, #ff8a00, #ffe600, #00ff85, #00d4ff, #6a5cff, #ff00c8, #ff0055)",
+            animation: "rgbConicSpin 2.4s linear infinite",
+            filter: "drop-shadow(0 0 16px rgba(255,90,180,0.7)) drop-shadow(0 0 26px rgba(90,200,255,0.45))",
+            willChange: "transform",
+          }}
+        />
+        <div
+          className="absolute rounded-full"
+          style={{ inset: 6, background: "#06040d", boxShadow: "inset 0 0 18px rgba(255,255,255,0.06)" }}
+        />
+        {logo ? (
           <img
-            src={resolvedLogo}
-            alt={displayName || "Logo"}
-            className="relative w-[112px] h-[112px] rounded-full object-cover"
-            loading="eager"
-            decoding="async"
+            src={logo}
+            alt={title || "Site logo"}
+            className="relative z-10 rounded-full object-cover"
             style={{
-              boxShadow:
-                "0 0 0 2px rgba(0,0,0,0.85), 0 0 0 3px rgba(255,255,255,0.18), 0 0 28px rgba(255,255,255,0.18), inset 0 0 18px rgba(0,0,0,0.55)",
+              width: LOGO_SIZE, height: LOGO_SIZE,
+              border: "2px solid rgba(255,255,255,0.4)",
+              boxShadow: "0 10px 32px rgba(0,0,0,0.6), 0 0 22px rgba(255,120,200,0.5)",
             }}
           />
-        </div>
-
-        {displayName ? (
+        ) : (
           <div
-            className="mt-9 text-[22px] font-bold tracking-[6px] uppercase text-center text-white"
+            className="relative z-10 rounded-full"
             style={{
-              fontFamily: "'Russo One', 'Inter', sans-serif",
-              textShadow: "0 2px 18px rgba(0,0,0,0.85), 0 0 22px rgba(255,255,255,0.16)",
-            }}
-          >
-            {displayName}
-          </div>
-        ) : null}
-
-        {tagline ? (
-          <p
-            className="mt-2.5 text-[11px] uppercase tracking-[5px] font-semibold text-center"
-            style={{ color: "rgba(255,255,255,0.85)", textShadow: "0 1px 8px rgba(0,0,0,0.85)" }}
-          >
-            {tagline}
-          </p>
-        ) : null}
-
-        {/* Progress rail */}
-        <div className="mt-8 w-[220px] h-[2.5px] rounded-full overflow-hidden bg-white/[0.08]">
-          <div
-            className="h-full w-[40%] rounded-full splash-sweep"
-            style={{
-              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent)",
-              willChange: "transform",
+              width: LOGO_SIZE, height: LOGO_SIZE,
+              background: "radial-gradient(circle, #fff, #ff9ad5 55%, #6a5cff)",
+              boxShadow: "0 0 28px rgba(255,120,200,0.55)",
             }}
           />
-        </div>
+        )}
       </div>
 
-      <style>{`
-        @keyframes splashSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes splashHalo { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
-        @keyframes splashSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
-        @keyframes blobA { 0%,100% { transform: translate(0,0); } 50% { transform: translate(30px,20px); } }
-        @keyframes blobB { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-25px,-18px); } }
-        .splash-spin { animation: splashSpin 2.6s linear infinite; }
-        .splash-halo { animation: splashHalo 2.6s ease-in-out infinite; }
-        .splash-sweep { animation: splashSweep 1.6s cubic-bezier(.45,.05,.25,1) infinite; }
-        .splash-blob-a { animation: blobA 8s ease-in-out infinite; }
-        .splash-blob-b { animation: blobB 9s ease-in-out infinite; }
-      `}</style>
+      {title && (
+        <h1
+          className="relative mt-8 px-5 text-center font-black leading-tight"
+          style={{
+            fontSize: "clamp(24px,6vw,36px)",
+            letterSpacing: "0.18em",
+            fontFamily: "'Russo One','Bebas Neue','Poppins',system-ui,sans-serif",
+            color: "#ffffff",
+            animation: "rgbTextGlow 4s ease-in-out infinite",
+          }}
+        >
+          {title}
+        </h1>
+      )}
+
+      {tagline && (
+        <div
+          className="relative mt-3 px-4 text-center"
+          style={{
+            color: "#ffffff",
+            fontSize: "clamp(11px,2.6vw,13px)",
+            letterSpacing: "0.3em",
+            textTransform: "uppercase",
+            fontWeight: 800,
+            animation: "rgbTextGlow 4s ease-in-out 0.6s infinite",
+          }}
+        >
+          {tagline}
+        </div>
+      )}
+
+      <div className="relative mt-7 w-[260px] max-w-[70vw] h-[3px] bg-white/10 overflow-hidden rounded-full">
+        <div
+          className="absolute inset-y-0 w-2/3"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, #ff0055, #ffe600, #00d4ff, #c47bff, transparent)",
+            animation: "splashBarFill 1.6s ease-in-out infinite",
+            filter: "drop-shadow(0 0 8px rgba(255,120,200,0.7))",
+          }}
+        />
+      </div>
+      <div
+        className="relative mt-3 text-[10px] tracking-[0.45em] text-white/85"
+        style={{ fontFamily: "ui-monospace,monospace", textShadow: "0 0 8px rgba(0,212,255,0.6)" }}
+      >
+        SYS · LOADING
+      </div>
     </div>
   );
 };

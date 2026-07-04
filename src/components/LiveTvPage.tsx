@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { db, ref, onValue } from "@/lib/firebase";
 import { Play, Radio, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoPlayer from "./VideoPlayer";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 interface TvChannel {
   id: string;
@@ -81,7 +83,10 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
   }, [activeChannel, channels]);
 
   if (activeChannel) {
-    return (
+    // Render via portal to document.body — ancestors using CSS transforms
+    // (e.g. the swipe-nav `translate3d` strip) create a containing block
+    // that breaks `position: fixed`, causing the player to render inline.
+    return createPortal(
       <VideoPlayer
         src={activeChannel.streamUrl}
         title={activeChannel.name}
@@ -92,7 +97,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           onExitPlayer?.();
         }}
         hideDownload
-        noProxy
+        preferProxy
         noServerSwitch
         suggestedAnime={suggestedChannels.map(ch => ({
           id: ch.id,
@@ -111,7 +116,8 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           const ch = channels.find(c => c.id === anime.id);
           if (ch) setActiveChannel(ch);
         }}
-      />
+      />,
+      document.body,
     );
   }
 
@@ -179,19 +185,19 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
       {!loading && filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map((channel) => (
-            <motion.div
+            <div
               key={channel.id}
-              whileTap={{ scale: 0.98 }}
               onClick={() => setActiveChannel(channel)}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >
               {/* Background Logo */}
               <img
-                src={channel.banner || channel.logo}
+                src={optimizedImageUrl(channel.banner || channel.logo, "backdrop")}
                 alt={channel.name}
                 className="w-full h-full object-cover"
-                loading="lazy"
+                loading="eager"
+                decoding="async"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "/placeholder.svg";
                 }}
@@ -210,9 +216,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                   {/* Channel Logo Small */}
                   <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
                     <img
-                      src={channel.logo}
+                      src={optimizedImageUrl(channel.logo, "avatar")}
                       alt=""
                       className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
@@ -235,7 +243,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                   <Play className="w-5 h-5 text-primary-foreground fill-current ml-0.5" />
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       )}

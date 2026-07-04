@@ -451,7 +451,8 @@ async function verifyKeyboard(user_id: number, returnPayload = "") {
 
   let finalUrl = callbackUrl;
   try {
-    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "";
+    if (!vplinkKey) { console.warn("[vplink] VPLINK_API_KEY not configured; skipping shortening"); return { inline_keyboard: [[{ text: `🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (${hours}ʜ)`, url: callbackUrl }]] }; }
     const apiUrl = `https://vplink.in/api?api=${encodeURIComponent(vplinkKey)}&url=${encodeURIComponent(callbackUrl)}`;
     const r = await fetch(apiUrl);
     const j = await r.json().catch(() => ({}));
@@ -1922,11 +1923,15 @@ async function handleUpdate(update: any) {
 
   const text: string = msg.text || msg.caption || "";
 
-  // Group anime link-share + access keyword (non-command messages only)
+  // Group anime link-share has been MOVED to the telegram-post bot.
+  // This bot now only handles access keyword in groups (free-access deep link).
   if ((msg.chat.type === "group" || msg.chat.type === "supergroup") && text && !text.startsWith("/")) {
-    await handleGroupQuery(chat_id, user_id, from, text, msg.message_id).catch((e) => console.error("[group]", e));
+    if (isAccessTrigger(text)) {
+      await sendGroupAccessCard(chat_id, user_id, from, msg.message_id).catch((e) => console.error("[group access]", e));
+    }
     return;
   }
+
 
   if (!text.startsWith("/")) return;
 

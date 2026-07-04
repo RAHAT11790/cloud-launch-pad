@@ -33,6 +33,14 @@ interface ReplyData {
 
 const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onClose, onPlay }, _ref) => {
   const branding = useBranding();
+  const sourceBadge = anime.source === "animesalt" || String(anime.id || "").startsWith("an_") || String(anime.id || "").startsWith("as_") || !!anime.anSlug || !!anime.animeSaltSlug
+    ? "AN"
+    : "RS";
+  const genres = Array.isArray(anime.genres) ? anime.genres.filter(Boolean) : [];
+  const displayCategory = genres.length ? genres.join(", ") : anime.category;
+  const storyline = anime.storyline || (anime as any).overview || "No storyline available yet.";
+  const directors = Array.isArray(anime.directors) ? anime.directors.filter(Boolean).slice(0, 4) : [];
+  const cast = Array.isArray(anime.cast) ? anime.cast.filter((p) => p?.name || p?.character || p?.photo).slice(0, 12) : [];
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -223,10 +231,12 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             {anime.title}
           </h1>
           <div className="flex items-center justify-center gap-2 text-[11px] text-secondary-foreground flex-wrap">
-            <span className="bg-accent px-2.5 py-1 rounded text-accent-foreground font-semibold shadow-[0_2px_10px_hsla(38,90%,55%,0.4)] flex items-center gap-1">
-              <Star className="w-3 h-3" /> {anime.rating}
-            </span>
-            <span>{anime.year}</span>
+            {anime.rating && (
+              <span className="bg-accent px-2.5 py-1 rounded text-accent-foreground font-semibold shadow-[0_2px_10px_hsla(38,90%,55%,0.4)] flex items-center gap-1">
+                <Star className="w-3 h-3" /> {anime.rating}
+              </span>
+            )}
+            {anime.year && <span>{anime.year}</span>}
             <span>{anime.language}</span>
             <span className="bg-foreground/15 px-2.5 py-1 rounded text-[10px] backdrop-blur-[10px]">
               {anime.type === "webseries" ? "Series" : "Movie"}
@@ -236,7 +246,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                 ? "bg-accent/85 text-accent-foreground"
                 : "bg-primary/85 text-primary-foreground"
             }`}>
-              {anime.source === "animesalt" ? branding.anCardLabel : branding.rsCardLabel}
+              {sourceBadge === "AN" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
             </span>
           </div>
         </div>
@@ -298,8 +308,34 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
           <h3 className="text-[15px] font-bold mb-2.5 flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-primary" /> Storyline
           </h3>
-          <p className="text-[13px] leading-relaxed text-secondary-foreground">{anime.storyline}</p>
+          <p className="text-[13px] leading-relaxed text-secondary-foreground">{storyline}</p>
         </div>
+
+        {(directors.length > 0 || cast.length > 0) && (
+          <div className="glass-card p-4 mb-5">
+            <h3 className="text-[15px] font-bold mb-3 flex items-center gap-2">
+              <Star className="w-4 h-4 text-primary" /> Cast & Crew
+            </h3>
+            {directors.length > 0 && (
+              <p className="text-[12px] text-secondary-foreground mb-3">
+                <span className="text-muted-foreground">Director:</span> {directors.join(", ")}
+              </p>
+            )}
+            {cast.length > 0 && (
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {cast.map((person, idx) => (
+                  <div key={`${person.name}-${idx}`} className="w-[76px] flex-shrink-0 text-center">
+                    <div className="w-[58px] h-[58px] mx-auto rounded-full overflow-hidden bg-secondary border border-foreground/10 mb-1.5">
+                      {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full grid place-items-center text-lg">👤</div>}
+                    </div>
+                    <p className="text-[10px] font-semibold line-clamp-2">{person.name}</p>
+                    {person.character && <p className="text-[9px] text-muted-foreground line-clamp-1">{person.character}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Episode List for webseries */}
         {anime.type === "webseries" && anime.seasons && (
@@ -476,16 +512,30 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         <div className="glass-card p-4">
           <div className="flex justify-between text-[12px] mb-2">
             <span className="text-muted-foreground">Category</span>
-            <span className="font-medium">{anime.category}</span>
+            <span className="font-medium text-right max-w-[65%]">{displayCategory}</span>
           </div>
+          {genres.length > 0 && (
+            <div className="flex justify-between text-[12px] mb-2">
+              <span className="text-muted-foreground">Genres</span>
+              <span className="font-medium text-right max-w-[65%]">{genres.join(", ")}</span>
+            </div>
+          )}
+          {anime.rating && (
+            <div className="flex justify-between text-[12px] mb-2">
+              <span className="text-muted-foreground">Rating</span>
+              <span className="font-medium">★ {anime.rating}</span>
+            </div>
+          )}
           <div className="flex justify-between text-[12px] mb-2">
             <span className="text-muted-foreground">Language</span>
             <span className="font-medium">{anime.language}</span>
           </div>
-          <div className="flex justify-between text-[12px]">
-            <span className="text-muted-foreground">Year</span>
-            <span className="font-medium">{anime.year}</span>
-          </div>
+          {anime.year && (
+            <div className="flex justify-between text-[12px]">
+              <span className="text-muted-foreground">Year</span>
+              <span className="font-medium">{anime.year}</span>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

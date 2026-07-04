@@ -1,0 +1,449 @@
+// Backdrop / Logo generator — Gemini primary + Lovable AI Gateway fallback.
+// REQUIRED SECRETS (set in EGD Manager deploy form):
+//   - GEMINI_API_KEY    : Google AI Studio key (primary)
+//   - LOVABLE_API_KEY   : Lovable AI Gateway key (auto fallback when Gemini 429/fails)
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const IMGBB_KEYS = ["d5c0bce7c98c54d813bf285ffe453689"];
+
+interface Body {
+  animeId?: string;
+  title?: string;
+  type?: "webseries" | "movies";
+  year?: string | number;
+  mode?: "backdrop" | "logo";
+  customPrompt?: string;
+  provider?: "gemini" | "lovable" | "auto";
+  model?: string;
+  referenceImageUrl?: string;
+  useReference?: boolean;
+  genres?: string[];
+  overview?: string;
+  action?: "check-gemini" | "check-lovable" | "check-all";
+}
+
+// ───────────────────────── PROMPTS ─────────────────────────
+function defaultBackdropPrompt(title: string): string {
+  return `Create an ULTRA-PROFESSIONAL 16:9 ANIME promotional banner — official Crunchyroll / Netflix / Aniplex / Toho key visual quality — for the anime titled "${title}".
+
+═══════════ ABSOLUTE STYLE LOCK ═══════════
+STRICTLY FORBIDDEN: Western cartoon (Disney/Pixar/DreamWorks/Cartoon Network), 3D Pixar/CGI, chibi, mascot, rubber-hose, oversized round heads, sticker art, American comic-book style, childish/silly tone.
+MANDATORY STYLE — JAPANESE ANIME ONLY: ufotable / MAPPA / Wit / Bones / A-1 / Madhouse / Kyoto Animation quality. Sharp anime linework, cel-shading, realistic proportions, expressive anime eyes. Cinematic HDR lighting, depth of field, atmospheric particles.
+
+CHARACTERS: use the ORIGINAL OFFICIAL anime characters of "${title}" — canonical hair, eyes, outfit, weapons, aura. Hero front-and-center; supporting characters layered with depth.
+
+LAYOUT (16:9 widescreen):
+- LEFT: large stylized anime title "${title}" in bold brushstroke / sharp-edged anime logo typography. Small kanji subtitle below.
+- RIGHT: hero character in dynamic cinematic pose, supports behind.
+
+BRANDING (small, premium):
+- TOP-RIGHT: small "RS ANIME" badge with a minimal crown icon.
+- BOTTOM-LEFT: clean glass chips — Telegram icon + "TG :- @CARTOONFUNNY03"  and  Globe icon + "WEBSITE :- RS ANIME".
+
+COLOR & FINISH: rich cinematic palette, deep blacks, vibrant highlights, glow, lens flares. 4K ultra-detailed, sharp focus, no extra fingers, no deformed anatomy, no watermarks, no random text, no year numbers.`;
+}
+
+function defaultLogoPrompt(title: string): string {
+  const upper = title.toUpperCase();
+  return `Official anime TITLE LOGO for "${title}", square 1:1. Title "${upper}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background with atmospheric particles. High resolution, perfect kerning, crisp edges, no foreground characters, no extra text.`;
+}
+
+function buildPrompt(body: Body): string {
+  if (body.customPrompt && body.customPrompt.trim()) {
+    return body.customPrompt
+      .replace(/\{title\}/gi, body.title || "")
+      .replace(/\[WRITE ANIME NAME HERE\]/gi, body.title || "");
+  }
+  return body.mode === "logo" ? defaultLogoPrompt(body.title || "") : defaultBackdropPrompt(body.title || "");
+}
+
+function buildGroundedPrompt(b: Body): string {
+  const genreLine = b.genres?.length ? b.genres.join(", ") : "(unknown — infer from reference image)";
+  const overview = (b.overview || "").trim().slice(0, 600);
+  const upperTitle = (b.title || "").toUpperCase();
+  const custom = (b.customPrompt || "").trim();
+  return `You are editing the PROVIDED REFERENCE IMAGE into an ULTRA-PROFESSIONAL 16:9 anime promotional banner for "${b.title}" — Crunchyroll / Netflix / official studio marketing quality.
+
+CRITICAL EDIT LOCK: This is IMAGE-TO-IMAGE EDITING. The supplied reference image is mandatory. Preserve EXACT character identity from the reference: same face, hair, eyes, outfit, weapons, body proportions, species, gender. DO NOT replace with random / generic / Western cartoon characters.
+
+ANIME TITLE: "${b.title}"${b.year ? ` (${b.year})` : ""}
+OFFICIAL GENRE(S): ${genreLine}
+OVERVIEW: ${overview || "(none provided)"}
+${custom ? `\nUSER EXTRA REQUEST (apply only if it does not break the edit lock):\n${custom.replace(/\{title\}/gi, b.title || "")}\n` : ""}
+
+MANDATORY BRANDING:
+- TOP-RIGHT: small premium "RS ANIME" badge with minimal crown icon.
+- BOTTOM-LEFT: two small chips on subtle glass bar — Telegram icon + "TG :- @CARTOONFUNNY03" and Globe icon + "WEBSITE :- RS ANIME".
+
+TITLE TEXT: "${upperTitle}" large and stylized, integrated naturally — official-logo treatment matching the genre.
+
+STYLE — JAPANESE ANIME ONLY (HARD LOCK): ufotable / MAPPA / Wit / A-1 / Madhouse / Bones quality. 4K HDR, cel-shading, realistic anime proportions.
+
+STRICT NO-GO: Western cartoon, 3D/CGI, chibi, mascot, childish tone, year/date numbers, deformed anatomy, generic stock typography.
+
+OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, same reference characters preserved.`;
+}
+
+// ───────────────────────── HELPERS ─────────────────────────
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`reference fetch ${r.status}`);
+  const ct = r.headers.get("content-type") || "image/jpeg";
+  const buf = new Uint8Array(await r.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return `data:${ct};base64,${btoa(bin)}`;
+}
+
+async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
+  let lastErr: unknown;
+  for (const key of IMGBB_KEYS) {
+    try {
+      const fd = new FormData();
+      const blob = new Blob([bytes], { type: "image/png" });
+      fd.append("image", blob, `${name}.png`);
+      fd.append("key", key);
+      const res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`ImgBB ${res.status}`);
+      const j = await res.json();
+      const url = j?.data?.display_url || j?.data?.url;
+      if (!url) throw new Error("ImgBB: no url");
+      return url;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("ImgBB failed");
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const m = /^data:[^;]+;base64,(.+)$/.exec(dataUrl);
+  if (!m) throw new Error("invalid data url");
+  return Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0));
+}
+
+// ───────────────────────── GEMINI ─────────────────────────
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
+const GEMINI_IMAGE_MODEL_PRIORITY = [
+  "gemini-3.1-flash-image",
+  "gemini-3-pro-image",
+  "gemini-2.5-flash-image",
+];
+
+type QuotaInfo = {
+  status?: string;
+  retryAfterSec?: number;
+  quotaId?: string;
+  perModel?: string;
+  helpUrl?: string;
+  raw?: string;
+};
+
+function parseGeminiError(status: number, text: string): { message: string; quota?: QuotaInfo } {
+  try {
+    const j = JSON.parse(text);
+    const e = j?.error || {};
+    const details: any[] = Array.isArray(e?.details) ? e.details : [];
+    const retry = details.find((d) => d?.["@type"]?.includes("RetryInfo"));
+    const quota = details.find((d) => d?.["@type"]?.includes("QuotaFailure"));
+    const help = details.find((d) => d?.["@type"]?.includes("Help"));
+    const v = quota?.violations?.[0] || {};
+    const retrySec = retry?.retryDelay ? Number(String(retry.retryDelay).replace("s", "")) : undefined;
+    return {
+      message: e?.message || `Gemini ${status}`,
+      quota: {
+        status: e?.status,
+        retryAfterSec: retrySec,
+        quotaId: v?.quotaId,
+        perModel: v?.quotaDimensions?.model,
+        helpUrl: help?.links?.[0]?.url,
+        raw: text.slice(0, 400),
+      },
+    };
+  } catch {
+    return { message: `Gemini ${status}: ${text.slice(0, 220)}` };
+  }
+}
+
+async function probeGemini(apiKey: string) {
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      return { ok: false, error: `Gemini ${r.status}: ${t.slice(0, 180)}` };
+    }
+    const j = await r.json();
+    const names: string[] = (j?.models || []).map((m: any) => String(m?.name || "").replace("models/", ""));
+    const hasImage = GEMINI_IMAGE_MODEL_PRIORITY.find((m) => names.includes(m)) || names.find((n) => n.includes("image"));
+    return { ok: true, model: hasImage || GEMINI_IMAGE_MODEL, message: `Reachable. ${names.length} models.` };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+async function resolveGeminiImageModel(apiKey: string): Promise<string> {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!r.ok) return GEMINI_IMAGE_MODEL;
+  const j = await r.json().catch(() => ({}));
+  const models: any[] = Array.isArray(j?.models) ? j.models : [];
+  const names = models.map((m) => String(m?.name || "").replace("models/", ""));
+  return GEMINI_IMAGE_MODEL_PRIORITY.find((m) => names.includes(m)) || names.find((n) => n.includes("image")) || GEMINI_IMAGE_MODEL;
+}
+
+async function genWithGemini(prompt: string, referenceDataUrl: string | null, apiKey: string): Promise<{ bytes: Uint8Array; model: string }> {
+  const parts: any[] = [{ text: prompt }];
+  if (referenceDataUrl) {
+    const m = /^data:([^;]+);base64,(.+)$/.exec(referenceDataUrl);
+    if (m) parts.unshift({ inline_data: { mime_type: m[1], data: m[2] } });
+  }
+  const body = {
+    contents: [{ role: "user", parts }],
+    generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+  };
+  const model = await resolveGeminiImageModel(apiKey);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    const parsed = parseGeminiError(res.status, t);
+    const err = new Error(parsed.message) as any;
+    err.status = res.status;
+    err.quota = parsed.quota;
+    err.model = model;
+    throw err;
+  }
+  const j = await res.json();
+  const allParts: any[] = j?.candidates?.[0]?.content?.parts || [];
+  const imgPart = allParts.find((p) => p?.inline_data?.data || p?.inlineData?.data);
+  const b64 = imgPart?.inline_data?.data || imgPart?.inlineData?.data;
+  if (!b64) {
+    const err = new Error("Gemini: no image data in response") as any;
+    err.model = model;
+    throw err;
+  }
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (bin.byteLength < 1000) throw new Error("Gemini: image too small");
+  return { bytes: bin, model };
+}
+
+// ───────────────────────── LOVABLE AI GATEWAY ─────────────────────────
+const LOVABLE_IMAGE_MODELS = [
+  "google/gemini-3.1-flash-image-preview",
+  "google/gemini-3-pro-image-preview",
+  "google/gemini-2.5-flash-image",
+];
+
+async function probeLovable(apiKey: string) {
+  try {
+    // Lightweight check: list models
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/models", {
+      headers: {
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "edge-fetch",
+      },
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      return { ok: false, error: `Lovable ${r.status}: ${t.slice(0, 180)}` };
+    }
+    return { ok: true, model: LOVABLE_IMAGE_MODELS[0], message: "Reachable." };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+async function genWithLovable(prompt: string, referenceDataUrl: string | null, apiKey: string, preferredModel?: string): Promise<{ bytes: Uint8Array; model: string }> {
+  const models = preferredModel ? [preferredModel, ...LOVABLE_IMAGE_MODELS.filter((m) => m !== preferredModel)] : LOVABLE_IMAGE_MODELS;
+
+  const content: any[] = [{ type: "text", text: prompt }];
+  if (referenceDataUrl) {
+    content.unshift({ type: "image_url", image_url: { url: referenceDataUrl } });
+  }
+
+  let lastErr: any;
+  for (const model of models) {
+    try {
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Lovable-API-Key": apiKey,
+          "X-Lovable-AIG-SDK": "edge-fetch",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content }],
+          modalities: ["image", "text"],
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        const err = new Error(`Lovable ${res.status}: ${t.slice(0, 200)}`) as any;
+        err.status = res.status;
+        err.model = model;
+        if (res.status === 429 || res.status === 402) throw err; // surface immediately
+        lastErr = err;
+        continue;
+      }
+      const j = await res.json();
+      // Try multiple known response shapes
+      const msg = j?.choices?.[0]?.message || {};
+      let dataUrl: string | undefined =
+        msg?.images?.[0]?.image_url?.url ||
+        msg?.images?.[0]?.url ||
+        (Array.isArray(msg?.content)
+          ? msg.content.find((c: any) => c?.type === "image_url" || c?.image_url)?.image_url?.url
+          : undefined);
+
+      // Fallback: scan whole response for first data:image URL
+      if (!dataUrl) {
+        const flat = JSON.stringify(j);
+        const m = /(data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+)/.exec(flat);
+        if (m) dataUrl = m[1];
+      }
+
+      if (!dataUrl) {
+        lastErr = new Error(`Lovable ${model}: no image in response`);
+        continue;
+      }
+      const bytes = dataUrlToBytes(dataUrl);
+      if (bytes.byteLength < 1000) {
+        lastErr = new Error(`Lovable ${model}: image too small`);
+        continue;
+      }
+      return { bytes, model };
+    } catch (e: any) {
+      lastErr = e;
+      if (e?.status === 429 || e?.status === 402) throw e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Lovable: all models failed");
+}
+
+// ───────────────────────── HANDLER ─────────────────────────
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "GET") {
+    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["gemini", "lovable"], source: "egd" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
+    const body = (await req.json()) as Body;
+    const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
+    const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
+
+    // ── Probes ──
+    if (body.action === "check-gemini" || body.action === "check-all") {
+      const gem = GEMINI_KEY ? await probeGemini(GEMINI_KEY) : { ok: false, error: "GEMINI_API_KEY not configured" };
+      if (body.action === "check-gemini") {
+        return new Response(JSON.stringify(gem), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const lov = LOVABLE_KEY ? await probeLovable(LOVABLE_KEY) : { ok: false, error: "LOVABLE_API_KEY not configured" };
+      return new Response(JSON.stringify({ gemini: gem, lovable: lov }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (body.action === "check-lovable") {
+      const lov = LOVABLE_KEY ? await probeLovable(LOVABLE_KEY) : { ok: false, error: "LOVABLE_API_KEY not configured" };
+      return new Response(JSON.stringify(lov), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (!body?.title || !body?.animeId) {
+      return new Response(JSON.stringify({ error: "title and animeId required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const mode = body.mode === "logo" ? "logo" : "backdrop";
+    const provider = body.provider || "auto";
+    const prompt = buildPrompt({ ...body, mode } as Body);
+    const safe = (body.animeId || "x").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+
+    const useRef = mode === "backdrop" && !!body.referenceImageUrl && body.useReference !== false;
+    if (mode === "backdrop" && !body.referenceImageUrl) throw new Error("Reference backdrop image is required.");
+
+    const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
+    if (mode === "backdrop" && !refDataUrl) throw new Error("Could not load reference backdrop image.");
+
+    const finalPrompt = useRef ? buildGroundedPrompt(body) : prompt;
+
+    let bytes: Uint8Array | null = null;
+    let usedModel = "";
+    let usedEngine: "gemini" | "lovable" = "gemini";
+    let geminiError: any = null;
+
+    const tryGemini = async () => {
+      if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured");
+      const out = await genWithGemini(finalPrompt, refDataUrl, GEMINI_KEY);
+      bytes = out.bytes;
+      usedModel = out.model;
+      usedEngine = "gemini";
+    };
+    const tryLovable = async () => {
+      if (!LOVABLE_KEY) throw new Error("LOVABLE_API_KEY not configured on this EGD-deployed function");
+      const out = await genWithLovable(finalPrompt, refDataUrl, LOVABLE_KEY);
+      bytes = out.bytes;
+      usedModel = out.model;
+      usedEngine = "lovable";
+    };
+
+    if (provider === "gemini") {
+      await tryGemini();
+    } else if (provider === "lovable") {
+      await tryLovable();
+    } else {
+      // auto: Gemini → fallback Lovable
+      try {
+        await tryGemini();
+      } catch (e: any) {
+        geminiError = {
+          message: String(e?.message || e),
+          status: e?.status,
+          quota: e?.quota,
+          model: e?.model,
+        };
+        console.warn("[generate-backdrop] Gemini failed, falling back to Lovable:", geminiError.message);
+        await tryLovable();
+      }
+    }
+
+    if (!bytes) throw new Error("No image bytes produced");
+
+    const url = await uploadToImgbb(bytes, `${mode}_${usedEngine}_${safe}_${Date.now()}`);
+    const engineLabel = `${usedEngine}${useRef ? "-edit" : ""}:${usedModel}`;
+
+    return new Response(JSON.stringify({
+      ok: true,
+      url,
+      mode,
+      engine: engineLabel,
+      provider: usedEngine,
+      model: usedModel,
+      source: "egd",
+      referenceUsed: !!refDataUrl,
+      fallbackUsed: usedEngine === "lovable" && provider !== "lovable",
+      geminiError,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    console.error("[generate-backdrop]", msg, e?.quota);
+    const status = e?.status === 429 ? 429 : e?.status === 402 ? 402 : 500;
+    return new Response(JSON.stringify({
+      error: msg,
+      status: e?.status,
+      quota: e?.quota,
+      model: e?.model,
+    }), {
+      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
