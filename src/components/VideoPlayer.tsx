@@ -41,8 +41,7 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-import { downloadManager } from "@/lib/downloadManager";
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
@@ -782,7 +781,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextEpCancelledRef = useRef(false);
-  const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
   const [deviceBlocked, setDeviceBlocked] = useState(false);
   const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
@@ -1413,13 +1411,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     "fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white overflow-y-auto overscroll-contain";
   const inlineSheetStyle = { top: videoBottomPx } as React.CSSProperties;
 
-  useEffect(() => {
-    const unsub = downloadManager.subscribe((snapshot) => {
-      setActiveDownloads(new Map(snapshot.downloads));
-    });
-    return () => unsub?.();
-  }, []);
-
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
     let cancelled = false;
@@ -1439,7 +1430,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     refresh();
     return () => { cancelled = true; };
-  }, [title, activeDownloads]);
+  }, [title]);
 
   // Listen for global free access from Firebase
   useEffect(() => {
@@ -5523,15 +5514,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
             const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
             if (!directHttpsUrl) { toast.error("Download not available"); return; }
-            downloadManager.startDownload({
-              id: buildDlId(quality, movieLabel),
-              url: directHttpsUrl,
-              title: cleanTitle,
-              subtitle: movieLabel,
-              poster,
-              quality,
-              fileName: buildDownloadFileName(movieLabel, quality),
-            });
+            const started = triggerBackgroundVideoDownload(directHttpsUrl, buildDownloadFileName(movieLabel, quality));
+            if (started) toast.success("Download sent to browser");
             closePanel();
           };
 
@@ -5541,8 +5525,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
-            const httpBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
-            const hlsBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
+            const browserBatch: Array<{ url: string; fileName: string }> = [];
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) continue;
@@ -5556,29 +5539,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 Object.values(ep.qualityLinks),
               );
               if (!epUrl) continue;
-              const isHls = isHlsLikeUrl(epUrl);
-              const fileName = isHls
-                ? buildDownloadFileName(episodeLabel, quality).replace(/\.mp4$/i, "") + ".ts"
-                : buildDownloadFileName(episodeLabel, quality);
-              const entry = {
-                id: buildDlId(quality, episodeLabel),
+              if (isHlsLikeUrl(epUrl)) continue;
+              browserBatch.push({
                 url: epUrl,
-                title: sanitizeAnimeDownloadTitle(title) || title,
-                subtitle: episodeLabel,
-                poster,
-                quality,
-                fileName,
-              };
-              (isHls ? hlsBatch : httpBatch).push(entry);
+                fileName: buildDownloadFileName(episodeLabel, quality),
+              });
             }
-            // Single unified batch — the download manager owns RS and AN
-            // alike (real fetch + saved blob + size + progress). No more
-            // parallel anchor clicks that the browser silently blocks.
-            const combined = [...httpBatch, ...hlsBatch];
-            if (combined.length) downloadManager.enqueueBatch(combined);
+            const startedCount = triggerBulkBackgroundDownloads(browserBatch);
             closePanel();
-            if (combined.length === 0) toast.error("No free downloadable links found for this selection");
-            else toast.success(`Started ${combined.length} download${combined.length > 1 ? "s" : ""}`);
+            if (startedCount === 0) toast.error("No free downloadable links found for this selection");
+            else toast.success(`Sent ${startedCount} download${startedCount > 1 ? "s" : ""} to browser`);
           };
 
           const playOffline = async (episodeData?: any) => {
