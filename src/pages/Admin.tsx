@@ -3113,16 +3113,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!seriesForm.category) { toast.error("Please select category"); return; }
     if (savingSeriesRef.current) { toast.info("Saving in progress…"); return; }
 
-    // Duplicate-title guard when adding a NEW series (case/space-insensitive)
+    // Duplicate-title guard when adding a NEW series — auto-redirect to edit
     if (!seriesEditId) {
       const norm = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
       const target = norm(seriesForm.title);
       const dupe = webseriesData.find((w: any) => norm(w.title) === target);
       if (dupe) {
-        const ok = confirm(`"${dupe.title}" নামে একটা সিরিজ আগে থেকেই আছে। আরেকটা duplicate তৈরি করবে?\n\nCancel = বাতিল, OK = তবুও তৈরি করব।`);
-        if (!ok) return;
+        toast.info(`"${dupe.title}" আগে থেকেই আছে — Edit page এ নিয়ে যাচ্ছি`);
+        savingSeriesRef.current = false;
+        await editSeries(dupe.id);
+        return;
       }
     }
+
 
       const nextMap = sanitizeSeasonLanguageMap({
         ...seriesSeasonsByLanguage,
