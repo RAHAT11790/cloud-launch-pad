@@ -6,8 +6,8 @@ import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
-const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download\?/i.test(String(value || ""));
-const isManagedVideoProxyUrl = (value: string) => /\/functions\/v1\/video-proxy\?/i.test(String(value || ""));
+const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download(?:[/?#]|$)/i.test(String(value || ""));
+const isManagedVideoProxyUrl = (value: string) => /\/functions\/v1\/video-proxy(?:[/?#]|$)/i.test(String(value || ""));
 
 const buildSafeFileName = (rawName: string) => {
   const cleaned = String(rawName || "video")
@@ -62,6 +62,30 @@ try {
 
 const unique = (items: string[]) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
 
+const pickUrlParam = (params: URLSearchParams) => {
+  const directKeys = ["url", "source", "target", "u"];
+  for (const key of directKeys) {
+    const value = String(params.get(key) || "").trim();
+    if (isHttpUrl(value)) return value;
+  }
+
+  const src = String(params.get("src") || "").trim();
+  if (!src) return "";
+  const decoded = fromOpaqueUrlToken(src);
+  if (isHttpUrl(decoded)) return decoded;
+  return isHttpUrl(src) ? src : "";
+};
+
+const unwrapProxyTarget = (value: string) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  try {
+    return pickUrlParam(new URL(trimmed).searchParams);
+  } catch {
+    return "";
+  }
+};
+
 const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
@@ -86,16 +110,17 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
   if (isManagedVideoProxyUrl(trimmedUrl) || isManagedVideoDownloadUrl(trimmedUrl)) {
-    try {
-      const parsed = new URL(trimmedUrl);
-      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
-      if (inner) return unique([trimmedUrl, ...buildVideoDownloadUrlCandidates(inner, rawFileName)]);
-    } catch {}
-    return [trimmedUrl];
+    const inner = unwrapProxyTarget(trimmedUrl);
+    if (!inner) return [];
+    const rebuilt = buildVideoDownloadUrlCandidates(inner, rawFileName);
+    return unique([...rebuilt, trimmedUrl]);
   }
 
   const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
-  return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
+  return unique([
+    ...bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)),
+    trimmedUrl,
+  ]);
 }
 
 export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
@@ -107,11 +132,9 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
   if (!/^http:\/\//i.test(trimmedUrl)) return [];
   if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
   if (isManagedVideoDownloadUrl(trimmedUrl)) {
-    try {
-      const parsed = new URL(trimmedUrl);
-      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
-      if (inner) return buildVideoProxyUrlCandidates(inner);
-    } catch {}
+    const inner = unwrapProxyTarget(trimmedUrl);
+    if (inner) return buildVideoProxyUrlCandidates(inner);
+    return [];
   }
   const bases = playbackProxyEnabled && playbackProxyBaseUrl ? [playbackProxyBaseUrl] : [];
   return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
@@ -120,13 +143,15 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
+  if (isManagedVideoDownloadUrl(trimmedUrl)) {
+    const inner = unwrapProxyTarget(trimmedUrl);
+    if (!inner) return null;
+    return buildVideoDownloadUrlCandidates(inner, rawFileName)[0] || trimmedUrl;
+  }
   if (isManagedVideoProxyUrl(trimmedUrl)) {
-    try {
-      const parsed = new URL(trimmedUrl);
-      const inner = parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "");
-      if (inner) return buildVideoDownloadUrl(inner, rawFileName);
-    } catch {}
+    const inner = unwrapProxyTarget(trimmedUrl);
+    if (inner) return buildVideoDownloadUrl(inner, rawFileName);
+    return null;
   }
   return buildVideoDownloadUrlCandidates(trimmedUrl, rawFileName)[0] || null;
 }
@@ -135,12 +160,7 @@ export function unwrapManagedVideoUrl(value: string): string {
   const trimmed = String(value || "").trim();
   if (!trimmed) return "";
   if (isManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
-    try {
-      const parsed = new URL(trimmed);
-      return parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || "") || trimmed;
-    } catch {
-      return trimmed;
-    }
+    return unwrapProxyTarget(trimmed) || "";
   }
   return trimmed;
 }
