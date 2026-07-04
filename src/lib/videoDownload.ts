@@ -84,6 +84,9 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
+  if (/\.workers\.dev(?:\/)?$/i.test(trimmedBase.replace(/\?.*$/, ""))) {
+    return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
+  }
   return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
 };
 

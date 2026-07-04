@@ -57,6 +57,9 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
+  // Existing Cloudflare Worker deployments accept `?url=` while Lovable-hosted
+  // function copies accept opaque `?src=`.
+  else if (/\.workers\.dev(?:\/)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
   // Default: append an opaque src token, not the raw upstream URL.
   else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
