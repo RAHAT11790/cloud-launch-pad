@@ -65,8 +65,12 @@ const unique = (items: string[]) => Array.from(new Set(items.map((item) => Strin
 const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string) => {
   const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
   if (!trimmedBase) return "";
+  const trimmedRaw = String(rawUrl || "").trim();
+  if (!trimmedRaw || !isHttpUrl(trimmedRaw)) return "";
+  const token = toOpaqueUrlToken(trimmedRaw);
+  if (!token) return "";
   const fileName = buildSafeFileName(rawFileName);
-  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
+  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&src=${encodeURIComponent(token)}`;
 };
 
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
