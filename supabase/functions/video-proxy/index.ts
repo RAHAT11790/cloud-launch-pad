@@ -100,20 +100,10 @@ function buildUpstreamCandidates(target: URL): URL[] {
 
 
 function alignMediaRange(range: string | null, _upstreamUrl: URL): { range: string | null; windowStart: number | null } {
-  // Exact pass-through for closed ranges (browser knows exactly what it wants —
-  // e.g. moov/MP4 metadata probes near EOF). Only cap OPEN-ENDED ranges like
-  // "bytes=1234-" down to a 1MB slice so RS server does not fire-hose a huge
-  // window into a low-end phone. This keeps skip snappy: each seek only pulls
-  // a 1MB slab, and the native <video> element requests the next slab as it
-  // plays. No Content-Range rewriting on our side — upstream returns its own
-  // matching 206 and Chromium accepts it cleanly.
-  if (!range) return { range, windowStart: null };
-  const match = range.match(/^bytes=(\d+)-\s*$/i);
-  if (!match) return { range, windowStart: null };
-  const start = Number(match[1]);
-  if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  const end = start + MEDIA_CHUNK_BYTES - 1;
-  return { range: `bytes=${start}-${end}`, windowStart: start };
+  // Pure pass-through: whatever Range the browser sends goes straight upstream.
+  // No check-size / chunk cap. The proxy is only here to bridge http:// media
+  // into an https:// page so the browser can play it like a normal HTTPS video.
+  return { range, windowStart: null };
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
