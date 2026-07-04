@@ -150,7 +150,7 @@ const applyAdminEnglish = (root: ParentNode) => {
  }
 };
 
-const ADMIN_VISIBLE_CARD_LIMIT = 80;
+const ADMIN_VISIBLE_CARD_LIMIT = Number.MAX_SAFE_INTEGER;
 const ADMIN_DROPDOWN_LIMIT = 60;
 
 const adminIdle = (callback: () => void, timeout = 1200) => {
@@ -2056,6 +2056,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
   const [adminFastCounts, setAdminFastCounts] = useState({ webseries: 0, movies: 0, users: 0 });
+   const [adminContentLoading, setAdminContentLoading] = useState({ webseries: true, movies: true });
   const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
   const adminLoadContentListRef = useRef<((kind: AdminContentKind, opts?: { force?: boolean }) => Promise<void>) | null>(null);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
@@ -2585,24 +2586,43 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const subscribeContentList = (kind: AdminContentKind) => {
     const setter = kind === "movies" ? setMoviesData : setWebseriesData;
     const cached = readCachedAdminContentList(kind);
-    if (cached.length) startTransition(() => setter(sortAdminContentList(cached)));
+    if (cached.length) {
+      startTransition(() => {
+        setter(sortAdminContentList(cached));
+        setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+      });
+    }
 
     const indexRef = ref(db, `adminContentIndex/${kind}`);
-    const unsub = onValue(indexRef, async (snap) => {
+    let reconcileRun = 0;
+    const unsub = onValue(indexRef, (snap) => {
       const data = snap.val() || {};
       let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
+      const merged = mergeAdminContentLists(items);
+      if (merged.length || cached.length) {
+        startTransition(() => {
+          setter(merged.length ? merged : sortAdminContentList(cached));
+          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+        });
+        writeCachedAdminContentList(kind, merged.length ? merged : cached);
+      }
+
+      const runId = ++reconcileRun;
+      const cancelReconcile = adminIdle(() => {
+        void (async () => {
       // Reconcile against the real collection: `adminContentIndex` may be
       // partially populated (legacy rows never got indexed). Whenever the
       // actual Firebase collection has more items than the index, hydrate
       // the missing ones and prime the index so it stays complete.
       try {
         const allKeys = await firebaseRestShallowKeys(kind);
+        if (runId !== reconcileRun) return;
         const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
         const indexedIds = new Set(items.map((it: any) => String(it.id)));
         const missing = cleanKeys.filter((k) => !indexedIds.has(k));
+        const hydrated: any[] = [];
         if (missing.length) {
           const chunkSize = 8;
-          const hydrated: any[] = [];
           for (let i = 0; i < missing.length; i += chunkSize) {
             const chunk = missing.slice(i, i + chunkSize);
             const rows = await Promise.all(chunk.map(async (id) => {
@@ -2612,6 +2632,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
               } catch { return null; }
             }));
             rows.forEach((r) => { if (r) hydrated.push(r); });
+            if (runId !== reconcileRun) return;
           }
           if (hydrated.length) {
             items = [...items, ...hydrated];
@@ -2638,6 +2659,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
                 } catch { return null; }
               }));
               rows.forEach((r) => { if (r) repaired.push(r); });
+              if (runId !== reconcileRun) return;
             }
             if (repaired.length) {
               const byId = new Map(items.map((it: any) => [String(it.id), it]));
@@ -2648,9 +2670,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           }
         }
       } catch {}
-      const merged = mergeAdminContentLists(items);
-      startTransition(() => setter(merged));
-      writeCachedAdminContentList(kind, merged);
+        const reconciled = mergeAdminContentLists(items);
+        startTransition(() => {
+          setter(reconciled);
+          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+        });
+        writeCachedAdminContentList(kind, reconciled);
+        })();
+      }, 250);
+      unsubs.push(cancelReconcile);
     });
     unsubs.push(unsub);
   };
@@ -5694,12 +5722,16 @@ ${tgBulkFooter}
  }
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
- <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
+ adminContentLoading.webseries && !q ? (
+ <div className="space-y-3 py-2">
+ {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+ </div>
+ ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
   ) : <>
   {visible.map(item => (
- <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
+ <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
- <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+  <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
@@ -6765,12 +6797,16 @@ ${tgBulkFooter}
  : moviesData;
   const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
   return filtered.length === 0 ? (
-  <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
+  adminContentLoading.movies && !deferredMvListSearch.trim() ? (
+  <div className="space-y-3 py-2">
+  {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+  </div>
+  ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
   ) : <>
   {visible.map(item => (
- <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
+ <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
- <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+  <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>

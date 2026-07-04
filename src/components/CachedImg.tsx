@@ -63,12 +63,12 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
       ref={ref}
       {...rest}
       src={url || undefined}
-      loading={loading ?? (warm ? "eager" : "lazy")}
-      decoding={decoding ?? (warm ? "sync" : "async")}
+      loading={loading ?? "lazy"}
+      decoding={decoding ?? "async"}
       style={{
         ...(style || {}),
-        opacity: loaded ? 1 : 0.001,
-        transition: warm ? undefined : "opacity 180ms ease-out",
+        opacity: 1,
+        transition: loaded || warm ? undefined : "none",
       }}
       onLoad={(event) => {
         markSeen(url, event.currentTarget);
