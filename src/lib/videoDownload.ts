@@ -94,7 +94,10 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   const token = toOpaqueUrlToken(trimmedRaw);
   if (!token) return "";
   const fileName = buildSafeFileName(rawFileName);
-  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&src=${encodeURIComponent(token)}`;
+  // Keep both params for live deployments during rollout:
+  // - url: older RS/EGD download workers require this exact parameter.
+  // - src: newer hardened workers prefer opaque tokens.
+  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedRaw)}&src=${encodeURIComponent(token)}`;
 };
 
 const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
