@@ -174,22 +174,11 @@ const isBypassSource = (url: string): boolean => {
   }
 
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
-  // Server 1/2/3/Premium can each be either http:// or https:// depending on
-  // what admin saved. isInsecureHttpSource() reads the actual scheme, so the
-  // right proxy path is chosen automatically per URL.
+  // HTTPS media must stay direct inside the native <video> tag. Only insecure
+  // http:// sources need video-proxy, because an HTTPS app cannot play raw HTTP.
   const isHttp = isInsecureHttpSource(url);
-  // HTTP (mixed-content) URLs MUST be rescued onto HTTPS via the admin-configured
-  // `video-proxy` — that's the RS Server 2/3 path.
-  // Server 1 (HuggingFace / hf.space etc.) is HTTPS but buffers hard when the
-  // browser pulls giant MKV/MP4 slabs direct from the origin. Route those
-  // through the same proxy so the 1MB "check size" cap applies and skip stays
-  // snappy on low-end phones. HLS playlists and embed pages skip this.
-  const lower = url.toLowerCase();
-  const isHfLike = /(?:^|\/\/|\.)(hf\.space|huggingface\.co|huggingface\.io)(?:[/:?#]|$)/i.test(lower);
-  const isMediaFile = /\.(?:mp4|m4v|mkv|mov|webm)(?:[?#]|$)/i.test(lower);
-  const shouldProxyHttps = !isHttp && !!proxyUrl && isMediaFile && (preferProxy || isHfLike);
 
-  if (isHttp || shouldProxyHttps) {
+  if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     // Always keep the raw URL as a diagnostic/failover fallback so the server
@@ -198,7 +187,7 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  // https:// URL — always direct.
+  // https:// URL — always direct, no proxy.
   addCandidate(url);
   return candidates;
 };
@@ -511,13 +500,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (u.protocol === "http:" || u.protocol === "https:") origins.add(u.origin);
       } catch {}
     };
-    // Do not preconnect to raw RS media hosts when an admin proxy is active —
-    // that leaks source domains in the Network panel and bypasses the router.
+    addOrigin(src);
+    effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
     if (proxyUrl) addOrigin(proxyUrl);
-    else {
-      addOrigin(src);
-      effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
-    }
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -660,16 +645,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy,
-  // saved from EGD Router after the admin deploys their own `video-proxy`.
-  // No hard-coded proxy in code, no EGD Manager duplicate URL field.
-  // The proxy itself decides what to do with each upstream URL:
-  //   • http://  → proxy fetches the upstream and streams it to the browser
-  //                (browsers can't play mixed-content http inside an https page)
-  //                AND enforces the domain allow-list.
-  //   • https:// → proxy passes the bytes through ONLY to enforce the domain
-  //                allow-list (anti-hotlink protection). If no proxy URL is set
-  //                we play https sources directly from the <video> tag.
+  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
+  // It is used only for http:// playback rescue. HTTPS servers play directly
+  // through the native <video> tag and never go through video-proxy.
   useEffect(() => {
     let cancelled = false;
     let routerBase = "";
