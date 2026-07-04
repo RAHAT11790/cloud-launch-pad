@@ -41,9 +41,24 @@ type SavedItem = {
   premiumEpisodes?: Record<string, boolean>;
 };
 
+// Card grid only needs these light fields — trimming cast/overview/genres keeps
+// the payload well under localStorage's ~5MB quota so writeCache never silently
+// fails. Full metadata is re-hydrated live on card click.
+const CACHE_FIELDS: (keyof AnimeItem)[] = [
+  "id", "title", "poster", "backdrop", "year", "rating", "language", "category",
+  "type", "source", "sourceName", "anSlug", "animeSaltSlug", "slug", "tmdbId",
+  "premium", "premiumEpisodes", "createdAt", "updatedAt",
+] as any;
+
+const slimForCache = (item: AnimeItem): AnimeItem => {
+  const out: any = { seasons: [] };
+  CACHE_FIELDS.forEach((k) => { if ((item as any)[k] !== undefined) out[k] = (item as any)[k]; });
+  return out as AnimeItem;
+};
+
 const readCache = (): AnimeItem[] | null => {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY) || sessionStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed;
@@ -53,7 +68,12 @@ const readCache = (): AnimeItem[] | null => {
 
 const writeCache = (items: AnimeItem[]) => {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(items));
+    const slim = items.map(slimForCache);
+    const payload = JSON.stringify(slim);
+    // Mirror to sessionStorage first — always succeeds even if localStorage is
+    // full/quota-blocked — so the next page nav still hits cache instantly.
+    try { sessionStorage.setItem(CACHE_KEY, payload); } catch {}
+    localStorage.setItem(CACHE_KEY, payload);
   } catch {}
 };
 
@@ -103,25 +123,29 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
 export function useSelectedAnimeSalt() {
   const initial = readCache() || [];
   const [items, setItems] = useState<AnimeItem[]>(initial || []);
-  const [loading, setLoading] = useState(false);
+  // If cache is present we already have cards on screen — don't flip into
+  // "loading" state and cause the grid to flash empty.
+  const [loading, setLoading] = useState(initial.length === 0);
 
   useEffect(() => {
     try { localStorage.removeItem("rs_cache_animesalt_selected_v1"); } catch {}
-    let selectedList: AnimeItem[] = readCache() || [];
-    if (selectedList.length) {
-      setItems(selectedList);
-      setLoading(false);
-    }
+    let lastSignature = ""; // skip identical snapshots — prevents re-render flash
 
     const unsub = onValue(ref(db, SELECTED_PATH), (snap) => {
       const val = (snap.val() as Record<string, SavedItem>) || {};
-      selectedList = Object.values(val)
+      const selectedList = (Object.values(val)
         .map(mapSaved)
-        .filter(Boolean) as AnimeItem[];
-      // Newest first
-      selectedList.sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
-      setItems(selectedList);
-      writeCache(selectedList);
+        .filter(Boolean) as AnimeItem[])
+        .sort((a, b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
+
+      // Signature by id+updatedAt — if nothing meaningful changed, skip setState
+      // to avoid re-renders that flicker the card grid.
+      const signature = selectedList.map((i) => `${i.id}:${i.updatedAt || 0}`).join("|");
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        setItems(selectedList);
+        writeCache(selectedList);
+      }
       setLoading(false);
     });
 
