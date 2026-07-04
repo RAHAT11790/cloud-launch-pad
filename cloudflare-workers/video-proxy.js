@@ -85,8 +85,10 @@ function rewritePlaylist(text, targetUrl, reqUrl) {
   }).join("\n");
 }
 
+const isSegmentLike = (u) => /\.(?:ts|m4s|aac|mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname);
+
 export default {
-  async fetch(req) {
+  async fetch(req, env, ctx) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (req.method !== "GET" && req.method !== "HEAD")
       return new Response("Method not allowed", { status: 405, headers: cors });
@@ -99,6 +101,19 @@ export default {
     try { up = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
     if (up.protocol !== "http:" && up.protocol !== "https:")
       return new Response("Only http/https supported", { status: 400, headers: cors });
+
+    // ⚡ CF edge cache: repeat/skip playback lands on the edge instead of upstream.
+    const cache = caches.default;
+    const cacheKey = new Request(reqUrl.toString() + "|" + (req.headers.get("range") || ""), { method: "GET" });
+    const isCacheable = req.method === "GET" && isSegmentLike(up);
+    if (isCacheable) {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const h = new Headers(cached.headers);
+        h.set("x-edge-cache", "HIT");
+        return new Response(cached.body, { status: cached.status, headers: h });
+      }
+    }
 
     const headers = {
       "User-Agent": UA,
@@ -138,8 +153,19 @@ export default {
       const body = rewritePlaylist(await res.text(), up.toString(), reqUrl);
       out.delete("content-length");
       out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-      out.set("cache-control", "no-store");
+      out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
       return new Response(body, { status: res.status, headers: out });
+    }
+
+    // Store immutable media chunks in CF edge cache for near-instant re-serve.
+    if (isCacheable && (res.status === 200 || res.status === 206)) {
+      out.set("cache-control", "public, max-age=604800, immutable");
+      out.set("x-edge-cache", "MISS");
+      const [a, b] = res.body.tee();
+      const responseForClient = new Response(req.method === "HEAD" ? null : a, { status: res.status, headers: out });
+      const responseForCache = new Response(b, { status: res.status, headers: out });
+      ctx?.waitUntil?.(cache.put(cacheKey, responseForCache));
+      return responseForClient;
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
