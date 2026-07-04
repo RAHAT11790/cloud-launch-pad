@@ -1,3 +1,5 @@
+// 🆕 NEW v2 (2026-07-04) — Opaque src token + strict router. REDEPLOY REQUIRED.
+// After deploy, paste this URL back into Admin → EGD Router.
 // an-playback — playback-only AN HLS proxy.
 //
 // The fetch/extract API (`an-api`) gathers metadata, seasons, streams and audio.
