@@ -1455,7 +1455,24 @@ const Index = () => {
       return () => unsub();
     } catch {}
   }, [isLoggedIn]);
-  // FCM token registration & forceNotifPrompt removed — push notifications fully disabled
+  // FCM push registration — request permission + register token via send-fcm worker.
+  // Runs once per session per user; keeps token fresh with a 12h interval.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = localStorage.getItem("rsanime_user");
+        const parsed = raw ? JSON.parse(raw) : null;
+        const uid = String(parsed?.id || parsed?.uid || "").trim();
+        if (!uid || cancelled) return;
+        const mod = await import("@/lib/pushNotifications");
+        await mod.initPushNotifications(uid);
+      } catch (err) {
+        console.warn("[FCM] init failed", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";

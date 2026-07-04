@@ -17,6 +17,7 @@ import telegramPostSrc  from "../../cloudflare-workers/telegram-post.js?raw";
 import anApiSrc         from "../../cloudflare-workers/an-api.js?raw";
 import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
+import sendFcmSrc       from "../../cloudflare-workers/send-fcm.js?raw";
 
 export type CfLibraryEntry = {
   slug: string;
@@ -55,6 +56,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("send-fcm",        "Send FCM (Push)", "🔔 Ultra push-notification worker — Firebase Admin (service-account JWT) → FCM v1 API. Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + built-in 24h TTL cleanup (bind a Cron Trigger to /cleanup). Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v1", badgeTone: "amber" }),
   entry("video-boost",     "Video Boost",     "🚀 Alpha professional playback proxy — 8MB aligned CF edge cache + background prefetch + Referer/Origin domain lock (set ALLOWED_ORIGINS env). Sits in front of every RS/Telegram video URL for lightspeed playback + anti-theft.", videoBoostSrc, [], { isNew: true, badgeText: "LIGHTSPEED", badgeTone: "emerald" }),
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
