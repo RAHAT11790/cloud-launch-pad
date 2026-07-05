@@ -51,7 +51,8 @@ async function loadVapidKey(): Promise<string> {
     const val = String(snap.val() || "").trim();
     if (val) { _vapidKey = val; return _vapidKey; }
   } catch {}
-  return "";
+  _vapidKey = DEFAULT_VAPID_KEY;
+  return _vapidKey;
 }
 
 function getFirebaseApp() {
