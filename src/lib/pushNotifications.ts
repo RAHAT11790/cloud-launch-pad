@@ -28,8 +28,9 @@ const FIREBASE_CONFIG = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:843989457516:web:57e0577d092183eedd9649",
 };
 
-// VAPID key is loaded from Firebase → settings/fcmVapidKey OR VITE env.
-// Admin can update it live without a redeploy.
+// VAPID public key — safe to ship in client code (it's a public key by design).
+// Precedence: VITE env → Firebase settings/fcmVapidKey → hardcoded default.
+const DEFAULT_VAPID_KEY = "BBEEfj8RvypJfWDs2KobRAQ6xAprjcmc0rMdddRHHe4nUMaSx27Sk_dWd0SRoUtp0WrNFdwz1N4_5CNGObW2H1w";
 const LS_LAST_REG = "rs_fcm_last_register_at";
 const LS_LAST_TOKEN = "rs_fcm_last_token";
 const LS_USER_ID = "rs_fcm_user_id";
@@ -50,7 +51,8 @@ async function loadVapidKey(): Promise<string> {
     const val = String(snap.val() || "").trim();
     if (val) { _vapidKey = val; return _vapidKey; }
   } catch {}
-  return "";
+  _vapidKey = DEFAULT_VAPID_KEY;
+  return _vapidKey;
 }
 
 function getFirebaseApp() {
