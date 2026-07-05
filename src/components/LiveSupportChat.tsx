@@ -174,7 +174,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const buildShareLink = (anime: AnimeInfo) => {
       if (anime.shareLink) return anime.shareLink;
       const key = anime.id || (anime.source === "animesalt" && anime.slug ? `as_${anime.slug}` : "");
-      return key ? `${SITE_URL}/anime/${encodeURIComponent(key)}` : "";
+      return key ? `${SITE_URL}/watch/${encodeURIComponent(key)}` : "";
     };
 
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");

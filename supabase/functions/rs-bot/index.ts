@@ -80,7 +80,7 @@ async function loadCatalog(): Promise<CatalogItem[]> {
         category: v.category,
         language: v.language,
         episodes: epCount,
-        shareLink: `${SITE_URL}?anime=${encodeURIComponent(id)}`,
+          shareLink: `${SITE_URL}/watch/${encodeURIComponent(id)}`,
       });
     }
   }
@@ -98,7 +98,7 @@ async function loadCatalog(): Promise<CatalogItem[]> {
         rating: v.rating,
         category: v.category,
         language: v.language,
-        shareLink: `${SITE_URL}?anime=${encodeURIComponent(id)}`,
+          shareLink: `${SITE_URL}/watch/${encodeURIComponent(id)}`,
       });
     }
   }
@@ -115,7 +115,7 @@ async function loadCatalog(): Promise<CatalogItem[]> {
         year: v.year,
         rating: v.rating,
         category: v.category,
-        shareLink: `${SITE_URL}?anime=${encodeURIComponent(id)}`,
+        shareLink: `${SITE_URL}/watch/${encodeURIComponent(id)}`,
       });
     }
   }

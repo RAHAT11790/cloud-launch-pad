@@ -116,7 +116,7 @@ async function getBotUsername(botToken: string): Promise<string | null> {
 
 // ============== GROUP ANIME LINK-SHARE (moved from link-share-bot) ==============
 // Users type anime name in a group where THIS bot is a member → bot replies
-// with a backdrop photo + buttons that deep-link to the website's detail page.
+// with a backdrop photo + buttons that deep-link directly to the website player.
 const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
 type CatalogItem = { id: string; title: string; backdrop: string; poster: string; source: "RS" | "AN" };
 let _rsCache: { items: CatalogItem[]; ts: number } | null = null;
@@ -127,6 +127,27 @@ const recentGroupUpdates = new Map<number, number>();
 async function loadRsCatalog(): Promise<CatalogItem[]> {
   if (_rsCache && Date.now() - _rsCache.ts < CATALOG_TTL) return _rsCache.items;
   const items: CatalogItem[] = [];
+  for (const [path, sourcePath] of [["adminContentIndex/webseries", "webseries"], ["adminContentIndex/movies", "movies"]] as const) {
+    try {
+      const data: any = await fbGet(path);
+      if (!data) continue;
+      for (const [id, raw] of Object.entries<any>(data)) {
+        if (!raw || typeof raw !== "object" || raw.visibility === "private") continue;
+        const title = String((raw as any).title || (raw as any).name || "").trim();
+        if (!title) continue;
+        items.push({
+          id, title,
+          backdrop: String((raw as any).backdrop || (raw as any).poster || ""),
+          poster: String((raw as any).poster || (raw as any).backdrop || ""),
+          source: "RS",
+        });
+      }
+    } catch (e) { console.error("[loadRsCatalog:index]", sourcePath, e); }
+  }
+  if (items.length) {
+    _rsCache = { items, ts: Date.now() };
+    return items;
+  }
   for (const path of ["webseries", "movies"]) {
     try {
       const data: any = await fbGet(path);
@@ -147,6 +168,8 @@ async function loadRsCatalog(): Promise<CatalogItem[]> {
   _rsCache = { items, ts: Date.now() };
   return items;
 }
+
+const shareUrlFor = (item: CatalogItem) => `${SITE_URL}/watch/${encodeURIComponent(item.id)}`;
 
 async function loadAnCatalog(): Promise<CatalogItem[]> {
   if (_anCache && Date.now() - _anCache.ts < CATALOG_TTL) return _anCache.items;
@@ -283,8 +306,8 @@ async function handleGroupQuery(botToken: string, chat_id: number, user_id: numb
   const name = escHtml([from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "there");
   for (const g of ranked) {
     const rows: any[][] = [];
-    if (g.rs) rows.push([{ text: `▶️ ${truncate(g.rs.title, 22)} • RS`, url: `${SITE_URL}/anime/${encodeURIComponent(g.rs.id)}` }]);
-    if (g.an) rows.push([{ text: `▶️ ${truncate(g.an.title, 22)} • AN`, url: `${SITE_URL}/anime/${encodeURIComponent(g.an.id)}` }]);
+    if (g.rs) rows.push([{ text: `▶️ ${truncate(g.rs.title, 22)} • RS`, url: shareUrlFor(g.rs) }]);
+    if (g.an) rows.push([{ text: `▶️ ${truncate(g.an.title, 22)} • AN`, url: shareUrlFor(g.an) }]);
     if (!rows.length) continue;
     const caption = `╭─ <b>RS ANIME GROUP SHARE</b>\n│\n│ 👤 <a href="tg://user?id=${user_id}">${name}</a>\n│ 🎬 <b>${escHtml(g.title)}</b>\n│ ${g.rs && g.an ? "Available in both RS &amp; AN" : g.rs ? "Available in RS catalog" : "Available in AN catalog"}\n│ Tap a button below to open details\n╰─`;
     await sendGroupPhoto(botToken, chat_id, g.backdrop, caption, reply_to, rows);

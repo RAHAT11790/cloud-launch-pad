@@ -192,6 +192,33 @@ const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink1080, anime.movieLink720, anime.movieLink480, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
+const routeItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
+
+const loadFirebaseAnimeItemByRouteId = async (routeId: string): Promise<AnimeItem | null> => {
+  const id = String(routeId || "").trim();
+  if (!id || id.startsWith("as_") || id.startsWith("an_") || id.startsWith("an_mv_")) return null;
+  const cached = routeItemLoadCache.get(id);
+  if (cached) return cached;
+
+  const request = (async () => {
+    for (const collection of ["webseries", "movies"] as const) {
+      try {
+        const snap = await get(ref(db, `${collection}/${id}`));
+        const row = snap.val();
+        if (!row || row.visibility === "private") continue;
+        return collection === "movies"
+          ? mapFirebaseMovieItem(id, row, { full: true })
+          : mapFirebaseWebseriesItem(id, row, { full: true });
+      } catch {}
+    }
+    return null;
+  })();
+
+  routeItemLoadCache.set(id, request);
+  request.finally(() => routeItemLoadCache.delete(id));
+  return request;
+};
+
 // Convert an AN movie row into the same shape buildAnimeSaltEpisodePlaybackFromFirebase
 // expects, so we get a synthetic HLS master that mounts video + Hindi audio together.
 const movieToAnEpisode = (anime: AnimeItem): Episode => ({
@@ -790,6 +817,8 @@ const Index = () => {
   // release after the first visible assets are warm. Route/page navigation does
   // not remount this component, so the splash still won't interrupt browsing.
   const [splashHold, setSplashHold] = useState<boolean>(() => {
+    if (isRoutedOverlay) return false;
+    try { if (new URLSearchParams(window.location.search).has("anime")) return false; } catch {}
     try { return sessionStorage.getItem("rs_splash_shown") !== "1"; } catch { return true; }
   });
   const splashAssetTargetsRef = useRef<string[]>([]);
@@ -1557,7 +1586,6 @@ const Index = () => {
   // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
     if (!pendingAnimeId) return;
-    if (allAnime.length === 0) return;
 
     const isSaltLink = pendingAnimeId.startsWith("as_");
     if (isSaltLink && saltLoading) return; // wait for AN data
@@ -1569,6 +1597,15 @@ const Index = () => {
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
+      const capturedId = pendingAnimeId;
+      if (!isSaltLink) {
+        (async () => {
+          const full = await loadFirebaseAnimeItemByRouteId(capturedId);
+          await handleCardClick(full || found, deepSIdx, deepEIdx);
+          setPendingAnimeId((current) => (current === capturedId ? null : current));
+        })();
+        return;
+      }
       handleCardClick(found, deepSIdx, deepEIdx);
       setPendingAnimeId(null);
       return;
@@ -1602,29 +1639,12 @@ const Index = () => {
       return;
     }
 
-    // Firebase-key deep links (e.g. -OkayI8Uw6RtjnFtGVep) — the item may exist
-    // in /webseries or /movies but be missing from adminContentIndex, so it
-    // never landed in allAnime. Fetch it directly as a fallback.
-    const looksLikeFirebaseKey = /^-[A-Za-z0-9_-]{18,}$/.test(pendingAnimeId);
-    if (looksLikeFirebaseKey) {
-      const capturedId = pendingAnimeId;
-      (async () => {
-        for (const collection of ["webseries", "movies"] as const) {
-          try {
-            const snap = await get(ref(db, `${collection}/${capturedId}`));
-            const row = snap.val();
-            if (!row || row.visibility === "private") continue;
-            const mapped = collection === "movies"
-              ? mapFirebaseMovieItem(capturedId, row, { full: true })
-              : mapFirebaseWebseriesItem(capturedId, row, { full: true });
-            handleCardClick(mapped, deepSIdx, deepEIdx);
-            return;
-          } catch {}
-        }
-      })();
-    }
-
-    setPendingAnimeId(null);
+    const capturedId = pendingAnimeId;
+    (async () => {
+      const mapped = await loadFirebaseAnimeItemByRouteId(capturedId);
+      if (mapped) await handleCardClick(mapped, deepSIdx, deepEIdx);
+      setPendingAnimeId((current) => (current === capturedId ? null : current));
+    })();
   }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
   // LIVE sync: whenever an RS anime is open (details or player), subscribe to
@@ -2204,8 +2224,8 @@ const Index = () => {
     if (latestPremiumMeta) anime = { ...anime, ...latestPremiumMeta };
 
     const fallbackTarget = getDefaultWatchTarget(anime);
-    const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
-    const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
+    let resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
+    let resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
 
     // Premium gate — series-level or per-episode lock
     const seriesLike = anime as any;
@@ -2232,6 +2252,11 @@ const Index = () => {
     // "no saved Firebase HLS URL" toast and blocked every AN video.
     if (!isAnimeSaltContentEarlyReload) {
       anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+      if (resolvedSeasonIdx === undefined || resolvedEpIdx === undefined) {
+        const fullDefaultTarget = getDefaultWatchTarget(anime);
+        resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
+        resolvedEpIdx = resolvedEpIdx ?? fullDefaultTarget.epIdx;
+      }
     }
 
     const isInlineSwitch = keepPlayerAliveRef.current;
@@ -2390,12 +2415,10 @@ const Index = () => {
         }
         return;
       }
-      // RS id not indexed yet — bounce to details route so its own loader can
-      // resolve it. If it truly doesn't exist, details page shows a graceful
-      // empty state instead of a blank /watch screen.
-      if (!loading) {
-        navigate(buildAnimeRoute(watchRouteAnimeId), { replace: true });
-      }
+      void loadFirebaseAnimeItemByRouteId(watchRouteAnimeId).then((mapped) => {
+        if (mapped) void handlePlay(mapped, nextSeasonIdx, nextEpIdx);
+        else if (!loading) navigate(buildAnimeRoute(watchRouteAnimeId), { replace: true });
+      });
       return;
     }
 
@@ -3661,7 +3684,7 @@ const Index = () => {
           source: a.source || "firebase",
           id: a.id,
           slug: a.slug,
-          shareLink: `${window.location.origin}/anime/${encodeURIComponent(a.id)}`,
+          shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
         }))}

@@ -4905,7 +4905,7 @@ ${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} 
  // Telegram renders <blockquote> with a colored left bar, giving each item a card-like feel.
  const boxes = picked.map((it, i) => {
  const num = String(i + 1).padStart(2, "0");
- const url = `${SITE_URL}?anime=${encodeURIComponent(it.id)}`;
+  const url = buildEpisodeShareUrl(it.id);
  const icon = it.type === "movie" ? "🎬" : "📺";
  const tag = it.type === "movie" ? "MOVIE" : "SERIES";
  const title = escapeHtmlBasic(it.title);
@@ -7554,7 +7554,7 @@ ${tgBulkFooter}
  if (!content) { toast.error("Content not found"); return; }
 
  let seasonNumber: number | undefined; let episodeNumber: number | undefined;
- let seasonName = "Movie"; let deepLink = `/watch/${contentId}`;
+ let seasonName = "Movie"; let deepLink = buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
  let startEpNum: number | null = null; let endEpNum: number | null = null;
  if (contentType === "webseries") {
  const sIdx = parseInt(pushSeason);
@@ -7568,8 +7568,8 @@ ${tgBulkFooter}
  startEpNum = startEp?.episodeNumber || startIdx + 1;
  endEpNum = endEp?.episodeNumber || endIdx + 1;
  seasonName = season?.name || `Season ${seasonNumber}`;
- // Notification click → load START episode
- deepLink = `/watch/${contentId}?s=${sIdx}&e=${startIdx}`;
+  // Notification click → load START episode; helper converts indexes to 1-based URL params.
+  deepLink = buildEpisodeShareUrl(contentId, sIdx, startIdx).replace(/^https?:\/\/[^/]+/, "");
  }
 
  const backdrop = content.backdrop || content.poster || "";
