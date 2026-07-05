@@ -4001,9 +4001,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
-    // Remember user's explicit quality choice so future episodes stay at
-    // the same quality automatically.
-    try { localStorage.setItem("rs_preferred_quality", option.label); } catch {}
+    // Quality choice is remembered only in-memory for the CURRENT anime via
+    // manualQualitySelectedRef + currentQuality. The per-anime reset effect
+    // clears both when animeId changes, so a new anime always starts at Auto.
+
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
