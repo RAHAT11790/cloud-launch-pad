@@ -1564,7 +1564,7 @@ ${perm}`,
 
 // ============== GROUP ANIME LINK-SHARE ==============
 // User types an anime name in a group → bot replies with a backdrop photo +
-// buttons that deep-link to the website's anime detail (?anime=<id>) for
+// buttons that deep-link directly to the website player for
 // both RS (Firebase webseries/movies) and AN (AnimeSalt) catalogs.
 
 const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
@@ -1751,7 +1751,7 @@ function escHtml(s: string): string {
 }
 
 function shareUrlFor(item: CatalogItem): string {
-  return `${SITE_URL}/anime/${encodeURIComponent(item.id)}`;
+  return `${SITE_URL}/watch/${encodeURIComponent(item.id)}`;
 }
 
 function isAccessTrigger(text: string): boolean {
