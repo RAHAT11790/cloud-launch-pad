@@ -79,41 +79,48 @@ async function ensureMessaging() {
   return _messagingInstance;
 }
 
-async function postRegister(userId: string, token: string) {
+async function postRegister(userId: string, token: string): Promise<boolean> {
   const endpoint = await getEdgeFunctionUrl("send-fcm");
-  if (!endpoint) return; // router not configured — skip silently
+  if (!endpoint) {
+    console.warn("[FCM] send-fcm endpoint not configured in EGD Router");
+    return false;
+  }
   const url = endpoint.replace(/\/+$/, "") + "/register";
   try {
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
     });
+    if (!r.ok) {
+      console.warn("[FCM] register HTTP", r.status, await r.text().catch(() => ""));
+      return false;
+    }
     try {
       localStorage.setItem(LS_LAST_REG, String(Date.now()));
       localStorage.setItem(LS_LAST_TOKEN, token);
       localStorage.setItem(LS_USER_ID, userId);
     } catch {}
+    console.info("[FCM] token registered for", userId);
+    return true;
   } catch (err) {
     console.warn("[FCM] register POST failed", err);
+    return false;
   }
 }
 
 async function acquireAndRegisterToken(userId: string): Promise<string | null> {
   const messaging = await ensureMessaging();
-  if (!messaging) return null;
+  if (!messaging) { console.warn("[FCM] messaging not supported"); return null; }
   const vapidKey = await loadVapidKey();
-  if (!vapidKey) {
-    console.warn("[FCM] VAPID key missing — set settings/fcmVapidKey in Firebase or VITE_FCM_VAPID_KEY");
-    return null;
-  }
+  if (!vapidKey) { console.warn("[FCM] VAPID key missing"); return null; }
   const swReg = await ensureServiceWorker();
-  if (!swReg) return null;
+  if (!swReg) { console.warn("[FCM] service worker registration failed"); return null; }
   try {
     const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
-    if (!token) return null;
-    await postRegister(userId, token);
-    return token;
+    if (!token) { console.warn("[FCM] getToken returned empty"); return null; }
+    const ok = await postRegister(userId, token);
+    return ok ? token : null;
   } catch (err) {
     console.warn("[FCM] getToken failed", err);
     return null;
