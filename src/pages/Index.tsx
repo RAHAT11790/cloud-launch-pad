@@ -1597,6 +1597,15 @@ const Index = () => {
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
+      const capturedId = pendingAnimeId;
+      if (!isSaltLink) {
+        (async () => {
+          const full = await loadFirebaseAnimeItemByRouteId(capturedId);
+          await handleCardClick(full || found, deepSIdx, deepEIdx);
+          setPendingAnimeId((current) => (current === capturedId ? null : current));
+        })();
+        return;
+      }
       handleCardClick(found, deepSIdx, deepEIdx);
       setPendingAnimeId(null);
       return;
