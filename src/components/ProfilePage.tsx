@@ -1054,7 +1054,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <span className="font-medium">Settings</span>
         </button>
         <div className="space-y-3">
-          <NotificationEnableCard userId={(user as any)?.id} />
+          <NotificationEnableCard />
           <div onClick={() => setActivePanel("quality")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Monitor className="w-5 h-5 text-primary" />
             <div className="flex-1">
