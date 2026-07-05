@@ -1598,6 +1598,30 @@ const Index = () => {
         };
         handleCardClick(stub, deepSIdx, deepEIdx);
       }
+      setPendingAnimeId(null);
+      return;
+    }
+
+    // Firebase-key deep links (e.g. -OkayI8Uw6RtjnFtGVep) — the item may exist
+    // in /webseries or /movies but be missing from adminContentIndex, so it
+    // never landed in allAnime. Fetch it directly as a fallback.
+    const looksLikeFirebaseKey = /^-[A-Za-z0-9_-]{18,}$/.test(pendingAnimeId);
+    if (looksLikeFirebaseKey) {
+      const capturedId = pendingAnimeId;
+      (async () => {
+        for (const collection of ["webseries", "movies"] as const) {
+          try {
+            const snap = await get(ref(db, `${collection}/${capturedId}`));
+            const row = snap.val();
+            if (!row || row.visibility === "private") continue;
+            const mapped = collection === "movies"
+              ? mapFirebaseMovieItem(capturedId, row, { full: true })
+              : mapFirebaseWebseriesItem(capturedId, row, { full: true });
+            handleCardClick(mapped, deepSIdx, deepEIdx);
+            return;
+          } catch {}
+        }
+      })();
     }
 
     setPendingAnimeId(null);
