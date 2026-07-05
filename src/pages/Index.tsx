@@ -1627,6 +1627,40 @@ const Index = () => {
     setPendingAnimeId(null);
   }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
+  // LIVE sync: whenever an RS anime is open (details or player), subscribe to
+  // its Firebase node so admin-side edits (new episode, status flip, poster
+  // swap) reflect in the user UI within ~1 second instead of waiting for the
+  // shallow index to refresh on the next page load.
+  const liveAnimeId = playerState?.anime?.id || selectedAnime?.id || null;
+  useEffect(() => {
+    if (!liveAnimeId) return;
+    // Skip AN/AnimeSalt — they hydrate via their own live API path.
+    if (liveAnimeId.startsWith("as_") || liveAnimeId.startsWith("an_")) return;
+    let cancelled = false;
+    const tryPath = (collection: "webseries" | "movies") => {
+      const nodeRef = ref(db, `${collection}/${liveAnimeId}`);
+      return onValue(nodeRef, (snap) => {
+        if (cancelled) return;
+        const row = snap.val();
+        if (!row) return;
+        const mapped = collection === "movies"
+          ? mapFirebaseMovieItem(liveAnimeId, row, { full: true })
+          : mapFirebaseWebseriesItem(liveAnimeId, row, { full: true });
+        setSelectedAnime((prev) => (prev && prev.id === liveAnimeId ? { ...prev, ...mapped } : prev));
+        setPlayerState((prev) => (prev && prev.anime?.id === liveAnimeId
+          ? { ...prev, anime: { ...prev.anime, ...mapped } }
+          : prev));
+      });
+    };
+    const unsubWs = tryPath("webseries");
+    const unsubMov = tryPath("movies");
+    return () => {
+      cancelled = true;
+      try { unsubWs(); } catch {}
+      try { unsubMov(); } catch {}
+    };
+  }, [liveAnimeId]);
+
   const filteredAnime = useMemo(() => {
     // Home/category screens are series-first only. Movies live in the dedicated
     // Movies tab plus the single "Most Favorite Movies" rail on Home.
