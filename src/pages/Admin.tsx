@@ -6704,6 +6704,19 @@ ${tgBulkFooter}
  // Step 2: Auto-redirect to Telegram Post section with anime preselected
  const ctx = wsNotifyContextRef.current;
  const seriesId = ctx?.seriesId || "";
+ // 🎯 Capture season/episode BEFORE state is cleared so we can build the
+ // exact deep link (/watch/<id>?s=<season>&e=<episode>) even when the
+ // releasesData snapshot from Firebase hasn't propagated yet.
+ const usingMulti = wsAutoRanges.length > 0;
+ const firstAuto = wsAutoRanges[0];
+ const capturedSeasonIdx = usingMulti
+   ? (firstAuto?.seasonIdx ?? 0)
+   : parseInt(wsNotifySeason);
+ const capturedEpNumber = usingMulti
+   ? (firstAuto?.startEp ?? 1)
+   : (parseInt(wsNotifyEpisode) + 1);
+ const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
+ const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
  toast.success("✅ Notification sent — redirecting to Telegram post...");
  setWsSaveNotifyModal(false);
  setWsNotifyStep("release");
@@ -6714,10 +6727,15 @@ ${tgBulkFooter}
  wsNotifyContextRef.current = null;
  // Switch section then preselect — find the matching release (most recent for this seriesId)
  setActiveSection("telegram-post");
- setTimeout(() => {
+ setTimeout(async () => {
  const matching = releasesData.find(r => r.contentId === seriesId);
  if (matching) {
- fillTelegramFromRelease(matching.id);
+ await fillTelegramFromRelease(matching.id);
+ // Force-override with the captured deep link so it always points at the
+ // freshly-added episode (releasesData may hold an older episodeInfo).
+ if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
+ }
  } else if (seriesId) {
  // Fallback: fill directly from webseries data
  const ws = webseriesData.find(s => s.id === seriesId);
@@ -6735,11 +6753,12 @@ ${tgBulkFooter}
   } catch {} })();
  if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
-  const latestRelease = releasesData.find(r => r.contentId === seriesId);
-  if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
-   const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
-   const eIdx = getEpisodeIndexForShare(ws?.seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
-   setTgButtonLink(buildEpisodeShareUrl(seriesId, sIdx, eIdx));
+  // Use the captured season/episode from the modal so the Watch button
+  // always deep-links to the newly-added episode (not just seriesId).
+  if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
+   setTgSeason(String(capturedSeasonIdx + 1).padStart(2, '0'));
+   setTgNewEpAdded(String(capturedEpNumber).padStart(2, '0'));
   } else {
    setTgButtonLink(buildEpisodeShareUrl(seriesId));
   }
