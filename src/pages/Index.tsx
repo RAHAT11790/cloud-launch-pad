@@ -1492,8 +1492,15 @@ const Index = () => {
       try {
         const raw = localStorage.getItem("rsanime_user");
         const parsed = raw ? JSON.parse(raw) : null;
-        const uid = String(parsed?.id || parsed?.uid || "").trim();
-        if (!uid || cancelled) return;
+        let uid = String(parsed?.id || parsed?.uid || "").trim();
+        // Guest visitors also register for push — falls back to guest_<deviceId>.
+        if (!uid) {
+          try {
+            const { getDeviceId } = await import("@/lib/premiumAccess");
+            uid = `guest_${getDeviceId()}`;
+          } catch { uid = ""; }
+        }
+        if (cancelled) return;
         const mod = await import("@/lib/pushNotifications");
         await mod.initPushNotifications(uid);
       } catch (err) {
