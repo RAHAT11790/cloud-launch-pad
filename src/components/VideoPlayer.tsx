@@ -3034,24 +3034,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     lastEpisodeKeyRef.current = episodeKey;
     instantSwitchRef.current = true;
     const nextQualityOptions: QualityOption[] = [{ label: "Auto", src }, ...(qualityOptions || []).filter((q) => q.src)];
-    let savedQualityLabel = "";
-    try { savedQualityLabel = localStorage.getItem("rs_preferred_quality") || ""; } catch {}
+    // Per-anime quality memory only: preserve the user's manual pick within
+    // the same series/anime (episode switches). On a brand-new anime the
+    // per-anime reset effect (animeId change) has already cleared this ref,
+    // so we always fall back to Auto — no global localStorage carry-over,
+    // no forced low-quality auto-start.
     const preservedQuality = manualQualitySelectedRef.current && currentQuality !== "Auto"
-      ? nextQualityOptions.find((q) => q.label === currentQuality)
-      : (savedQualityLabel && savedQualityLabel !== "Auto"
-          ? nextQualityOptions.find((q) => q.label === savedQualityLabel && (!is4KLabel(q.label) || isPremium))
-          : null);
-    if (preservedQuality) manualQualitySelectedRef.current = true;
-    // RS direct HTTPS servers often host non-faststart MP4s. Starting Auto on
-    // the lightest available stream avoids pulling a huge 1080p/720p open-ended
-    // range before metadata lands, which is the main Server 1 buffering trigger
-    // on low phones. Users can still switch quality manually after playback starts.
-    const autoStartQuality = !preservedQuality && !isAnimeSaltContent
-      ? nextQualityOptions.find((q) => /480|360/i.test(q.label) && q.src)
-        || nextQualityOptions.find((q) => /720/i.test(q.label) && q.src)
-        || null
+      ? nextQualityOptions.find((q) => q.label === currentQuality && (!is4KLabel(q.label) || isPremium))
       : null;
-    const baseRawSrc = preservedQuality?.src || autoStartQuality?.src || src;
+    const autoStartQuality = null as QualityOption | null;
+    const baseRawSrc = preservedQuality?.src || src;
     const isFastHlsSource = isHlsLikeUrl(baseRawSrc);
     const hadManualServer = manualServerSelectedRef.current;
     const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
@@ -4009,9 +4001,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
-    // Remember user's explicit quality choice so future episodes stay at
-    // the same quality automatically.
-    try { localStorage.setItem("rs_preferred_quality", option.label); } catch {}
+    // Quality choice is remembered only in-memory for the CURRENT anime via
+    // manualQualitySelectedRef + currentQuality. The per-anime reset effect
+    // clears both when animeId changes, so a new anime always starts at Auto.
+
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
