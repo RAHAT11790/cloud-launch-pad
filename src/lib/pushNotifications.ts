@@ -79,41 +79,48 @@ async function ensureMessaging() {
   return _messagingInstance;
 }
 
-async function postRegister(userId: string, token: string) {
+async function postRegister(userId: string, token: string): Promise<boolean> {
   const endpoint = await getEdgeFunctionUrl("send-fcm");
-  if (!endpoint) return; // router not configured — skip silently
+  if (!endpoint) {
+    console.warn("[FCM] send-fcm endpoint not configured in EGD Router");
+    return false;
+  }
   const url = endpoint.replace(/\/+$/, "") + "/register";
   try {
-    await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
     });
+    if (!r.ok) {
+      console.warn("[FCM] register HTTP", r.status, await r.text().catch(() => ""));
+      return false;
+    }
     try {
       localStorage.setItem(LS_LAST_REG, String(Date.now()));
       localStorage.setItem(LS_LAST_TOKEN, token);
       localStorage.setItem(LS_USER_ID, userId);
     } catch {}
+    console.info("[FCM] token registered for", userId);
+    return true;
   } catch (err) {
     console.warn("[FCM] register POST failed", err);
+    return false;
   }
 }
 
 async function acquireAndRegisterToken(userId: string): Promise<string | null> {
   const messaging = await ensureMessaging();
-  if (!messaging) return null;
+  if (!messaging) { console.warn("[FCM] messaging not supported"); return null; }
   const vapidKey = await loadVapidKey();
-  if (!vapidKey) {
-    console.warn("[FCM] VAPID key missing — set settings/fcmVapidKey in Firebase or VITE_FCM_VAPID_KEY");
-    return null;
-  }
+  if (!vapidKey) { console.warn("[FCM] VAPID key missing"); return null; }
   const swReg = await ensureServiceWorker();
-  if (!swReg) return null;
+  if (!swReg) { console.warn("[FCM] service worker registration failed"); return null; }
   try {
     const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
-    if (!token) return null;
-    await postRegister(userId, token);
-    return token;
+    if (!token) { console.warn("[FCM] getToken returned empty"); return null; }
+    const ok = await postRegister(userId, token);
+    return ok ? token : null;
   } catch (err) {
     console.warn("[FCM] getToken failed", err);
     return null;
@@ -223,6 +230,93 @@ export async function initPushNotifications(userIdInput?: string) {
   };
   window.addEventListener("focus", revalidate);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) revalidate(); });
+}
+
+/**
+ * Returns the current push status for UI display in Profile → Notifications.
+ */
+export async function getPushStatus(): Promise<{
+  supported: boolean;
+  permission: NotificationPermission | "unsupported";
+  tokenRegistered: boolean;
+  lastRegisterAt: number;
+}> {
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    return { supported: false, permission: "unsupported", tokenRegistered: false, lastRegisterAt: 0 };
+  }
+  const supported = await isSupported().catch(() => false);
+  let tokenRegistered = false;
+  let lastRegisterAt = 0;
+  try {
+    tokenRegistered = !!localStorage.getItem(LS_LAST_TOKEN);
+    lastRegisterAt = Number(localStorage.getItem(LS_LAST_REG) || 0);
+  } catch {}
+  return { supported, permission: Notification.permission, tokenRegistered, lastRegisterAt };
+}
+
+/**
+ * User-gesture triggered: force a permission prompt and register the FCM token.
+ * Call this from a click handler (e.g. "Enable Notifications" button).
+ * Returns a status string the UI can toast/show.
+ */
+export async function enablePushNotifications(userIdInput?: string): Promise<{
+  ok: boolean;
+  status: "granted" | "denied" | "default" | "unsupported" | "error";
+  token?: string;
+  message: string;
+}> {
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    return { ok: false, status: "unsupported", message: "Your browser does not support notifications." };
+  }
+  if (!(await isSupported().catch(() => false))) {
+    return { ok: false, status: "unsupported", message: "Push messaging is not supported in this browser." };
+  }
+
+  // Resolve user id (guest fallback)
+  let userId = String(userIdInput || "").trim();
+  if (!userId) {
+    try {
+      const { getDeviceId } = await import("@/lib/premiumAccess");
+      userId = `guest_${getDeviceId()}`;
+    } catch {
+      userId = "guest_unknown";
+    }
+  }
+
+  let permission = Notification.permission;
+  if (permission === "denied") {
+    return {
+      ok: false,
+      status: "denied",
+      message: "Notifications are blocked. Click the lock icon in your browser's address bar → Site settings → Notifications → Allow, then try again.",
+    };
+  }
+
+  if (permission === "default") {
+    try {
+      permission = await Notification.requestPermission();
+    } catch {
+      return { ok: false, status: "error", message: "Could not open the permission prompt." };
+    }
+    try {
+      // Reset the 3-strike counters since the user actively opted in
+      localStorage.removeItem("rs_fcm_perm_attempts");
+      localStorage.removeItem("rs_fcm_perm_last_prompt");
+      localStorage.removeItem("rs_fcm_perm_stopped");
+    } catch {}
+  }
+
+  if (permission !== "granted") {
+    return { ok: false, status: permission as any, message: "You did not allow notifications." };
+  }
+
+  const token = await acquireAndRegisterToken(userId);
+  if (!token) {
+    return { ok: false, status: "error", message: "Permission granted but token registration failed. Please retry." };
+  }
+  bindForegroundHandler();
+  _bootstrapped = true;
+  return { ok: true, status: "granted", token, message: "Notifications enabled successfully!" };
 }
 
 /**

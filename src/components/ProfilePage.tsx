@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-// FCM removed
+import { enablePushNotifications, getPushStatus } from "@/lib/pushNotifications";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import { triggerApkDownload } from "@/lib/apkDownload";
@@ -1054,7 +1054,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <span className="font-medium">Settings</span>
         </button>
         <div className="space-y-3">
-          {/* Notifications settings entry removed — FCM disabled */}
+          <NotificationEnableCard />
           <div onClick={() => setActivePanel("quality")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Monitor className="w-5 h-5 text-primary" />
             <div className="flex-1">
@@ -2398,7 +2398,78 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-// PushDebugInfo and NotificationToggle removed — FCM disabled site-wide
+// Notification enable card — user-gesture button to request permission + register FCM token.
+const NotificationEnableCard = () => {
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [registered, setRegistered] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const s = await getPushStatus();
+    setPermission(s.permission);
+    setRegistered(s.tokenRegistered);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const onVis = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [refresh]);
+
+  const handleClick = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await enablePushNotifications();
+      if (res.ok) toast.success(res.message);
+      else if (res.status === "denied") toast.error(res.message, { duration: 10000 });
+      else toast.error(res.message);
+      await refresh();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isOn = permission === "granted" && registered;
+  const isBlocked = permission === "denied";
+  const isUnsupported = permission === "unsupported";
+
+  const status = isUnsupported
+    ? "Not supported in this browser"
+    : isOn
+    ? "Enabled — you'll receive push updates"
+    : isBlocked
+    ? "Blocked — allow in browser site settings"
+    : permission === "granted"
+    ? "Permission granted — tap to register"
+    : "Tap to enable notifications";
+
+  return (
+    <div
+      onClick={isUnsupported ? undefined : handleClick}
+      className={`glass-card px-4 py-4 rounded-xl flex items-center gap-3 transition-all ${
+        isUnsupported ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:border-primary"
+      }`}
+    >
+      <Bell className={`w-5 h-5 ${isOn ? "text-primary" : "text-muted-foreground"}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">Notifications</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{status}</p>
+      </div>
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+      ) : isOn ? (
+        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-primary/15 text-primary">ON</span>
+      ) : isBlocked ? (
+        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-destructive/15 text-destructive">BLOCKED</span>
+      ) : (
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      )}
+    </div>
+  );
+};
+
 
 const ProfilePage = forwardRef<HTMLDivElement, ProfilePageProps>((props, _ref) => {
   return <ProfilePageInner {...props} />;
