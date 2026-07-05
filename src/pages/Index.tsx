@@ -1586,7 +1586,6 @@ const Index = () => {
   // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
     if (!pendingAnimeId) return;
-    if (allAnime.length === 0) return;
 
     const isSaltLink = pendingAnimeId.startsWith("as_");
     if (isSaltLink && saltLoading) return; // wait for AN data
@@ -2402,12 +2401,10 @@ const Index = () => {
         }
         return;
       }
-      if (!loading) {
-        void loadFirebaseAnimeItemByRouteId(watchRouteAnimeId).then((mapped) => {
-          if (mapped) void handlePlay(mapped, nextSeasonIdx, nextEpIdx);
-          else navigate(buildAnimeRoute(watchRouteAnimeId), { replace: true });
-        });
-      }
+      void loadFirebaseAnimeItemByRouteId(watchRouteAnimeId).then((mapped) => {
+        if (mapped) void handlePlay(mapped, nextSeasonIdx, nextEpIdx);
+        else if (!loading) navigate(buildAnimeRoute(watchRouteAnimeId), { replace: true });
+      });
       return;
     }
 
