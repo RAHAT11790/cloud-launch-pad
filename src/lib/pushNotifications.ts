@@ -140,17 +140,70 @@ function bindForegroundHandler() {
  * Public entry: kick off FCM registration for the current user.
  * Safe to call multiple times — deduped.
  */
-export async function initPushNotifications(userId: string) {
-  if (_bootstrapped || !userId) return;
-  _bootstrapped = true;
+export async function initPushNotifications(userIdInput?: string) {
+  if (_bootstrapped) return;
   if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (!("serviceWorker" in navigator)) return;
 
-  // Don't nag: only request permission if it hasn't been decided yet.
-  // Users who denied stay denied (no notifications sent).
-  let permission = Notification.permission;
-  if (permission === "default") {
-    try { permission = await Notification.requestPermission(); } catch { permission = Notification.permission; }
+  // Resolve an ID even for guests so tokens can still be stored & pushed to.
+  let userId = String(userIdInput || "").trim();
+  if (!userId) {
+    try {
+      const { getDeviceId } = await import("@/lib/premiumAccess");
+      userId = `guest_${getDeviceId()}`;
+    } catch {
+      userId = "guest_unknown";
+    }
   }
+
+  _bootstrapped = true;
+
+  // ============ 3-strike permission prompt logic ============
+  // Prompt on first visit; if user dismisses/declines, wait 24h and try again,
+  // up to 3 attempts total. After 3 declines, stop prompting forever.
+  const LS_PERM_ATTEMPTS = "rs_fcm_perm_attempts";
+  const LS_PERM_LAST_PROMPT = "rs_fcm_perm_last_prompt";
+  const LS_PERM_STOPPED = "rs_fcm_perm_stopped";
+  const PROMPT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
+  const MAX_ATTEMPTS = 3;
+
+  let permission = Notification.permission;
+
+  if (permission === "default") {
+    const stopped = localStorage.getItem(LS_PERM_STOPPED) === "1";
+    const attempts = Number(localStorage.getItem(LS_PERM_ATTEMPTS) || 0);
+    const lastPrompt = Number(localStorage.getItem(LS_PERM_LAST_PROMPT) || 0);
+    const cooldownOk = !lastPrompt || Date.now() - lastPrompt >= PROMPT_COOLDOWN_MS;
+
+    if (!stopped && attempts < MAX_ATTEMPTS && cooldownOk) {
+      // Slight delay so it doesn't hit before the page paints.
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        permission = await Notification.requestPermission();
+      } catch {
+        permission = Notification.permission;
+      }
+      try {
+        localStorage.setItem(LS_PERM_LAST_PROMPT, String(Date.now()));
+        const newAttempts = attempts + 1;
+        localStorage.setItem(LS_PERM_ATTEMPTS, String(newAttempts));
+        if (permission !== "granted" && newAttempts >= MAX_ATTEMPTS) {
+          localStorage.setItem(LS_PERM_STOPPED, "1");
+        }
+      } catch {}
+    }
+  } else if (permission === "granted") {
+    // Reset attempt counter so a future re-permission works cleanly.
+    try {
+      localStorage.removeItem(LS_PERM_ATTEMPTS);
+      localStorage.removeItem(LS_PERM_LAST_PROMPT);
+      localStorage.removeItem(LS_PERM_STOPPED);
+    } catch {}
+  } else if (permission === "denied") {
+    // Browser-level denial → cannot be re-prompted; stop trying.
+    try { localStorage.setItem(LS_PERM_STOPPED, "1"); } catch {}
+  }
+
   if (permission !== "granted") return;
 
   await acquireAndRegisterToken(userId);
