@@ -3673,7 +3673,7 @@ const Index = () => {
           source: a.source || "firebase",
           id: a.id,
           slug: a.slug,
-          shareLink: `${window.location.origin}/anime/${encodeURIComponent(a.id)}`,
+          shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
         }))}
