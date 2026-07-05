@@ -226,6 +226,93 @@ export async function initPushNotifications(userIdInput?: string) {
 }
 
 /**
+ * Returns the current push status for UI display in Profile → Notifications.
+ */
+export async function getPushStatus(): Promise<{
+  supported: boolean;
+  permission: NotificationPermission | "unsupported";
+  tokenRegistered: boolean;
+  lastRegisterAt: number;
+}> {
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    return { supported: false, permission: "unsupported", tokenRegistered: false, lastRegisterAt: 0 };
+  }
+  const supported = await isSupported().catch(() => false);
+  let tokenRegistered = false;
+  let lastRegisterAt = 0;
+  try {
+    tokenRegistered = !!localStorage.getItem(LS_LAST_TOKEN);
+    lastRegisterAt = Number(localStorage.getItem(LS_LAST_REG) || 0);
+  } catch {}
+  return { supported, permission: Notification.permission, tokenRegistered, lastRegisterAt };
+}
+
+/**
+ * User-gesture triggered: force a permission prompt and register the FCM token.
+ * Call this from a click handler (e.g. "Enable Notifications" button).
+ * Returns a status string the UI can toast/show.
+ */
+export async function enablePushNotifications(userIdInput?: string): Promise<{
+  ok: boolean;
+  status: "granted" | "denied" | "default" | "unsupported" | "error";
+  token?: string;
+  message: string;
+}> {
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    return { ok: false, status: "unsupported", message: "Your browser does not support notifications." };
+  }
+  if (!(await isSupported().catch(() => false))) {
+    return { ok: false, status: "unsupported", message: "Push messaging is not supported in this browser." };
+  }
+
+  // Resolve user id (guest fallback)
+  let userId = String(userIdInput || "").trim();
+  if (!userId) {
+    try {
+      const { getDeviceId } = await import("@/lib/premiumAccess");
+      userId = `guest_${getDeviceId()}`;
+    } catch {
+      userId = "guest_unknown";
+    }
+  }
+
+  let permission = Notification.permission;
+  if (permission === "denied") {
+    return {
+      ok: false,
+      status: "denied",
+      message: "Notifications are blocked. Click the lock icon in your browser's address bar → Site settings → Notifications → Allow, then try again.",
+    };
+  }
+
+  if (permission === "default") {
+    try {
+      permission = await Notification.requestPermission();
+    } catch {
+      return { ok: false, status: "error", message: "Could not open the permission prompt." };
+    }
+    try {
+      // Reset the 3-strike counters since the user actively opted in
+      localStorage.removeItem("rs_fcm_perm_attempts");
+      localStorage.removeItem("rs_fcm_perm_last_prompt");
+      localStorage.removeItem("rs_fcm_perm_stopped");
+    } catch {}
+  }
+
+  if (permission !== "granted") {
+    return { ok: false, status: permission as any, message: "You did not allow notifications." };
+  }
+
+  const token = await acquireAndRegisterToken(userId);
+  if (!token) {
+    return { ok: false, status: "error", message: "Permission granted but token registration failed. Please retry." };
+  }
+  bindForegroundHandler();
+  _bootstrapped = true;
+  return { ok: true, status: "granted", token, message: "Notifications enabled successfully!" };
+}
+
+/**
  * Unregister the current token for the user (e.g. on logout).
  */
 export async function unregisterPushNotifications() {
