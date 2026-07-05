@@ -2224,8 +2224,8 @@ const Index = () => {
     if (latestPremiumMeta) anime = { ...anime, ...latestPremiumMeta };
 
     const fallbackTarget = getDefaultWatchTarget(anime);
-    const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
-    const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
+    let resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
+    let resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
 
     // Premium gate — series-level or per-episode lock
     const seriesLike = anime as any;
@@ -2252,6 +2252,11 @@ const Index = () => {
     // "no saved Firebase HLS URL" toast and blocked every AN video.
     if (!isAnimeSaltContentEarlyReload) {
       anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+      if (resolvedSeasonIdx === undefined || resolvedEpIdx === undefined) {
+        const fullDefaultTarget = getDefaultWatchTarget(anime);
+        resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
+        resolvedEpIdx = resolvedEpIdx ?? fullDefaultTarget.epIdx;
+      }
     }
 
     const isInlineSwitch = keepPlayerAliveRef.current;
