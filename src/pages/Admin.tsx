@@ -3890,43 +3890,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const releaseNotifMsg = contentType === "webseries"
  ? `${episodeInfo.seasonName} - Episode ${episodeInfo.episodeNumber} is now available!`
  : `${content.title} (${content.year}) is now available!`;
+ const releaseDeepLink = contentType === "webseries"
+ ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
+ : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
   startTransition(() => { setReleaseContent(""); setShowSeasonEpisode(false); });
   adminIdle(async () => {
   try {
-  const usersSnap = await get(ref(db, "users"));
-  const users = usersSnap.val() || {};
-  const entries = Object.entries(users);
-  const seenUserIds = new Set<string>();
-  let sent = 0;
-  for (let i = 0; i < entries.length; i += 150) {
-  const userNotifUpdates: Record<string, any> = {};
-  entries.slice(i, i + 150).forEach(([userKey, userData]: any) => {
-  const effectiveUserId = String(userData?.id || userKey || "").trim();
-  if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
-  seenUserIds.add(effectiveUserId);
-  const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
-  if (!notifKey) return;
-  userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
+  const pushMod = await import("@/lib/pushNotifications");
+  const res = await pushMod.sendPushNotification({
   title: releaseNotifTitle,
-  message: releaseNotifMsg,
-  type: "new_episode",
+  body: releaseNotifMsg,
+  image: toPushImageUrl(content.backdrop || content.poster || ""),
+  deepLink: releaseDeepLink,
   contentId,
   contentType,
-  image: content.poster || "",
-  poster: content.poster || "",
-  timestamp: Date.now(),
-  read: false,
-  };
+  seasonNumber: contentType === "webseries" ? episodeInfo.seasonNumber : undefined,
+  episodeNumber: contentType === "webseries" ? episodeInfo.episodeNumber : undefined,
   });
-  const keys = Object.keys(userNotifUpdates);
-  if (keys.length > 0) { await update(ref(db), userNotifUpdates); sent += keys.length; }
-  await yieldAdminFrame();
-  }
-  if (sent > 0) toast.success(`In-app notification sent to ${sent} users`);
+  if (res.ok) toast.success(`Browser push sent → ${res.sent}/${res.total} users`);
+  else toast.warning(`Push skipped: ${res.error || "send-fcm not configured"}`);
   } catch (err: any) { console.warn("Background release notification failed", err); }
   }, 500);
  
- // FCM push removed — in-app notifications above are sufficient
  } catch (err: any) { toast.error("Error: " + err.message); }
  };
 
