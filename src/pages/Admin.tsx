@@ -6538,13 +6538,11 @@ ${tgBulkFooter}
         ? `${firstR.seasonName} • Episode ${firstR.startEp}–${firstR.endEp}`
         : `${firstR.seasonName} • Episode ${firstR.startEp}`);
     const pushBody = `${ctxForm.title} — ${epLine} is now live!\n▶ Tap to watch instantly on RS Anime.`;
-    const backdrop = ctxForm.backdrop || ctxForm.poster || "";
-    const image = backdrop
-      ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/')
-      : "";
+    const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
     const firstRange = rangesToPublish[0];
     const seasonIdxForLink = usingMulti ? (wsAutoRanges[0]?.seasonIdx ?? 0) : parseInt(wsNotifySeason);
-    const epIdxForLink = usingMulti ? 0 : getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode));
+    const firstRangeSeason = ctxForm.seasons?.[seasonIdxForLink] || season;
+    const epIdxForLink = getEpisodeIndexForShare(firstRangeSeason, firstRange.startEp, usingMulti ? Math.max(0, firstRange.startEp - 1) : parseInt(wsNotifyEpisode));
     const deepLink = buildEpisodeShareUrl(ctxSeriesId, seasonIdxForLink, epIdxForLink).replace(/^https?:\/\/[^/]+/, "");
     const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
     setAdminBusyTask("Sending push to users…");
