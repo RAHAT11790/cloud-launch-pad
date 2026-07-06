@@ -173,7 +173,7 @@ function bindForegroundHandler() {
       }
 
       const swReg = await ensureServiceWorker();
-      const options: NotificationOptions & { image?: string } = {
+      const options: any = {
         body: n.body || d.body || "New episode is live!",
         icon: (n as any).icon || d.icon || "/icon-192.png",
         badge: "/icon-192.png",
