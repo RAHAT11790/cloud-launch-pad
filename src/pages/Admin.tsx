@@ -4,10 +4,7 @@ import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, 
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-// FCM removed — notifications now go via Telegram posts only. Stubs preserved so legacy callers no-op silently.
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
-const sendPushToUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
-const sendPushToAllUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
 import { toast } from "sonner";
 import {
  LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -77,6 +74,11 @@ const getEpisodeIndexForShare = (season: any, episodeNumber: unknown, fallbackId
   return Math.max(0, Math.floor(num) - 1);
  }
  return Math.max(0, fallbackIdx);
+};
+
+const toPushImageUrl = (value: unknown) => {
+ const url = String(value || "").trim();
+ return url ? url.replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
 };
 
 const TG_DUB_TAGS = {
