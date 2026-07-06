@@ -3740,8 +3740,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const savedTitle = notifTitle;
  const savedMessage = notifMessage;
 
- // Push delivery removed — only in-app notifications below
-
  try {
  let contentId = "", contentType = "", contentPoster = "";
  if (notifContent) {
@@ -3750,44 +3748,34 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  contentPoster = contentOptions.find((o) => o.value === notifContent)?.poster || "";
  }
 
+ const targetUserIds: string[] = [];
+ if (notifTarget === "online") {
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
- const targetUserIds: string[] = [];
- const userNotifUpdates: Record<string, any> = {};
  const seenUserIds = new Set<string>();
-
  Object.entries(users).forEach(([userKey, userData]: any) => {
  const effectiveUserId = String(userData?.id || userKey || "").trim();
- if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
- if (notifTarget === "online" && !userData?.online) return;
-
+ if (!effectiveUserId || seenUserIds.has(effectiveUserId) || !userData?.online) return;
  seenUserIds.add(effectiveUserId);
  targetUserIds.push(effectiveUserId);
+ });
+ }
 
- const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
- if (!notifKey) return;
-
- userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
+ const pushMod = await import("@/lib/pushNotifications");
+ const result = await pushMod.sendPushNotification({
  title: savedTitle,
- message: savedMessage,
- type: notifType,
+ body: savedMessage,
+ image: toPushImageUrl(contentPoster),
+ deepLink: contentId ? buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "") : "/",
  contentId,
  contentType,
- image: contentPoster,
- poster: contentPoster,
- timestamp: Date.now(),
- read: false,
- };
+ userIds: notifTarget === "online" ? targetUserIds : undefined,
  });
 
- if (Object.keys(userNotifUpdates).length > 0) {
- await update(ref(db), userNotifUpdates);
- }
- toast.success(`In-app notification sent to ${targetUserIds.length} users`);
+ if (!result.ok) throw new Error(result.error || "send-fcm not configured");
+ toast.success(`Browser push sent → ${result.sent}/${result.total} users`);
  setNotifTitle("");
  setNotifMessage("");
-
- // FCM push removed — only in-app notifications were sent above
  } catch (err: any) {
  console.warn("Notification send failed:", err);
  toast.error("Error: " + err.message);
