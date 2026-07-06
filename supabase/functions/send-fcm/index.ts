@@ -2,7 +2,7 @@
 // as cloudflare-workers/send-fcm.js. Deploy as an alternative when the
 // admin prefers the Supabase edge runtime instead of Cloudflare.
 
-const DEFAULT_TTL_HOURS = 24;
+const DEFAULT_TTL_HOURS = 2160;
 const FCM_BATCH_SIZE = 500;
 const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
 
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
         for (const [uid, tm] of Object.entries<any>(all)) {
           if (filter && !filter.has(uid)) continue;
           for (const [h, row] of Object.entries<any>(tm || {})) {
-            if (!row?.token || Number(row.createdAt || 0) < cutoff) continue;
+            if (!row?.token || Number(row.updatedAt || row.createdAt || 0) < cutoff) continue;
             targets.push({ userId: uid, hash: h, token: row.token });
           }
         }
@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
       const all = (await rtdb(env, "GET", "/fcmTokens").catch(() => null)) || {};
       const del: Record<string, null> = {}; let removed = 0, kept = 0;
       for (const [uid, tm] of Object.entries<any>(all)) for (const [h, row] of Object.entries<any>(tm || {})) {
-        if (Number(row?.createdAt || 0) < cutoff) { del[`fcmTokens/${uid}/${h}`] = null; removed++; } else kept++;
+        if (Number(row?.updatedAt || row?.createdAt || 0) < cutoff) { del[`fcmTokens/${uid}/${h}`] = null; removed++; } else kept++;
       }
       if (removed > 0) await rtdb(env, "PATCH", "/", del);
       resp = json({ ok: true, removed, kept, ttlHours: ttl });

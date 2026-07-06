@@ -485,7 +485,6 @@ import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
-import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
@@ -797,10 +796,9 @@ const Index = () => {
   const animeRouteMatch = matchPath("/anime/:animeId", pathname);
   const watchRouteMatch = matchPath("/watch/:animeId", pathname);
   const isSearchRoute = pathname === "/search";
-  const isNotificationsRoute = pathname === "/notifications";
   const isAnimeRoute = !!animeRouteMatch;
   const isWatchRoute = !!watchRouteMatch;
-  const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isAnimeRoute || isWatchRoute;
+  const isRoutedOverlay = isSearchRoute || isAnimeRoute || isWatchRoute;
   const animeRouteId = animeRouteMatch?.params.animeId ? decodeURIComponent(animeRouteMatch.params.animeId) : null;
   const watchRouteAnimeId = watchRouteMatch?.params.animeId ? decodeURIComponent(watchRouteMatch.params.animeId) : null;
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
@@ -1559,7 +1557,7 @@ const Index = () => {
   }, [animeRouteId, isAnimeRoute, isWatchRoute, selectedAnime]);
 
   useEffect(() => {
-    // Routed pages (/search, /notifications) own their own history entry — do NOT
+    // Routed pages (/search, watch/details) own their own history entry — do NOT
     // push our rsAnime guard state on top of them, otherwise the browser back
     // button needs two clicks (one to pop our duplicate, one to actually leave).
     if (isRoutedOverlay) return;
@@ -2116,7 +2114,7 @@ const Index = () => {
 
     const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
     if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
-      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+      const fromRoutedOverlay = isSearchRoute;
       navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
     }
 
@@ -2209,7 +2207,7 @@ const Index = () => {
 
 
     // Reflect details view in the URL so back-button works as a real route.
-    // Use replace when coming from a routed overlay (search/notifications) to
+    // Use replace when coming from a routed overlay (search/watch/details) to
     // avoid stacking duplicate entries; push from anywhere else.
     await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
@@ -3196,7 +3194,7 @@ const Index = () => {
     );
   }
 
-  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
+  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
@@ -3571,10 +3569,6 @@ const Index = () => {
             onCardClick={(anime) => { void handleCardClick(anime); }}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isNotificationsRoute && <NotificationsPage />}
       </AnimatePresence>
 
       <AnimatePresence>

@@ -12,20 +12,20 @@
 //                                              → FCM v1 send, 500-parallel batches,
 //                                                 auto-purge invalid tokens.
 //                                                 Returns { total, sent, failed, invalidRemoved, batches }
-//   POST /cleanup      no body                 → deletes tokens older than TTL (24h)
+//   POST /cleanup      no body                 → deletes stale tokens older than TTL
 //   GET  /health                               → { ok:true, project }
 //
 // Env (Worker secrets)
 //   FIREBASE_SERVICE_ACCOUNT_KEY   Full service-account JSON (paste as one line)
 //   FIREBASE_DB_URL                https://<project>-default-rtdb.firebaseio.com
 //   ALLOWED_ORIGINS   (optional)   Comma-separated, wildcards ok (*.lovable.app)
-//   TOKEN_TTL_HOURS   (optional)   Defaults to 24
+//   TOKEN_TTL_HOURS   (optional)   Defaults to 2160 (90 days)
 //
 // Cron: bind a Cron Trigger to run /cleanup (see wrangler.toml example
 // below) so expired tokens are auto-purged.
 // ============================================================
 
-const DEFAULT_TTL_HOURS = 24;
+const DEFAULT_TTL_HOURS = 2160;
 const FCM_BATCH_SIZE = 500;
 const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
 
@@ -272,7 +272,7 @@ async function handleSend(req, env) {
     if (userFilter && !userFilter.has(uid)) continue;
     for (const [hash, row] of Object.entries(tokMap || {})) {
       if (!row?.token) continue;
-      if (Number(row.createdAt || 0) < cutoff) continue; // skip expired
+      if (Number(row.updatedAt || row.createdAt || 0) < cutoff) continue; // skip stale
       targets.push({ userId: uid, hash, token: row.token });
     }
   }

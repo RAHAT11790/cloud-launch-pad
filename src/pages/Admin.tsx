@@ -4,10 +4,7 @@ import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, 
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-// FCM removed — notifications now go via Telegram posts only. Stubs preserved so legacy callers no-op silently.
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
-const sendPushToUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
-const sendPushToAllUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
 import { toast } from "sonner";
 import {
  LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -77,6 +74,11 @@ const getEpisodeIndexForShare = (season: any, episodeNumber: unknown, fallbackId
   return Math.max(0, Math.floor(num) - 1);
  }
  return Math.max(0, fallbackIdx);
+};
+
+const toPushImageUrl = (value: unknown) => {
+ const url = String(value || "").trim();
+ return url ? url.replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
 };
 
 const TG_DUB_TAGS = {
@@ -2174,7 +2176,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [notifContent, setNotifContent] = useState("");
  const [notifType, setNotifType] = useState("info");
  const [notifTarget, setNotifTarget] = useState("all");
- const [contentOptions, setContentOptions] = useState<{ value: string; label: string; poster: string }[]>([]);
+ const [contentOptions, setContentOptions] = useState<{ value: string; label: string; poster: string; backdrop?: string }[]>([]);
  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
  const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
  const notifDropdownRef = useRef<HTMLDivElement>(null);
@@ -2192,7 +2194,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [releaseContentSearch, setReleaseContentSearch] = useState("");
  const deferredReleaseContentSearch = useDeferredValue(releaseContentSearch);
 
- // Synced Notification (own section, independent from New Release)
+ // Browser Push (own section, independent from New Release)
  const [pushContent, setPushContent] = useState("");
  const [pushSeason, setPushSeason] = useState("");
  const [pushEpisode, setPushEpisode] = useState("");        // start ep index
@@ -3127,9 +3129,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Build content options for notifications/releases (newest first by updatedAt/createdAt)
  useEffect(() => {
- const options: { value: string; label: string; poster: string; createdAt: number }[] = [];
- webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", createdAt: s.updatedAt || s.createdAt || 0 }));
- moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", createdAt: m.updatedAt || m.createdAt || 0 }));
+  const options: { value: string; label: string; poster: string; backdrop?: string; createdAt: number }[] = [];
+  webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", backdrop: s.backdrop || "", createdAt: s.updatedAt || s.createdAt || 0 }));
+  moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", backdrop: m.backdrop || "", createdAt: m.updatedAt || m.createdAt || 0 }));
  // Sort by updatedAt/createdAt descending so newest edited/added items appear first
  options.sort((a, b) => b.createdAt - a.createdAt);
   startTransition(() => setContentOptions(options));
@@ -3216,7 +3218,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  users: "Users",
  notifications: "Notifications",
  "new-releases": "New Releases",
- "manual-push": "Synced Notification",
+ "manual-push": "Browser Push",
  "tmdb-fetch": "TMDB Fetch",
  "add-content": "Add Content",
  "redeem-codes": "Redeem Codes",
@@ -3738,54 +3740,43 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const savedTitle = notifTitle;
  const savedMessage = notifMessage;
 
- // Push delivery removed — only in-app notifications below
-
  try {
  let contentId = "", contentType = "", contentPoster = "";
  if (notifContent) {
  const parts = notifContent.split("|");
  contentId = parts[0]; contentType = parts[1];
- contentPoster = contentOptions.find((o) => o.value === notifContent)?.poster || "";
+ const selectedOption = contentOptions.find((o) => o.value === notifContent);
+ contentPoster = selectedOption?.backdrop || selectedOption?.poster || "";
  }
 
+ const targetUserIds: string[] = [];
+ if (notifTarget === "online") {
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
- const targetUserIds: string[] = [];
- const userNotifUpdates: Record<string, any> = {};
  const seenUserIds = new Set<string>();
-
  Object.entries(users).forEach(([userKey, userData]: any) => {
  const effectiveUserId = String(userData?.id || userKey || "").trim();
- if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
- if (notifTarget === "online" && !userData?.online) return;
-
+ if (!effectiveUserId || seenUserIds.has(effectiveUserId) || !userData?.online) return;
  seenUserIds.add(effectiveUserId);
  targetUserIds.push(effectiveUserId);
+ });
+ }
 
- const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
- if (!notifKey) return;
-
- userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
+ const pushMod = await import("@/lib/pushNotifications");
+ const result = await pushMod.sendPushNotification({
  title: savedTitle,
- message: savedMessage,
- type: notifType,
+ body: savedMessage,
+ image: toPushImageUrl(contentPoster),
+ deepLink: contentId ? buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "") : "/",
  contentId,
  contentType,
- image: contentPoster,
- poster: contentPoster,
- timestamp: Date.now(),
- read: false,
- };
+ userIds: notifTarget === "online" ? targetUserIds : undefined,
  });
 
- if (Object.keys(userNotifUpdates).length > 0) {
- await update(ref(db), userNotifUpdates);
- }
- toast.success(`In-app notification sent to ${targetUserIds.length} users`);
+ if (!result.ok) throw new Error(result.error || "send-fcm not configured");
+ toast.success(`Browser push sent → ${result.sent}/${result.total} users`);
  setNotifTitle("");
  setNotifMessage("");
-
- // FCM push removed — only in-app notifications were sent above
  } catch (err: any) {
  console.warn("Notification send failed:", err);
  toast.error("Error: " + err.message);
@@ -3900,43 +3891,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const releaseNotifMsg = contentType === "webseries"
  ? `${episodeInfo.seasonName} - Episode ${episodeInfo.episodeNumber} is now available!`
  : `${content.title} (${content.year}) is now available!`;
+ const releaseDeepLink = contentType === "webseries"
+ ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
+ : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
   startTransition(() => { setReleaseContent(""); setShowSeasonEpisode(false); });
   adminIdle(async () => {
   try {
-  const usersSnap = await get(ref(db, "users"));
-  const users = usersSnap.val() || {};
-  const entries = Object.entries(users);
-  const seenUserIds = new Set<string>();
-  let sent = 0;
-  for (let i = 0; i < entries.length; i += 150) {
-  const userNotifUpdates: Record<string, any> = {};
-  entries.slice(i, i + 150).forEach(([userKey, userData]: any) => {
-  const effectiveUserId = String(userData?.id || userKey || "").trim();
-  if (!effectiveUserId || seenUserIds.has(effectiveUserId)) return;
-  seenUserIds.add(effectiveUserId);
-  const notifKey = push(ref(db, `notifications/${effectiveUserId}`)).key;
-  if (!notifKey) return;
-  userNotifUpdates[`notifications/${effectiveUserId}/${notifKey}`] = {
+  const pushMod = await import("@/lib/pushNotifications");
+  const res = await pushMod.sendPushNotification({
   title: releaseNotifTitle,
-  message: releaseNotifMsg,
-  type: "new_episode",
+  body: releaseNotifMsg,
+  image: toPushImageUrl(content.backdrop || content.poster || ""),
+  deepLink: releaseDeepLink,
   contentId,
   contentType,
-  image: content.poster || "",
-  poster: content.poster || "",
-  timestamp: Date.now(),
-  read: false,
-  };
+  seasonNumber: contentType === "webseries" ? episodeInfo.seasonNumber : undefined,
+  episodeNumber: contentType === "webseries" ? episodeInfo.episodeNumber : undefined,
   });
-  const keys = Object.keys(userNotifUpdates);
-  if (keys.length > 0) { await update(ref(db), userNotifUpdates); sent += keys.length; }
-  await yieldAdminFrame();
-  }
-  if (sent > 0) toast.success(`In-app notification sent to ${sent} users`);
+  if (res.ok) toast.success(`Browser push sent → ${res.sent}/${res.total} users`);
+  else toast.warning(`Push skipped: ${res.error || "send-fcm not configured"}`);
   } catch (err: any) { console.warn("Background release notification failed", err); }
   }, 500);
  
- // FCM push removed — in-app notifications above are sufficient
  } catch (err: any) { toast.error("Error: " + err.message); }
  };
 
@@ -5204,7 +5180,7 @@ ${tgBulkFooter}
  { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
  { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
  { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
- { section: "manual-push", icon: <Bell size={16} />, label: "Synced Notification" },
+ { section: "manual-push", icon: <Bell size={16} />, label: "Browser Push" },
  { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
@@ -6563,13 +6539,11 @@ ${tgBulkFooter}
         ? `${firstR.seasonName} • Episode ${firstR.startEp}–${firstR.endEp}`
         : `${firstR.seasonName} • Episode ${firstR.startEp}`);
     const pushBody = `${ctxForm.title} — ${epLine} is now live!\n▶ Tap to watch instantly on RS Anime.`;
-    const backdrop = ctxForm.backdrop || ctxForm.poster || "";
-    const image = backdrop
-      ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/')
-      : "";
+    const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
     const firstRange = rangesToPublish[0];
     const seasonIdxForLink = usingMulti ? (wsAutoRanges[0]?.seasonIdx ?? 0) : parseInt(wsNotifySeason);
-    const epIdxForLink = usingMulti ? 0 : getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode));
+    const firstRangeSeason = ctxForm.seasons?.[seasonIdxForLink] || season;
+    const epIdxForLink = getEpisodeIndexForShare(firstRangeSeason, firstRange.startEp, usingMulti ? Math.max(0, firstRange.startEp - 1) : parseInt(wsNotifyEpisode));
     const deepLink = buildEpisodeShareUrl(ctxSeriesId, seasonIdxForLink, epIdxForLink).replace(/^https?:\/\/[^/]+/, "");
     const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
     setAdminBusyTask("Sending push to users…");
@@ -7422,14 +7396,14 @@ ${tgBulkFooter}
  </div>
  )}
 
- {/* ==================== MANUAL PUSH NOTIFICATION (own section) ==================== */}
+  {/* ==================== BROWSER PUSH NOTIFICATION (own section) ==================== */}
  {activeSection === "manual-push" && (
  <div>
  <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
- <Bell size={14} className="text-yellow-400" /> Synced Notification
+ <Bell size={14} className="text-yellow-400" /> Browser Push
  </h3>
- <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → auto-generated title + description → instant FCM push to all users. Notification click loads the start episode.</p>
+ <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → Chrome/browser push to users. Notification click loads the start episode.</p>
 
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Anime / Movie</label>
  <div className="relative z-[130] mb-4">
@@ -7629,7 +7603,7 @@ ${tgBulkFooter}
  }}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
  >
- <Send size={16} /> {pushSending ? "Sending push…" : "Send Synced Notification"}
+ <Send size={16} /> {pushSending ? "Sending push…" : "Send Browser Push"}
  </button>
  {pushLastResult && (
  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
