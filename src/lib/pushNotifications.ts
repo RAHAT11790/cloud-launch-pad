@@ -86,9 +86,9 @@ async function getSendFcmEndpoints(): Promise<string[]> {
     const endpoint = String(value || "").trim().replace(/\/+$/, "");
     if (endpoint && !endpoints.includes(endpoint)) endpoints.push(endpoint);
   };
-  try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
   const cloudBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (cloudBase) add(`${cloudBase}/functions/v1/send-fcm`);
+  try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
   return endpoints;
 }
 
