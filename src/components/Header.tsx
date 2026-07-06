@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
@@ -171,7 +170,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       )}
       <div className="flex items-center gap-1 flex-shrink-0">
         <ThemeToggle />
-        <NotificationPanel userId={userId} onOpenContent={onOpenContent} />
         {userId ? (
           <button
             onClick={onProfileClick}
