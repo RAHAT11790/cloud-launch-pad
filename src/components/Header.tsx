@@ -39,7 +39,7 @@ interface HeaderProps {
   showSearch?: boolean;
 }
 
-const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen, showSearch = true }: HeaderProps) => {
+const Header = ({ onSearchClick, onProfileClick, animeTitles = [], onLogoClick, chatOpen, showSearch = true }: HeaderProps) => {
   const branding = useBranding();
   const logoSrc = branding.logoUrl ;
   const [userId, setUserId] = useState<string | undefined>(undefined);
