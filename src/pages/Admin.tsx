@@ -2194,7 +2194,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [releaseContentSearch, setReleaseContentSearch] = useState("");
  const deferredReleaseContentSearch = useDeferredValue(releaseContentSearch);
 
- // Synced Notification (own section, independent from New Release)
+ // Browser Push (own section, independent from New Release)
  const [pushContent, setPushContent] = useState("");
  const [pushSeason, setPushSeason] = useState("");
  const [pushEpisode, setPushEpisode] = useState("");        // start ep index
@@ -3218,7 +3218,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  users: "Users",
  notifications: "Notifications",
  "new-releases": "New Releases",
- "manual-push": "Synced Notification",
+ "manual-push": "Browser Push",
  "tmdb-fetch": "TMDB Fetch",
  "add-content": "Add Content",
  "redeem-codes": "Redeem Codes",
@@ -5180,7 +5180,7 @@ ${tgBulkFooter}
  { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
  { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
  { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
- { section: "manual-push", icon: <Bell size={16} />, label: "Synced Notification" },
+ { section: "manual-push", icon: <Bell size={16} />, label: "Browser Push" },
  { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
@@ -7396,14 +7396,14 @@ ${tgBulkFooter}
  </div>
  )}
 
- {/* ==================== MANUAL PUSH NOTIFICATION (own section) ==================== */}
+  {/* ==================== BROWSER PUSH NOTIFICATION (own section) ==================== */}
  {activeSection === "manual-push" && (
  <div>
  <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
- <Bell size={14} className="text-yellow-400" /> Synced Notification
+ <Bell size={14} className="text-yellow-400" /> Browser Push
  </h3>
- <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → auto-generated title + description → instant FCM push to all users. Notification click loads the start episode.</p>
+ <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → Chrome/browser push to users. Notification click loads the start episode.</p>
 
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Anime / Movie</label>
  <div className="relative z-[130] mb-4">
