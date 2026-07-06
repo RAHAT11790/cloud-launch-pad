@@ -40,7 +40,13 @@ async function getAccessToken(env: Record<string, string>) {
   if (!sa.client_email || !sa.private_key || !sa.project_id) throw new Error("service account JSON incomplete");
   const iat = now, exp = now + 3600;
   const header = { alg: "RS256", typ: "JWT" };
-  const claim = { iss: sa.client_email, scope: "https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", iat, exp };
+  const claim = {
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+    aud: "https://oauth2.googleapis.com/token",
+    iat,
+    exp,
+  };
   const enc = (o: unknown) => b64url(new TextEncoder().encode(JSON.stringify(o)));
   const unsigned = `${enc(header)}.${enc(claim)}`;
   const key = await importPrivateKey(sa.private_key);
