@@ -27,6 +27,7 @@
 
 const DEFAULT_TTL_HOURS = 24;
 const FCM_BATCH_SIZE = 500;
+const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
 
 // ---------- CORS ----------
 function corsHeaders(origin, env) {
@@ -79,7 +80,7 @@ async function getAccessToken(env) {
   const header = { alg: "RS256", typ: "JWT" };
   const claim = {
     iss: sa.client_email,
-    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
     aud: "https://oauth2.googleapis.com/token",
     iat, exp,
   };
@@ -120,25 +121,33 @@ async function importPrivateKey(pem) {
 // ---------- Firebase RTDB REST helpers ----------
 async function rtdbPut(env, path, body) {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url, { method: "PUT", body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`RTDB PUT ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
 }
 async function rtdbPatch(env, path, body) {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url, { method: "PATCH", body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`RTDB PATCH ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
 }
 async function rtdbDelete(env, path) {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url, { method: "DELETE" });
   if (!r.ok) throw new Error(`RTDB DELETE ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
 }
 async function rtdbGet(env, path, query = "") {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}${query ? `&${query}` : ""}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}${query ? `&${query}` : ""}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`RTDB GET ${path} failed: ${r.status}`);
   return r.json();

@@ -80,35 +80,49 @@ async function ensureMessaging() {
   return _messagingInstance;
 }
 
+async function getSendFcmEndpoints(): Promise<string[]> {
+  const endpoints: string[] = [];
+  const add = (value: string) => {
+    const endpoint = String(value || "").trim().replace(/\/+$/, "");
+    if (endpoint && !endpoints.includes(endpoint)) endpoints.push(endpoint);
+  };
+  try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
+  const cloudBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  if (cloudBase) add(`${cloudBase}/functions/v1/send-fcm`);
+  return endpoints;
+}
+
 async function postRegister(userId: string, token: string): Promise<boolean> {
-  const endpoint = await getEdgeFunctionUrl("send-fcm");
-  if (!endpoint) {
+  const endpoints = await getSendFcmEndpoints();
+  if (!endpoints.length) {
     console.warn("[FCM] send-fcm endpoint not configured in EGD Router");
     return false;
   }
-  const url = endpoint.replace(/\/+$/, "") + "/register";
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
-    });
-    const text = await r.text().catch(() => "");
-    if (!r.ok) {
-      console.warn("[FCM] register HTTP", r.status, text);
-      return false;
-    }
+  for (const endpoint of endpoints) {
+    const url = endpoint + "/register";
     try {
-      localStorage.setItem(LS_LAST_REG, String(Date.now()));
-      localStorage.setItem(LS_LAST_TOKEN, token);
-      localStorage.setItem(LS_USER_ID, userId);
-    } catch {}
-    console.info("[FCM] token registered for", userId);
-    return true;
-  } catch (err) {
-    console.warn("[FCM] register POST failed", err);
-    return false;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
+      });
+      const text = await r.text().catch(() => "");
+      if (!r.ok) {
+        console.warn("[FCM] register HTTP", r.status, text, url);
+        continue;
+      }
+      try {
+        localStorage.setItem(LS_LAST_REG, String(Date.now()));
+        localStorage.setItem(LS_LAST_TOKEN, token);
+        localStorage.setItem(LS_USER_ID, userId);
+      } catch {}
+      console.info("[FCM] token registered for", userId);
+      return true;
+    } catch (err) {
+      console.warn("[FCM] register POST failed", err, url);
+    }
   }
+  return false;
 }
 
 async function acquireAndRegisterToken(userId: string): Promise<string | null> {
@@ -345,13 +359,14 @@ export async function unregisterPushNotifications() {
     const userId = localStorage.getItem(LS_USER_ID) || "";
     const token = localStorage.getItem(LS_LAST_TOKEN) || "";
     if (userId && token) {
-      const endpoint = await getEdgeFunctionUrl("send-fcm");
-      if (endpoint) {
-        await fetch(endpoint.replace(/\/+$/, "") + "/unregister", {
+      const endpoints = await getSendFcmEndpoints();
+      for (const endpoint of endpoints) {
+        const r = await fetch(endpoint + "/unregister", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ userId, token }),
         }).catch(() => {});
+        if (r && "ok" in r && r.ok) break;
       }
     }
     const messaging = await ensureMessaging();
@@ -377,19 +392,22 @@ export async function sendPushNotification(payload: {
   episodeNumber?: number | string;
   userIds?: string[];
 }): Promise<{ ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; error?: string }> {
-  const endpoint = await getEdgeFunctionUrl("send-fcm");
-  if (!endpoint) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured in EGD Router" };
-  const url = endpoint.replace(/\/+$/, "") + "/send";
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: data?.error || `HTTP ${r.status}` };
-    return { ok: true, total: data.total || 0, sent: data.sent || 0, failed: data.failed || 0, invalidRemoved: data.invalidRemoved || 0 };
-  } catch (err: any) {
-    return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: String(err?.message || err) };
+  const endpoints = await getSendFcmEndpoints();
+  if (!endpoints.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured" };
+  let lastError = "send-fcm failed";
+  for (const endpoint of endpoints) {
+    try {
+      const r = await fetch(endpoint + "/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { lastError = data?.error || `HTTP ${r.status}`; continue; }
+      return { ok: true, total: data.total || 0, sent: data.sent || 0, failed: data.failed || 0, invalidRemoved: data.invalidRemoved || 0 };
+    } catch (err: any) {
+      lastError = String(err?.message || err);
+    }
   }
+  return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: lastError };
 }
