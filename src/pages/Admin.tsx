@@ -3745,7 +3745,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (notifContent) {
  const parts = notifContent.split("|");
  contentId = parts[0]; contentType = parts[1];
- contentPoster = contentOptions.find((o) => o.value === notifContent)?.poster || "";
+ const selectedOption = contentOptions.find((o) => o.value === notifContent);
+ contentPoster = selectedOption?.backdrop || selectedOption?.poster || "";
  }
 
  const targetUserIds: string[] = [];
