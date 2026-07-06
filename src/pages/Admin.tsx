@@ -7603,7 +7603,7 @@ ${tgBulkFooter}
  }}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
  >
- <Send size={16} /> {pushSending ? "Sending push…" : "Send Synced Notification"}
+ <Send size={16} /> {pushSending ? "Sending push…" : "Send Browser Push"}
  </button>
  {pushLastResult && (
  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
