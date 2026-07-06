@@ -173,7 +173,7 @@ function bindForegroundHandler() {
       }
 
       const swReg = await ensureServiceWorker();
-      await swReg?.showNotification(title, {
+      const options: NotificationOptions & { image?: string } = {
         body: n.body || d.body || "New episode is live!",
         icon: (n as any).icon || d.icon || "/icon-192.png",
         badge: "/icon-192.png",
@@ -188,7 +188,8 @@ function bindForegroundHandler() {
           seasonNumber,
           episodeNumber,
         },
-      }).catch((err) => console.warn("[FCM] foreground browser notification failed", err));
+      };
+      await swReg?.showNotification(title, options).catch((err) => console.warn("[FCM] foreground browser notification failed", err));
     });
   });
 }
