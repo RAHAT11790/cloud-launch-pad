@@ -4,6 +4,7 @@
 
 const DEFAULT_TTL_HOURS = 24;
 const FCM_BATCH_SIZE = 500;
+const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
 
 function corsHeaders(origin: string, env: Record<string, string>) {
   const allow = matchOrigin(origin, env);
@@ -39,7 +40,13 @@ async function getAccessToken(env: Record<string, string>) {
   if (!sa.client_email || !sa.private_key || !sa.project_id) throw new Error("service account JSON incomplete");
   const iat = now, exp = now + 3600;
   const header = { alg: "RS256", typ: "JWT" };
-  const claim = { iss: sa.client_email, scope: "https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", iat, exp };
+  const claim = {
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+    aud: "https://oauth2.googleapis.com/token",
+    iat,
+    exp,
+  };
   const enc = (o: unknown) => b64url(new TextEncoder().encode(JSON.stringify(o)));
   const unsigned = `${enc(header)}.${enc(claim)}`;
   const key = await importPrivateKey(sa.private_key);
@@ -67,9 +74,12 @@ async function importPrivateKey(pem: string) {
 
 async function rtdb(env: Record<string, string>, method: string, path: string, body?: unknown) {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${dbUrl}${cleanPath}.json?access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url, { method, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  if (!r.ok) throw new Error(`RTDB ${method} ${path} → ${r.status}`);
+  if (!r.ok) throw new Error(`RTDB ${method} ${cleanPath} → ${r.status}: ${await r.text().catch(() => "")}`);
   return method === "GET" ? r.json() : null;
 }
 async function tokenHash(token: string) {

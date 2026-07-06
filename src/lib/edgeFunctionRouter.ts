@@ -156,6 +156,7 @@ function supabaseFallbackUrl(fnName: string): string {
   const ENABLED = new Set([
     "generate-backdrop",
     "rs-bot",
+    "send-fcm",
     "send-otp-email",
     "process-email-queue",
   ]);
@@ -213,9 +214,12 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   const built = buildFunctionUrl(fnName, config);
   if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
+  const fallback = supabaseFallbackUrl(fnName);
+  if (fallback) return fallback;
+
   if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
 
-  return supabaseFallbackUrl(fnName);
+  return "";
 }
 
 /** Call a cloud function */
