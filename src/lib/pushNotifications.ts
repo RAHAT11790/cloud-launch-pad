@@ -36,6 +36,7 @@ const LS_LAST_TOKEN = "rs_fcm_last_token";
 const LS_USER_ID = "rs_fcm_user_id";
 const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h
 const REVALIDATE_MS = 6 * 60 * 60 * 1000; // 6h
+const TOKEN_RECHECK_MS = 30 * 60 * 1000; // 30m — retry if permission is already granted but backend was down
 
 let _bootstrapped = false;
 let _vapidKey = "";
@@ -92,8 +93,9 @@ async function postRegister(userId: string, token: string): Promise<boolean> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
     });
+    const text = await r.text().catch(() => "");
     if (!r.ok) {
-      console.warn("[FCM] register HTTP", r.status, await r.text().catch(() => ""));
+      console.warn("[FCM] register HTTP", r.status, text);
       return false;
     }
     try {
@@ -124,6 +126,18 @@ async function acquireAndRegisterToken(userId: string): Promise<string | null> {
   } catch (err) {
     console.warn("[FCM] getToken failed", err);
     return null;
+  }
+}
+
+function getSavedTokenState() {
+  try {
+    return {
+      token: localStorage.getItem(LS_LAST_TOKEN) || "",
+      userId: localStorage.getItem(LS_USER_ID) || "",
+      lastRegisterAt: Number(localStorage.getItem(LS_LAST_REG) || 0),
+    };
+  } catch {
+    return { token: "", userId: "", lastRegisterAt: 0 };
   }
 }
 
@@ -215,7 +229,10 @@ export async function initPushNotifications(userIdInput?: string) {
 
   if (permission !== "granted") return;
 
-  await acquireAndRegisterToken(userId);
+  const saved = getSavedTokenState();
+  if (!saved.token || saved.userId !== userId || Date.now() - saved.lastRegisterAt >= TOKEN_RECHECK_MS) {
+    await acquireAndRegisterToken(userId);
+  }
   bindForegroundHandler();
 
   // Periodic refresh (12h) — keeps token < CF worker's 24h TTL
@@ -248,8 +265,9 @@ export async function getPushStatus(): Promise<{
   let tokenRegistered = false;
   let lastRegisterAt = 0;
   try {
-    tokenRegistered = !!localStorage.getItem(LS_LAST_TOKEN);
-    lastRegisterAt = Number(localStorage.getItem(LS_LAST_REG) || 0);
+    const saved = getSavedTokenState();
+    tokenRegistered = !!saved.token && Date.now() - saved.lastRegisterAt < REFRESH_INTERVAL_MS * 2;
+    lastRegisterAt = saved.lastRegisterAt;
   } catch {}
   return { supported, permission: Notification.permission, tokenRegistered, lastRegisterAt };
 }
@@ -312,7 +330,7 @@ export async function enablePushNotifications(userIdInput?: string): Promise<{
 
   const token = await acquireAndRegisterToken(userId);
   if (!token) {
-    return { ok: false, status: "error", message: "Permission granted but token registration failed. Please retry." };
+    return { ok: false, status: "error", message: "Permission is allowed, but the push token could not be saved. Refresh and tap Enable Notifications again." };
   }
   bindForegroundHandler();
   _bootstrapped = true;

@@ -156,6 +156,7 @@ function supabaseFallbackUrl(fnName: string): string {
   const ENABLED = new Set([
     "generate-backdrop",
     "rs-bot",
+    "send-fcm",
     "send-otp-email",
     "process-email-queue",
   ]);

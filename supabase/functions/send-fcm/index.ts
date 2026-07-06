@@ -4,6 +4,7 @@
 
 const DEFAULT_TTL_HOURS = 24;
 const FCM_BATCH_SIZE = 500;
+const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
 
 function corsHeaders(origin: string, env: Record<string, string>) {
   const allow = matchOrigin(origin, env);
@@ -67,9 +68,12 @@ async function importPrivateKey(pem: string) {
 
 async function rtdb(env: Record<string, string>, method: string, path: string, body?: unknown) {
   const { token } = await getAccessToken(env);
-  const url = `${String(env.FIREBASE_DB_URL || "").replace(/\/$/, "")}${path}.json?access_token=${encodeURIComponent(token)}`;
+  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
+  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${dbUrl}${cleanPath}.json?access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url, { method, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  if (!r.ok) throw new Error(`RTDB ${method} ${path} → ${r.status}`);
+  if (!r.ok) throw new Error(`RTDB ${method} ${cleanPath} → ${r.status}: ${await r.text().catch(() => "")}`);
   return method === "GET" ? r.json() : null;
 }
 async function tokenHash(token: string) {
