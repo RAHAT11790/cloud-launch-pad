@@ -2176,7 +2176,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [notifContent, setNotifContent] = useState("");
  const [notifType, setNotifType] = useState("info");
  const [notifTarget, setNotifTarget] = useState("all");
- const [contentOptions, setContentOptions] = useState<{ value: string; label: string; poster: string }[]>([]);
+ const [contentOptions, setContentOptions] = useState<{ value: string; label: string; poster: string; backdrop?: string }[]>([]);
  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
  const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
  const notifDropdownRef = useRef<HTMLDivElement>(null);
@@ -3129,9 +3129,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Build content options for notifications/releases (newest first by updatedAt/createdAt)
  useEffect(() => {
- const options: { value: string; label: string; poster: string; createdAt: number }[] = [];
- webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", createdAt: s.updatedAt || s.createdAt || 0 }));
- moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", createdAt: m.updatedAt || m.createdAt || 0 }));
+  const options: { value: string; label: string; poster: string; backdrop?: string; createdAt: number }[] = [];
+  webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", backdrop: s.backdrop || "", createdAt: s.updatedAt || s.createdAt || 0 }));
+  moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", backdrop: m.backdrop || "", createdAt: m.updatedAt || m.createdAt || 0 }));
  // Sort by updatedAt/createdAt descending so newest edited/added items appear first
  options.sort((a, b) => b.createdAt - a.createdAt);
   startTransition(() => setContentOptions(options));
