@@ -8,14 +8,13 @@
 // • Auto-refreshes every 12h and re-registers the token so the CF worker's
 //   24h TTL never expires an active user's token
 // • On visibility change / focus, re-checks token if last refresh > 6h ago
-// • Foreground onMessage → in-app toast fallback so the user still sees it
+// • Foreground onMessage → native browser notification via Service Worker
 // ============================================================
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getMessaging, getToken, onMessage, deleteToken, isSupported,
 } from "firebase/messaging";
-import { toast } from "sonner";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 const FIREBASE_CONFIG = {
@@ -158,17 +157,38 @@ function getSavedTokenState() {
 function bindForegroundHandler() {
   ensureMessaging().then((messaging) => {
     if (!messaging) return;
-    onMessage(messaging, (payload) => {
+    onMessage(messaging, async (payload) => {
       const n = payload.notification || {};
       const d = (payload.data || {}) as Record<string, string>;
-      const title = n.title || d.title || "🎬 New Notification";
-      const body = n.body || d.body || "";
-      const link = d.deepLink || (d.contentId ? `/watch/${d.contentId}` : "/");
-      toast(title, {
-        description: body,
-        duration: 8000,
-        action: { label: "Watch", onClick: () => { window.location.href = link; } },
-      });
+      if (Notification.permission !== "granted") return;
+      const title = n.title || d.title || "🎬 RS Anime";
+      const contentId = d.contentId || "";
+      const seasonNumber = d.seasonNumber || "";
+      const episodeNumber = d.episodeNumber || "";
+      let deepLink = d.deepLink || "/";
+      if ((!deepLink || deepLink === "/") && contentId) {
+        const s = seasonNumber ? `?s=${encodeURIComponent(seasonNumber)}` : "";
+        const e = episodeNumber ? `${s ? "&" : "?"}e=${encodeURIComponent(episodeNumber)}` : "";
+        deepLink = `/watch/${encodeURIComponent(contentId)}${s}${e}`;
+      }
+
+      const swReg = await ensureServiceWorker();
+      await swReg?.showNotification(title, {
+        body: n.body || d.body || "New episode is live!",
+        icon: (n as any).icon || d.icon || "/icon-192.png",
+        badge: "/icon-192.png",
+        image: (n as any).image || d.image || undefined,
+        tag: contentId || d.tag || "rsanime",
+        renotify: true,
+        requireInteraction: false,
+        data: {
+          deepLink,
+          contentId,
+          contentType: d.contentType || "",
+          seasonNumber,
+          episodeNumber,
+        },
+      }).catch((err) => console.warn("[FCM] foreground browser notification failed", err));
     });
   });
 }
