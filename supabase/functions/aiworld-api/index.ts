@@ -25,25 +25,19 @@ const LOGIN_TTL = 25 * 60 * 1000;
 async function login(): Promise<string> {
   const u = Deno.env.get("AIWORLD_USERNAME") || "";
   const p = Deno.env.get("AIWORLD_PASSWORD") || "";
-  if (!u || !p) return "";
+  if (!u || !p) { console.log("[login] no creds"); return ""; }
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": UA, "Origin": BASE, "Referer": `${BASE}/` },
-    body: JSON.stringify({ username: u, password: p }),
+    headers: { "Content-Type": "application/json", "User-Agent": UA, "Origin": BASE, "Referer": `${BASE}/`, "Accept": "application/json" },
+    body: JSON.stringify({ username: u, password: p, deviceId: Deno.env.get("AIWORLD_DEVICE_ID") || "aiworld-proxy-lovable-01" }),
   });
   const setCookies: string[] = [];
-  // Deno supports getSetCookie()
   const anyH = r.headers as any;
   if (typeof anyH.getSetCookie === "function") setCookies.push(...anyH.getSetCookie());
-  else {
-    const raw = r.headers.get("set-cookie");
-    if (raw) setCookies.push(raw);
-  }
-  const cookie = setCookies
-    .map(c => c.split(";")[0])
-    .filter(Boolean)
-    .join("; ");
-  await r.text().catch(() => "");
+  else { const raw = r.headers.get("set-cookie"); if (raw) setCookies.push(raw); }
+  const body = await r.text().catch(() => "");
+  const cookie = setCookies.map(c => c.split(";")[0]).filter(Boolean).join("; ");
+  console.log(`[login] status=${r.status} cookies=${setCookies.length} body=${body.slice(0, 200)}`);
   if (!r.ok || !cookie) return "";
   sessionCookie = cookie;
   lastLoginAt = Date.now();
