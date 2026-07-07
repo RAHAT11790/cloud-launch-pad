@@ -2214,7 +2214,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [pushContentSearch, setPushContentSearch] = useState("");
  const [pushTitleOverride, setPushTitleOverride] = useState("");
  const [pushBodyOverride, setPushBodyOverride] = useState("");
- const [pushLastResult, setPushLastResult] = useState<string>("");
+  const [pushLastResult, setPushLastResult] = useState<string>("");
+ const [pushRecipients, setPushRecipients] = useState<{ name: string; email: string }[]>([]);
 
  // Redeem code state
  const [redeemCodesData, setRedeemCodesData] = useState<any[]>([]);
