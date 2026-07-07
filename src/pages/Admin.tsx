@@ -3775,7 +3775,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  name: String(userData?.name || userData?.displayName || "User").trim(),
  email: String(userData?.email || "").trim(),
  });
- const notifKey = pushFn(ref(db, `notifications/${uid}`)).key;
+ const notifKey = push(ref(db, `notifications/${uid}`)).key;
  if (notifKey) {
  userNotifUpdates[`notifications/${uid}/${notifKey}`] = {
  title: savedTitle,
