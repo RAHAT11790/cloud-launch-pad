@@ -296,6 +296,8 @@ export async function initPushNotifications(userIdInput?: string) {
 
   if (permission !== "granted") return;
 
+  await ensureServiceWorker();
+
   const saved = getSavedTokenState();
   if (!saved.token || saved.userId !== userId || Date.now() - saved.lastRegisterAt >= TOKEN_RECHECK_MS) {
     await acquireAndRegisterToken(userId);
