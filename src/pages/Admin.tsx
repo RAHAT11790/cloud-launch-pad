@@ -6564,6 +6564,8 @@ ${tgBulkFooter}
       contentType: "webseries",
       seasonNumber: firstRange.seasonIdxNum,
       episodeNumber: firstRange.startEp,
+      seasonName: isMulti ? "New seasons" : String(firstRange.seasonName || ""),
+      episodeRange: epLine,
     });
     toast.dismiss(pushToastId);
     setAdminBusyTask(null);
@@ -7589,6 +7591,8 @@ ${tgBulkFooter}
  title, body, image, deepLink,
  contentId: String(contentId), contentType,
  seasonNumber, episodeNumber,
+  seasonName,
+  episodeRange: epRange,
  });
  toast.dismiss(toastId);
  if (res.ok) {

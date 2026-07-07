@@ -451,6 +451,8 @@ export async function sendPushNotification(payload: {
   contentType?: string;
   seasonNumber?: number | string;
   episodeNumber?: number | string;
+  seasonName?: string;
+  episodeRange?: string;
   userIds?: string[];
 }): Promise<{ ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; error?: string }> {
   const endpoints = await getSendFcmEndpoints();
