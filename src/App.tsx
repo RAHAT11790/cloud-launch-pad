@@ -74,6 +74,7 @@ const App = () => (
         <Routes>
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><AnExplorer /></Suspense>} />
+          <Route path="/ai-world-explorer" element={<Suspense fallback={<RouteFallback />}><AiWorldExplorer /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
           <Route path="/premium-required" element={<PremiumRequired />} />
