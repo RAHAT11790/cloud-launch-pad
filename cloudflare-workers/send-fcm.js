@@ -175,6 +175,7 @@ async function handleSend(req, env) {
     } catch (e) {
       return jsonResponse({
         success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        deliveredUserIds: [], deliveredUsers: 0,
         reason: "TOKEN_LOOKUP_FAILED", details: { message: (e && e.message) || String(e) },
       });
     }
@@ -182,6 +183,7 @@ async function handleSend(req, env) {
   if (!resolvedTokens.length) {
     return jsonResponse({
       success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+      deliveredUserIds: [], deliveredUsers: 0,
       reason: "NO_MATCHING_TOKENS",
     });
   }

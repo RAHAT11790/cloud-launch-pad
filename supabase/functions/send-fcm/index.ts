@@ -182,6 +182,7 @@ serve(async (req) => {
       } catch (e: any) {
         return new Response(JSON.stringify({
           success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+          deliveredUserIds: [], deliveredUsers: 0,
           reason: "TOKEN_LOOKUP_FAILED", details: { message: e?.message || String(e) },
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -189,6 +190,7 @@ serve(async (req) => {
     if (!resolvedTokens.length) {
       return new Response(JSON.stringify({
         success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        deliveredUserIds: [], deliveredUsers: 0,
         reason: "NO_MATCHING_TOKENS",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
