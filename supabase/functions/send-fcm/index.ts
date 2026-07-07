@@ -5,6 +5,7 @@
 const DEFAULT_TTL_HOURS = 2160;
 const FCM_BATCH_SIZE = 500;
 const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
+const DEFAULT_SITE_URL = "https://rsanime03.lovable.app";
 
 function corsHeaders(origin: string, env: Record<string, string>) {
   const allow = matchOrigin(origin, env);
@@ -92,26 +93,49 @@ function sanitizeData(o: Record<string, unknown>) {
   const out: Record<string, string> = {}; for (const [k, v] of Object.entries(o)) out[k] = String(v ?? "");
   return out;
 }
+function siteOrigin(env: Record<string, string>) {
+  return String(env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "") || DEFAULT_SITE_URL;
+}
+function absoluteUrl(env: Record<string, string>, value: unknown, fallback = "/") {
+  const raw = String(value || fallback || "/").trim();
+  try { return new URL(raw, siteOrigin(env)).href; } catch { return new URL(fallback, siteOrigin(env)).href; }
+}
+function episodeText(p: any) {
+  const range = String(p.episodeRange || "").trim();
+  if (range) return range;
+  return p.episodeNumber != null && String(p.episodeNumber).trim() ? `Episode ${p.episodeNumber}` : "New episode";
+}
+function compactBody(p: any) {
+  const season = String(p.seasonName || (p.seasonNumber != null ? `Season ${p.seasonNumber}` : "")).trim();
+  return [String(p.title || "Anime").trim(), season, episodeText(p)].filter(Boolean).join(" • ");
+}
 async function sendOne(env: Record<string, string>, at: string, projectId: string, token: string, p: any) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const title = String(p.title || "🎬 RS Anime").trim();
+  const body = String(p.body || compactBody(p)).trim();
+  const image = p.image ? absoluteUrl(env, p.image) : undefined;
+  const icon = absoluteUrl(env, p.icon || "/icon-192.png");
+  const badge = absoluteUrl(env, p.badge || "/icon-192.png");
+  const link = absoluteUrl(env, p.deepLink || "/");
   const message = {
     token,
-    notification: { title: p.title, body: p.body, ...(p.image ? { image: p.image } : {}) },
+    notification: { title, body, ...(image ? { image } : {}) },
     data: sanitizeData({
-      deepLink: p.deepLink || "/", contentId: p.contentId || "", contentType: p.contentType || "",
+      deepLink: link, contentId: p.contentId || "", contentType: p.contentType || "",
       seasonNumber: p.seasonNumber != null ? String(p.seasonNumber) : "",
       episodeNumber: p.episodeNumber != null ? String(p.episodeNumber) : "",
-      image: p.image || "", title: p.title || "", body: p.body || "", sentAt: String(Date.now()),
+      seasonName: p.seasonName || "", episodeRange: p.episodeRange || "",
+      image: image || "", title, body, sentAt: String(Date.now()),
     }),
     webpush: {
       headers: { Urgency: "high", TTL: "86400" },
       notification: {
-        title: p.title, body: p.body,
-        icon: p.icon || "/icon-192.png", badge: p.badge || "/icon-192.png",
-        image: p.image || undefined,
+        title, body,
+        icon, badge,
+        image,
         tag: p.tag || (p.contentId || "rsanime"), renotify: true,
       },
-      fcm_options: { link: p.deepLink || "/" },
+      fcm_options: { link },
     },
   };
   const r = await fetch(url, {
@@ -160,8 +184,8 @@ Deno.serve(async (req) => {
       else { await rtdb(env, "DELETE", `/fcmTokens/${encodeURIComponent(userId)}/${await tokenHash(token)}`); resp = json({ ok: true }); }
     } else if (path === "send" && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
-      const title = String(body.title || "").trim(); const msg = String(body.body || "").trim();
-      if (!title || !msg) { resp = json({ ok: false, error: "title+body required" }, 400); }
+      const title = String(body.title || "").trim();
+      if (!title) { resp = json({ ok: false, error: "title required" }, 400); }
       else {
         const { token: at, projectId } = await getAccessToken(env);
         const all = (await rtdb(env, "GET", "/fcmTokens").catch(() => null)) || {};
