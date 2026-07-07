@@ -77,7 +77,13 @@ async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> 
       existing?.update?.().catch(() => {});
       return existing!;
     }
-    if (existing) await existing.unregister().catch(() => false);
+    if (existing) {
+      await existing.unregister().catch(() => false);
+      try {
+        localStorage.removeItem(LS_LAST_TOKEN);
+        localStorage.removeItem(LS_LAST_REG);
+      } catch {}
+    }
 
     const reg = await navigator.serviceWorker.register(swPath, { scope: "/", updateViaCache: "none" });
     await navigator.serviceWorker.ready.catch(() => reg);
