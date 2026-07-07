@@ -91,17 +91,36 @@ const buildBrowserPushBody = (title: unknown, seasonName: unknown, episodeText: 
 
 type BrowserPushRecipient = { userId: string; name: string; email: string };
 
-const mapBrowserPushRecipients = (users: Record<string, any>, deliveredUserIds?: string[]): BrowserPushRecipient[] => {
+const getFcmTokenOwnerIds = async (): Promise<string[]> => {
+ try {
+  const snap = await get(ref(db, "fcmTokens"));
+  return Object.keys(snap.val() || {}).map(String).filter(Boolean);
+ } catch { return []; }
+};
+
+const mergeTargetIdsWithFcmOwners = async (targetUserIds: string[]): Promise<string[]> => {
+ const tokenOwners = await getFcmTokenOwnerIds();
+ return [...new Set([...targetUserIds, ...tokenOwners].map((id) => String(id || "").trim()).filter(Boolean))];
+};
+
+const mapBrowserPushRecipients = async (users: Record<string, any>, deliveredUserIds?: string[]): Promise<BrowserPushRecipient[]> => {
  const ids = [...new Set((deliveredUserIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
  if (!ids.length) return [];
  const values = Object.entries(users || {});
+ let fcmTree: Record<string, any> = {};
+ try {
+  const fcmSnap = await get(ref(db, "fcmTokens"));
+  fcmTree = fcmSnap.val() || {};
+ } catch {}
  return ids.map((uid) => {
   const direct = users?.[uid];
   const found = direct || values.find(([key, value]: any) => key === uid || String(value?.id || "") === uid)?.[1] || {};
+  const tokenEntries = Object.values(fcmTree?.[uid] || {}) as any[];
+  const tokenMeta = tokenEntries.find((entry) => entry?.email || entry?.name) || {};
   return {
    userId: uid,
-   name: String(found?.name || found?.displayName || "User").trim(),
-   email: String(found?.email || "").trim(),
+   name: String(found?.name || found?.displayName || tokenMeta?.name || "User").trim(),
+   email: String(found?.email || tokenMeta?.email || (uid.includes("@") ? uid : "")).trim(),
   };
  });
 };
@@ -3808,6 +3827,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Fire browser push
  const pushMod = await import("@/lib/pushNotifications");
+ const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
  const result = await pushMod.sendPushNotification({
  title: savedTitle,
  body: savedMessage,
@@ -3815,10 +3835,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  deepLink: contentId ? `/?anime=${contentId}` : "/",
  contentId,
  contentType,
- userIds: targetUserIds,
+ userIds: browserTargetUserIds,
  });
 
- setPushRecipients(mapBrowserPushRecipients(users, result.deliveredUserIds));
+ setPushRecipients(await mapBrowserPushRecipients(users, result.deliveredUserIds));
 
  if (!result.ok && result.total === 0) {
  toast.warning(`In-app sent to ${targetUserIds.length} users. Browser push: no tokens found${result.reason ? ` [${result.reason}]` : ""}`);
@@ -7654,16 +7674,17 @@ ${tgBulkFooter}
  if (Object.keys(inAppUpdates).length) await update(ref(db), inAppUpdates);
 
  const pushMod = await import("@/lib/pushNotifications");
+ const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
  const res = await pushMod.sendPushNotification({
  title, body, image, deepLink,
  contentId: String(contentId), contentType,
  seasonNumber, episodeNumber,
   seasonName,
   episodeRange: epRange,
- userIds: targetUserIds,
+  userIds: browserTargetUserIds,
  });
  toast.dismiss(toastId);
- const browserRecipients = mapBrowserPushRecipients(users, res.deliveredUserIds);
+ const browserRecipients = await mapBrowserPushRecipients(users, res.deliveredUserIds);
  setPushRecipients(browserRecipients);
  if (res.ok) {
  const msg = `Browser push sent → ${res.sent}/${res.total} tokens · ${browserRecipients.length} users${res.invalidRemoved ? ` · cleaned ${res.invalidRemoved}` : ""}`;

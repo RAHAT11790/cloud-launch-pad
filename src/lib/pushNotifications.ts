@@ -90,6 +90,19 @@ const deviceId = (): string => {
   return id;
 };
 
+function currentLocalUserMeta(userId: string) {
+  try {
+    const raw = localStorage.getItem("rsanime_user");
+    const u = raw ? JSON.parse(raw) : {};
+    return {
+      name: String(u?.name || localStorage.getItem("rs_display_name") || "").trim(),
+      email: String(u?.email || (String(userId).includes("@") ? userId : "")).trim(),
+    };
+  } catch {
+    return { name: "", email: String(userId).includes("@") ? userId : "" };
+  }
+}
+
 async function pruneUserTokens(userId: string, currentKey: string, currentDevice: string) {
   try {
     const snap = await get(ref(db, `fcmTokens/${userId}`));
@@ -123,8 +136,11 @@ async function acquireAndRegister(userId: string): Promise<string | null> {
     if (!token) return null;
     const key = tokenKey(token);
     const dev = deviceId();
+    const meta = currentLocalUserMeta(userId);
     await set(ref(db, `fcmTokens/${userId}/${key}`), {
       token, deviceId: dev, origin: window.location.origin, updatedAt: Date.now(),
+      name: meta.name,
+      email: meta.email,
       userAgent: navigator.userAgent.substring(0, 160),
     });
     await pruneUserTokens(userId, key, dev);
