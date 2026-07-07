@@ -2,7 +2,7 @@
 // Endpoints:
 //   GET /                → info
 //   GET /search?q=...    → [{id,title,poster,year,type,slug,description,episodeCount}]
-//   GET /anime?id=...    → {title,poster,storyline,seasons:[{name,episodes:[{number,title,slug}]}], episodeCount}
+//   GET /anime?id=...    → {title,poster,storyline,seasons:[{name,episodes:[{number,title,slug}]}], episodeCount, authRequired, authMessage}
 //   GET /episode?slug=animeId:epId  → {slug,title,pageUrl,sources:[{embed,master,streams,audio}]}
 //
 // Auth: uses AIWORLD_USERNAME / AIWORLD_PASSWORD secrets to keep a login cookie
@@ -25,7 +25,7 @@ const LOGIN_TTL = 25 * 60 * 1000;
 async function login(): Promise<string> {
   const u = Deno.env.get("AIWORLD_USERNAME") || "";
   const p = Deno.env.get("AIWORLD_PASSWORD") || "";
-  if (!u || !p) { console.log("[login] no creds"); return ""; }
+  if (!u || !p) return "";
   try {
     const r = await fetch(`${BASE}/api/auth/login`, {
       method: "POST",
@@ -36,15 +36,12 @@ async function login(): Promise<string> {
     const anyH = r.headers as any;
     if (typeof anyH.getSetCookie === "function") setCookies.push(...anyH.getSetCookie());
     else { const raw = r.headers.get("set-cookie"); if (raw) setCookies.push(raw); }
-    const body = await r.text().catch(() => "");
     const cookie = setCookies.map(c => c.split(";")[0]).filter(Boolean).join("; ");
-    console.log(`[login] status=${r.status} cookies=${setCookies.length} body=${body.slice(0, 200)}`);
     if (!r.ok || !cookie) return "";
     sessionCookie = cookie;
     lastLoginAt = Date.now();
     return cookie;
-  } catch (e) {
-    console.error("[login] error", e);
+  } catch {
     return "";
   }
 }
@@ -131,8 +128,11 @@ async function handleAnime(id: string) {
   const r = await apiFetch(`/api/anime/${encodeURIComponent(id)}`);
   
   if (!r.ok) {
+    const status = r.status;
+    const text = await r.text().catch(() => "");
+    
     // If auth failed, try to get basic info from public endpoints
-    if (r.status === 401 || r.status === 403) {
+    if (status === 401 || status === 403) {
       const publicList = await getPublicAnimeList();
       const p = publicList.find(x => String(x.id || x._id) === id);
       if (p) {
@@ -142,7 +142,7 @@ async function handleAnime(id: string) {
           episodes: Array.from({ length: epCount }, (_, i) => ({
             number: i + 1,
             title: `Episode ${i + 1}`,
-            slug: `${id}:${i + 1}`, // Best guess
+            slug: `${id}:${i + 1}`, 
           }))
         }];
         return json({
@@ -151,12 +151,15 @@ async function handleAnime(id: string) {
           storyline: String(p.description || p.storyline || ""),
           seasons: epCount > 0 ? seasons : [],
           episodeCount: epCount,
-          note: "This content requires a valid AI World Premium account to stream."
+          status: String(p.status || ""),
+          year: String(p.releaseYear || ""),
+          authRequired: true,
+          authMessage: "AI World Premium credentials are required to access full episode details and streams.",
+          authError: text.slice(0, 100)
         });
       }
     }
-    const t = await r.text().catch(() => "");
-    return json({ error: `Fetch failed (${r.status}). This content might require a Premium account.` }, r.status || 500);
+    return json({ error: `Fetch failed (${status}). Premium credentials might be expired or required.` }, status || 500);
   }
   
   const d = await r.json();
@@ -179,6 +182,9 @@ async function handleAnime(id: string) {
     title: String(d.title || ""),
     poster: coverToPoster(d.coverImage || ""),
     storyline: String(d.description || d.storyline || ""),
+    genres: Array.isArray(d.genres) ? d.genres : [],
+    status: String(d.status || ""),
+    year: String(d.releaseYear || ""),
     seasons,
     episodeCount: eps.length || Number(d.episodeCount || 0),
   });
@@ -190,11 +196,15 @@ async function handleEpisode(slug: string) {
   
   const r = await apiFetch(`/api/anime/${encodeURIComponent(animeId)}/episodes/${encodeURIComponent(epId)}/stream`);
   if (!r.ok) {
-    const text = await r.text().catch(() => "");
-    if (r.status === 401 || r.status === 403) {
-      return json({ error: "AI World Premium credentials are required to extract this stream. (Error 401)" }, r.status);
+    const status = r.status;
+    if (status === 401 || status === 403) {
+      return json({ 
+        error: "AI World Premium required. This account has likely expired or access is restricted.",
+        authRequired: true 
+      }, status);
     }
-    return json({ error: `Stream fetch failed (${r.status}): ${text.slice(0, 100)}` }, r.status || 500);
+    const text = await r.text().catch(() => "");
+    return json({ error: `Stream fetch failed (${status}): ${text.slice(0, 100)}` }, status || 500);
   }
   
   const text = await r.text();
