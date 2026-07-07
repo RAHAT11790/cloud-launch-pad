@@ -81,6 +81,14 @@ const toPushImageUrl = (value: unknown) => {
  return url ? url.replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
 };
 
+const buildBrowserPushTitle = (title: unknown) => `🎬 ${String(title || "New Episode").trim()}`;
+const buildBrowserPushBody = (title: unknown, seasonName: unknown, episodeText: unknown) => {
+ const t = String(title || "Anime").trim();
+ const s = String(seasonName || "Season 1").trim();
+ const e = String(episodeText || "New episode").trim();
+ return `${t} • ${s} • ${e}`;
+};
+
 const TG_DUB_TAGS = {
  official: "#ᴏғғɪᴄɪᴀʟ",
  fandub: "#ғᴀɴᴅᴜʙ",
@@ -3887,10 +3895,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  try {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
- const releaseNotifTitle = contentType === "webseries" ? `New Episode: ${content.title}` : `New Movie: ${content.title}`;
+ const releaseNotifTitle = buildBrowserPushTitle(content.title);
+ const releaseEpisodeText = contentType === "webseries" ? `Episode ${episodeInfo.episodeNumber}` : "Movie release";
  const releaseNotifMsg = contentType === "webseries"
- ? `${episodeInfo.seasonName} - Episode ${episodeInfo.episodeNumber} is now available!`
- : `${content.title} (${content.year}) is now available!`;
+ ? buildBrowserPushBody(content.title, episodeInfo.seasonName, releaseEpisodeText)
+ : `${content.title} • Movie release`;
  const releaseDeepLink = contentType === "webseries"
  ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
  : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
@@ -3907,6 +3916,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   contentType,
   seasonNumber: contentType === "webseries" ? episodeInfo.seasonNumber : undefined,
   episodeNumber: contentType === "webseries" ? episodeInfo.episodeNumber : undefined,
+  seasonName: contentType === "webseries" ? episodeInfo.seasonName : undefined,
+  episodeRange: contentType === "webseries" ? releaseEpisodeText : undefined,
   });
   if (res.ok) toast.success(`Browser push sent → ${res.sent}/${res.total} users`);
   else toast.warning(`Push skipped: ${res.error || "send-fcm not configured"}`);
@@ -6531,14 +6542,14 @@ ${tgBulkFooter}
     const pushMod = await import("@/lib/pushNotifications");
     const isRange = rangesToPublish.length === 1 && rangesToPublish[0].endEp !== rangesToPublish[0].startEp;
     const isMulti = rangesToPublish.length > 1;
-    const pushTitle = `🎬 ${ctxForm.title} — New Episode${isRange || isMulti ? "s" : ""}`;
+    const pushTitle = buildBrowserPushTitle(ctxForm.title);
     const firstR = rangesToPublish[0];
     const epLine = isMulti
-      ? `Multiple new episodes across seasons`
+      ? `Multiple episodes`
       : (isRange
-        ? `${firstR.seasonName} • Episode ${firstR.startEp}–${firstR.endEp}`
-        : `${firstR.seasonName} • Episode ${firstR.startEp}`);
-    const pushBody = `${ctxForm.title} — ${epLine} is now live!\n▶ Tap to watch instantly on RS Anime.`;
+        ? `Episode ${firstR.startEp}–${firstR.endEp}`
+        : `Episode ${firstR.startEp}`);
+    const pushBody = buildBrowserPushBody(ctxForm.title, isMulti ? "New seasons" : firstR.seasonName, epLine);
     const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
     const firstRange = rangesToPublish[0];
     const seasonIdxForLink = usingMulti ? (wsAutoRanges[0]?.seasonIdx ?? 0) : parseInt(wsNotifySeason);
@@ -6556,6 +6567,8 @@ ${tgBulkFooter}
       contentType: "webseries",
       seasonNumber: firstRange.seasonIdxNum,
       episodeNumber: firstRange.startEp,
+      seasonName: isMulti ? "New seasons" : String(firstRange.seasonName || ""),
+      episodeRange: epLine,
     });
     toast.dismiss(pushToastId);
     setAdminBusyTask(null);
@@ -7512,12 +7525,10 @@ ${tgBulkFooter}
  const endIdx = pushEpisodeEnd !== "" ? pushEpisodeEnd : pushEpisode;
  const endEpNum = pushShowSeasonEp && endIdx !== "" ? (pushEpisodes.find(e => String(e.index) === endIdx)?.num || parseInt(endIdx) + 1) : null;
  const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
- const autoTitle = ctype === "webseries"
- ? `🎬 ${opt?.label || ""} — New Episode${startEpNum && endEpNum && endEpNum !== startEpNum ? "s" : ""}`
- : `🎬 ${opt?.label || ""} — New Movie`;
+ const autoTitle = buildBrowserPushTitle(opt?.label || "");
  const autoDesc = ctype === "webseries"
- ? `${opt?.label || ""} — ${seasonName}${epRange ? ` • ${epRange}` : ""} is now live!\n▶ Tap to watch instantly on RS Anime.`
- : `${opt?.label || ""} is now streaming on RS Anime.\n▶ Tap to watch in HD.`;
+ ? buildBrowserPushBody(opt?.label || "", seasonName, epRange || "New episode")
+ : `${opt?.label || "Movie"} • Movie release`;
  return (
  <div className="bg-[#0F0F1A] border border-yellow-500/25 rounded-xl p-3 mb-4 space-y-1.5">
  <p className="text-[10px] uppercase tracking-wide text-yellow-500/70 font-semibold">Auto preview</p>
@@ -7531,7 +7542,7 @@ ${tgBulkFooter}
  <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="Auto-detected from anime title" />
 
  <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Short Description (leave empty for auto)</label>
- <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={3} className={`${inputClass} mb-4 resize-none`} placeholder="Auto: anime name, season, episode range + tap-to-watch line" />
+  <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={3} className={`${inputClass} mb-4 resize-none`} placeholder="Auto: anime title, season, episode" />
 
  <button
  disabled={pushSending || !pushContent}
@@ -7568,12 +7579,10 @@ ${tgBulkFooter}
  const backdrop = content.backdrop || content.poster || "";
  const image = backdrop ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
  const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
- const autoTitle = contentType === "webseries"
- ? `🎬 ${content.title} — New Episode${startEpNum && endEpNum && endEpNum !== startEpNum ? "s" : ""}`
- : `🎬 ${content.title} — New Movie`;
- const autoBody = contentType === "webseries"
- ? `${content.title} — ${seasonName}${epRange ? ` • ${epRange}` : ""} is now live!\n▶ Tap to watch instantly on RS Anime.`
- : `${content.title} (${content.year || ""}) is now streaming on RS Anime.\n▶ Tap to watch in HD.`;
+  const autoTitle = buildBrowserPushTitle(content.title);
+  const autoBody = contentType === "webseries"
+  ? buildBrowserPushBody(content.title, seasonName, epRange || "New episode")
+  : `${content.title} • Movie release`;
  const title = pushTitleOverride.trim() || autoTitle;
  const body = pushBodyOverride.trim() || autoBody;
 
@@ -7585,6 +7594,8 @@ ${tgBulkFooter}
  title, body, image, deepLink,
  contentId: String(contentId), contentType,
  seasonNumber, episodeNumber,
+  seasonName,
+  episodeRange: epRange,
  });
  toast.dismiss(toastId);
  if (res.ok) {

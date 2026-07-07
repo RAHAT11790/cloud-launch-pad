@@ -17,6 +17,7 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 const IMAGE_CACHE = "rs-image-cache-v2";
+const SITE_ORIGIN = self.location.origin;
 const inFlightImageRequests = new Map();
 const IMG_HOSTS = [
   "i.ibb.co",
@@ -85,23 +86,33 @@ self.addEventListener("fetch", (event) => {
   })());
 });
 
-// Some browsers deliver via 'push' without going through onBackgroundMessage
-// when the payload is data-only. Handle both paths → richer notification
-// with anime backdrop image and RS logo watermark badge.
+function compactBody(notification, data) {
+  const title = data.title || notification.title || "Anime";
+  const season = data.seasonName || (data.seasonNumber ? `Season ${data.seasonNumber}` : "");
+  const ep = data.episodeRange || (data.episodeNumber ? `Episode ${data.episodeNumber}` : "New episode");
+  return [title, season, ep].filter(Boolean).join(" • ");
+}
+
+function absoluteUrl(value, fallback = "/") {
+  try { return new URL(value || fallback, SITE_ORIGIN).href; } catch { return new URL(fallback, SITE_ORIGIN).href; }
+}
+
+// Background browser push: show a native Chrome/Android notification using
+// the backdrop image. This runs even when the website tab is closed.
 messaging.onBackgroundMessage((payload) => {
   const n = payload.notification || {};
   const d = payload.data || {};
   const title = n.title || d.title || "🎬 RS Anime";
   const options = {
-    body: n.body || d.body || "New episode is live!",
-    icon: n.icon || "/icon-192.png",
-    badge: "/icon-192.png",
+    body: d.body || compactBody(n, d),
+    icon: absoluteUrl(n.icon || d.icon || "/icon-192.png"),
+    badge: absoluteUrl("/icon-192.png"),
     image: n.image || d.image || undefined,
     tag: d.contentId || "rsanime",
     renotify: true,
     requireInteraction: false,
     data: {
-      deepLink: d.deepLink || "/",
+      deepLink: absoluteUrl(d.deepLink || "/"),
       contentId: d.contentId || "",
       contentType: d.contentType || "",
       seasonNumber: d.seasonNumber || "",
@@ -121,6 +132,7 @@ self.addEventListener("notificationclick", (event) => {
     const e = data.episodeNumber ? `${s ? "&" : "?"}e=${encodeURIComponent(data.episodeNumber)}` : "";
     target = `/watch/${encodeURIComponent(data.contentId)}${s}${e}`;
   }
+  target = absoluteUrl(target);
   event.waitUntil((async () => {
     const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     // Prefer an existing tab on the same origin — navigate + focus

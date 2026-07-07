@@ -62,10 +62,32 @@ function getFirebaseApp() {
 async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
-    // Reuse an existing registration if the SW file is already installed
-    const existing = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
-    if (existing) return existing;
-    return await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+    const swPath = "/firebase-messaging-sw.js";
+    const isFirebaseSw = (reg: ServiceWorkerRegistration | null | undefined) => {
+      const url = reg?.active?.scriptURL || reg?.waiting?.scriptURL || reg?.installing?.scriptURL || "";
+      return url.includes(swPath);
+    };
+
+    // getRegistration(url) returns the root-scope registration even when its
+    // script is the old /sw.js image-cache worker. That old worker can mint FCM
+    // tokens but cannot display background browser notifications. Force-upgrade
+    // it to the Firebase messaging worker.
+    const existing = await navigator.serviceWorker.getRegistration("/");
+    if (isFirebaseSw(existing)) {
+      existing?.update?.().catch(() => {});
+      return existing!;
+    }
+    if (existing) {
+      await existing.unregister().catch(() => false);
+      try {
+        localStorage.removeItem(LS_LAST_TOKEN);
+        localStorage.removeItem(LS_LAST_REG);
+      } catch {}
+    }
+
+    const reg = await navigator.serviceWorker.register(swPath, { scope: "/", updateViaCache: "none" });
+    await navigator.serviceWorker.ready.catch(() => reg);
+    return reg;
   } catch (err) {
     console.warn("[FCM] SW registration failed", err);
     return null;
@@ -82,9 +104,25 @@ async function ensureMessaging() {
 async function getSendFcmEndpoints(): Promise<string[]> {
   const endpoints: string[] = [];
   const add = (value: string) => {
-    const endpoint = String(value || "").trim().replace(/\/+$/, "");
+    let endpoint = String(value || "").trim().replace(/\/+$/, "");
+    // Admins sometimes paste a route URL like /send or /health. Store/callers
+    // need the function base; send/register is appended below.
+    endpoint = endpoint.replace(/\/(send|register|unregister|cleanup|health)$/i, "");
     if (endpoint && !endpoints.includes(endpoint)) endpoints.push(endpoint);
   };
+
+  // The Admin “FCM Provider” switch is the source of truth. Put the selected
+  // Cloudflare/Lovable Cloud sender first so “sent” comes from the provider the
+  // admin actually configured.
+  try {
+    const { db, ref, get } = await import("@/lib/firebase");
+    const snap = await get(ref(db, "settings/fcmProvider"));
+    const cfg = snap.val() || {};
+    const active = String(cfg.active || "").toLowerCase();
+    const activeUrl = String(cfg.url || (active === "cloudflare" ? cfg.cloudflareUrl : cfg.supabaseUrl) || "").trim();
+    add(activeUrl);
+  } catch {}
+
   const cloudBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (cloudBase) add(`${cloudBase}/functions/v1/send-fcm`);
   try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
@@ -264,6 +302,8 @@ export async function initPushNotifications(userIdInput?: string) {
 
   if (permission !== "granted") return;
 
+  await ensureServiceWorker();
+
   const saved = getSavedTokenState();
   if (!saved.token || saved.userId !== userId || Date.now() - saved.lastRegisterAt >= TOKEN_RECHECK_MS) {
     await acquireAndRegisterToken(userId);
@@ -411,6 +451,8 @@ export async function sendPushNotification(payload: {
   contentType?: string;
   seasonNumber?: number | string;
   episodeNumber?: number | string;
+  seasonName?: string;
+  episodeRange?: string;
   userIds?: string[];
 }): Promise<{ ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; error?: string }> {
   const endpoints = await getSendFcmEndpoints();
