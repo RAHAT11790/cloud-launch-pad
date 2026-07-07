@@ -159,6 +159,7 @@ function supabaseFallbackUrl(fnName: string): string {
     "send-fcm",
     "send-otp-email",
     "process-email-queue",
+    "aiworld-api",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
