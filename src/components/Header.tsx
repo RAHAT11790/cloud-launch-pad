@@ -3,6 +3,7 @@ import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
+import NotificationPanel from "./NotificationPanel";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
 import { readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
