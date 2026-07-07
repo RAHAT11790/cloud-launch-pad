@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type SearchItem = { id: string; slug: string; type: string; title: string; poster: string; year: string };
+type SearchItem = { id: string; slug: string; type: string; title: string; poster: string; year: string; description?: string; episodeCount?: number };
 type Episode = { number: number; title: string; slug: string };
 type Season = { name: string; episodes: Episode[] };
 type Detail = { title: string; poster: string; storyline: string; seasons: Season[]; episodeCount: number; authRequired?: boolean; authMessage?: string; authError?: string; genres?: string[]; status?: string; year?: string };
