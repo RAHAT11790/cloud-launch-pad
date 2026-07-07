@@ -3895,10 +3895,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  try {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
- const releaseNotifTitle = contentType === "webseries" ? `New Episode: ${content.title}` : `New Movie: ${content.title}`;
+ const releaseNotifTitle = buildBrowserPushTitle(content.title);
+ const releaseEpisodeText = contentType === "webseries" ? `Episode ${episodeInfo.episodeNumber}` : "Movie release";
  const releaseNotifMsg = contentType === "webseries"
- ? `${episodeInfo.seasonName} - Episode ${episodeInfo.episodeNumber} is now available!`
- : `${content.title} (${content.year}) is now available!`;
+ ? buildBrowserPushBody(content.title, episodeInfo.seasonName, releaseEpisodeText)
+ : `${content.title} • Movie release`;
  const releaseDeepLink = contentType === "webseries"
  ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
  : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
@@ -3915,6 +3916,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   contentType,
   seasonNumber: contentType === "webseries" ? episodeInfo.seasonNumber : undefined,
   episodeNumber: contentType === "webseries" ? episodeInfo.episodeNumber : undefined,
+  seasonName: contentType === "webseries" ? episodeInfo.seasonName : undefined,
+  episodeRange: contentType === "webseries" ? releaseEpisodeText : undefined,
   });
   if (res.ok) toast.success(`Browser push sent → ${res.sent}/${res.total} users`);
   else toast.warning(`Push skipped: ${res.error || "send-fcm not configured"}`);
