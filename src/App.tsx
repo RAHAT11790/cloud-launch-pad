@@ -52,6 +52,7 @@ const lazyWithReload = <T extends React.ComponentType<any>>(factory: () => Promi
 
 const Admin = lazyWithReload(() => import("./pages/Admin"));
 const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
+const AiWorldExplorer = lazyWithReload(() => import("./pages/AiWorldExplorer"));
 const queryClient = new QueryClient();
 
 const RouteFallback = () => (
