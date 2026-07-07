@@ -29,7 +29,7 @@ async function login(): Promise<string> {
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "User-Agent": UA, "Origin": BASE, "Referer": `${BASE}/`, "Accept": "application/json" },
-    body: JSON.stringify({ username: u, password: p }),
+    body: JSON.stringify({ username: u, password: p, deviceId: Deno.env.get("AIWORLD_DEVICE_ID") || "aiworld-proxy-lovable-01" }),
   });
   const setCookies: string[] = [];
   const anyH = r.headers as any;
