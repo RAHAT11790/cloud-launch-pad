@@ -28,6 +28,7 @@
 const DEFAULT_TTL_HOURS = 2160;
 const FCM_BATCH_SIZE = 500;
 const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
+const DEFAULT_SITE_URL = "https://rsanime03.lovable.app";
 
 // ---------- CORS ----------
 function corsHeaders(origin, env) {
@@ -165,37 +166,45 @@ async function tokenHash(token) {
 // ---------- FCM v1 send (one message per token) ----------
 async function sendOneMessage(env, accessToken, projectId, token, payload) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  const title = String(payload.title || "🎬 RS Anime").trim();
+  const body = String(payload.body || compactBody(payload)).trim();
+  const image = payload.image ? absoluteUrl(env, payload.image) : undefined;
+  const icon = absoluteUrl(env, payload.icon || "/icon-192.png");
+  const badge = absoluteUrl(env, payload.badge || "/icon-192.png");
+  const link = absoluteUrl(env, payload.deepLink || "/");
   const message = {
     token,
     notification: {
-      title: payload.title,
-      body: payload.body,
-      ...(payload.image ? { image: payload.image } : {}),
+      title,
+      body,
+      ...(image ? { image } : {}),
     },
     data: sanitizeData({
-      deepLink: payload.deepLink || "/",
+      deepLink: link,
       contentId: payload.contentId || "",
       contentType: payload.contentType || "",
       seasonNumber: payload.seasonNumber != null ? String(payload.seasonNumber) : "",
       episodeNumber: payload.episodeNumber != null ? String(payload.episodeNumber) : "",
-      image: payload.image || "",
-      title: payload.title || "",
-      body: payload.body || "",
+      seasonName: payload.seasonName || "",
+      episodeRange: payload.episodeRange || "",
+      image: image || "",
+      title,
+      body,
       sentAt: String(Date.now()),
     }),
     webpush: {
       headers: { Urgency: "high", TTL: "86400" },
       notification: {
-        title: payload.title,
-        body: payload.body,
-        icon: payload.icon || "/icon-192.png",
-        badge: payload.badge || "/icon-192.png",
-        image: payload.image || undefined,
+        title,
+        body,
+        icon,
+        badge,
+        image,
         requireInteraction: false,
         tag: payload.tag || (payload.contentId || "rsanime"),
         renotify: true,
       },
-      fcm_options: { link: payload.deepLink || "/" },
+      fcm_options: { link },
     },
   };
   const r = await fetch(url, {
@@ -213,6 +222,22 @@ function sanitizeData(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) out[k] = String(v == null ? "" : v);
   return out;
+}
+function siteOrigin(env) {
+  return String(env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "") || DEFAULT_SITE_URL;
+}
+function absoluteUrl(env, value, fallback = "/") {
+  const raw = String(value || fallback || "/").trim();
+  try { return new URL(raw, siteOrigin(env)).href; } catch { return new URL(fallback, siteOrigin(env)).href; }
+}
+function episodeText(payload) {
+  const range = String(payload.episodeRange || "").trim();
+  if (range) return range;
+  return payload.episodeNumber != null && String(payload.episodeNumber).trim() ? `Episode ${payload.episodeNumber}` : "New episode";
+}
+function compactBody(payload) {
+  const season = String(payload.seasonName || (payload.seasonNumber != null ? `Season ${payload.seasonNumber}` : "")).trim();
+  return [String(payload.title || "Anime").trim(), season, episodeText(payload)].filter(Boolean).join(" • ");
 }
 function isInvalidTokenError(status, body) {
   if (status === 404 || status === 400) {
@@ -254,8 +279,7 @@ async function handleUnregister(req, env) {
 async function handleSend(req, env) {
   const body = await req.json().catch(() => ({}));
   const title = String(body.title || "").trim();
-  const msg = String(body.body || "").trim();
-  if (!title || !msg) return json({ ok: false, error: "title and body required" }, 400);
+  if (!title) return json({ ok: false, error: "title required" }, 400);
 
   const { token: accessToken, projectId } = await getAccessToken(env);
 
