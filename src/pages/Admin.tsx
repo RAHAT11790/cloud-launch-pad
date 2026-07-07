@@ -81,6 +81,14 @@ const toPushImageUrl = (value: unknown) => {
  return url ? url.replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
 };
 
+const buildBrowserPushTitle = (title: unknown) => `🎬 ${String(title || "New Episode").trim()}`;
+const buildBrowserPushBody = (title: unknown, seasonName: unknown, episodeText: unknown) => {
+ const t = String(title || "Anime").trim();
+ const s = String(seasonName || "Season 1").trim();
+ const e = String(episodeText || "New episode").trim();
+ return `${t} • ${s} • ${e}`;
+};
+
 const TG_DUB_TAGS = {
  official: "#ᴏғғɪᴄɪᴀʟ",
  fandub: "#ғᴀɴᴅᴜʙ",
