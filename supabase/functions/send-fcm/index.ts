@@ -1,243 +1,238 @@
-// send-fcm — Supabase Edge Function mirror (Deno). Same routes/behavior
-// as cloudflare-workers/send-fcm.js. Deploy as an alternative when the
-// admin prefers the Supabase edge runtime instead of Cloudflare.
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const DEFAULT_TTL_HOURS = 2160;
-const FCM_BATCH_SIZE = 500;
-const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
-const DEFAULT_SITE_URL = "https://rsanime03.lovable.app";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-function corsHeaders(origin: string, env: Record<string, string>) {
-  const allow = matchOrigin(origin, env);
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization, apikey, x-requested-with",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
+type ServiceAccount = {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+  database_url?: string;
+};
+
+type TokenLookupResult = {
+  tokens: string[];
+  tokenPathsByToken: Record<string, string[]>;
+};
+
+const BRAND_ICON_URL = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+const DEFAULT_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
+
+function base64UrlEncode(input: string | Uint8Array): string {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
-function matchOrigin(origin: string, env: Record<string, string>) {
-  const list = String(env.ALLOWED_ORIGINS || "*").split(",").map((s) => s.trim()).filter(Boolean);
-  if (list.includes("*") || !origin) return list.includes("*") ? "*" : (list[0] || "*");
-  for (const rule of list) {
-    if (rule === origin) return origin;
-    if (rule.startsWith("*.")) {
-      try { if (new URL(origin).host.endsWith(rule.slice(2))) return origin; } catch { /* noop */ }
-    }
-  }
-  return list[0] || "*";
-}
-const json = (b: unknown, s = 200, extra: HeadersInit = {}) =>
-  new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json; charset=utf-8", ...extra } });
 
-let _cache = { token: "", exp: 0, projectId: "" };
-async function getAccessToken(env: Record<string, string>) {
+async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  if (_cache.token && _cache.exp - 60 > now) return _cache;
-  const raw = env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not configured");
-  const sa = JSON.parse(raw);
-  if (!sa.client_email || !sa.private_key || !sa.project_id) throw new Error("service account JSON incomplete");
-  const iat = now, exp = now + 3600;
-  const header = { alg: "RS256", typ: "JWT" };
-  const claim = {
+  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64UrlEncode(JSON.stringify({
     iss: sa.client_email,
-    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database",
     aud: "https://oauth2.googleapis.com/token",
-    iat,
-    exp,
-  };
-  const enc = (o: unknown) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const unsigned = `${enc(header)}.${enc(claim)}`;
-  const key = await importPrivateKey(sa.private_key);
-  const sig = await crypto.subtle.sign({ name: "RSASSA-PKCS1-v1_5" }, key, new TextEncoder().encode(unsigned));
-  const jwt = `${unsigned}.${b64url(new Uint8Array(sig))}`;
-  const r = await fetch("https://oauth2.googleapis.com/token", {
+    iat: now,
+    exp: now + 3600,
+  }));
+  const pem = sa.private_key
+    .replace(/\\n/g, "\n")
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${payload}`),
+  );
+  const jwt = `${header}.${payload}.${base64UrlEncode(new Uint8Array(sig))}`;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
   });
-  const d = await r.json();
-  if (!r.ok || !d.access_token) throw new Error(`OAuth exchange failed ${r.status}: ${JSON.stringify(d)}`);
-  _cache = { token: d.access_token, exp: iat + Number(d.expires_in || 3600), projectId: sa.project_id };
-  return _cache;
-}
-function b64url(bytes: Uint8Array) {
-  let s = ""; for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-async function importPrivateKey(pem: string) {
-  const clean = pem.replace(/\\n/g, "\n").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
-  const der = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
-  return crypto.subtle.importKey("pkcs8", der.buffer, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const data = await res.json();
+  if (!res.ok || !data.access_token) throw new Error(`OAuth failed: ${JSON.stringify(data)}`);
+  return data.access_token;
 }
 
-async function rtdb(env: Record<string, string>, method: string, path: string, body?: unknown) {
-  const { token } = await getAccessToken(env);
-  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${dbUrl}${cleanPath}.json?access_token=${encodeURIComponent(token)}`;
-  const r = await fetch(url, { method, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  if (!r.ok) throw new Error(`RTDB ${method} ${cleanPath} → ${r.status}: ${await r.text().catch(() => "")}`);
-  return method === "GET" ? r.json() : null;
+function dbBase(sa: ServiceAccount): string {
+  const url = (sa.database_url || "").trim() || DEFAULT_DB_URL;
+  return url.replace(/\/$/, "");
 }
-async function tokenHash(token: string) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const bytes = new Uint8Array(buf);
-  let hex = ""; for (let i = 0; i < 12; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
+
+function absUrl(v: string | undefined, base: string): string | undefined {
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("//")) return `https:${v}`;
+  if (v.startsWith("/")) return `${base}${v}`;
+  return `${base}/${v}`;
 }
-function sanitizeData(o: Record<string, unknown>) {
-  const out: Record<string, string> = {}; for (const [k, v] of Object.entries(o)) out[k] = String(v ?? "");
-  return out;
+
+const TRANSIENT = ["UNAVAILABLE", "INTERNAL", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED"];
+type FailCat = "invalid" | "transient" | "other";
+function categorize(msg: string): FailCat {
+  const m = msg.toUpperCase();
+  if (m.includes("UNREGISTERED") || m.includes("REGISTRATION_TOKEN_NOT_REGISTERED")) return "invalid";
+  if (m.includes("INVALID_ARGUMENT") && (m.includes("TOKEN") || m.includes("REGISTRATION"))) return "invalid";
+  if (TRANSIENT.some((c) => m.includes(c))) return "transient";
+  return "other";
 }
-function siteOrigin(env: Record<string, string>) {
-  return String(env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "") || DEFAULT_SITE_URL;
-}
-function absoluteUrl(env: Record<string, string>, value: unknown, fallback = "/") {
-  const raw = String(value || fallback || "/").trim();
-  try { return new URL(raw, siteOrigin(env)).href; } catch { return new URL(fallback, siteOrigin(env)).href; }
-}
-function episodeText(p: any) {
-  const range = String(p.episodeRange || "").trim();
-  if (range) return range;
-  return p.episodeNumber != null && String(p.episodeNumber).trim() ? `Episode ${p.episodeNumber}` : "New episode";
-}
-function compactBody(p: any) {
-  const season = String(p.seasonName || (p.seasonNumber != null ? `Season ${p.seasonNumber}` : "")).trim();
-  return [String(p.title || "Anime").trim(), season, episodeText(p)].filter(Boolean).join(" • ");
-}
-async function sendOne(env: Record<string, string>, at: string, projectId: string, token: string, p: any) {
-  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-  const title = String(p.title || "🎬 RS Anime").trim();
-  const notifBody = String(p.body || compactBody(p)).trim();
-  const image = p.image ? absoluteUrl(env, p.image) : undefined;
-  const icon = absoluteUrl(env, p.icon || "/icon-192.png");
-  const badge = absoluteUrl(env, p.badge || "/icon-192.png");
-  const link = absoluteUrl(env, p.deepLink || "/");
-  const message = {
-    token,
-    notification: { title, body: notifBody, ...(image ? { image } : {}) },
-    data: sanitizeData({
-      deepLink: link, contentId: p.contentId || "", contentType: p.contentType || "",
-      seasonNumber: p.seasonNumber != null ? String(p.seasonNumber) : "",
-      episodeNumber: p.episodeNumber != null ? String(p.episodeNumber) : "",
-      seasonName: p.seasonName || "", episodeRange: p.episodeRange || "",
-      image: image || "", title, body: notifBody, sentAt: String(Date.now()),
-    }),
-    webpush: {
-      headers: { Urgency: "high", TTL: "86400" },
-      notification: {
-        title, body: notifBody,
-        icon, badge,
-        image,
-        tag: p.tag || (p.contentId || "rsanime"), renotify: true,
-      },
-      fcm_options: { link },
-    },
-  };
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${at}`, "content-type": "application/json" },
-    body: JSON.stringify({ message }),
+
+async function fetchTokens(sa: ServiceAccount, accessToken: string, userIds?: string[]): Promise<TokenLookupResult> {
+  const base = dbBase(sa);
+  let res = await fetch(`${base}/fcmTokens.json?access_token=${accessToken}`);
+  if (!res.ok) res = await fetch(`${base}/fcmTokens.json`);
+  if (!res.ok) throw new Error(`fcmTokens read failed: ${res.status}`);
+  const tree = (await res.json()) || {};
+  const allowed = userIds?.length ? new Set(userIds) : null;
+  const tokens = new Set<string>();
+  const paths: Record<string, string[]> = {};
+  Object.entries(tree).forEach(([uid, userTokens]: any) => {
+    if (allowed && !allowed.has(uid)) return;
+    Object.entries(userTokens || {}).forEach(([key, entry]: any) => {
+      const t = entry?.token;
+      if (!t) return;
+      tokens.add(t);
+      (paths[t] = paths[t] || []).push(`fcmTokens/${uid}/${key}`);
+    });
   });
-  const responseBody = await r.json().catch(() => ({}));
-  return { ok: r.ok, status: r.status, body: responseBody };
-}
-function invalidTokenErr(status: number, body: any) {
-  if (status === 404 || status === 400) {
-    const c = body?.error?.details?.[0]?.errorCode || body?.error?.status;
-    if (c === "UNREGISTERED" || c === "INVALID_ARGUMENT") return true;
-  }
-  return false;
+  return { tokens: [...tokens], tokenPathsByToken: paths };
 }
 
-Deno.serve(async (req) => {
-  const env = Deno.env.toObject();
-  const url = new URL(req.url);
-  const origin = req.headers.get("Origin") || "";
-  const cors = corsHeaders(origin, env);
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  const path = url.pathname.replace(/^\/+/, "").split("/").pop() || "";
+async function cleanupInvalid(sa: ServiceAccount, accessToken: string, invalid: string[], pathsByToken: Record<string, string[]>): Promise<number> {
+  if (!invalid.length) return 0;
+  const base = dbBase(sa);
+  const paths = invalid.flatMap((t) => pathsByToken[t] || []);
+  let removed = 0;
+  await Promise.all(paths.map(async (p) => {
+    try {
+      const r = await fetch(`${base}/${p}.json?access_token=${accessToken}`, { method: "DELETE" });
+      if (r.ok) removed++;
+    } catch {}
+  }));
+  return removed;
+}
 
-  try {
-    let resp: Response;
-    if (path === "health") {
-      resp = json({ ok: true, service: "send-fcm" });
-    } else if (path === "register" && req.method === "POST") {
-      const b = await req.json().catch(() => ({}));
-      const userId = String(b.userId || "").trim(); const token = String(b.token || "").trim();
-      if (!userId || !token) resp = json({ ok: false, error: "userId+token required" }, 400);
-      else {
-        const h = await tokenHash(token); const now = Date.now();
-        await rtdb(env, "PUT", `/fcmTokens/${encodeURIComponent(userId)}/${h}`, {
-          token, createdAt: now, updatedAt: now, ua: String(b.ua || "").slice(0, 200),
-        });
-        resp = json({ ok: true, hash: h });
-      }
-    } else if (path === "unregister" && req.method === "POST") {
-      const b = await req.json().catch(() => ({}));
-      const userId = String(b.userId || "").trim(); const token = String(b.token || "").trim();
-      if (!userId || !token) resp = json({ ok: false, error: "userId+token required" }, 400);
-      else { await rtdb(env, "DELETE", `/fcmTokens/${encodeURIComponent(userId)}/${await tokenHash(token)}`); resp = json({ ok: true }); }
-    } else if (path === "send" && req.method === "POST") {
-      const body = await req.json().catch(() => ({}));
-      const title = String(body.title || "").trim();
-      if (!title) { resp = json({ ok: false, error: "title required" }, 400); }
-      else {
-        const { token: at, projectId } = await getAccessToken(env);
-        const all = (await rtdb(env, "GET", "/fcmTokens").catch(() => null)) || {};
-        const ttlMs = Math.max(1, Number(env.TOKEN_TTL_HOURS || DEFAULT_TTL_HOURS)) * 3600 * 1000;
-        const cutoff = Date.now() - ttlMs;
-        const filter = Array.isArray(body.userIds) && body.userIds.length ? new Set(body.userIds.map(String)) : null;
-        const targets: { userId: string; hash: string; token: string }[] = [];
-        for (const [uid, tm] of Object.entries<any>(all)) {
-          if (filter && !filter.has(uid)) continue;
-          for (const [h, row] of Object.entries<any>(tm || {})) {
-            if (!row?.token || Number(row.updatedAt || row.createdAt || 0) < cutoff) continue;
-            targets.push({ userId: uid, hash: h, token: row.token });
-          }
-        }
-        let sent = 0, failed = 0, invalidRemoved = 0;
-        const del: Record<string, null> = {};
-        const errors: any[] = [];
-        for (let i = 0; i < targets.length; i += FCM_BATCH_SIZE) {
-          const chunk = targets.slice(i, i + FCM_BATCH_SIZE);
-          const rs = await Promise.all(chunk.map((t) =>
-            sendOne(env, at, projectId, t.token, body).catch((e) => ({ ok: false, status: 0, body: { error: String(e) } }))));
-          for (let j = 0; j < rs.length; j++) {
-            const r = rs[j], t = chunk[j];
-            if (r.ok) sent++;
-            else {
-              failed++;
-              if (invalidTokenErr(r.status, r.body)) { del[`fcmTokens/${t.userId}/${t.hash}`] = null; invalidRemoved++; }
-              else if (errors.length < 5) errors.push({ status: r.status, error: r.body?.error?.message || String(r.body).slice(0, 200) });
-            }
-          }
-        }
-        if (invalidRemoved > 0) { try { await rtdb(env, "PATCH", "/", del); } catch { /* noop */ } }
-        resp = json({ ok: true, total: targets.length, sent, failed, invalidRemoved, batches: Math.ceil(targets.length / FCM_BATCH_SIZE), errors });
-      }
-    } else if (path === "cleanup") {
-      const ttl = Math.max(1, Number(env.TOKEN_TTL_HOURS || DEFAULT_TTL_HOURS));
-      const cutoff = Date.now() - ttl * 3600 * 1000;
-      const all = (await rtdb(env, "GET", "/fcmTokens").catch(() => null)) || {};
-      const del: Record<string, null> = {}; let removed = 0, kept = 0;
-      for (const [uid, tm] of Object.entries<any>(all)) for (const [h, row] of Object.entries<any>(tm || {})) {
-        if (Number(row?.updatedAt || row?.createdAt || 0) < cutoff) { del[`fcmTokens/${uid}/${h}`] = null; removed++; } else kept++;
-      }
-      if (removed > 0) await rtdb(env, "PATCH", "/", del);
-      resp = json({ ok: true, removed, kept, ttlHours: ttl });
-    } else {
-      resp = json({ ok: false, error: "Not found", hint: "/send /register /unregister /cleanup /health" }, 404);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function sendOne(projectId: string, accessToken: string, message: any, retries = 2): Promise<{ ok: boolean; category?: FailCat; err?: string }> {
+  for (let a = 0; a <= retries; a++) {
+    try {
+      const r = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+      });
+      if (r.ok) { await r.text().catch(() => ""); return { ok: true }; }
+      const err = await r.text();
+      const cat = categorize(err);
+      if (cat === "transient" && a < retries) { await sleep(500 * 2 ** a); continue; }
+      return { ok: false, category: cat, err };
+    } catch (e) {
+      if (a < retries) { await sleep(500 * 2 ** a); continue; }
+      return { ok: false, category: "transient", err: String(e) };
     }
-    const h = new Headers(resp.headers); for (const [k, v] of Object.entries(cors)) h.set(k, v);
-    return new Response(resp.body, { status: resp.status, headers: h });
+  }
+  return { ok: false, category: "other" };
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { tokens, userIds, title, body: msgBody, image, icon, badge, data } = body || {};
+    const inTokens: string[] = Array.isArray(tokens) ? tokens.filter(Boolean) : [];
+    const inUsers: string[] = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
+    if (!inTokens.length && !inUsers.length) {
+      return new Response(JSON.stringify({ error: "No tokens or userIds provided" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const saJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
+    if (!saJson) return new Response(JSON.stringify({ error: "FIREBASE_SERVICE_ACCOUNT_KEY missing" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const sa: ServiceAccount = JSON.parse(saJson);
+    const accessToken = await getAccessToken(sa);
+
+    const normalized: Record<string, string> = {};
+    if (data && typeof data === "object") {
+      Object.entries(data).forEach(([k, v]) => { normalized[k] = v == null ? "" : String(v); });
+    }
+    const base = (normalized.baseUrl || req.headers.get("origin") || "https://rsanime03.lovable.app").replace(/\/$/, "");
+    const iconUrl = absUrl(icon, base) || BRAND_ICON_URL;
+    const badgeUrl = absUrl(badge, base) || BRAND_ICON_URL;
+    const imageUrl = absUrl(image, base);
+    const clickLink = absUrl(normalized.url || "/", base);
+
+    let resolvedTokens = [...new Set(inTokens)];
+    let pathsByToken: Record<string, string[]> = {};
+    if (!resolvedTokens.length && inUsers.length) {
+      try {
+        const l = await fetchTokens(sa, accessToken, inUsers);
+        resolvedTokens = l.tokens;
+        pathsByToken = l.tokenPathsByToken;
+      } catch (e: any) {
+        return new Response(JSON.stringify({
+          success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+          reason: "TOKEN_LOOKUP_FAILED", details: { message: e?.message || String(e) },
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+    if (!resolvedTokens.length) {
+      return new Response(JSON.stringify({
+        success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        reason: "NO_MATCHING_TOKENS",
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    let success = 0, failed = 0;
+    const invalid: string[] = [];
+    const failReasons = { invalid: 0, transient: 0, other: 0 };
+    const concurrency = Math.min(30, resolvedTokens.length);
+    let idx = 0;
+    const worker = async () => {
+      while (idx < resolvedTokens.length) {
+        const i = idx++;
+        const token = resolvedTokens[i];
+        const message = {
+          message: {
+            token,
+            notification: { title, body: msgBody },
+            webpush: {
+              headers: { Urgency: "high", TTL: "2419200" },
+              notification: {
+                title, body: msgBody,
+                icon: iconUrl, badge: badgeUrl, image: imageUrl,
+                vibrate: [200, 100, 200], requireInteraction: false,
+              },
+              fcm_options: clickLink ? { link: clickLink } : undefined,
+            },
+            data: normalized,
+          },
+        };
+        const r = await sendOne(sa.project_id, accessToken, message);
+        if (r.ok) success++;
+        else {
+          failed++;
+          const c = r.category || "other";
+          failReasons[c]++;
+          if (c === "invalid") invalid.push(token);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    const invalidRemoved = inUsers.length ? await cleanupInvalid(sa, accessToken, invalid, pathsByToken) : 0;
+
+    return new Response(JSON.stringify({
+      success, failed, totalTokens: resolvedTokens.length,
+      invalidTokens: invalid, invalidRemoved, failReasons,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
-    return new Response(JSON.stringify({ ok: false, error: String(e?.message || e) }), {
-      status: 500, headers: { "content-type": "application/json", ...cors },
+    return new Response(JSON.stringify({ error: e?.message || String(e) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
