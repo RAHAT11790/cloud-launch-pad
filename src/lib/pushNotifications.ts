@@ -1,21 +1,16 @@
-// pushNotifications.ts — FCM Web Push client
+// pushNotifications.ts — RS Anime FCM Web Push
 // ============================================================
-// • Registers /firebase-messaging-sw.js on page load
-// • Requests notification permission (once, after first user gesture)
-// • Fetches / refreshes the FCM registration token
-// • POSTs the token to the send-fcm worker /register endpoint so it's
-//   persisted under fcmTokens/{userId}/{hash}
-// • Auto-refreshes every 12h and re-registers the token so the CF worker's
-//   24h TTL never expires an active user's token
-// • On visibility change / focus, re-checks token if last refresh > 6h ago
-// • Foreground onMessage → native browser notification via Service Worker
+// • Registers /firebase-messaging-sw.js
+// • Requests notification permission (3-strike cooldown)
+// • Fetches FCM token and stores directly to Firebase RTDB
+//   at fcmTokens/{userId}/{tokenKey}
+// • Sends push via the Supabase edge function `send-fcm`
+// • Foreground onMessage → native browser notification via SW
 // ============================================================
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getMessaging, getToken, onMessage, deleteToken, isSupported,
-} from "firebase/messaging";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { getMessaging, getToken, onMessage, deleteToken, isSupported } from "firebase/messaging";
+import { db, ref, set, get, update, remove } from "@/lib/firebase";
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
@@ -27,64 +22,56 @@ const FIREBASE_CONFIG = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:843989457516:web:57e0577d092183eedd9649",
 };
 
-// VAPID public key — safe to ship in client code (it's a public key by design).
-// Precedence: VITE env → Firebase settings/fcmVapidKey → hardcoded default.
 const DEFAULT_VAPID_KEY = "BBEEfj8RvypJfWDs2KobRAQ6xAprjcmc0rMdddRHHe4nUMaSx27Sk_dWd0SRoUtp0WrNFdwz1N4_5CNGObW2H1w";
+const BRAND_ICON = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
 const LS_LAST_REG = "rs_fcm_last_register_at";
 const LS_LAST_TOKEN = "rs_fcm_last_token";
 const LS_USER_ID = "rs_fcm_user_id";
-const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h
-const REVALIDATE_MS = 6 * 60 * 60 * 1000; // 6h
-const TOKEN_RECHECK_MS = 30 * 60 * 1000; // 30m — retry if permission is already granted but backend was down
+const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const REVALIDATE_MS = 6 * 60 * 60 * 1000;
+const MAX_TOKENS_PER_USER = 3;
 
 let _bootstrapped = false;
 let _vapidKey = "";
-let _messagingInstance: ReturnType<typeof getMessaging> | null = null;
+let _messaging: ReturnType<typeof getMessaging> | null = null;
+let _foregroundBound = false;
+
+function firebaseApp() {
+  return getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG);
+}
 
 async function loadVapidKey(): Promise<string> {
   if (_vapidKey) return _vapidKey;
-  const fromEnv = String(import.meta.env.VITE_FCM_VAPID_KEY || "").trim();
-  if (fromEnv) { _vapidKey = fromEnv; return _vapidKey; }
+  const env = String(import.meta.env.VITE_FCM_VAPID_KEY || "").trim();
+  if (env) return (_vapidKey = env);
   try {
-    const { db, ref, get } = await import("@/lib/firebase");
     const snap = await get(ref(db, "settings/fcmVapidKey"));
-    const val = String(snap.val() || "").trim();
-    if (val) { _vapidKey = val; return _vapidKey; }
+    const v = String(snap.val() || "").trim();
+    if (v) return (_vapidKey = v);
   } catch {}
-  _vapidKey = DEFAULT_VAPID_KEY;
-  return _vapidKey;
+  return (_vapidKey = DEFAULT_VAPID_KEY);
 }
 
-function getFirebaseApp() {
-  return getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG);
+async function ensureMessaging() {
+  if (_messaging) return _messaging;
+  if (!(await isSupported().catch(() => false))) return null;
+  _messaging = getMessaging(firebaseApp());
+  return _messaging;
 }
 
 async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
     const swPath = "/firebase-messaging-sw.js";
-    const isFirebaseSw = (reg: ServiceWorkerRegistration | null | undefined) => {
-      const url = reg?.active?.scriptURL || reg?.waiting?.scriptURL || reg?.installing?.scriptURL || "";
-      return url.includes(swPath);
-    };
-
-    // getRegistration(url) returns the root-scope registration even when its
-    // script is the old /sw.js image-cache worker. That old worker can mint FCM
-    // tokens but cannot display background browser notifications. Force-upgrade
-    // it to the Firebase messaging worker.
     const existing = await navigator.serviceWorker.getRegistration("/");
-    if (isFirebaseSw(existing)) {
-      existing?.update?.().catch(() => {});
-      return existing!;
-    }
-    if (existing) {
+    const url = existing?.active?.scriptURL || existing?.waiting?.scriptURL || existing?.installing?.scriptURL || "";
+    if (existing && !url.includes("firebase-messaging-sw")) {
       await existing.unregister().catch(() => false);
-      try {
-        localStorage.removeItem(LS_LAST_TOKEN);
-        localStorage.removeItem(LS_LAST_REG);
-      } catch {}
+      try { localStorage.removeItem(LS_LAST_TOKEN); localStorage.removeItem(LS_LAST_REG); } catch {}
+    } else if (existing) {
+      existing.update?.().catch(() => {});
+      return existing;
     }
-
     const reg = await navigator.serviceWorker.register(swPath, { scope: "/", updateViaCache: "none" });
     await navigator.serviceWorker.ready.catch(() => reg);
     return reg;
@@ -94,239 +81,145 @@ async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> 
   }
 }
 
-async function ensureMessaging() {
-  if (_messagingInstance) return _messagingInstance;
-  if (!(await isSupported().catch(() => false))) return null;
-  _messagingInstance = getMessaging(getFirebaseApp());
-  return _messagingInstance;
-}
+const tokenKey = (t: string) => btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+const deviceId = (): string => {
+  const K = "rs_fcm_device_id";
+  let id = localStorage.getItem(K);
+  if (!id) { id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`; localStorage.setItem(K, id); }
+  return id;
+};
 
-async function getSendFcmEndpoints(): Promise<string[]> {
-  const endpoints: string[] = [];
-  const add = (value: string) => {
-    let endpoint = String(value || "").trim().replace(/\/+$/, "");
-    // Admins sometimes paste a route URL like /send or /health. Store/callers
-    // need the function base; send/register is appended below.
-    endpoint = endpoint.replace(/\/(send|register|unregister|cleanup|health)$/i, "");
-    if (endpoint && !endpoints.includes(endpoint)) endpoints.push(endpoint);
-  };
-
-  // The Admin “FCM Provider” switch is the source of truth. Put the selected
-  // Cloudflare/Lovable Cloud sender first so “sent” comes from the provider the
-  // admin actually configured.
+async function pruneUserTokens(userId: string, currentKey: string, currentDevice: string) {
   try {
-    const { db, ref, get } = await import("@/lib/firebase");
-    const snap = await get(ref(db, "settings/fcmProvider"));
-    const cfg = snap.val() || {};
-    const active = String(cfg.active || "").toLowerCase();
-    const activeUrl = String(cfg.url || (active === "cloudflare" ? cfg.cloudflareUrl : cfg.supabaseUrl) || "").trim();
-    add(activeUrl);
-  } catch {}
-
-  const cloudBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  if (cloudBase) add(`${cloudBase}/functions/v1/send-fcm`);
-  try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
-  return endpoints;
-}
-
-async function postRegister(userId: string, token: string): Promise<boolean> {
-  const endpoints = await getSendFcmEndpoints();
-  if (!endpoints.length) {
-    console.warn("[FCM] send-fcm endpoint not configured in EGD Router");
-    return false;
-  }
-  for (const endpoint of endpoints) {
-    const url = endpoint + "/register";
-    try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, token, ua: navigator.userAgent }),
-      });
-      const text = await r.text().catch(() => "");
-      if (!r.ok) {
-        console.warn("[FCM] register HTTP", r.status, text, url);
-        continue;
+    const snap = await get(ref(db, `fcmTokens/${userId}`));
+    const tokens = snap.val() || {};
+    const updates: Record<string, null> = {};
+    Object.entries(tokens).forEach(([key, entry]: any) => {
+      if (key !== currentKey && entry?.deviceId === currentDevice) {
+        updates[`fcmTokens/${userId}/${key}`] = null;
       }
-      try {
-        localStorage.setItem(LS_LAST_REG, String(Date.now()));
-        localStorage.setItem(LS_LAST_TOKEN, token);
-        localStorage.setItem(LS_USER_ID, userId);
-      } catch {}
-      console.info("[FCM] token registered for", userId);
-      return true;
-    } catch (err) {
-      console.warn("[FCM] register POST failed", err, url);
+    });
+    const remaining = Object.entries(tokens)
+      .filter(([key]) => key !== currentKey && !updates[`fcmTokens/${userId}/${key}`])
+      .map(([key, entry]: any) => ({ key, updatedAt: entry?.updatedAt || 0 }));
+    if (remaining.length + 1 > MAX_TOKENS_PER_USER) {
+      remaining.sort((a, b) => a.updatedAt - b.updatedAt);
+      const toRemove = remaining.length + 1 - MAX_TOKENS_PER_USER;
+      for (let i = 0; i < toRemove; i++) updates[`fcmTokens/${userId}/${remaining[i].key}`] = null;
     }
-  }
-  return false;
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  } catch (e) { console.warn("[FCM] prune failed", e); }
 }
 
-async function acquireAndRegisterToken(userId: string): Promise<string | null> {
-  const messaging = await ensureMessaging();
-  if (!messaging) { console.warn("[FCM] messaging not supported"); return null; }
+async function acquireAndRegister(userId: string): Promise<string | null> {
+  const msg = await ensureMessaging();
+  if (!msg) return null;
   const vapidKey = await loadVapidKey();
-  if (!vapidKey) { console.warn("[FCM] VAPID key missing"); return null; }
   const swReg = await ensureServiceWorker();
-  if (!swReg) { console.warn("[FCM] service worker registration failed"); return null; }
+  if (!swReg) return null;
   try {
-    const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
-    if (!token) { console.warn("[FCM] getToken returned empty"); return null; }
-    const ok = await postRegister(userId, token);
-    return ok ? token : null;
+    const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg });
+    if (!token) return null;
+    const key = tokenKey(token);
+    const dev = deviceId();
+    await set(ref(db, `fcmTokens/${userId}/${key}`), {
+      token, deviceId: dev, origin: window.location.origin, updatedAt: Date.now(),
+      userAgent: navigator.userAgent.substring(0, 160),
+    });
+    await pruneUserTokens(userId, key, dev);
+    try {
+      localStorage.setItem(LS_LAST_REG, String(Date.now()));
+      localStorage.setItem(LS_LAST_TOKEN, token);
+      localStorage.setItem(LS_USER_ID, userId);
+    } catch {}
+    console.info("[FCM] token saved for", userId);
+    return token;
   } catch (err) {
     console.warn("[FCM] getToken failed", err);
     return null;
   }
 }
 
-function getSavedTokenState() {
-  try {
-    return {
-      token: localStorage.getItem(LS_LAST_TOKEN) || "",
-      userId: localStorage.getItem(LS_USER_ID) || "",
-      lastRegisterAt: Number(localStorage.getItem(LS_LAST_REG) || 0),
-    };
-  } catch {
-    return { token: "", userId: "", lastRegisterAt: 0 };
-  }
-}
-
-function bindForegroundHandler() {
-  ensureMessaging().then((messaging) => {
-    if (!messaging) return;
-    onMessage(messaging, async (payload) => {
+function bindForeground() {
+  if (_foregroundBound) return;
+  _foregroundBound = true;
+  ensureMessaging().then((m) => {
+    if (!m) return;
+    onMessage(m, async (payload) => {
+      if (Notification.permission !== "granted") return;
       const n = payload.notification || {};
       const d = (payload.data || {}) as Record<string, string>;
-      if (Notification.permission !== "granted") return;
       const title = n.title || d.title || "🎬 RS Anime";
-      const contentId = d.contentId || "";
-      const seasonNumber = d.seasonNumber || "";
-      const episodeNumber = d.episodeNumber || "";
-      let deepLink = d.deepLink || "/";
-      if ((!deepLink || deepLink === "/") && contentId) {
-        const s = seasonNumber ? `?s=${encodeURIComponent(seasonNumber)}` : "";
-        const e = episodeNumber ? `${s ? "&" : "?"}e=${encodeURIComponent(episodeNumber)}` : "";
-        deepLink = `/watch/${encodeURIComponent(contentId)}${s}${e}`;
-      }
-
+      const link = d.url || d.deepLink || (d.contentId ? `/?anime=${d.contentId}` : "/");
       const swReg = await ensureServiceWorker();
-      const options: any = {
-        body: n.body || d.body || "New episode is live!",
-        icon: (n as any).icon || d.icon || "/icon-192.png",
-        badge: "/icon-192.png",
+      swReg?.showNotification(title, {
+        body: n.body || d.body || "",
+        icon: (n as any).icon || d.icon || BRAND_ICON,
+        badge: BRAND_ICON,
         image: (n as any).image || d.image || undefined,
-        tag: contentId || d.tag || "rsanime",
+        tag: d.contentId ? `rsanime-${d.contentId}` : `rsanime-${Date.now()}`,
+        vibrate: [200, 100, 200],
         renotify: true,
-        requireInteraction: false,
-        data: {
-          deepLink,
-          contentId,
-          contentType: d.contentType || "",
-          seasonNumber,
-          episodeNumber,
-        },
-      };
-      await swReg?.showNotification(title, options).catch((err) => console.warn("[FCM] foreground browser notification failed", err));
+        data: { url: link, ...d },
+      } as any).catch(() => {});
     });
   });
 }
 
-/**
- * Public entry: kick off FCM registration for the current user.
- * Safe to call multiple times — deduped.
- */
 export async function initPushNotifications(userIdInput?: string) {
   if (_bootstrapped) return;
-  if (typeof window === "undefined" || !("Notification" in window)) return;
-  if (!("serviceWorker" in navigator)) return;
+  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) return;
 
-  // Resolve an ID even for guests so tokens can still be stored & pushed to.
   let userId = String(userIdInput || "").trim();
   if (!userId) {
     try {
       const { getDeviceId } = await import("@/lib/premiumAccess");
       userId = `guest_${getDeviceId()}`;
-    } catch {
-      userId = "guest_unknown";
-    }
+    } catch { userId = "guest_unknown"; }
   }
-
   _bootstrapped = true;
 
-  // ============ 3-strike permission prompt logic ============
-  // Prompt on first visit; if user dismisses/declines, wait 24h and try again,
-  // up to 3 attempts total. After 3 declines, stop prompting forever.
-  const LS_PERM_ATTEMPTS = "rs_fcm_perm_attempts";
-  const LS_PERM_LAST_PROMPT = "rs_fcm_perm_last_prompt";
-  const LS_PERM_STOPPED = "rs_fcm_perm_stopped";
-  const PROMPT_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
-  const MAX_ATTEMPTS = 3;
+  const LS_ATT = "rs_fcm_perm_attempts";
+  const LS_LAST = "rs_fcm_perm_last_prompt";
+  const LS_STOP = "rs_fcm_perm_stopped";
+  const COOLDOWN = 24 * 60 * 60 * 1000;
+  const MAX = 3;
 
   let permission = Notification.permission;
-
   if (permission === "default") {
-    const stopped = localStorage.getItem(LS_PERM_STOPPED) === "1";
-    const attempts = Number(localStorage.getItem(LS_PERM_ATTEMPTS) || 0);
-    const lastPrompt = Number(localStorage.getItem(LS_PERM_LAST_PROMPT) || 0);
-    const cooldownOk = !lastPrompt || Date.now() - lastPrompt >= PROMPT_COOLDOWN_MS;
-
-    if (!stopped && attempts < MAX_ATTEMPTS && cooldownOk) {
-      // Slight delay so it doesn't hit before the page paints.
+    const stopped = localStorage.getItem(LS_STOP) === "1";
+    const att = Number(localStorage.getItem(LS_ATT) || 0);
+    const last = Number(localStorage.getItem(LS_LAST) || 0);
+    if (!stopped && att < MAX && (!last || Date.now() - last >= COOLDOWN)) {
       await new Promise((r) => setTimeout(r, 1500));
+      try { permission = await Notification.requestPermission(); } catch { permission = Notification.permission; }
       try {
-        permission = await Notification.requestPermission();
-      } catch {
-        permission = Notification.permission;
-      }
-      try {
-        localStorage.setItem(LS_PERM_LAST_PROMPT, String(Date.now()));
-        const newAttempts = attempts + 1;
-        localStorage.setItem(LS_PERM_ATTEMPTS, String(newAttempts));
-        if (permission !== "granted" && newAttempts >= MAX_ATTEMPTS) {
-          localStorage.setItem(LS_PERM_STOPPED, "1");
-        }
+        localStorage.setItem(LS_LAST, String(Date.now()));
+        localStorage.setItem(LS_ATT, String(att + 1));
+        if (permission !== "granted" && att + 1 >= MAX) localStorage.setItem(LS_STOP, "1");
       } catch {}
     }
   } else if (permission === "granted") {
-    // Reset attempt counter so a future re-permission works cleanly.
-    try {
-      localStorage.removeItem(LS_PERM_ATTEMPTS);
-      localStorage.removeItem(LS_PERM_LAST_PROMPT);
-      localStorage.removeItem(LS_PERM_STOPPED);
-    } catch {}
-  } else if (permission === "denied") {
-    // Browser-level denial → cannot be re-prompted; stop trying.
-    try { localStorage.setItem(LS_PERM_STOPPED, "1"); } catch {}
+    try { [LS_ATT, LS_LAST, LS_STOP].forEach((k) => localStorage.removeItem(k)); } catch {}
   }
 
   if (permission !== "granted") return;
 
   await ensureServiceWorker();
+  await acquireAndRegister(userId);
+  bindForeground();
 
-  const saved = getSavedTokenState();
-  if (!saved.token || saved.userId !== userId || Date.now() - saved.lastRegisterAt >= TOKEN_RECHECK_MS) {
-    await acquireAndRegisterToken(userId);
-  }
-  bindForegroundHandler();
-
-  // Periodic refresh (12h) — keeps token < CF worker's 24h TTL
-  setInterval(() => { acquireAndRegisterToken(userId).catch(() => {}); }, REFRESH_INTERVAL_MS);
-
-  // Revalidate on focus / visibility if > 6h since last register
+  setInterval(() => { acquireAndRegister(userId).catch(() => {}); }, REFRESH_INTERVAL_MS);
   const revalidate = () => {
     try {
       const last = Number(localStorage.getItem(LS_LAST_REG) || 0);
-      if (Date.now() - last >= REVALIDATE_MS) acquireAndRegisterToken(userId).catch(() => {});
+      if (Date.now() - last >= REVALIDATE_MS) acquireAndRegister(userId).catch(() => {});
     } catch {}
   };
   window.addEventListener("focus", revalidate);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) revalidate(); });
 }
 
-/**
- * Returns the current push status for UI display in Profile → Notifications.
- */
 export async function getPushStatus(): Promise<{
   supported: boolean;
   permission: NotificationPermission | "unsupported";
@@ -337,26 +230,17 @@ export async function getPushStatus(): Promise<{
     return { supported: false, permission: "unsupported", tokenRegistered: false, lastRegisterAt: 0 };
   }
   const supported = await isSupported().catch(() => false);
-  let tokenRegistered = false;
-  let lastRegisterAt = 0;
+  let tokenRegistered = false, lastRegisterAt = 0;
   try {
-    const saved = getSavedTokenState();
-    tokenRegistered = !!saved.token && Date.now() - saved.lastRegisterAt < REFRESH_INTERVAL_MS * 2;
-    lastRegisterAt = saved.lastRegisterAt;
+    const t = localStorage.getItem(LS_LAST_TOKEN) || "";
+    lastRegisterAt = Number(localStorage.getItem(LS_LAST_REG) || 0);
+    tokenRegistered = !!t && Date.now() - lastRegisterAt < REFRESH_INTERVAL_MS * 2;
   } catch {}
   return { supported, permission: Notification.permission, tokenRegistered, lastRegisterAt };
 }
 
-/**
- * User-gesture triggered: force a permission prompt and register the FCM token.
- * Call this from a click handler (e.g. "Enable Notifications" button).
- * Returns a status string the UI can toast/show.
- */
 export async function enablePushNotifications(userIdInput?: string): Promise<{
-  ok: boolean;
-  status: "granted" | "denied" | "default" | "unsupported" | "error";
-  token?: string;
-  message: string;
+  ok: boolean; status: "granted" | "denied" | "default" | "unsupported" | "error"; token?: string; message: string;
 }> {
   if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
     return { ok: false, status: "unsupported", message: "Your browser does not support notifications." };
@@ -364,113 +248,134 @@ export async function enablePushNotifications(userIdInput?: string): Promise<{
   if (!(await isSupported().catch(() => false))) {
     return { ok: false, status: "unsupported", message: "Push messaging is not supported in this browser." };
   }
-
-  // Resolve user id (guest fallback)
   let userId = String(userIdInput || "").trim();
   if (!userId) {
     try {
       const { getDeviceId } = await import("@/lib/premiumAccess");
       userId = `guest_${getDeviceId()}`;
-    } catch {
-      userId = "guest_unknown";
-    }
+    } catch { userId = "guest_unknown"; }
   }
-
   let permission = Notification.permission;
   if (permission === "denied") {
-    return {
-      ok: false,
-      status: "denied",
-      message: "Notifications are blocked. Click the lock icon in your browser's address bar → Site settings → Notifications → Allow, then try again.",
-    };
+    return { ok: false, status: "denied", message: "Notifications are blocked. Open browser Site Settings → Notifications → Allow, then retry." };
   }
-
   if (permission === "default") {
-    try {
-      permission = await Notification.requestPermission();
-    } catch {
-      return { ok: false, status: "error", message: "Could not open the permission prompt." };
-    }
-    try {
-      // Reset the 3-strike counters since the user actively opted in
-      localStorage.removeItem("rs_fcm_perm_attempts");
-      localStorage.removeItem("rs_fcm_perm_last_prompt");
-      localStorage.removeItem("rs_fcm_perm_stopped");
-    } catch {}
+    try { permission = await Notification.requestPermission(); }
+    catch { return { ok: false, status: "error", message: "Could not open the permission prompt." }; }
+    try { ["rs_fcm_perm_attempts", "rs_fcm_perm_last_prompt", "rs_fcm_perm_stopped"].forEach((k) => localStorage.removeItem(k)); } catch {}
   }
-
   if (permission !== "granted") {
     return { ok: false, status: permission as any, message: "You did not allow notifications." };
   }
-
-  const token = await acquireAndRegisterToken(userId);
-  if (!token) {
-    return { ok: false, status: "error", message: "Permission is allowed, but the push token could not be saved. Refresh and tap Enable Notifications again." };
-  }
-  bindForegroundHandler();
+  const token = await acquireAndRegister(userId);
+  if (!token) return { ok: false, status: "error", message: "Permission allowed but token could not be saved. Refresh and try again." };
+  bindForeground();
   _bootstrapped = true;
-  return { ok: true, status: "granted", token, message: "Notifications enabled successfully!" };
+  return { ok: true, status: "granted", token, message: "Notifications enabled!" };
 }
 
-/**
- * Unregister the current token for the user (e.g. on logout).
- */
 export async function unregisterPushNotifications() {
   try {
     const userId = localStorage.getItem(LS_USER_ID) || "";
     const token = localStorage.getItem(LS_LAST_TOKEN) || "";
     if (userId && token) {
-      const endpoints = await getSendFcmEndpoints();
-      for (const endpoint of endpoints) {
-        const r = await fetch(endpoint + "/unregister", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ userId, token }),
-        }).catch(() => {});
-        if (r && "ok" in r && r.ok) break;
-      }
+      await remove(ref(db, `fcmTokens/${userId}/${tokenKey(token)}`)).catch(() => {});
     }
-    const messaging = await ensureMessaging();
-    if (messaging) await deleteToken(messaging).catch(() => {});
-    localStorage.removeItem(LS_LAST_REG);
-    localStorage.removeItem(LS_LAST_TOKEN);
-    localStorage.removeItem(LS_USER_ID);
+    const m = await ensureMessaging();
+    if (m) await deleteToken(m).catch(() => {});
+    [LS_LAST_REG, LS_LAST_TOKEN, LS_USER_ID].forEach((k) => localStorage.removeItem(k));
   } catch {}
 }
 
-/**
- * Fire a push send by calling the send-fcm worker /send endpoint.
- * Accepts either a full deepLink or content id + season/episode to build one.
- */
-export async function sendPushNotification(payload: {
+// ============================================================
+// SEND
+// ============================================================
+
+function sendFcmUrl(): string {
+  const base = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  if (!base) return "";
+  return `${base}/functions/v1/send-fcm`;
+}
+
+export type SendPushPayload = {
   title: string;
   body: string;
   image?: string;
   deepLink?: string;
+  url?: string;
   contentId?: string;
   contentType?: string;
   seasonNumber?: number | string;
   episodeNumber?: number | string;
   seasonName?: string;
   episodeRange?: string;
-  userIds?: string[];
-}): Promise<{ ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; error?: string }> {
-  const endpoints = await getSendFcmEndpoints();
-  if (!endpoints.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured" };
-  let lastError = "send-fcm failed";
-  for (const endpoint of endpoints) {
-    try {
-      const r = await fetch(endpoint + "/send", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) { lastError = data?.error || `HTTP ${r.status}`; continue; }
-      return { ok: true, total: data.total || 0, sent: data.sent || 0, failed: data.failed || 0, invalidRemoved: data.invalidRemoved || 0 };
-    } catch (err: any) {
-      lastError = String(err?.message || err);
-    }
+  userIds?: string[]; // if omitted, targets all users with tokens
+  data?: Record<string, any>;
+};
+
+async function loadAllUserIds(): Promise<string[]> {
+  try {
+    const snap = await get(ref(db, "fcmTokens"));
+    const tree = snap.val() || {};
+    return Object.keys(tree);
+  } catch { return []; }
+}
+
+/** Compose a compact notification body: "Title • Season • Episode X" */
+function composeBody(p: SendPushPayload): string {
+  if (p.body && p.body.trim()) return p.body.trim();
+  const season = p.seasonName || (p.seasonNumber != null && p.seasonNumber !== "" ? `Season ${p.seasonNumber}` : "");
+  const ep = p.episodeRange || (p.episodeNumber != null && p.episodeNumber !== "" ? `Episode ${p.episodeNumber}` : "");
+  return [season, ep].filter(Boolean).join(" • ");
+}
+
+export async function sendPushNotification(payload: SendPushPayload): Promise<{
+  ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; reason?: string; error?: string;
+}> {
+  const url = sendFcmUrl();
+  if (!url) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured" };
+  try {
+    let userIds = Array.isArray(payload.userIds) ? [...new Set(payload.userIds.filter(Boolean))] : undefined;
+    if (!userIds || userIds.length === 0) userIds = await loadAllUserIds();
+    if (!userIds.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "No users with tokens" };
+
+    const deepLink = payload.deepLink || payload.url || (payload.contentId ? `/?anime=${payload.contentId}` : "/");
+    const body = composeBody(payload);
+
+    const data: Record<string, string> = {
+      url: deepLink,
+      deepLink,
+      contentId: String(payload.contentId || ""),
+      contentType: String(payload.contentType || ""),
+      seasonNumber: payload.seasonNumber != null ? String(payload.seasonNumber) : "",
+      episodeNumber: payload.episodeNumber != null ? String(payload.episodeNumber) : "",
+      baseUrl: window.location.origin,
+    };
+    if (payload.data) Object.entries(payload.data).forEach(([k, v]) => { data[k] = v == null ? "" : String(v); });
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userIds,
+        title: payload.title || "RS ANIME",
+        body,
+        image: payload.image,
+        data,
+      }),
+    });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: res?.error || `HTTP ${r.status}` };
+    const total = Number(res.totalTokens || 0);
+    const sent = Number(res.success || 0);
+    const failed = Number(res.failed || 0);
+    return {
+      ok: sent > 0 || total > 0,
+      total, sent, failed,
+      invalidRemoved: Number(res.invalidRemoved || 0),
+      reason: res.reason,
+    };
+  } catch (err: any) {
+    return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: String(err?.message || err) };
   }
-  return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: lastError };
 }
