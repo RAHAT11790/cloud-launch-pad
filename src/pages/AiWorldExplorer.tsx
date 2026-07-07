@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type SearchItem = { id: string; slug: string; type: string; title: string; poster: string; year: string };
+type SearchItem = { id: string; slug: string; type: string; title: string; poster: string; year: string; description?: string; episodeCount?: number };
 type Episode = { number: number; title: string; slug: string };
 type Season = { name: string; episodes: Episode[] };
-type Detail = { title: string; poster: string; storyline: string; seasons: Season[]; episodeCount: number };
+type Detail = { title: string; poster: string; storyline: string; seasons: Season[]; episodeCount: number; authRequired?: boolean; authMessage?: string; authError?: string; genres?: string[]; status?: string; year?: string };
 type Stream = { url: string; label?: string; resolution?: string; height?: number };
 type Audio = { language?: string; name?: string; uri: string };
 type Source = { embed?: string; master?: string; streams?: Stream[]; audio?: Audio[]; error?: string };
@@ -133,12 +133,29 @@ export default function AiWorldExplorer() {
                   <div className="min-w-0">
                     <h2 className="m-0 mb-1.5 text-base sm:text-lg leading-tight">{detail.title}</h2>
                     <p className="text-[#8b90a0] text-xs sm:text-[13px] leading-relaxed m-0 line-clamp-4">{detail.storyline}</p>
-                    {detail.episodeCount > 0 && <div className="mt-2 inline-block bg-[rgba(124,77,255,0.18)] text-[#cdbbff] px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{detail.episodeCount} EP</div>}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {detail.episodeCount > 0 && <span className="inline-block bg-[rgba(124,77,255,0.18)] text-[#cdbbff] px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{detail.episodeCount} EP</span>}
+                      {detail.status && <span className="inline-block bg-[rgba(64,196,255,0.16)] text-[#a4dcff] px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{detail.status}</span>}
+                      {detail.year && <span className="inline-block bg-[rgba(63,217,127,0.13)] text-[#b8f5cc] px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">{detail.year}</span>}
+                    </div>
+                    {Array.isArray(detail.genres) && detail.genres.length > 0 && (
+                      <div className="mt-2 text-[11px] text-[#8b90a0] line-clamp-2">{detail.genres.join(" • ")}</div>
+                    )}
                   </div>
                 </div>
 
+                {detail.authRequired && (
+                  <div className="mt-4 bg-[rgba(255,193,7,0.12)] text-[#ffd978] p-3 rounded-xl border border-[rgba(255,193,7,0.28)] text-sm leading-relaxed">
+                    <div className="font-semibold mb-1">Public info loaded only</div>
+                    <div>{detail.authMessage || "Episodes and stream URLs require an active AI World account."}</div>
+                    {detail.authError && <div className="mt-2 text-[11px] opacity-80 break-words">Auth response: {detail.authError}</div>}
+                  </div>
+                )}
+
                 {detail.seasons.length === 0 ? (
-                  <div className="mt-4 text-[#8b90a0] text-sm">No episodes listed.</div>
+                  <div className="mt-4 text-[#8b90a0] text-sm">
+                    {detail.authRequired ? "Episode list is locked by AI World login." : "No episodes listed."}
+                  </div>
                 ) : detail.seasons.map((s) => (
                   <div key={s.name} className="mt-4">
                     <h3 className="m-0 mb-2 text-[11px] text-[#8b90a0] uppercase tracking-wider">{s.name}</h3>
@@ -190,7 +207,7 @@ function Card({ it, onClick }: { it: SearchItem; onClick: () => void }) {
 
 function EpisodePanel({ ep, copy, copied }: { ep: any; copy: (s: string) => void; copied: string }) {
   if (ep?.loading) return <div className="bg-[#0f1119] border border-[#262936] rounded-xl p-4 mt-3 text-center text-[#8b90a0] text-sm">Extracting streams…</div>;
-  if (ep?.error) return <div className="bg-[rgba(255,77,109,0.12)] text-[#ff97a8] p-3 rounded-xl border border-[rgba(255,77,109,0.3)] text-sm mt-3">{ep.error}</div>;
+  if (ep?.error) return <div className={`${ep.authRequired ? "bg-[rgba(255,193,7,0.12)] text-[#ffd978] border-[rgba(255,193,7,0.28)]" : "bg-[rgba(255,77,109,0.12)] text-[#ff97a8] border-[rgba(255,77,109,0.3)]"} p-3 rounded-xl border text-sm mt-3`}>{ep.error}</div>;
   if (!ep?.sources) return null;
   return (
     <div className="bg-[#0f1119] border border-[#262936] rounded-xl p-3 sm:p-4 mt-3">
