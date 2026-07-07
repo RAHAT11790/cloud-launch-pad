@@ -82,9 +82,25 @@ async function ensureMessaging() {
 async function getSendFcmEndpoints(): Promise<string[]> {
   const endpoints: string[] = [];
   const add = (value: string) => {
-    const endpoint = String(value || "").trim().replace(/\/+$/, "");
+    let endpoint = String(value || "").trim().replace(/\/+$/, "");
+    // Admins sometimes paste a route URL like /send or /health. Store/callers
+    // need the function base; send/register is appended below.
+    endpoint = endpoint.replace(/\/(send|register|unregister|cleanup|health)$/i, "");
     if (endpoint && !endpoints.includes(endpoint)) endpoints.push(endpoint);
   };
+
+  // The Admin “FCM Provider” switch is the source of truth. Put the selected
+  // Cloudflare/Lovable Cloud sender first so “sent” comes from the provider the
+  // admin actually configured.
+  try {
+    const { db, ref, get } = await import("@/lib/firebase");
+    const snap = await get(ref(db, "settings/fcmProvider"));
+    const cfg = snap.val() || {};
+    const active = String(cfg.active || "").toLowerCase();
+    const activeUrl = String(cfg.url || (active === "cloudflare" ? cfg.cloudflareUrl : cfg.supabaseUrl) || "").trim();
+    add(activeUrl);
+  } catch {}
+
   const cloudBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (cloudBase) add(`${cloudBase}/functions/v1/send-fcm`);
   try { add(await getEdgeFunctionUrl("send-fcm")); } catch {}
