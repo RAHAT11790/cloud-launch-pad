@@ -11,6 +11,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, deleteToken, isSupported } from "firebase/messaging";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
+import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
@@ -89,6 +90,19 @@ const deviceId = (): string => {
   return id;
 };
 
+function currentLocalUserMeta(userId: string) {
+  try {
+    const raw = localStorage.getItem("rsanime_user");
+    const u = raw ? JSON.parse(raw) : {};
+    return {
+      name: String(u?.name || localStorage.getItem("rs_display_name") || "").trim(),
+      email: String(u?.email || (String(userId).includes("@") ? userId : "")).trim(),
+    };
+  } catch {
+    return { name: "", email: String(userId).includes("@") ? userId : "" };
+  }
+}
+
 async function pruneUserTokens(userId: string, currentKey: string, currentDevice: string) {
   try {
     const snap = await get(ref(db, `fcmTokens/${userId}`));
@@ -122,8 +136,11 @@ async function acquireAndRegister(userId: string): Promise<string | null> {
     if (!token) return null;
     const key = tokenKey(token);
     const dev = deviceId();
+    const meta = currentLocalUserMeta(userId);
     await set(ref(db, `fcmTokens/${userId}/${key}`), {
       token, deviceId: dev, origin: window.location.origin, updatedAt: Date.now(),
+      name: meta.name,
+      email: meta.email,
       userAgent: navigator.userAgent.substring(0, 160),
     });
     await pruneUserTokens(userId, key, dev);
@@ -297,6 +314,29 @@ function sendFcmUrl(): string {
   return `${base}/functions/v1/send-fcm`;
 }
 
+async function resolveSendFcmEndpoint(): Promise<{ url: string; provider: "cloudflare" | "supabase" }> {
+  const fallback = sendFcmUrl();
+  try {
+    const snap = await get(ref(db, "settings/fcmProvider"));
+    const val = snap.val() || {};
+    const provider = val.active === "cloudflare" ? "cloudflare" : "supabase";
+    const configured = String(val.url || (provider === "cloudflare" ? val.cloudflareUrl : val.supabaseUrl) || "").trim();
+    if (configured) return { url: configured, provider };
+  } catch {}
+  return { url: fallback, provider: "supabase" };
+}
+
+function sendHeaders(url: string, provider: "cloudflare" | "supabase") {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (provider === "supabase" || /\/functions\/v1\/send-fcm/i.test(url)) {
+    if (SUPABASE_ANON_KEY) {
+      headers.apikey = SUPABASE_ANON_KEY;
+      headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+    }
+  }
+  return headers;
+}
+
 export type SendPushPayload = {
   title: string;
   body: string;
@@ -330,14 +370,14 @@ function composeBody(p: SendPushPayload): string {
 }
 
 export async function sendPushNotification(payload: SendPushPayload): Promise<{
-  ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; reason?: string; error?: string;
+  ok: boolean; total: number; sent: number; failed: number; invalidRemoved: number; reason?: string; error?: string; deliveredUserIds: string[]; deliveredUsers: number; provider?: "cloudflare" | "supabase";
 }> {
-  const url = sendFcmUrl();
-  if (!url) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "send-fcm URL not configured" };
+  const { url, provider } = await resolveSendFcmEndpoint();
+  if (!url) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: "send-fcm URL not configured", provider };
   try {
     let userIds = Array.isArray(payload.userIds) ? [...new Set(payload.userIds.filter(Boolean))] : undefined;
     if (!userIds || userIds.length === 0) userIds = await loadAllUserIds();
-    if (!userIds.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: "No users with tokens" };
+    if (!userIds.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: "No users with tokens", provider };
 
     const deepLink = payload.deepLink || payload.url || (payload.contentId ? `/?anime=${payload.contentId}` : "/");
     const body = composeBody(payload);
@@ -355,7 +395,7 @@ export async function sendPushNotification(payload: SendPushPayload): Promise<{
 
     const r = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: sendHeaders(url, provider),
       body: JSON.stringify({
         userIds,
         title: payload.title || "RS ANIME",
@@ -365,17 +405,25 @@ export async function sendPushNotification(payload: SendPushPayload): Promise<{
       }),
     });
     const res = await r.json().catch(() => ({}));
-    if (!r.ok) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: res?.error || `HTTP ${r.status}` };
+    if (!r.ok) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: res?.error || `HTTP ${r.status}`, provider };
     const total = Number(res.totalTokens || 0);
     const sent = Number(res.success || 0);
     const failed = Number(res.failed || 0);
+    const deliveredUserIds = Array.isArray(res.deliveredUserIds) ? res.deliveredUserIds.map(String).filter(Boolean) : [];
+    const failReasons = res.failReasons && typeof res.failReasons === "object"
+      ? Object.entries(res.failReasons).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k}:${v}`).join(" ")
+      : "";
     return {
-      ok: sent > 0 || total > 0,
+      ok: sent > 0,
       total, sent, failed,
       invalidRemoved: Number(res.invalidRemoved || 0),
       reason: res.reason,
+      error: sent > 0 ? undefined : (res.reason || failReasons || (total ? "No browser push was delivered" : "No matching FCM tokens")),
+      deliveredUserIds,
+      deliveredUsers: Number(res.deliveredUsers || deliveredUserIds.length || 0),
+      provider,
     };
   } catch (err: any) {
-    return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, error: String(err?.message || err) };
+    return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: String(err?.message || err), provider };
   }
 }

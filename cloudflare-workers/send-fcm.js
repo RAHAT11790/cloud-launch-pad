@@ -82,6 +82,7 @@ async function fetchTokens(sa, accessToken, userIds) {
   const allowed = userIds && userIds.length ? new Set(userIds) : null;
   const tokens = new Set();
   const paths = {};
+  const usersByToken = {};
   Object.entries(tree).forEach(([uid, userTokens]) => {
     if (allowed && !allowed.has(uid)) return;
     Object.entries(userTokens || {}).forEach(([key, entry]) => {
@@ -89,9 +90,10 @@ async function fetchTokens(sa, accessToken, userIds) {
       if (!t) return;
       tokens.add(t);
       (paths[t] = paths[t] || []).push(`fcmTokens/${uid}/${key}`);
+      (usersByToken[t] = usersByToken[t] || []).push(String(uid));
     });
   });
-  return { tokens: [...tokens], tokenPathsByToken: paths };
+  return { tokens: [...tokens], tokenPathsByToken: paths, tokenUserIdsByToken: usersByToken };
 }
 
 async function cleanupInvalid(sa, accessToken, invalid, pathsByToken) {
@@ -163,14 +165,17 @@ async function handleSend(req, env) {
 
   let resolvedTokens = [...new Set(inTokens)];
   let pathsByToken = {};
+  let usersByToken = {};
   if (!resolvedTokens.length && inUsers.length) {
     try {
       const l = await fetchTokens(sa, accessToken, inUsers);
       resolvedTokens = l.tokens;
       pathsByToken = l.tokenPathsByToken;
+      usersByToken = l.tokenUserIdsByToken;
     } catch (e) {
       return jsonResponse({
         success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        deliveredUserIds: [], deliveredUsers: 0,
         reason: "TOKEN_LOOKUP_FAILED", details: { message: (e && e.message) || String(e) },
       });
     }
@@ -178,12 +183,14 @@ async function handleSend(req, env) {
   if (!resolvedTokens.length) {
     return jsonResponse({
       success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+      deliveredUserIds: [], deliveredUsers: 0,
       reason: "NO_MATCHING_TOKENS",
     });
   }
 
   let success = 0, failed = 0;
   const invalid = [];
+  const deliveredUserIds = new Set();
   const failReasons = { invalid: 0, transient: 0, other: 0 };
   const concurrency = Math.min(30, resolvedTokens.length);
   let idx = 0;
@@ -208,7 +215,10 @@ async function handleSend(req, env) {
         },
       };
       const r = await sendOne(sa.project_id, accessToken, message);
-      if (r.ok) success++;
+      if (r.ok) {
+        success++;
+        (usersByToken[token] || []).forEach((uid) => deliveredUserIds.add(uid));
+      }
       else {
         failed++;
         const c = r.category || "other";
@@ -219,10 +229,22 @@ async function handleSend(req, env) {
   };
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
   const invalidRemoved = inUsers.length ? await cleanupInvalid(sa, accessToken, invalid, pathsByToken) : 0;
+  const deliveredIds = [...deliveredUserIds];
+  console.log("[send-fcm] result", JSON.stringify({
+    requestedUsers: inUsers.length,
+    totalTokens: resolvedTokens.length,
+    success,
+    failed,
+    deliveredUsers: deliveredIds.length,
+    invalidRemoved,
+    failReasons,
+  }));
 
   return jsonResponse({
     success, failed, totalTokens: resolvedTokens.length,
     invalidTokens: invalid, invalidRemoved, failReasons,
+    deliveredUserIds: deliveredIds,
+    deliveredUsers: deliveredIds.length,
   });
 }
 

@@ -16,6 +16,7 @@ type ServiceAccount = {
 type TokenLookupResult = {
   tokens: string[];
   tokenPathsByToken: Record<string, string[]>;
+  tokenUserIdsByToken: Record<string, string[]>;
 };
 
 const BRAND_ICON_URL = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
@@ -91,6 +92,7 @@ async function fetchTokens(sa: ServiceAccount, accessToken: string, userIds?: st
   const allowed = userIds?.length ? new Set(userIds) : null;
   const tokens = new Set<string>();
   const paths: Record<string, string[]> = {};
+  const usersByToken: Record<string, string[]> = {};
   Object.entries(tree).forEach(([uid, userTokens]: any) => {
     if (allowed && !allowed.has(uid)) return;
     Object.entries(userTokens || {}).forEach(([key, entry]: any) => {
@@ -98,9 +100,10 @@ async function fetchTokens(sa: ServiceAccount, accessToken: string, userIds?: st
       if (!t) return;
       tokens.add(t);
       (paths[t] = paths[t] || []).push(`fcmTokens/${uid}/${key}`);
+      (usersByToken[t] = usersByToken[t] || []).push(String(uid));
     });
   });
-  return { tokens: [...tokens], tokenPathsByToken: paths };
+  return { tokens: [...tokens], tokenPathsByToken: paths, tokenUserIdsByToken: usersByToken };
 }
 
 async function cleanupInvalid(sa: ServiceAccount, accessToken: string, invalid: string[], pathsByToken: Record<string, string[]>): Promise<number> {
@@ -169,14 +172,17 @@ serve(async (req) => {
 
     let resolvedTokens = [...new Set(inTokens)];
     let pathsByToken: Record<string, string[]> = {};
+    let usersByToken: Record<string, string[]> = {};
     if (!resolvedTokens.length && inUsers.length) {
       try {
         const l = await fetchTokens(sa, accessToken, inUsers);
         resolvedTokens = l.tokens;
         pathsByToken = l.tokenPathsByToken;
+        usersByToken = l.tokenUserIdsByToken;
       } catch (e: any) {
         return new Response(JSON.stringify({
           success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+          deliveredUserIds: [], deliveredUsers: 0,
           reason: "TOKEN_LOOKUP_FAILED", details: { message: e?.message || String(e) },
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -184,12 +190,14 @@ serve(async (req) => {
     if (!resolvedTokens.length) {
       return new Response(JSON.stringify({
         success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        deliveredUserIds: [], deliveredUsers: 0,
         reason: "NO_MATCHING_TOKENS",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let success = 0, failed = 0;
     const invalid: string[] = [];
+    const deliveredUserIds = new Set<string>();
     const failReasons = { invalid: 0, transient: 0, other: 0 };
     const concurrency = Math.min(30, resolvedTokens.length);
     let idx = 0;
@@ -214,7 +222,10 @@ serve(async (req) => {
           },
         };
         const r = await sendOne(sa.project_id, accessToken, message);
-        if (r.ok) success++;
+        if (r.ok) {
+          success++;
+          (usersByToken[token] || []).forEach((uid) => deliveredUserIds.add(uid));
+        }
         else {
           failed++;
           const c = r.category || "other";
@@ -225,10 +236,22 @@ serve(async (req) => {
     };
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     const invalidRemoved = inUsers.length ? await cleanupInvalid(sa, accessToken, invalid, pathsByToken) : 0;
+    const deliveredIds = [...deliveredUserIds];
+    console.log("[send-fcm] result", JSON.stringify({
+      requestedUsers: inUsers.length,
+      totalTokens: resolvedTokens.length,
+      success,
+      failed,
+      deliveredUsers: deliveredIds.length,
+      invalidRemoved,
+      failReasons,
+    }));
 
     return new Response(JSON.stringify({
       success, failed, totalTokens: resolvedTokens.length,
       invalidTokens: invalid, invalidRemoved, failReasons,
+      deliveredUserIds: deliveredIds,
+      deliveredUsers: deliveredIds.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), {

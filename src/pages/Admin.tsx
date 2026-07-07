@@ -89,6 +89,42 @@ const buildBrowserPushBody = (title: unknown, seasonName: unknown, episodeText: 
  return `${t} • ${s} • ${e}`;
 };
 
+type BrowserPushRecipient = { userId: string; name: string; email: string };
+
+const getFcmTokenOwnerIds = async (): Promise<string[]> => {
+ try {
+  const snap = await get(ref(db, "fcmTokens"));
+  return Object.keys(snap.val() || {}).map(String).filter(Boolean);
+ } catch { return []; }
+};
+
+const mergeTargetIdsWithFcmOwners = async (targetUserIds: string[]): Promise<string[]> => {
+ const tokenOwners = await getFcmTokenOwnerIds();
+ return [...new Set([...targetUserIds, ...tokenOwners].map((id) => String(id || "").trim()).filter(Boolean))];
+};
+
+const mapBrowserPushRecipients = async (users: Record<string, any>, deliveredUserIds?: string[]): Promise<BrowserPushRecipient[]> => {
+ const ids = [...new Set((deliveredUserIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+ if (!ids.length) return [];
+ const values = Object.entries(users || {});
+ let fcmTree: Record<string, any> = {};
+ try {
+  const fcmSnap = await get(ref(db, "fcmTokens"));
+  fcmTree = fcmSnap.val() || {};
+ } catch {}
+ return ids.map((uid) => {
+  const direct = users?.[uid];
+  const found = direct || values.find(([key, value]: any) => key === uid || String(value?.id || "") === uid)?.[1] || {};
+  const tokenEntries = Object.values(fcmTree?.[uid] || {}) as any[];
+  const tokenMeta = tokenEntries.find((entry) => entry?.email || entry?.name) || {};
+  return {
+   userId: uid,
+   name: String(found?.name || found?.displayName || tokenMeta?.name || "User").trim(),
+   email: String(found?.email || tokenMeta?.email || (uid.includes("@") ? uid : "")).trim(),
+  };
+ });
+};
+
 const TG_DUB_TAGS = {
  official: "#ᴏғғɪᴄɪᴀʟ",
  fandub: "#ғᴀɴᴅᴜʙ",
@@ -2215,7 +2251,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [pushTitleOverride, setPushTitleOverride] = useState("");
  const [pushBodyOverride, setPushBodyOverride] = useState("");
   const [pushLastResult, setPushLastResult] = useState<string>("");
- const [pushRecipients, setPushRecipients] = useState<{ name: string; email: string }[]>([]);
+  const [pushRecipients, setPushRecipients] = useState<BrowserPushRecipient[]>([]);
 
  // Redeem code state
  const [redeemCodesData, setRedeemCodesData] = useState<any[]>([]);
@@ -3758,11 +3794,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  contentPoster = selectedOption?.backdrop || selectedOption?.poster || "";
  }
 
- // Load all users to build target list + in-app notifications + recipient panel
+ // Load all users to build target list + in-app notifications.
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
  const targetUserIds: string[] = [];
- const recipients: { name: string; email: string }[] = [];
  const userNotifUpdates: Record<string, any> = {};
  const seen = new Set<string>();
  Object.entries(users).forEach(([userKey, userData]: any) => {
@@ -3771,10 +3806,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (notifTarget === "online" && !userData?.online) return;
  seen.add(uid);
  targetUserIds.push(uid);
- recipients.push({
- name: String(userData?.name || userData?.displayName || "User").trim(),
- email: String(userData?.email || "").trim(),
- });
  const notifKey = push(ref(db, `notifications/${uid}`)).key;
  if (notifKey) {
  userNotifUpdates[`notifications/${uid}/${notifKey}`] = {
@@ -3796,6 +3827,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Fire browser push
  const pushMod = await import("@/lib/pushNotifications");
+ const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
  const result = await pushMod.sendPushNotification({
  title: savedTitle,
  body: savedMessage,
@@ -3803,15 +3835,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  deepLink: contentId ? `/?anime=${contentId}` : "/",
  contentId,
  contentType,
- userIds: targetUserIds,
+ userIds: browserTargetUserIds,
  });
 
- setPushRecipients(recipients);
+ setPushRecipients(await mapBrowserPushRecipients(users, result.deliveredUserIds));
 
  if (!result.ok && result.total === 0) {
  toast.warning(`In-app sent to ${targetUserIds.length} users. Browser push: no tokens found${result.reason ? ` [${result.reason}]` : ""}`);
  } else {
- toast.success(`Sent → ${targetUserIds.length} in-app · ${result.sent}/${result.total} browser push`);
+ toast.success(`Sent → ${targetUserIds.length} in-app · ${result.sent}/${result.total} browser push · ${result.deliveredUsers || 0} browser users`);
  }
  setNotifTitle("");
  setNotifMessage("");
@@ -7619,11 +7651,11 @@ ${tgBulkFooter}
   setPushSending(true); setPushLastResult(""); setPushRecipients([]);
  const toastId = toast.loading("🔔 Sending push to all users…", { duration: 60000 });
  try {
- // Build recipients + write in-app notifications for the bell icon
+ // Build in-app notifications for the bell icon. Recipient panel below must
+ // show only users whose FCM token got a successful browser push.
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
  const targetUserIds: string[] = [];
- const recipients: { name: string; email: string }[] = [];
  const inAppUpdates: Record<string, any> = {};
  const seen = new Set<string>();
  Object.entries(users).forEach(([userKey, userData]: any) => {
@@ -7631,10 +7663,6 @@ ${tgBulkFooter}
  if (!uid || seen.has(uid)) return;
  seen.add(uid);
  targetUserIds.push(uid);
- recipients.push({
- name: String(userData?.name || userData?.displayName || "User").trim(),
- email: String(userData?.email || "").trim(),
- });
  const key = push(ref(db, `notifications/${uid}`)).key;
  if (key) inAppUpdates[`notifications/${uid}/${key}`] = {
  title, message: body, type: "new_episode",
@@ -7646,22 +7674,24 @@ ${tgBulkFooter}
  if (Object.keys(inAppUpdates).length) await update(ref(db), inAppUpdates);
 
  const pushMod = await import("@/lib/pushNotifications");
+ const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
  const res = await pushMod.sendPushNotification({
  title, body, image, deepLink,
  contentId: String(contentId), contentType,
  seasonNumber, episodeNumber,
   seasonName,
   episodeRange: epRange,
- userIds: targetUserIds,
+  userIds: browserTargetUserIds,
  });
  toast.dismiss(toastId);
- setPushRecipients(recipients);
+ const browserRecipients = await mapBrowserPushRecipients(users, res.deliveredUserIds);
+ setPushRecipients(browserRecipients);
  if (res.ok) {
- const msg = `Push sent → ${res.sent}/${res.total} tokens · ${targetUserIds.length} users notified${res.invalidRemoved ? ` · cleaned ${res.invalidRemoved}` : ""}`;
+ const msg = `Browser push sent → ${res.sent}/${res.total} tokens · ${browserRecipients.length} users${res.invalidRemoved ? ` · cleaned ${res.invalidRemoved}` : ""}`;
  toast.success("🔔 " + msg, { duration: 6000 });
  setPushLastResult(msg);
  } else {
- const msg = `In-app: ${targetUserIds.length} · Push: ${res.error || res.reason || "no tokens"}`;
+ const msg = `In-app: ${targetUserIds.length} · Browser push: ${res.error || res.reason || "no FCM token delivered"}`;
  toast.warning(msg);
  setPushLastResult(msg);
  }
@@ -7685,13 +7715,13 @@ ${tgBulkFooter}
  <div className="px-4 py-2.5 border-b border-white/8 flex items-center justify-between bg-yellow-500/5">
  <div className="flex items-center gap-2">
  <Bell size={13} className="text-yellow-400" />
- <span className="text-[12px] font-semibold text-white">Notification Delivered</span>
+ <span className="text-[12px] font-semibold text-white">Browser Push Delivered</span>
  </div>
  <span className="text-[11px] text-yellow-400 font-bold">{pushRecipients.length} users</span>
  </div>
  <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
  {pushRecipients.map((r, i) => (
- <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+  <div key={r.userId || i} className="px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-500/30 to-pink-500/30 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-yellow-100">
  {(r.name || r.email || "U").charAt(0).toUpperCase()}
