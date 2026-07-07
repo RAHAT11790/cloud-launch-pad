@@ -167,7 +167,7 @@ async function tokenHash(token) {
 async function sendOneMessage(env, accessToken, projectId, token, payload) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
   const title = String(payload.title || "🎬 RS Anime").trim();
-  const body = String(payload.body || compactBody(payload)).trim();
+  const notifBody = String(payload.body || compactBody(payload)).trim();
   const image = payload.image ? absoluteUrl(env, payload.image) : undefined;
   const icon = absoluteUrl(env, payload.icon || "/icon-192.png");
   const badge = absoluteUrl(env, payload.badge || "/icon-192.png");
@@ -176,7 +176,7 @@ async function sendOneMessage(env, accessToken, projectId, token, payload) {
     token,
     notification: {
       title,
-      body,
+      body: notifBody,
       ...(image ? { image } : {}),
     },
     data: sanitizeData({
@@ -189,14 +189,14 @@ async function sendOneMessage(env, accessToken, projectId, token, payload) {
       episodeRange: payload.episodeRange || "",
       image: image || "",
       title,
-      body,
+      body: notifBody,
       sentAt: String(Date.now()),
     }),
     webpush: {
       headers: { Urgency: "high", TTL: "86400" },
       notification: {
         title,
-        body,
+        body: notifBody,
         icon,
         badge,
         image,

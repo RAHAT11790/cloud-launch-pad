@@ -112,25 +112,25 @@ function compactBody(p: any) {
 async function sendOne(env: Record<string, string>, at: string, projectId: string, token: string, p: any) {
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
   const title = String(p.title || "🎬 RS Anime").trim();
-  const body = String(p.body || compactBody(p)).trim();
+  const notifBody = String(p.body || compactBody(p)).trim();
   const image = p.image ? absoluteUrl(env, p.image) : undefined;
   const icon = absoluteUrl(env, p.icon || "/icon-192.png");
   const badge = absoluteUrl(env, p.badge || "/icon-192.png");
   const link = absoluteUrl(env, p.deepLink || "/");
   const message = {
     token,
-    notification: { title, body, ...(image ? { image } : {}) },
+    notification: { title, body: notifBody, ...(image ? { image } : {}) },
     data: sanitizeData({
       deepLink: link, contentId: p.contentId || "", contentType: p.contentType || "",
       seasonNumber: p.seasonNumber != null ? String(p.seasonNumber) : "",
       episodeNumber: p.episodeNumber != null ? String(p.episodeNumber) : "",
       seasonName: p.seasonName || "", episodeRange: p.episodeRange || "",
-      image: image || "", title, body, sentAt: String(Date.now()),
+      image: image || "", title, body: notifBody, sentAt: String(Date.now()),
     }),
     webpush: {
       headers: { Urgency: "high", TTL: "86400" },
       notification: {
-        title, body,
+        title, body: notifBody,
         icon, badge,
         image,
         tag: p.tag || (p.contentId || "rsanime"), renotify: true,
@@ -143,8 +143,8 @@ async function sendOne(env: Record<string, string>, at: string, projectId: strin
     headers: { Authorization: `Bearer ${at}`, "content-type": "application/json" },
     body: JSON.stringify({ message }),
   });
-  const body = await r.json().catch(() => ({}));
-  return { ok: r.ok, status: r.status, body };
+  const responseBody = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, body: responseBody };
 }
 function invalidTokenErr(status: number, body: any) {
   if (status === 404 || status === 400) {
