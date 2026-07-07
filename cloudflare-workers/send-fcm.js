@@ -1,397 +1,239 @@
-// ============================================================
-// send-fcm — Firebase Cloud Messaging (HTTP v1 API) — Cloudflare Worker
-// ============================================================
-// Rocket-fast push notifications backed by the Firebase Admin service
-// account (JSON key stored in env.FIREBASE_SERVICE_ACCOUNT_KEY).
-//
-// Routes
-//   POST /register     { userId, token, ua? }   → stores under fcmTokens/{userId}/{hash}
-//   POST /unregister   { userId, token }        → removes a single token
-//   POST /send         { title, body, image, deepLink, contentId, contentType,
-//                        seasonNumber?, episodeNumber?, userIds?[] }
-//                                              → FCM v1 send, 500-parallel batches,
-//                                                 auto-purge invalid tokens.
-//                                                 Returns { total, sent, failed, invalidRemoved, batches }
-//   POST /cleanup      no body                 → deletes stale tokens older than TTL
-//   GET  /health                               → { ok:true, project }
-//
-// Env (Worker secrets)
-//   FIREBASE_SERVICE_ACCOUNT_KEY   Full service-account JSON (paste as one line)
-//   FIREBASE_DB_URL                https://<project>-default-rtdb.firebaseio.com
-//   ALLOWED_ORIGINS   (optional)   Comma-separated, wildcards ok (*.lovable.app)
-//   TOKEN_TTL_HOURS   (optional)   Defaults to 2160 (90 days)
-//
-// Cron: bind a Cron Trigger to run /cleanup (see wrangler.toml example
-// below) so expired tokens are auto-purged.
-// ============================================================
+// Cloudflare Worker: send-fcm
+// Deploy: wrangler deploy
+// Required secret (wrangler secret put): FIREBASE_SERVICE_ACCOUNT_KEY
+//   -> full service account JSON string with { client_email, private_key, project_id, database_url }
+// Optional: set ALLOWED_ORIGINS as a comma-separated list env var (defaults to "*")
 
-const DEFAULT_TTL_HOURS = 2160;
-const FCM_BATCH_SIZE = 500;
-const DEFAULT_FIREBASE_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
-const DEFAULT_SITE_URL = "https://rsanime03.lovable.app";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-// ---------- CORS ----------
-function corsHeaders(origin, env) {
-  const allow = matchAllowedOrigin(origin, env);
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization, apikey, x-requested-with",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
+const BRAND_ICON_URL = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+const DEFAULT_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
+const TRANSIENT = ["UNAVAILABLE", "INTERNAL", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED"];
+
+function base64UrlEncode(input) {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
-function matchAllowedOrigin(origin, env) {
-  const list = String(env.ALLOWED_ORIGINS || "*").split(",").map(s => s.trim()).filter(Boolean);
-  if (list.includes("*") || !origin) return list.includes("*") ? "*" : (list[0] || "*");
-  for (const rule of list) {
-    if (rule === origin) return origin;
-    if (rule.startsWith("*.")) {
-      const suffix = rule.slice(1);
-      try {
-        const host = new URL(origin).host;
-        if (host.endsWith(suffix.slice(1))) return origin;
-      } catch {}
-    }
-  }
-  return list[0] || "*";
-}
-const json = (body, status, extra) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", ...(extra || {}) },
-  });
 
-// ---------- Service account + OAuth token cache ----------
-let _tokenCache = { token: "", exp: 0, projectId: "" };
-async function getAccessToken(env) {
+async function getAccessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
-  if (_tokenCache.token && _tokenCache.exp - 60 > now) return _tokenCache;
-
-  const raw = env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not configured");
-  let sa;
-  try { sa = JSON.parse(raw); }
-  catch { throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON"); }
-  if (!sa.client_email || !sa.private_key || !sa.project_id) {
-    throw new Error("Service account JSON is missing client_email / private_key / project_id");
-  }
-
-  const iat = now, exp = now + 3600;
-  const header = { alg: "RS256", typ: "JWT" };
-  const claim = {
+  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64UrlEncode(JSON.stringify({
     iss: sa.client_email,
-    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email",
+    scope: "https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/firebase.database",
     aud: "https://oauth2.googleapis.com/token",
-    iat, exp,
-  };
-  const enc = (obj) => b64url(new TextEncoder().encode(JSON.stringify(obj)));
-  const unsigned = `${enc(header)}.${enc(claim)}`;
-
-  const key = await importPrivateKey(sa.private_key);
-  const sig = await crypto.subtle.sign({ name: "RSASSA-PKCS1-v1_5" }, key, new TextEncoder().encode(unsigned));
-  const jwt = `${unsigned}.${b64url(new Uint8Array(sig))}`;
-
-  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    iat: now,
+    exp: now + 3600,
+  }));
+  const pem = sa.private_key
+    .replace(/\\n/g, "\n")
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${payload}`),
+  );
+  const jwt = `${header}.${payload}.${base64UrlEncode(new Uint8Array(sig))}`;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
   });
-  const data = await resp.json();
-  if (!resp.ok || !data.access_token) {
-    throw new Error(`OAuth token exchange failed: ${resp.status} ${JSON.stringify(data)}`);
-  }
-  _tokenCache = { token: data.access_token, exp: iat + Number(data.expires_in || 3600), projectId: sa.project_id };
-  return _tokenCache;
-}
-function b64url(bytes) {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-async function importPrivateKey(pem) {
-  const clean = pem.replace(/\\n/g, "\n").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, "");
-  const der = Uint8Array.from(atob(clean), c => c.charCodeAt(0));
-  return crypto.subtle.importKey(
-    "pkcs8", der.buffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false, ["sign"],
-  );
+  const data = await res.json();
+  if (!res.ok || !data.access_token) throw new Error(`OAuth failed: ${JSON.stringify(data)}`);
+  return data.access_token;
 }
 
-// ---------- Firebase RTDB REST helpers ----------
-async function rtdbPut(env, path, body) {
-  const { token } = await getAccessToken(env);
-  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
-  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
-  const r = await fetch(url, { method: "PUT", body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(`RTDB PUT ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
-}
-async function rtdbPatch(env, path, body) {
-  const { token } = await getAccessToken(env);
-  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
-  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
-  const r = await fetch(url, { method: "PATCH", body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(`RTDB PATCH ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
-}
-async function rtdbDelete(env, path) {
-  const { token } = await getAccessToken(env);
-  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
-  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}`;
-  const r = await fetch(url, { method: "DELETE" });
-  if (!r.ok) throw new Error(`RTDB DELETE ${path} failed: ${r.status} ${await r.text().catch(() => "")}`);
-}
-async function rtdbGet(env, path, query = "") {
-  const { token } = await getAccessToken(env);
-  const dbUrl = String(env.FIREBASE_DB_URL || DEFAULT_FIREBASE_DB_URL).trim().replace(/\/$/, "");
-  if (!/^https:\/\//i.test(dbUrl)) throw new Error("Firebase database URL is invalid");
-  const url = `${dbUrl}${path}.json?access_token=${encodeURIComponent(token)}${query ? `&${query}` : ""}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`RTDB GET ${path} failed: ${r.status}`);
-  return r.json();
+function dbBase(sa) {
+  const url = (sa.database_url || "").trim() || DEFAULT_DB_URL;
+  return url.replace(/\/$/, "");
 }
 
-// ---------- Token hashing (short, stable) ----------
-async function tokenHash(token) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const bytes = new Uint8Array(buf);
-  let hex = "";
-  for (let i = 0; i < 12; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  return hex;
+function absUrl(v, base) {
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("//")) return `https:${v}`;
+  if (v.startsWith("/")) return `${base}${v}`;
+  return `${base}/${v}`;
 }
 
-// ---------- FCM v1 send (one message per token) ----------
-async function sendOneMessage(env, accessToken, projectId, token, payload) {
-  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-  const title = String(payload.title || "🎬 RS Anime").trim();
-  const notifBody = String(payload.body || compactBody(payload)).trim();
-  const image = payload.image ? absoluteUrl(env, payload.image) : undefined;
-  const icon = absoluteUrl(env, payload.icon || "/icon-192.png");
-  const badge = absoluteUrl(env, payload.badge || "/icon-192.png");
-  const link = absoluteUrl(env, payload.deepLink || "/");
-  const message = {
-    token,
-    notification: {
-      title,
-      body: notifBody,
-      ...(image ? { image } : {}),
-    },
-    data: sanitizeData({
-      deepLink: link,
-      contentId: payload.contentId || "",
-      contentType: payload.contentType || "",
-      seasonNumber: payload.seasonNumber != null ? String(payload.seasonNumber) : "",
-      episodeNumber: payload.episodeNumber != null ? String(payload.episodeNumber) : "",
-      seasonName: payload.seasonName || "",
-      episodeRange: payload.episodeRange || "",
-      image: image || "",
-      title,
-      body: notifBody,
-      sentAt: String(Date.now()),
-    }),
-    webpush: {
-      headers: { Urgency: "high", TTL: "86400" },
-      notification: {
-        title,
-        body: notifBody,
-        icon,
-        badge,
-        image,
-        requireInteraction: false,
-        tag: payload.tag || (payload.contentId || "rsanime"),
-        renotify: true,
-      },
-      fcm_options: { link },
-    },
-  };
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ message }),
+function categorize(msg) {
+  const m = (msg || "").toUpperCase();
+  if (m.includes("UNREGISTERED") || m.includes("REGISTRATION_TOKEN_NOT_REGISTERED")) return "invalid";
+  if (m.includes("INVALID_ARGUMENT") && (m.includes("TOKEN") || m.includes("REGISTRATION"))) return "invalid";
+  if (TRANSIENT.some((c) => m.includes(c))) return "transient";
+  return "other";
+}
+
+async function fetchTokens(sa, accessToken, userIds) {
+  const base = dbBase(sa);
+  let res = await fetch(`${base}/fcmTokens.json?access_token=${accessToken}`);
+  if (!res.ok) res = await fetch(`${base}/fcmTokens.json`);
+  if (!res.ok) throw new Error(`fcmTokens read failed: ${res.status}`);
+  const tree = (await res.json()) || {};
+  const allowed = userIds && userIds.length ? new Set(userIds) : null;
+  const tokens = new Set();
+  const paths = {};
+  Object.entries(tree).forEach(([uid, userTokens]) => {
+    if (allowed && !allowed.has(uid)) return;
+    Object.entries(userTokens || {}).forEach(([key, entry]) => {
+      const t = entry && entry.token;
+      if (!t) return;
+      tokens.add(t);
+      (paths[t] = paths[t] || []).push(`fcmTokens/${uid}/${key}`);
+    });
   });
-  const body = await r.json().catch(() => ({}));
-  return { ok: r.ok, status: r.status, body };
+  return { tokens: [...tokens], tokenPathsByToken: paths };
 }
-function sanitizeData(obj) {
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) out[k] = String(v == null ? "" : v);
-  return out;
+
+async function cleanupInvalid(sa, accessToken, invalid, pathsByToken) {
+  if (!invalid.length) return 0;
+  const base = dbBase(sa);
+  const paths = invalid.flatMap((t) => pathsByToken[t] || []);
+  let removed = 0;
+  await Promise.all(paths.map(async (p) => {
+    try {
+      const r = await fetch(`${base}/${p}.json?access_token=${accessToken}`, { method: "DELETE" });
+      if (r.ok) removed++;
+    } catch {}
+  }));
+  return removed;
 }
-function siteOrigin(env) {
-  return String(env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "") || DEFAULT_SITE_URL;
-}
-function absoluteUrl(env, value, fallback = "/") {
-  const raw = String(value || fallback || "/").trim();
-  try { return new URL(raw, siteOrigin(env)).href; } catch { return new URL(fallback, siteOrigin(env)).href; }
-}
-function episodeText(payload) {
-  const range = String(payload.episodeRange || "").trim();
-  if (range) return range;
-  return payload.episodeNumber != null && String(payload.episodeNumber).trim() ? `Episode ${payload.episodeNumber}` : "New episode";
-}
-function compactBody(payload) {
-  const season = String(payload.seasonName || (payload.seasonNumber != null ? `Season ${payload.seasonNumber}` : "")).trim();
-  return [String(payload.title || "Anime").trim(), season, episodeText(payload)].filter(Boolean).join(" • ");
-}
-function isInvalidTokenError(status, body) {
-  if (status === 404 || status === 400) {
-    const code = body?.error?.details?.[0]?.errorCode || body?.error?.status;
-    if (code === "UNREGISTERED" || code === "INVALID_ARGUMENT") return true;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function sendOne(projectId, accessToken, message, retries = 2) {
+  for (let a = 0; a <= retries; a++) {
+    try {
+      const r = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+      });
+      if (r.ok) { await r.text().catch(() => ""); return { ok: true }; }
+      const err = await r.text();
+      const cat = categorize(err);
+      if (cat === "transient" && a < retries) { await sleep(500 * 2 ** a); continue; }
+      return { ok: false, category: cat, err };
+    } catch (e) {
+      if (a < retries) { await sleep(500 * 2 ** a); continue; }
+      return { ok: false, category: "transient", err: String(e) };
+    }
   }
-  return false;
+  return { ok: false, category: "other" };
 }
 
-// ---------- Route: /register ----------
-async function handleRegister(req, env) {
-  const body = await req.json().catch(() => ({}));
-  const userId = String(body.userId || "").trim();
-  const token = String(body.token || "").trim();
-  if (!userId || !token) return json({ ok: false, error: "userId and token required" }, 400);
-  const hash = await tokenHash(token);
-  const now = Date.now();
-  await rtdbPut(env, `/fcmTokens/${encodeURIComponent(userId)}/${hash}`, {
-    token,
-    createdAt: now,
-    updatedAt: now,
-    ua: String(body.ua || "").slice(0, 200),
+function jsonResponse(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-  return json({ ok: true, hash });
 }
 
-// ---------- Route: /unregister ----------
-async function handleUnregister(req, env) {
-  const body = await req.json().catch(() => ({}));
-  const userId = String(body.userId || "").trim();
-  const token = String(body.token || "").trim();
-  if (!userId || !token) return json({ ok: false, error: "userId and token required" }, 400);
-  const hash = await tokenHash(token);
-  await rtdbDelete(env, `/fcmTokens/${encodeURIComponent(userId)}/${hash}`);
-  return json({ ok: true });
-}
-
-// ---------- Route: /send ----------
 async function handleSend(req, env) {
   const body = await req.json().catch(() => ({}));
-  const title = String(body.title || "").trim();
-  if (!title) return json({ ok: false, error: "title required" }, 400);
+  const { tokens, userIds, title, body: msgBody, image, icon, badge, data } = body || {};
+  const inTokens = Array.isArray(tokens) ? tokens.filter(Boolean) : [];
+  const inUsers = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
+  if (!inTokens.length && !inUsers.length) {
+    return jsonResponse({ error: "No tokens or userIds provided" }, 400);
+  }
+  const saJson = env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!saJson) return jsonResponse({ error: "FIREBASE_SERVICE_ACCOUNT_KEY missing" }, 500);
+  const sa = JSON.parse(saJson);
+  const accessToken = await getAccessToken(sa);
 
-  const { token: accessToken, projectId } = await getAccessToken(env);
+  const normalized = {};
+  if (data && typeof data === "object") {
+    Object.entries(data).forEach(([k, v]) => { normalized[k] = v == null ? "" : String(v); });
+  }
+  const base = (normalized.baseUrl || req.headers.get("origin") || "https://rsanime03.lovable.app").replace(/\/$/, "");
+  const iconUrl = absUrl(icon, base) || BRAND_ICON_URL;
+  const badgeUrl = absUrl(badge, base) || BRAND_ICON_URL;
+  const imageUrl = absUrl(image, base);
+  const clickLink = absUrl(normalized.url || "/", base);
 
-  // Collect tokens
-  const targets = []; // [{ userId, hash, token }]
-  const allTokens = (await rtdbGet(env, "/fcmTokens").catch(() => null)) || {};
-  const ttlMs = Math.max(1, Number(env.TOKEN_TTL_HOURS || DEFAULT_TTL_HOURS)) * 3600 * 1000;
-  const cutoff = Date.now() - ttlMs;
-  const userFilter = Array.isArray(body.userIds) && body.userIds.length
-    ? new Set(body.userIds.map(String))
-    : null;
-
-  for (const [uid, tokMap] of Object.entries(allTokens || {})) {
-    if (userFilter && !userFilter.has(uid)) continue;
-    for (const [hash, row] of Object.entries(tokMap || {})) {
-      if (!row?.token) continue;
-      if (Number(row.updatedAt || row.createdAt || 0) < cutoff) continue; // skip stale
-      targets.push({ userId: uid, hash, token: row.token });
+  let resolvedTokens = [...new Set(inTokens)];
+  let pathsByToken = {};
+  if (!resolvedTokens.length && inUsers.length) {
+    try {
+      const l = await fetchTokens(sa, accessToken, inUsers);
+      resolvedTokens = l.tokens;
+      pathsByToken = l.tokenPathsByToken;
+    } catch (e) {
+      return jsonResponse({
+        success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+        reason: "TOKEN_LOOKUP_FAILED", details: { message: (e && e.message) || String(e) },
+      });
     }
   }
+  if (!resolvedTokens.length) {
+    return jsonResponse({
+      success: 0, failed: 0, totalTokens: 0, invalidTokens: [], invalidRemoved: 0,
+      reason: "NO_MATCHING_TOKENS",
+    });
+  }
 
-  const total = targets.length;
-  let sent = 0, failed = 0, invalidRemoved = 0;
-  const invalidDeletes = {};
-  const errors = [];
-
-  // Parallel batches of 500 for lightspeed dispatch
-  for (let i = 0; i < targets.length; i += FCM_BATCH_SIZE) {
-    const chunk = targets.slice(i, i + FCM_BATCH_SIZE);
-    const results = await Promise.all(chunk.map(t =>
-      sendOneMessage(env, accessToken, projectId, t.token, body).catch(err => ({ ok: false, status: 0, body: { error: String(err) } }))
-    ));
-    for (let j = 0; j < results.length; j++) {
-      const r = results[j], t = chunk[j];
-      if (r.ok) { sent++; continue; }
-      failed++;
-      if (isInvalidTokenError(r.status, r.body)) {
-        invalidDeletes[`fcmTokens/${t.userId}/${t.hash}`] = null;
-        invalidRemoved++;
-      } else if (errors.length < 5) {
-        errors.push({ status: r.status, error: r.body?.error?.message || r.body?.error || String(r.body).slice(0, 200) });
+  let success = 0, failed = 0;
+  const invalid = [];
+  const failReasons = { invalid: 0, transient: 0, other: 0 };
+  const concurrency = Math.min(30, resolvedTokens.length);
+  let idx = 0;
+  const worker = async () => {
+    while (idx < resolvedTokens.length) {
+      const i = idx++;
+      const token = resolvedTokens[i];
+      const message = {
+        message: {
+          token,
+          notification: { title, body: msgBody },
+          webpush: {
+            headers: { Urgency: "high", TTL: "2419200" },
+            notification: {
+              title, body: msgBody,
+              icon: iconUrl, badge: badgeUrl, image: imageUrl,
+              vibrate: [200, 100, 200], requireInteraction: false,
+            },
+            fcm_options: clickLink ? { link: clickLink } : undefined,
+          },
+          data: normalized,
+        },
+      };
+      const r = await sendOne(sa.project_id, accessToken, message);
+      if (r.ok) success++;
+      else {
+        failed++;
+        const c = r.category || "other";
+        failReasons[c]++;
+        if (c === "invalid") invalid.push(token);
       }
     }
-  }
-  if (invalidRemoved > 0) {
-    try { await rtdbPatch(env, "/", invalidDeletes); } catch {}
-  }
-  return json({
-    ok: true, total, sent, failed, invalidRemoved,
-    batches: Math.ceil(total / FCM_BATCH_SIZE),
-    errors,
+  };
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  const invalidRemoved = inUsers.length ? await cleanupInvalid(sa, accessToken, invalid, pathsByToken) : 0;
+
+  return jsonResponse({
+    success, failed, totalTokens: resolvedTokens.length,
+    invalidTokens: invalid, invalidRemoved, failReasons,
   });
 }
 
-// ---------- Route: /cleanup ----------
-async function handleCleanup(env) {
-  const ttlMs = Math.max(1, Number(env.TOKEN_TTL_HOURS || DEFAULT_TTL_HOURS)) * 3600 * 1000;
-  const cutoff = Date.now() - ttlMs;
-  const all = (await rtdbGet(env, "/fcmTokens").catch(() => null)) || {};
-  const deletes = {};
-  let removed = 0, kept = 0;
-  for (const [uid, tokMap] of Object.entries(all || {})) {
-    for (const [hash, row] of Object.entries(tokMap || {})) {
-      if (Number(row?.createdAt || 0) < cutoff) {
-        deletes[`fcmTokens/${uid}/${hash}`] = null;
-        removed++;
-      } else kept++;
-    }
-  }
-  if (removed > 0) {
-    try { await rtdbPatch(env, "/", deletes); } catch (e) { return json({ ok: false, error: String(e) }, 500); }
-  }
-  return json({ ok: true, removed, kept, ttlHours: Number(env.TOKEN_TTL_HOURS || DEFAULT_TTL_HOURS) });
-}
-
-// ---------- Fetch router ----------
 export default {
-  async fetch(req, env, ctx) {
-    const url = new URL(req.url);
-    const origin = req.headers.get("Origin") || "";
-    const cors = corsHeaders(origin, env);
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-
+  async fetch(req, env) {
+    if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+    if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
     try {
-      const path = url.pathname.replace(/^\/+/, "").split("/").pop() || "";
-      let resp;
-      if (path === "health") {
-        resp = json({ ok: true, service: "send-fcm", project: (await getAccessToken(env).catch(() => ({ projectId: null }))).projectId });
-      } else if (path === "register" && req.method === "POST") {
-        resp = await handleRegister(req, env);
-      } else if (path === "unregister" && req.method === "POST") {
-        resp = await handleUnregister(req, env);
-      } else if (path === "send" && req.method === "POST") {
-        resp = await handleSend(req, env);
-      } else if (path === "cleanup" && (req.method === "POST" || req.method === "GET")) {
-        resp = await handleCleanup(env);
-      } else {
-        resp = json({ ok: false, error: "Not found", hint: "Use /send /register /unregister /cleanup /health" }, 404);
-      }
-      const merged = new Headers(resp.headers);
-      for (const [k, v] of Object.entries(cors)) merged.set(k, v);
-      return new Response(resp.body, { status: resp.status, headers: merged });
-    } catch (err) {
-      return new Response(JSON.stringify({ ok: false, error: String(err?.message || err) }), {
-        status: 500,
-        headers: { "content-type": "application/json", ...cors },
-      });
+      return await handleSend(req, env);
+    } catch (e) {
+      return jsonResponse({ error: (e && e.message) || String(e) }, 500);
     }
-  },
-  // Cron Trigger — bind in wrangler.toml:
-  //   [triggers] crons = ["0 */6 * * *"]   # every 6 hours
-  async scheduled(_event, env, _ctx) {
-    try { await handleCleanup(env); } catch (e) { console.warn("scheduled cleanup failed", e); }
   },
 };
