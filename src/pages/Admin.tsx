@@ -3743,7 +3743,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }
  };
 
- // ==================== NOTIFICATIONS ====================
+  // ==================== NOTIFICATIONS ====================
  const sendNotification = async () => {
  if (!notifTitle || !notifMessage) { toast.error("Please enter title and message"); return; }
  const savedTitle = notifTitle;
@@ -3758,32 +3758,61 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  contentPoster = selectedOption?.backdrop || selectedOption?.poster || "";
  }
 
- const targetUserIds: string[] = [];
- if (notifTarget === "online") {
+ // Load all users to build target list + in-app notifications + recipient panel
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
- const seenUserIds = new Set<string>();
+ const targetUserIds: string[] = [];
+ const recipients: { name: string; email: string }[] = [];
+ const userNotifUpdates: Record<string, any> = {};
+ const seen = new Set<string>();
  Object.entries(users).forEach(([userKey, userData]: any) => {
- const effectiveUserId = String(userData?.id || userKey || "").trim();
- if (!effectiveUserId || seenUserIds.has(effectiveUserId) || !userData?.online) return;
- seenUserIds.add(effectiveUserId);
- targetUserIds.push(effectiveUserId);
+ const uid = String(userData?.id || userKey || "").trim();
+ if (!uid || seen.has(uid)) return;
+ if (notifTarget === "online" && !userData?.online) return;
+ seen.add(uid);
+ targetUserIds.push(uid);
+ recipients.push({
+ name: String(userData?.name || userData?.displayName || "User").trim(),
+ email: String(userData?.email || "").trim(),
  });
+ const notifKey = pushFn(ref(db, `notifications/${uid}`)).key;
+ if (notifKey) {
+ userNotifUpdates[`notifications/${uid}/${notifKey}`] = {
+ title: savedTitle,
+ message: savedMessage,
+ type: notifType,
+ contentId, contentType,
+ image: contentPoster, poster: contentPoster,
+ timestamp: Date.now(),
+ read: false,
+ };
+ }
+ });
+
+ // Write in-app notifications (for the bell icon)
+ if (Object.keys(userNotifUpdates).length > 0) {
+ await update(ref(db), userNotifUpdates);
  }
 
+ // Fire browser push
  const pushMod = await import("@/lib/pushNotifications");
  const result = await pushMod.sendPushNotification({
  title: savedTitle,
  body: savedMessage,
  image: toPushImageUrl(contentPoster),
- deepLink: contentId ? buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "") : "/",
+ deepLink: contentId ? `/?anime=${contentId}` : "/",
  contentId,
  contentType,
- userIds: notifTarget === "online" ? targetUserIds : undefined,
+ userIds: targetUserIds,
  });
 
- if (!result.ok) throw new Error(result.error || "send-fcm not configured");
- toast.success(`Browser push sent → ${result.sent}/${result.total} users`);
+ setPushRecipients(recipients);
+
+ if (!result.ok && result.total === 0) {
+ toast.warning(`In-app sent to ${targetUserIds.length} users. Browser push: no tokens found${result.reason ? ` [${result.reason}]` : ""}`);
+ } else {
+ toast.success(`Sent → ${targetUserIds.length} in-app · ${result.sent}/${result.total} browser push`);
+ }
  setNotifTitle("");
  setNotifMessage("");
  } catch (err: any) {
