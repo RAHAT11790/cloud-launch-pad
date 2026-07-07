@@ -7616,9 +7616,35 @@ ${tgBulkFooter}
  const title = pushTitleOverride.trim() || autoTitle;
  const body = pushBodyOverride.trim() || autoBody;
 
- setPushSending(true); setPushLastResult("");
+  setPushSending(true); setPushLastResult(""); setPushRecipients([]);
  const toastId = toast.loading("🔔 Sending push to all users…", { duration: 60000 });
  try {
+ // Build recipients + write in-app notifications for the bell icon
+ const usersSnap = await get(ref(db, "users"));
+ const users = usersSnap.val() || {};
+ const targetUserIds: string[] = [];
+ const recipients: { name: string; email: string }[] = [];
+ const inAppUpdates: Record<string, any> = {};
+ const seen = new Set<string>();
+ Object.entries(users).forEach(([userKey, userData]: any) => {
+ const uid = String(userData?.id || userKey || "").trim();
+ if (!uid || seen.has(uid)) return;
+ seen.add(uid);
+ targetUserIds.push(uid);
+ recipients.push({
+ name: String(userData?.name || userData?.displayName || "User").trim(),
+ email: String(userData?.email || "").trim(),
+ });
+ const key = push(ref(db, `notifications/${uid}`)).key;
+ if (key) inAppUpdates[`notifications/${uid}/${key}`] = {
+ title, message: body, type: "new_episode",
+ contentId: String(contentId), contentType,
+ image: image || content.poster || "", poster: content.poster || "",
+ timestamp: Date.now(), read: false,
+ };
+ });
+ if (Object.keys(inAppUpdates).length) await update(ref(db), inAppUpdates);
+
  const pushMod = await import("@/lib/pushNotifications");
  const res = await pushMod.sendPushNotification({
  title, body, image, deepLink,
@@ -7626,15 +7652,18 @@ ${tgBulkFooter}
  seasonNumber, episodeNumber,
   seasonName,
   episodeRange: epRange,
+ userIds: targetUserIds,
  });
  toast.dismiss(toastId);
+ setPushRecipients(recipients);
  if (res.ok) {
- const msg = `Push sent → ${res.sent}/${res.total} users${res.invalidRemoved ? ` (cleaned ${res.invalidRemoved} dead tokens)` : ""}`;
+ const msg = `Push sent → ${res.sent}/${res.total} tokens · ${targetUserIds.length} users notified${res.invalidRemoved ? ` · cleaned ${res.invalidRemoved}` : ""}`;
  toast.success("🔔 " + msg, { duration: 6000 });
  setPushLastResult(msg);
  } else {
- toast.error("Push failed: " + (res.error || "send-fcm not configured"));
- setPushLastResult("Failed: " + (res.error || "send-fcm not configured"));
+ const msg = `In-app: ${targetUserIds.length} · Push: ${res.error || res.reason || "no tokens"}`;
+ toast.warning(msg);
+ setPushLastResult(msg);
  }
  } catch (err: any) {
  toast.dismiss(toastId);
@@ -7648,6 +7677,34 @@ ${tgBulkFooter}
  </button>
  {pushLastResult && (
  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
+ )}
+
+ {/* ==================== RECIPIENTS STATUS PANEL ==================== */}
+ {pushRecipients.length > 0 && (
+ <div className="mt-4 bg-gradient-to-br from-[#141422] to-[#0F0F1A] border border-yellow-500/25 rounded-xl overflow-hidden">
+ <div className="px-4 py-2.5 border-b border-white/8 flex items-center justify-between bg-yellow-500/5">
+ <div className="flex items-center gap-2">
+ <Bell size={13} className="text-yellow-400" />
+ <span className="text-[12px] font-semibold text-white">Notification Delivered</span>
+ </div>
+ <span className="text-[11px] text-yellow-400 font-bold">{pushRecipients.length} users</span>
+ </div>
+ <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
+ {pushRecipients.map((r, i) => (
+ <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+ <div className="flex items-center gap-2.5 min-w-0">
+ <div className="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-500/30 to-pink-500/30 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-yellow-100">
+ {(r.name || r.email || "U").charAt(0).toUpperCase()}
+ </div>
+ <div className="min-w-0">
+ <p className="text-[12px] text-white font-medium truncate">{r.name || "User"}</p>
+ </div>
+ </div>
+ <span className="text-[10.5px] text-[#957DAD] truncate max-w-[55%] text-right">{r.email || "—"}</span>
+ </div>
+ ))}
+ </div>
+ </div>
  )}
  </div>
  </div>
