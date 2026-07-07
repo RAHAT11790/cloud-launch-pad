@@ -171,6 +171,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       )}
       <div className="flex items-center gap-1 flex-shrink-0">
         <ThemeToggle />
+        {userId && <NotificationPanel userId={userId} onOpenContent={onOpenContent} />}
         {userId ? (
           <button
             onClick={onProfileClick}
