@@ -62,10 +62,26 @@ function getFirebaseApp() {
 async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
   try {
-    // Reuse an existing registration if the SW file is already installed
-    const existing = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
-    if (existing) return existing;
-    return await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+    const swPath = "/firebase-messaging-sw.js";
+    const isFirebaseSw = (reg: ServiceWorkerRegistration | null | undefined) => {
+      const url = reg?.active?.scriptURL || reg?.waiting?.scriptURL || reg?.installing?.scriptURL || "";
+      return url.includes(swPath);
+    };
+
+    // getRegistration(url) returns the root-scope registration even when its
+    // script is the old /sw.js image-cache worker. That old worker can mint FCM
+    // tokens but cannot display background browser notifications. Force-upgrade
+    // it to the Firebase messaging worker.
+    const existing = await navigator.serviceWorker.getRegistration("/");
+    if (isFirebaseSw(existing)) {
+      existing?.update?.().catch(() => {});
+      return existing!;
+    }
+    if (existing) await existing.unregister().catch(() => false);
+
+    const reg = await navigator.serviceWorker.register(swPath, { scope: "/", updateViaCache: "none" });
+    await navigator.serviceWorker.ready.catch(() => reg);
+    return reg;
   } catch (err) {
     console.warn("[FCM] SW registration failed", err);
     return null;
