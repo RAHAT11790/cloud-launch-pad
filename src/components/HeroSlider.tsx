@@ -246,7 +246,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
             aria-label={`Go to slide ${i + 1}`}
           >
             <div className={`absolute inset-0 rounded-full ${i === current ? "bg-white/40" : "bg-white/25"}`} />
-            {i === current && !paused && (
+            {i === current && !paused && settled && (
               <div
                 key={`prog-${current}-${progressKey}`}
                 className="absolute inset-0 rounded-full gradient-primary hero-progress-bar"
