@@ -22,7 +22,7 @@ const cors = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -256,10 +256,8 @@ export default {
     if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
-    const assembledOpenRange = streamOpenEndedRange(up, req.method, res, out, rawRange, effectiveHeaders);
-    if (assembledOpenRange) {
-      return new Response(assembledOpenRange, { status: res.status, headers: out });
-    }
+    // Keep RS range responses short and bounded. Re-assembling an open-ended
+    // browser range into the full file tail made skip/seek wait on slow mirrors.
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
 };

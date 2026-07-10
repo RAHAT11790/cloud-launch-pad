@@ -65,7 +65,8 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
-const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url);
+const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
+const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url, AN_PLAYBACK_HLS_PREFIX);
 
 const isAnPlayableHlsUrl = (url?: string | null) => {
   const raw = String(url || "").trim();
@@ -127,9 +128,8 @@ const buildAnSyntheticMaster = (
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
-  const codecs = String(stream.codecs || "").trim() || "avc1.4d401f,mp4a.40.2";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`},CODECS="${codecs.replace(/"/g, "")}"${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`}${audioRef}`,
   );
   lines.push(buildAnHlsPlaybackUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
@@ -513,6 +513,7 @@ import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetada
 import { usePremium } from "@/hooks/usePremium";
 import { isEpisodeLocked, isSeriesLocked } from "@/lib/premiumAccess";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { supabase } from "@/integrations/supabase/client";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;

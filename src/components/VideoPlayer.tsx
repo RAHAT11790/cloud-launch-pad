@@ -44,6 +44,7 @@ interface VideoServerOption {
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { supabase } from "@/integrations/supabase/client";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -129,6 +130,7 @@ const isHlsLikeUrl = (url: string): boolean => {
 };
 
 const isAnApiHlsProxyUrl = (url: string): boolean => /\/(?:an-api|an-playback)\/hls\?/i.test(String(url || ""));
+const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
 
 const sanitizeAnimeDownloadTitle = (value: string): string => {
   return String(value || "")
@@ -187,9 +189,8 @@ const isBypassSource = (url: string): boolean => {
 
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
   // http:// sources must use video-proxy because an HTTPS app cannot play raw HTTP.
-  // https:// RS files also get a proxy route when CDN/proxy is enabled, so slow
-  // Server 1 origins can stream through the same optimized range bridge instead
-  // of being trapped on the direct host only.
+  // HTTPS RS files should play DIRECT first: routing every healthy HTTPS server
+  // through video-proxy adds an extra hop and was the main source of RS latency.
   const isHttp = isInsecureHttpSource(url);
 
   if (isHttp) {
@@ -202,7 +203,7 @@ const isBypassSource = (url: string): boolean => {
   }
 
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (customProxyCandidate && (_cdnEnabled || preferProxy)) addCandidate(customProxyCandidate);
+  if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
   addCandidate(url);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
   return candidates;
@@ -848,9 +849,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   const trimmed = line.trim();
                   if (!trimmed) return line;
                   if (trimmed.startsWith("#")) {
-                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri)}"`);
+                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri, AN_PLAYBACK_HLS_PREFIX)}"`);
                   }
-                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed) : line;
+                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed, AN_PLAYBACK_HLS_PREFIX) : line;
                 })
                 .join("\n")
             : decoded;
@@ -2606,42 +2607,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Skip the bandwidth probe on cold-start — it costs ~1-2s before the first
-      // frame renders. We start from an optimistic estimate and let ABR correct
-      // within the next few fragments; on modern connections this is invisible
-      // and on slow ones ABR drops within one segment.
-      testBandwidth: false,
-      abrEwmaDefaultEstimate: 8_000_000,
-      abrBandWidthFactor: 0.95,
-      abrBandWidthUpFactor: 0.85,
+      testBandwidth: true,
+      abrEwmaDefaultEstimate: 5_000_000,
+      abrBandWidthFactor: 0.9,
+      abrBandWidthUpFactor: 0.7,
       abrMaxWithRealBitrate: true,
-      // Big forward buffer so in-buffer seeks are instant, small back buffer so
-      // memory stays flat. maxMaxBufferLength capped to 240s so far-forward seeks
-      // don't have to flush 10 minutes of media before decoding new chunks.
-      backBufferLength: 20,
-      maxBufferLength: 90,
-      maxMaxBufferLength: 240,
-      maxBufferSize: 120 * 1024 * 1024,
-      maxBufferHole: 0.3,
-      highBufferWatchdogPeriod: 1,
-      nudgeMaxRetry: 12,
+      backBufferLength: 90,
+      maxBufferLength: 60,
+      maxMaxBufferLength: 600,
+      maxBufferSize: 200 * 1024 * 1024,
+      maxBufferHole: 0.5,
+      highBufferWatchdogPeriod: 2,
+      nudgeMaxRetry: 8,
       nudgeOffset: 0.1,
-      maxFragLookUpTolerance: 0.2,
-      // Start on the lowest rendition — first frame in <1s, then ABR ramps up.
-      startLevel: 0,
+      maxFragLookUpTolerance: 0.25,
+      startLevel: -1,
       startFragPrefetch: true,
       progressive: true,
-      // Aggressive first-try timeouts, but many retries so flaky servers still recover.
-      manifestLoadingTimeOut: 5000,
-      manifestLoadingMaxRetry: 6,
-      manifestLoadingRetryDelay: 120,
-      levelLoadingTimeOut: 5000,
-      levelLoadingMaxRetry: 6,
-      levelLoadingRetryDelay: 120,
-      fragLoadingTimeOut: 12000,
-      fragLoadingMaxRetry: 10,
-      fragLoadingRetryDelay: 120,
-      appendErrorMaxRetry: 6,
+      manifestLoadingTimeOut: 7000,
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 250,
+      levelLoadingTimeOut: 7000,
+      levelLoadingMaxRetry: 4,
+      levelLoadingRetryDelay: 250,
+      fragLoadingTimeOut: 16000,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 250,
+      appendErrorMaxRetry: 4,
       capLevelToPlayerSize: true,
       renderTextTracksNatively: false,
     });
@@ -2745,6 +2737,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
+      console.warn("[HLS] playback error", {
+        type: data.type,
+        details: data.details,
+        fatal: data.fatal,
+        code: data.response?.code,
+      });
       if (!data.fatal) return;
       const savedBeforeRecovery = preserveResumePoint(videoRef.current?.currentTime || 0);
       const recoverableTrackDetails = new Set([
@@ -2764,11 +2762,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
 
       hlsFatalRetriesRef.current += 1;
-      const fatalRetryLimit = manualQualitySelectedRef.current ? 5 : 2;
+      const fatalRetryLimit = isAnimeSaltContent ? 8 : (manualQualitySelectedRef.current ? 5 : 2);
       if (hlsFatalRetriesRef.current > fatalRetryLimit) {
         try { hls.destroy(); } catch {}
         hlsRef.current = null;
-        tryNextPlaybackRouteRef.current(savedBeforeRecovery);
+        if (!isAnimeSaltContent || [403, 410].includes(Number(data.response?.code || 0))) {
+          tryNextPlaybackRouteRef.current(savedBeforeRecovery);
+        } else {
+          setVideoError(false);
+          setIsBuffering(false);
+        }
         return;
       }
 
@@ -3152,10 +3155,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (isAnimeSaltContent || isHlsSrc) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
     const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
-      ? 24000
+      ? 12000
       : /^https:\/\//i.test(raw)
-        ? 45000
-        : 12000;
+        ? 10000
+        : 9000;
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
@@ -3742,10 +3745,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hardStallTimer) clearTimeout(hardStallTimer);
       const raw = activeSourceBaseRef.current || sourceBaseRef.current || currentSrc;
       const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
-        ? 22000
+        ? 12000
         : /^https:\/\//i.test(raw)
-          ? 45000
-          : 10000;
+          ? 15000
+          : 9000;
       hardStallTimer = setTimeout(() => {
         if (v.readyState < 2 && !v.paused) {
           tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
@@ -3925,6 +3928,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return Math.min(Math.max(target, 0), v.duration);
   }, []);
 
+  const isTimeBuffered = useCallback((v: HTMLVideoElement, time: number, margin = 0.75) => {
+    try {
+      const ranges = v.buffered;
+      for (let i = 0; i < ranges.length; i += 1) {
+        if (time >= ranges.start(i) - margin && time <= ranges.end(i) + margin) return true;
+      }
+    } catch {}
+    return false;
+  }, []);
+
+  const fastSeekTo = useCallback((v: HTMLVideoElement, target: number) => {
+    const wasPlaying = !v.paused || userPlaybackIntentRef.current;
+    if (!isTimeBuffered(v, target)) setIsBuffering(true);
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch {
+      try { v.currentTime = target; } catch {}
+    }
+    if (wasPlaying && !adGateActiveRef.current) {
+      window.setTimeout(() => { v.play().catch(() => {}); }, 0);
+    }
+  }, [isTimeBuffered]);
+
   const showSkipPill = useCallback((seconds: number) => {
     const side: "left" | "right" = seconds > 0 ? "right" : "left";
     const acc = skipAccumRef.current;
@@ -3958,20 +3985,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = nextTime;
-    setIsBuffering(true);
-    try {
-      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(nextTime);
-      else v.currentTime = nextTime;
-    } catch {
-      v.currentTime = nextTime;
-    }
+    fastSeekTo(v, nextTime);
     if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${(nextTime / v.duration) * 100}%`;
     if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(nextTime)} / ${formatTime(v.duration)}`;
     setCurrentTime(nextTime);
 
     showSkipPill(seconds);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, showSkipPill]);
+  }, [fastSeekTo, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, showSkipPill]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
@@ -4050,16 +4071,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = target;
-    setIsBuffering(true);
-    try {
-      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
-      else v.currentTime = target;
-    } catch { v.currentTime = target; }
+    fastSeekTo(v, target);
     if (progressRef.current && v.duration > 0) progressRef.current.style.width = `${pct * 100}%`;
     if (timeDisplayRef.current && v.duration > 0) timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     setCurrentTime(target);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [fastSeekTo, getSafeSeekTime, resetHideTimer]);
 
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -4077,16 +4094,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = target;
-    setIsBuffering(true);
-    try {
-      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
-      else v.currentTime = target;
-    } catch { v.currentTime = target; }
+    fastSeekTo(v, target);
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${pct * 100}%`;
     }
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [fastSeekTo, getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -4100,10 +4113,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = target;
-    try {
-      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
-      else v.currentTime = target;
-    } catch { v.currentTime = target; }
+    fastSeekTo(v, target);
 
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;
@@ -4111,7 +4121,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [getSafeSeekTime]);
+  }, [fastSeekTo, getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
