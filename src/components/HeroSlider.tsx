@@ -48,7 +48,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   // 1.5s (no new prop update in that window). Then flip `settled` so the
   // auto-advance timer + progress bar can start.
   useEffect(() => {
-    if (!slides || slides.length === 0) return;
+    if (!slides || renderSlides.length === 0) return;
     const t = setTimeout(() => {
       setRenderSlides(slides);
       setCurrent(0);
@@ -101,9 +101,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   // Preload neighbor backdrops for snappy swipe
   useEffect(() => {
-    if (slides.length <= 1) return;
-    const next = slides[(current + 1) % slides.length];
-    const prev = slides[(current - 1 + slides.length) % slides.length];
+    if (renderSlides.length <= 1) return;
+    const next = renderSlides[(current + 1) % renderSlides.length];
+    const prev = renderSlides[(current - 1 + renderSlides.length) % renderSlides.length];
     [next, prev].forEach((s) => {
       if (!s?.backdrop) return;
       const i = new Image();
@@ -113,9 +113,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   }, [current, slides]);
 
   const goTo = useCallback((idx: number) => {
-    setCurrent(((idx % slides.length) + slides.length) % slides.length);
+    setCurrent(((idx % renderSlides.length) + renderSlides.length) % renderSlides.length);
     setProgressKey((k) => k + 1);
-  }, [slides.length]);
+  }, [renderSlides.length]);
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.changedTouches[0];
@@ -135,7 +135,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     goTo(dx > 0 ? current - 1 : current + 1);
   };
 
-  if (slides.length === 0) {
+  if (renderSlides.length === 0) {
     return (
       <div className="relative w-full h-[42vh] min-h-[300px] bg-card flex items-center justify-center" style={{ boxShadow: "var(--neu-shadow)" }}>
         <p className="text-muted-foreground">No content available</p>
@@ -143,7 +143,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     );
   }
 
-  const slide = slides[current];
+  const slide = renderSlides[current];
   if (!slide) return null;
 
   return (
@@ -155,7 +155,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       onTouchEnd={handleTouchEnd}
     >
       {/* Cross-fade backdrops — single layer per slide, pure CSS opacity */}
-      {slides.map((s, i) => (
+      {renderSlides.map((s, i) => (
         <img
           key={s.id + i}
           src={optimizedImageUrl(s.backdrop, "backdrop")}
@@ -244,7 +244,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       {/* Slide indicators with CSS progress (auto-pauses with the timer because key resets) */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-        {slides.map((_, i) => (
+        {renderSlides.map((_, i) => (
           <button
             key={i}
             onClick={() => goTo(i)}
