@@ -90,7 +90,7 @@ const isVideoProxyPlaybackUrl = (value: string, configuredBase?: string): boolea
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
 const RS_VALID_SOURCE_TTL_MS = 10 * 60 * 1000;
-const RS_SEEK_GRACE_MS = 25_000;
+const RS_SEEK_GRACE_MS = 60_000;
 const RS_SEEK_PROXY_RESCUE_MS = 18_000;
 const RS_NORMAL_RELOAD_LIMIT = 2;
 const RS_SEEK_RELOAD_LIMIT = 2;
@@ -2140,6 +2140,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     const savedTime = lastKnownTime || v?.currentTime || lastPlaybackPositionRef.current || 0;
     const isSeekRecovery = Date.now() < seekRecoveryUntilRef.current;
+    if (isSeekRecovery && isCurrentPlaybackSourceValid()) {
+      // A far seek on non-faststart MP4 can legitimately take 15-30s while the
+      // browser walks MP4 byte ranges. Treat it as buffering, not expired. Route
+      // switching here aborts the in-flight range and creates the endless loader.
+      return false;
+    }
     const reloadCurrentHealthyRoute = (limit: number, delayBase = 220) => {
       rsSoftRetriesRef.current = (rsSoftRetriesRef.current || 0) + 1;
       if (rsSoftRetriesRef.current > limit || !v) return false;
@@ -3241,6 +3247,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
+    if (activeSeekTargetRef.current !== null) return;
     if (isHlsLikeUrl(activeSourceBaseRef.current)) return;
     if (!noServerSwitch && isInsecureHttpSource(activeSourceBaseRef.current) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
@@ -3253,6 +3260,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // domain swap has produced the final http:// URL.
   useEffect(() => {
     if (!playbackRouteReady || !effectiveVideoServers.length) return;
+    if (activeSeekTargetRef.current !== null) return;
     if (isHlsLikeUrl(sourceBaseRef.current || src)) return;
     const safeServerIndex = Math.min(activeServerIndex, effectiveVideoServers.length - 1);
     if (safeServerIndex !== activeServerIndex) setActiveServerIndex(safeServerIndex);
@@ -3280,6 +3288,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
+      if (activeSeekTargetRef.current !== null && isCurrentPlaybackSourceValid()) return;
       if (v.readyState < 2) {
         tryNextPlaybackRoute(v.currentTime || 0);
       }
@@ -3870,7 +3879,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 400);
-      scheduleHardStallRecovery(activeSeekTargetRef.current !== null ? 22_000 : 9000);
+      scheduleHardStallRecovery(activeSeekTargetRef.current !== null ? 45_000 : 9000);
     };
     const onPlaying = () => {
       markPlaybackSourceHealthy();
@@ -3898,7 +3907,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, 1500);
       const raw = activeSourceBaseRef.current || sourceBaseRef.current || currentSrc;
       const stallDelay = activeSeekTargetRef.current !== null
-        ? 22_000
+        ? 45_000
         : isVideoProxyPlaybackUrl(currentSrc, proxyUrl)
           ? 5500
           : manualQualitySelectedRef.current || isInsecureHttpSource(raw)
