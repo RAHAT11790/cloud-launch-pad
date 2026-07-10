@@ -480,7 +480,7 @@ div[style*="z-index: 2147483647"],
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     will-change: transform;
-    animation: heroBackdropDrift 8200ms linear both;
+    animation: heroBackdropDrift 8000ms linear both;
   }
   .hero-panel-out .hero-backdrop {
     animation: none;
