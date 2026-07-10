@@ -47,6 +47,7 @@ import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
+import VideoServersManager from "@/components/admin/VideoServersManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
@@ -10203,133 +10204,15 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
  />
  )}
 
- {/* ==================== VIDEO SERVERS ==================== */}
- {activeSection === "video-servers" && (() => {
- const VideoServersSection = () => {
- const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
- const [vsLoading, setVsLoading] = useState(true);
- const [newName, setNewName] = useState("");
- const [newDomain, setNewDomain] = useState("");
+        {/* ==================== VIDEO SERVERS ==================== */}
+        {activeSection === "video-servers" && (
+          <VideoServersManager
+            glassCard={glassCard}
+            inputClass={inputClass}
+            btnPrimary={btnPrimary}
+          />
+        )}
 
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
- const val = snap.val();
- if (val && Array.isArray(val)) {
- setServers(val.filter((s: any) => s && s.domain));
- } else if (val && typeof val === "object") {
- const arr = Object.values(val).filter((s: any) => s && s.domain) as any[];
- setServers(arr);
- } else {
- setServers([]);
- }
- setVsLoading(false);
- });
- return () => unsub();
- }, []);
-
- const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
- await set(ref(db, "settings/videoServers"), updated);
- toast.success("✅ Server list saved!");
- };
-
- const addServer = () => {
- if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
- const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
- saveServers(updated);
- setNewName("");
- setNewDomain("");
- };
-
- const toggleLocked = (idx: number) => {
- const updated = [...servers];
- updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
- saveServers(updated);
- };
-
- const removeServer = (idx: number) => {
- const updated = servers.filter((_, i) => i !== idx);
- saveServers(updated);
- };
-
- const moveServer = (idx: number, dir: -1 | 1) => {
- const newIdx = idx + dir;
- if (newIdx < 0 || newIdx >= servers.length) return;
- const updated = [...servers];
- [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
- saveServers(updated);
- };
-
- return (
- <div>
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
- <Activity size={14} className="text-cyan-400" /> video server manageার
- </h3>
- <p className="text-[11px] text-zinc-400 mb-4">
- Add at least 2 servers to show the server-switch button in the video player। only domain change will be, file পাথ কthis থাকবে।
- </p>
-
- {vsLoading ? (
- <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
- ) : servers.length === 0 ? (
- <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">any server none। নিচে from add ।</p>
- ) : (
- <div className="space-y-2 mb-4">
- {servers.map((srv, idx) => (
- <div key={idx} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
- <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
- <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
- </div>
- <div className="flex-1 min-w-0">
- <span className="text-[12px] font-medium block truncate flex items-center gap-1">
- {srv.name}
- {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
- </span>
- <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
- </div>
- <div className="flex items-center gap-1">
- <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
- className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
- {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
- </button>
- <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
- <ChevronLeft size={12} />
- </button>
- <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
- <ChevronRight size={12} />
- </button>
- <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
- <Trash2 size={13} />
- </button>
- </div>
- </div>
- ))}
- </div>
- )}
-
- <div className="border border-dashed border-zinc-700 rounded-xl p-3 space-y-2">
- <p className="text-[11px] text-zinc-400 font-medium">➕ new server add </p>
- <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="server name (such as: Server 1)" />
- <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="domain (such as: https://example.com)" />
- <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
- <Plus size={14} /> server add 
- </button>
- </div>
- </div>
-
- <div className={`${glassCard} p-4`}>
- <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 how to task করে?</h4>
- <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
- <li>With at least 2 servers, the player shows a "Server" button</li>
- <li>Switching server only changes the domain — channel/file ID stays the same</li>
- <li>example: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
- </ul>
- </div>
- </div>
- );
- };
- return <VideoServersSection />;
- })()}
 
  {activeSection === "comments" && (
  <AdminCommentsSection
