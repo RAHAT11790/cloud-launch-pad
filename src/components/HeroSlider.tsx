@@ -276,7 +276,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   }
 
   const slide = deck[current] || deck[0];
-  const metaLabel = slide.isCustom ? "Featured" : slide.type === "webseries" ? "Series" : "Movie";
+  const metaTypeLabel = slide.isCustom ? "Featured" : slide.type === "webseries" ? "Series" : "Movie";
   const sourceIndex = getSourceIndex(slide);
 
   const handlePrimary = () => {
@@ -287,11 +287,13 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     onPlay(sourceIndex);
   };
 
+  const posterSrc = slide.poster || slide.backdrop;
+
   return (
     <section
       data-no-swipe="true"
       aria-label="Featured anime"
-      className="relative w-full h-[52vh] min-h-[380px] max-h-[560px] overflow-hidden bg-background select-none"
+      className="relative w-full h-[58vh] min-h-[440px] max-h-[600px] overflow-hidden bg-background select-none"
       style={{ touchAction: "pan-y pinch-zoom", "--hero-drag-x": `${dragDx * 0.22}px` } as CSSProperties}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -322,88 +324,87 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div className="hero-vignette" aria-hidden />
 
-      <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-5 pb-[72px] pointer-events-none hero-copy-enter sm:px-8 sm:pb-[86px]">
-        <div className="max-w-[660px]">
-          <div className="flex items-center gap-2 mb-3 pointer-events-auto">
-            <span className="hero-kicker">
-              {metaLabel}
+      <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
+        <button
+          type="button"
+          onClick={handlePrimary}
+          className="hero-info-card pointer-events-auto"
+          aria-label={`Watch ${slide.title}`}
+        >
+          <span className="hero-info-poster">
+            <img
+              src={optimizedImageUrl(posterSrc, "poster")}
+              alt=""
+              aria-hidden
+              draggable={false}
+              loading="eager"
+              decoding="async"
+            />
+          </span>
+
+          <span className="hero-info-body">
+            <span
+              className="hero-info-title"
+              style={{
+                ...(slide.titleColor ? { color: slide.titleColor } : {}),
+                ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
+              }}
+            >
+              {slide.title}
             </span>
-            {slide.year && !slide.isCustom && (
-              <span className="hero-submeta">
-                {slide.year}
-              </span>
-            )}
-            {slide.rating && !slide.isCustom && (
-              <span className="hero-submeta">
-                ★ {slide.rating}
-              </span>
-            )}
-          </div>
+            <span className="hero-info-meta">
+              {slide.rating && !slide.isCustom && (
+                <span className="hero-info-rating">★ {slide.rating}</span>
+              )}
+              {slide.year && !slide.isCustom && (
+                <span className="hero-info-dot">{slide.year}</span>
+              )}
+              {!slide.isCustom && (
+                <span className="hero-info-dot">{metaTypeLabel}</span>
+              )}
+              {slide.episodeInfo && !slide.isCustom && (
+                <span className="hero-info-dot">{slide.episodeInfo}</span>
+              )}
+              {slide.languageInfo && !slide.isCustom && (
+                <span className="hero-info-lang">{slide.languageInfo}</span>
+              )}
+            </span>
+          </span>
 
-          <h1
-            className="hero-title pointer-events-auto line-clamp-2"
-            style={{
-              ...(slide.titleColor ? { color: slide.titleColor } : {}),
-              ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-              letterSpacing: 0,
-            }}
+          <span
+            className="hero-watch-btn"
+            role="presentation"
           >
-            {slide.title}
-          </h1>
+            <Play className="w-3.5 h-3.5 fill-current" />
+            <span>WATCH</span>
+          </span>
+        </button>
 
-          {slide.isCustom && slide.description ? (
-            <p className="max-w-[340px] text-[13px] leading-snug text-primary-foreground/78 mb-5 line-clamp-2 pointer-events-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.75)]">
-              {slide.description}
-            </p>
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap mb-5 pointer-events-auto">
-              {(slide.episodeInfo || slide.subtitle) && (
-                <span className="hero-meta-pill">{slide.episodeInfo || slide.subtitle}</span>
-              )}
-              {slide.languageInfo && <span className="hero-meta-pill">{slide.languageInfo}</span>}
-            </div>
-          )}
-
-          <div className="pointer-events-auto">
-            <button
-              type="button"
-              onClick={handlePrimary}
-              className="hero-play-button group"
-              aria-label={`Play ${slide.title}`}
-            >
-              <span className="hero-play-icon">
-                <Play className="w-4 h-4 fill-current" />
-              </span>
-              <span>Watch Now</span>
-            </button>
+        {deck.length > 1 && (
+          <div className="mt-4 flex items-center justify-center gap-1.5" aria-label="Hero slides">
+            {deck.map((item, index) => (
+              <button
+                type="button"
+                key={item.id}
+                onClick={(e) => { e.stopPropagation(); goTo(index); }}
+                className="hero-dot"
+                style={{ flexGrow: index === current ? 1 : 0, width: index === current ? undefined : 14, maxWidth: index === current ? 48 : 14 }}
+                aria-label={`Go to ${item.title}`}
+                aria-current={index === current ? "true" : undefined}
+              >
+                <span className="hero-dot-track" />
+                {index === current && !paused && !transitioning && (
+                  <span
+                    key={`progress-${current}-${progressKey}`}
+                    className="hero-dot-fill"
+                    style={{ animationDuration: `${SLIDE_DURATION}ms` }}
+                  />
+                )}
+              </button>
+            ))}
           </div>
-        </div>
+        )}
       </div>
-
-      {deck.length > 1 && (
-        <div className="absolute bottom-6 left-5 right-5 z-10 flex items-center gap-1.5" aria-label="Hero slides">
-          {deck.map((item, index) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => goTo(index)}
-              className="hero-dot"
-              style={{ flexGrow: index === current ? 1 : 0, width: index === current ? undefined : 18 }}
-              aria-label={`Go to ${item.title}`}
-              aria-current={index === current ? "true" : undefined}
-            >
-              <span className="hero-dot-track" />
-              {index === current && !paused && !transitioning && (
-                <span
-                  key={`progress-${current}-${progressKey}`}
-                  className="hero-dot-fill"
-                  style={{ animationDuration: `${SLIDE_DURATION}ms` }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </section>
   );
 };
