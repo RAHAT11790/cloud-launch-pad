@@ -293,7 +293,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     <section
       data-no-swipe="true"
       aria-label="Featured anime"
-      className="relative w-full h-[58vh] min-h-[440px] max-h-[600px] overflow-hidden bg-background select-none"
+      className="relative w-full h-[44vh] min-h-[340px] max-h-[460px] overflow-hidden bg-background select-none"
       style={{ touchAction: "pan-y pinch-zoom", "--hero-drag-x": `${dragDx * 0.22}px` } as CSSProperties}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
