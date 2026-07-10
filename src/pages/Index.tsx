@@ -65,7 +65,6 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
-const AN_PLAYBACK_HLS_PREFIX = `${String(import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
 const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url, AN_PLAYBACK_HLS_PREFIX);
 
 const isAnPlayableHlsUrl = (url?: string | null) => {

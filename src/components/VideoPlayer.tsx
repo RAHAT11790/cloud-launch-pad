@@ -44,6 +44,7 @@ interface VideoServerOption {
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { supabase } from "@/integrations/supabase/client";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -129,7 +130,7 @@ const isHlsLikeUrl = (url: string): boolean => {
 };
 
 const isAnApiHlsProxyUrl = (url: string): boolean => /\/(?:an-api|an-playback)\/hls\?/i.test(String(url || ""));
-const AN_PLAYBACK_HLS_PREFIX = `${String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
+const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
 
 const sanitizeAnimeDownloadTitle = (value: string): string => {
   return String(value || "")

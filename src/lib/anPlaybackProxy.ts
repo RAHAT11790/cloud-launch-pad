@@ -1,5 +1,6 @@
 import { db, ref, onValue } from "@/lib/firebase";
 import { getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { supabase } from "@/integrations/supabase/client";
 
 const AN_PLAYBACK_CACHE_KEY = "rs_an_playback_route_v2";
 
@@ -30,7 +31,7 @@ const writeCachedRoute = (value: string) => {
 };
 
 export const getCachedAnPlaybackHlsPrefix = () => {
-  const envBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const envBase = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
   const base = readCachedRoute();
   return base ? `${base}/hls` : "";
