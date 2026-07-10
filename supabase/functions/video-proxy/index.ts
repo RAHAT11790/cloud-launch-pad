@@ -26,7 +26,7 @@ const PASS = ["content-type", "content-length", "content-range", "accept-ranges"
 // answer with the whole remaining file (often 40MB-2GB), which makes Server 1
 // feel slow and causes Server 2/HTTP proxy requests to hang. Bounded ranges let
 // the browser request exactly the next piece it needs and keep seeking snappy.
-const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
+const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -302,10 +302,10 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  const assembledOpenRange = streamOpenEndedRange(effectiveUrl, req.method, up, out, rawRange, effectiveHeaders, ac.signal);
-  if (assembledOpenRange) {
-    return new Response(assembledOpenRange, { status: up.status, statusText: up.statusText, headers: out });
-  }
-
+  // For RS direct files, keep the upstream response bounded to the small range
+  // requested in alignMediaRange(). Do NOT re-assemble `bytes=N-` into a single
+  // huge tail response; that was tying up slow mirrors and made seek/skip wait
+  // until the edge had streamed a long body. Browsers handle short 206 chunks and
+  // immediately ask for the next window, which feels much closer to native download.
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });
 });
