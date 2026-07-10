@@ -419,6 +419,15 @@ Deno.serve(async (req) => {
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
+  try {
+    const faststart = await tryFaststartMp4(req, upstreamUrl, rawRange, baseHeaders, ac.signal);
+    if (faststart) return faststart;
+  } catch {
+    // Fall through to the normal streaming proxy if fast-start rewriting cannot
+    // be applied for this source. Playback must never fail only because the
+    // optimization path could not parse a particular MP4 layout.
+  }
+
   let up: Response | null = null;
   let lastError = "";
   let effectiveUrl = upstreamUrl;
