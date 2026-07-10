@@ -7,6 +7,7 @@ export interface HeroSlide {
   id: string;
   title: string;
   backdrop: string;
+  poster?: string;
   subtitle: string;
   rating: string;
   year: string;
@@ -25,9 +26,10 @@ interface HeroSliderProps {
   onInfo?: (index: number) => void;
 }
 
-const SLIDE_DURATION = 8200;
+const SLIDE_DURATION = 8000;
 const TRANSITION_MS = 920;
 const MAX_SLIDES = 8;
+
 
 const imageReadyCache = new Map<string, Promise<void>>();
 
