@@ -47,6 +47,7 @@ import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
+import VideoServersManager from "@/components/admin/VideoServersManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
