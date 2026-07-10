@@ -57,34 +57,26 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     return () => unsub();
   }, []);
 
-  // Pick random titles for placeholder rotation — shuffle ONCE per meaningful
-  // titles change (not on every parent re-render / incremental Firebase snapshot),
-  // otherwise every render swaps `displayTitles[placeholderIdx]` to a new random
-  // string and the placeholder appears to flash through dozens of names/second.
-  const titlesKey = useMemo(() => {
-    // Cheap stable signature: sorted unique length + first/last title.
-    if (!animeTitles || animeTitles.length === 0) return "";
-    const first = animeTitles[0] || "";
-    const last = animeTitles[animeTitles.length - 1] || "";
-    return `${animeTitles.length}|${first}|${last}`;
+  // Placeholder rotation: wait until the titles list has been STABLE for 1.5s
+  // (Firebase's initial snapshot burst is over) before touching UI, then
+  // shuffle ONCE and cycle every 4s. Never re-shuffle mid-session — that was
+  // the "50-60 names flashing per 10s" bug.
+  const [settledTitles, setSettledTitles] = useState<string[]>([]);
+  useEffect(() => {
+    if (!animeTitles || animeTitles.length === 0) return;
+    const snapshot = animeTitles.slice(0, 200);
+    const t = setTimeout(() => {
+      const shuffled = [...snapshot].sort(() => Math.random() - 0.5).slice(0, 20);
+      setSettledTitles((prev) => (prev.length >= 5 ? prev : shuffled));
+    }, 1500);
+    return () => clearTimeout(t);
   }, [animeTitles]);
 
-  const shuffledRef = useRef<string[]>(["Search..."]);
-  const displayTitles = useMemo(() => {
-    if (!animeTitles || animeTitles.length === 0) {
-      shuffledRef.current = ["Search..."];
-      return shuffledRef.current;
-    }
-    const shuffled = [...animeTitles].sort(() => Math.random() - 0.5);
-    shuffledRef.current = shuffled.slice(0, Math.min(20, shuffled.length));
-    return shuffledRef.current;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titlesKey]);
+  const displayTitles = settledTitles.length > 0 ? settledTitles : ["Search..."];
 
-  // Rotate placeholder text
+  // Rotate placeholder text — only once titles have settled.
   useEffect(() => {
     if (displayTitles.length <= 1) return;
-    // Reset to first item whenever the list changes so the visible text is stable.
     setPlaceholderIdx(0);
     const interval = setInterval(() => {
       setAnimating(true);
@@ -92,7 +84,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         setPlaceholderIdx(prev => (prev + 1) % displayTitles.length);
         setAnimating(false);
       }, 300);
-    }, 3000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [displayTitles]);
 
