@@ -1973,6 +1973,7 @@ const Index = () => {
       id: item.id,
       title: item.title,
       backdrop: item.backdrop,
+      poster: item.poster,
       subtitle: item.type === "webseries" ? "Series" : "Movie",
       rating: item.rating,
       year: item.year,
@@ -1989,6 +1990,7 @@ const Index = () => {
         id: p.id,
         title: p.title,
         backdrop: p.backdrop,
+        poster: (p as any).poster || p.backdrop,
         subtitle: p.isCustom ? (p.description?.slice(0, 40) || "Custom Post") : (p.type === "webseries" ? "Series" : "Movie"),
         rating: p.rating || "",
         year: p.year || "",
@@ -1998,6 +2000,7 @@ const Index = () => {
         titleColor: p.titleColor || "",
         titleFont: p.titleFont || "",
       }));
+
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
       const filtered = randomSlides.filter(s => !pinnedIds.has(s.id));
       return [...pinnedSlides, ...filtered].slice(0, 8);
