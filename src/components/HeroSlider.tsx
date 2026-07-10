@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { Play, Info, Star } from "lucide-react";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
@@ -31,30 +31,45 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [current, setCurrent] = useState(0);
   const [progressKey, setProgressKey] = useState(0); // forces progress restart
   const [paused, setPaused] = useState(false);
+  // Internal, stable snapshot of the slides array. We do NOT render from the
+  // `slides` prop directly — the parent re-shuffles/re-orders it as Firebase
+  // snapshots stream in during the first few seconds, which visually looked
+  // like the slider was rapidly scrolling through many cards (even though
+  // `current` was still 0). Rendering from this snapshot fully decouples us
+  // from that churn.
+  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>(slides);
   const [settled, setSettled] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const slidesLenRef = useRef(slides.length);
-  slidesLenRef.current = slides.length;
+  const slidesLenRef = useRef(renderSlides.length);
+  slidesLenRef.current = renderSlides.length;
 
-  // Wait until the slides array has been STABLE for ~1.5s (Firebase's initial
-  // snapshot burst finished) before starting auto-advance. Otherwise the
-  // rapid prop churn made the slider "scroll very fast" during the first
-  // 5-10 seconds after page load.
+  // Debounce: adopt parent's slides only after their CONTENT has been stable
+  // for 1.5s. We key on a cheap content signature (length + joined ids) so
+  // that reference-only re-renders from the parent (which happen on every
+  // Firebase snapshot even when no slide actually changed) don't reset the
+  // debounce forever — which would freeze the slider on an empty snapshot.
+  const slidesSignature = useMemo(
+    () => slides.map((s) => s.id).join("|"),
+    [slides],
+  );
   useEffect(() => {
-    setSettled(false);
-    if (slides.length === 0) return;
+    if (!slides || slides.length === 0) return;
+    const snapshot = slides;
     const t = setTimeout(() => {
+      setRenderSlides(snapshot);
+      setCurrent(0);
+      setProgressKey((k) => k + 1);
       setSettled(true);
-      setProgressKey((k) => k + 1); // restart CSS progress bar in sync with timer
     }, 1500);
     return () => clearTimeout(t);
-  }, [slides.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slidesSignature]);
 
-  // Clamp current if slides change
+  // Clamp current if renderSlides changes
   useEffect(() => {
-    if (slides.length > 0 && current >= slides.length) setCurrent(0);
-  }, [slides.length, current]);
+    if (renderSlides.length > 0 && current >= renderSlides.length) setCurrent(0);
+  }, [renderSlides.length, current]);
 
   // Schedule next slide — only when settled, not paused, tab visible.
   useEffect(() => {
@@ -94,21 +109,21 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   // Preload neighbor backdrops for snappy swipe
   useEffect(() => {
-    if (slides.length <= 1) return;
-    const next = slides[(current + 1) % slides.length];
-    const prev = slides[(current - 1 + slides.length) % slides.length];
+    if (renderSlides.length <= 1) return;
+    const next = renderSlides[(current + 1) % renderSlides.length];
+    const prev = renderSlides[(current - 1 + renderSlides.length) % renderSlides.length];
     [next, prev].forEach((s) => {
       if (!s?.backdrop) return;
       const i = new Image();
       i.decoding = "async";
       i.src = optimizedImageUrl(s.backdrop, "backdrop");
     });
-  }, [current, slides]);
+  }, [current, renderSlides]);
 
   const goTo = useCallback((idx: number) => {
-    setCurrent(((idx % slides.length) + slides.length) % slides.length);
+    setCurrent(((idx % renderSlides.length) + renderSlides.length) % renderSlides.length);
     setProgressKey((k) => k + 1);
-  }, [slides.length]);
+  }, [renderSlides.length]);
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.changedTouches[0];
@@ -128,7 +143,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     goTo(dx > 0 ? current - 1 : current + 1);
   };
 
-  if (slides.length === 0) {
+  if (renderSlides.length === 0) {
     return (
       <div className="relative w-full h-[42vh] min-h-[300px] bg-card flex items-center justify-center" style={{ boxShadow: "var(--neu-shadow)" }}>
         <p className="text-muted-foreground">No content available</p>
@@ -136,7 +151,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     );
   }
 
-  const slide = slides[current];
+  const slide = renderSlides[current];
   if (!slide) return null;
 
   return (
@@ -148,7 +163,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       onTouchEnd={handleTouchEnd}
     >
       {/* Cross-fade backdrops — single layer per slide, pure CSS opacity */}
-      {slides.map((s, i) => (
+      {renderSlides.map((s, i) => (
         <img
           key={s.id + i}
           src={optimizedImageUrl(s.backdrop, "backdrop")}
@@ -237,7 +252,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       {/* Slide indicators with CSS progress (auto-pauses with the timer because key resets) */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-        {slides.map((_, i) => (
+        {renderSlides.map((_, i) => (
           <button
             key={i}
             onClick={() => goTo(i)}

@@ -57,10 +57,16 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     return () => unsub();
   }, []);
 
-  // Placeholder rotation: wait until the titles list has been STABLE for 1.5s
-  // (Firebase's initial snapshot burst is over) before touching UI, then
-  // shuffle ONCE and cycle every 4s. Never re-shuffle mid-session — that was
-  // the "50-60 names flashing per 10s" bug.
+  // Placeholder rotation: wait until titles CONTENT is stable for 1.5s (not
+  // just any array-ref change) before doing anything. Then shuffle ONCE and
+  // cycle every 4s. Never re-shuffle. This kills the "50-60 names flashing"
+  // bug caused by parent Index.tsx re-creating the animeTitles array on
+  // every render.
+  const titlesSignature = useMemo(() => {
+    if (!animeTitles || animeTitles.length === 0) return "";
+    return `${animeTitles.length}|${animeTitles[0]}|${animeTitles[animeTitles.length - 1]}`;
+  }, [animeTitles]);
+
   const [settledTitles, setSettledTitles] = useState<string[]>([]);
   useEffect(() => {
     if (!animeTitles || animeTitles.length === 0) return;
@@ -70,7 +76,8 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       setSettledTitles((prev) => (prev.length >= 5 ? prev : shuffled));
     }, 1500);
     return () => clearTimeout(t);
-  }, [animeTitles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titlesSignature]);
 
   const displayTitles = settledTitles.length > 0 ? settledTitles : ["Search..."];
 
