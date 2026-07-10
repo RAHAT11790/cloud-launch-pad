@@ -2606,37 +2606,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Fast but stable ABR: allow real bandwidth testing instead of forcing a
-      // guessed 8 Mbps path.
-      testBandwidth: true,
-      abrEwmaDefaultEstimate: 6_000_000,
+      // Skip the bandwidth probe on cold-start — it costs ~1-2s before the first
+      // frame renders. We start from an optimistic estimate and let ABR correct
+      // within the next few fragments; on modern connections this is invisible
+      // and on slow ones ABR drops within one segment.
+      testBandwidth: false,
+      abrEwmaDefaultEstimate: 8_000_000,
       abrBandWidthFactor: 0.95,
-      abrBandWidthUpFactor: 0.9,
-      // Ultra buffer — skip lands inside preloaded chunks nearly every time.
-      backBufferLength: 30,
-      maxBufferLength: 180,
-      maxMaxBufferLength: 600,
-      maxBufferSize: 200 * 1024 * 1024,
-      maxBufferHole: 0.5,
+      abrBandWidthUpFactor: 0.85,
+      abrMaxWithRealBitrate: true,
+      // Big forward buffer so in-buffer seeks are instant, small back buffer so
+      // memory stays flat. maxMaxBufferLength capped to 240s so far-forward seeks
+      // don't have to flush 10 minutes of media before decoding new chunks.
+      backBufferLength: 20,
+      maxBufferLength: 90,
+      maxMaxBufferLength: 240,
+      maxBufferSize: 120 * 1024 * 1024,
+      maxBufferHole: 0.3,
       highBufferWatchdogPeriod: 1,
-      nudgeMaxRetry: 10,
-      nudgeOffset: 0.15,
-      maxFragLookUpTolerance: 0.25,
-      startLevel: -1,
+      nudgeMaxRetry: 12,
+      nudgeOffset: 0.1,
+      maxFragLookUpTolerance: 0.2,
+      // Start on the lowest rendition — first frame in <1s, then ABR ramps up.
+      startLevel: 0,
       startFragPrefetch: true,
       progressive: true,
-      // Aggressive but bounded retries.
-      manifestLoadingTimeOut: 7000,
-      manifestLoadingMaxRetry: 8,
-      manifestLoadingRetryDelay: 150,
-      levelLoadingTimeOut: 7000,
-      levelLoadingMaxRetry: 8,
-      levelLoadingRetryDelay: 150,
-      fragLoadingTimeOut: 20000,
-      fragLoadingMaxRetry: 12,
-      fragLoadingRetryDelay: 150,
+      // Aggressive first-try timeouts, but many retries so flaky servers still recover.
+      manifestLoadingTimeOut: 5000,
+      manifestLoadingMaxRetry: 6,
+      manifestLoadingRetryDelay: 120,
+      levelLoadingTimeOut: 5000,
+      levelLoadingMaxRetry: 6,
+      levelLoadingRetryDelay: 120,
+      fragLoadingTimeOut: 12000,
+      fragLoadingMaxRetry: 10,
+      fragLoadingRetryDelay: 120,
       appendErrorMaxRetry: 6,
-      capLevelToPlayerSize: false,
+      capLevelToPlayerSize: true,
       renderTextTracksNatively: false,
     });
     hlsRef.current = hls;
