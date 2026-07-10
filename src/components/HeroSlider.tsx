@@ -33,28 +33,31 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const slidesLenRef = useRef(slides.length);
+  slidesLenRef.current = slides.length;
 
   // Clamp current if slides change
   useEffect(() => {
     if (slides.length > 0 && current >= slides.length) setCurrent(0);
   }, [slides.length, current]);
 
-  // Schedule next slide — only when visible & not paused
-  const scheduleNext = useCallback(() => {
+  // Schedule next slide — only re-runs when `current`/`progressKey` change
+  // (i.e. an actual slide advance or manual restart), NOT on every parent
+  // re-render / Firebase snapshot that shuffles the `slides` array identity.
+  // Previously scheduleNext depended on `slides.length` + `paused`, so
+  // incremental Firebase loads reset the timer many times in the first few
+  // seconds and made auto-advance look like it was flashing through slides.
+  useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (slides.length <= 1) return;
+    if (slidesLenRef.current <= 1) return;
     if (paused) return;
     if (typeof document !== "undefined" && document.hidden) return;
     timerRef.current = setTimeout(() => {
-      setCurrent((c) => (c + 1) % slides.length);
+      setCurrent((c) => (c + 1) % Math.max(1, slidesLenRef.current));
       setProgressKey((k) => k + 1);
     }, SLIDE_DURATION);
-  }, [slides.length, paused]);
-
-  useEffect(() => {
-    scheduleNext();
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [scheduleNext, current, progressKey]);
+  }, [current, progressKey, paused]);
 
   // Pause on tab hidden / blur; resume on focus
   useEffect(() => {
@@ -66,11 +69,15 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
         setProgressKey((k) => k + 1);
       }
     };
+    const onBlur = () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    const onFocus = () => setProgressKey((k) => k + 1);
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("blur", () => { if (timerRef.current) clearTimeout(timerRef.current); });
-    window.addEventListener("focus", () => setProgressKey((k) => k + 1));
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
