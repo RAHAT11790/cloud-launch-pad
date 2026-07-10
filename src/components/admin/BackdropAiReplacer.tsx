@@ -48,8 +48,15 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
 };
 
 
+// ---------------------------------------------------------------------------
+// Module-level cache so re-mounting this tab in the admin panel paints INSTANTLY
+// from the last-known Firebase snapshot instead of showing an empty grid while
+// the RTDB listener re-subscribes. The listener still updates the cache live.
+// ---------------------------------------------------------------------------
+let backdropItemsCache: Item[] = [];
+
 const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<Item[]>(() => backdropItemsCache);
   const [filter, setFilter] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("backdrop");
@@ -83,7 +90,11 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
         addedAt: Number(v[id]?.addedAt || v[id]?.createdAt || v[id]?.updatedAt || 0),
       }));
-      setItems((prev) => [...ws, ...prev.filter((p) => p.type !== "webseries")]);
+      setItems((prev) => {
+        const next = [...ws, ...prev.filter((p) => p.type !== "webseries")];
+        backdropItemsCache = next;
+        return next;
+      });
     });
     const u2 = onValue(ref(db, "movies"), (snap) => {
       const v = snap.val() || {};
@@ -94,10 +105,15 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
         addedAt: Number(v[id]?.addedAt || v[id]?.createdAt || v[id]?.updatedAt || 0),
       }));
-      setItems((prev) => [...prev.filter((p) => p.type !== "movies"), ...mv]);
+      setItems((prev) => {
+        const next = [...prev.filter((p) => p.type !== "movies"), ...mv];
+        backdropItemsCache = next;
+        return next;
+      });
     });
     return () => { u1(); u2(); };
   }, []);
+
 
   const visible = useMemo(() => {
     const q = filter.trim();
