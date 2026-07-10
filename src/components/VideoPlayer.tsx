@@ -2009,6 +2009,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return recentSlowSeeks.length >= 3 && autoQualityShiftCountRef.current < 1;
   }, []);
 
+  const clearSeekRescueTimer = useCallback(() => {
+    if (seekRescueTimerRef.current) {
+      clearTimeout(seekRescueTimerRef.current);
+      seekRescueTimerRef.current = null;
+    }
+  }, []);
+
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
@@ -4046,10 +4053,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const fastSeekTo = useCallback((v: HTMLVideoElement, target: number) => {
     const wasPlaying = !v.paused || userPlaybackIntentRef.current;
     const buffered = isTimeBuffered(v, target);
-    if (seekRescueTimerRef.current) {
-      clearTimeout(seekRescueTimerRef.current);
-      seekRescueTimerRef.current = null;
-    }
+    clearSeekRescueTimer();
     seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
     if (!buffered) setIsBuffering(true);
     try {
@@ -4064,8 +4068,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       seekRescueTimerRef.current = setTimeout(() => {
         const liveVideo = videoRef.current;
         if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
-        const stillWaitingNearTarget = liveVideo.readyState < 3 || Math.abs((liveVideo.currentTime || 0) - target) > 2;
-        if (!stillWaitingNearTarget) return;
+        // If canplay/seeked/playing fired, this timer is cleared before running.
+        // Reaching this point means the direct server has not delivered the seek
+        // quickly enough, even if readyState is stale from the previous buffer.
         const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
           .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
         if (!proxyCandidate) return;
@@ -4081,7 +4086,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (wasPlaying && !adGateActiveRef.current) {
       window.setTimeout(() => { v.play().catch(() => {}); }, 0);
     }
-  }, [cdnEnabled, currentSrc, isTimeBuffered, proxyApiKey, proxyUrl, src]);
+  }, [cdnEnabled, clearSeekRescueTimer, currentSrc, isTimeBuffered, proxyApiKey, proxyUrl, src]);
 
   const showSkipPill = useCallback((seconds: number) => {
     const side: "left" | "right" = seconds > 0 ? "right" : "left";
