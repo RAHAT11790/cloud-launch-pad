@@ -48,7 +48,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   // 1.5s (no new prop update in that window). Then flip `settled` so the
   // auto-advance timer + progress bar can start.
   useEffect(() => {
-    if (!slides || renderSlides.length === 0) return;
+    if (!slides || slides.length === 0) return;
     const t = setTimeout(() => {
       setRenderSlides(slides);
       setCurrent(0);
