@@ -1886,15 +1886,8 @@ const Index = () => {
     return groups.map((g, i) => ({ key: `${i}-${g.cat}`, title: g.cat, items: g.items.slice(0, MAX_SLOTS) }));
   }, [filteredSeries, filteredMovies, categories, activeSaltItems, homeRefreshTick]);
 
-  // Hero slides: randomized mix from all anime with backdrop
-  const [heroRotation, setHeroRotation] = useState(0);
-  
-  useEffect(() => {
-    const timer = setInterval(() => { setHeroRotation(prev => prev + 1); }, 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-
+  // Hero slides: stable mix from all anime with backdrop. The HeroSlider owns timing;
+  // the parent must not reshuffle while the progress bar is running.
   // Pinned hero posts from Firebase
   const [pinnedHeroPosts, setPinnedHeroPosts] = useState<any[]>([]);
   // Custom background image from Firebase
@@ -1947,9 +1940,9 @@ const Index = () => {
     const withBackdrop = allSeries.filter(a => a.backdrop);
     if (withBackdrop.length === 0) return [];
     
-    // Seeded shuffle based on rotation
+    // Stable seeded shuffle so live data refresh cannot cause rapid card flips.
     const shuffled = [...withBackdrop];
-    let seed = heroRotation;
+    let seed = 17;
     for (let i = shuffled.length - 1; i > 0; i--) {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       const j = seed % (i + 1);
@@ -2011,7 +2004,7 @@ const Index = () => {
     }
 
     return randomSlides;
-  }, [allSeries, heroRotation, pinnedHeroPosts]);
+  }, [allSeries, pinnedHeroPosts]);
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
