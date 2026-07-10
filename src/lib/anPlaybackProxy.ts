@@ -31,7 +31,9 @@ const writeCachedRoute = (value: string) => {
 
 export const getCachedAnPlaybackHlsPrefix = () => {
   const base = readCachedRoute();
-  return base ? `${base}/hls` : "";
+  if (base) return `${base}/hls`;
+  const envBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  return envBase ? `${envBase}/functions/v1/an-playback/hls` : "";
 };
 
 export const refreshAnPlaybackRoute = async (): Promise<string> => {
