@@ -91,6 +91,12 @@ function getPublicFunctionOrigin(reqUrl) {
   const protocol = /(?:^|\.)supabase\.co$/i.test(reqUrl.hostname) ? "https:" : reqUrl.protocol;
   return `${protocol}//${reqUrl.host}`;
 }
+function getPublicHlsPrefix(reqUrl) {
+  const origin = getPublicFunctionOrigin(reqUrl);
+  return /(?:^|\.)supabase\.co$/i.test(reqUrl.hostname)
+    ? `${origin}/functions/v1/an-playback/hls`
+    : `${origin}/hls`;
+}
 const isAnimeSaltIndexPlaylist = (url) => /\/hls\/[^?#]+\/index\.ts$/i.test(url.pathname);
 const isLikelySegmentUrl = (url) => !isAnimeSaltIndexPlaylist(url) && (/\.(?:ts|m4s|js|mp4|aac)(?:$|\?)/i.test(url.pathname) || /\/p\//i.test(url.pathname));
 const isLikelyPlaylistUrl = (url) => isAnimeSaltIndexPlaylist(url) || /\.m3u8(?:$|\?)/i.test(url.pathname) || !isLikelySegmentUrl(url);
@@ -180,7 +186,7 @@ var stdin_default = { async fetch(req, env, ctx) {
       h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
       h.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
       if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
-      return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${getPublicFunctionOrigin(reqUrl)}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
+      return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), getPublicHlsPrefix(reqUrl), parentOrigin), { status: upstream.status, headers: h });
     }
     const isSegment = /\.(?:ts|m4s|js|css|woff2?)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct);
     if (isSegment) {

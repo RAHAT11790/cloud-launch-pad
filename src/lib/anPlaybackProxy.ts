@@ -30,10 +30,10 @@ const writeCachedRoute = (value: string) => {
 };
 
 export const getCachedAnPlaybackHlsPrefix = () => {
-  const base = readCachedRoute();
-  if (base) return `${base}/hls`;
   const envBase = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  return envBase ? `${envBase}/functions/v1/an-playback/hls` : "";
+  if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
+  const base = readCachedRoute();
+  return base ? `${base}/hls` : "";
 };
 
 export const refreshAnPlaybackRoute = async (): Promise<string> => {
