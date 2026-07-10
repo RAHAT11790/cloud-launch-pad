@@ -1424,3 +1424,256 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   user-select: auto;
   -webkit-touch-callout: default;
 }
+
+/* ============================================================
+   DESKTOP / SMART TV / LAPTOP LAYER (≥1024px)
+   Redesigns the mobile-first UI for large screens without
+   touching mobile behavior. Pure CSS override — no JSX changes.
+   ============================================================ */
+@media (min-width: 1024px) {
+
+  /* ---------- HEADER ---------- */
+  header.fixed.top-0.left-0.right-0 {
+    height: 72px !important;
+    padding-left: 40px !important;
+    padding-right: 40px !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 1px 0 hsl(var(--border) / 0.6), 0 8px 24px rgba(0,0,0,0.05) !important;
+    backdrop-filter: saturate(1.1);
+  }
+  header.fixed.top-0 > *:first-child img {
+    height: 44px !important;
+    width: 44px !important;
+  }
+  /* Search bar — much wider on desktop */
+  header.fixed.top-0 > div.relative.flex-1 {
+    max-width: 560px !important;
+    margin-left: 32px !important;
+    margin-right: 32px !important;
+  }
+  header.fixed.top-0 > div.relative.flex-1 > div {
+    height: 44px !important;
+    font-size: 14px !important;
+    padding-left: 44px !important;
+  }
+  header.fixed.top-0 > div.relative.flex-1 svg {
+    width: 18px !important;
+    height: 18px !important;
+    left: 16px !important;
+  }
+  header.fixed.top-0 > div.flex.items-center {
+    gap: 10px !important;
+  }
+  header.fixed.top-0 > div.flex.items-center > * {
+    transform: scale(1.08);
+  }
+
+  /* ---------- CONVERT BOTTOM NAV → TOP HORIZONTAL PILL NAV ---------- */
+  nav.fixed.bottom-0.left-0.right-0 {
+    position: fixed !important;
+    top: 72px !important;
+    bottom: auto !important;
+    height: 62px !important;
+    padding: 0 40px !important;
+    background: hsl(var(--background)) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06), inset 0 -1px 0 hsl(var(--border) / 0.4) !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    z-index: 49 !important;
+  }
+  nav.fixed.bottom-0 button {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 22px !important;
+    border-radius: 14px !important;
+  }
+  nav.fixed.bottom-0 button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  nav.fixed.bottom-0 button span {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+  }
+  nav.fixed.bottom-0 button > span.absolute {
+    display: none !important; /* hide the top bar indicator; use bg instead */
+  }
+
+  /* ---------- MAIN CONTENT — shift below header + top nav ---------- */
+  main.relative.overflow-hidden {
+    height: calc(100vh - 72px - 62px) !important;
+    margin-top: calc(72px + 62px) !important;
+  }
+  /* Center content inside each swipe page, keeping 100vw for swipe math */
+  main.relative.overflow-hidden > div > div {
+    padding-left: max(24px, calc((100vw - 1440px) / 2)) !important;
+    padding-right: max(24px, calc((100vw - 1440px) / 2)) !important;
+  }
+
+  /* ---------- HERO SLIDER ---------- */
+  main.relative.overflow-hidden > div > div > *:first-child .hero-panel,
+  main.relative.overflow-hidden [class*="h-[44vh]"],
+  main.relative.overflow-hidden [class*="h-[50vh]"] {
+    border-radius: 24px !important;
+    overflow: hidden !important;
+    max-height: 520px !important;
+    margin-top: 8px !important;
+    box-shadow: 0 20px 50px -20px rgba(0,0,0,0.35) !important;
+  }
+  .hero-info-title { font-size: 30px !important; line-height: 1.15 !important; }
+  .hero-info-poster img, .hero-info-poster { border-radius: 14px !important; }
+  .hero-watch-btn { padding: 10px 22px !important; font-size: 14px !important; }
+
+  /* ---------- ANIME SECTION / CARD STRIPS ---------- */
+  /* Remove the mobile -mt-10 pull so sections space out cleanly */
+  main.relative.overflow-hidden section[class*="-mt-10"] {
+    margin-top: 24px !important;
+  }
+  main.relative.overflow-hidden section {
+    padding-top: 24px !important;
+    padding-bottom: 12px !important;
+  }
+  /* Section header (title bar) — bigger, more editorial */
+  main.relative.overflow-hidden section > div:first-child h3 {
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.01em !important;
+  }
+  main.relative.overflow-hidden section > div:first-child button {
+    font-size: 13px !important;
+  }
+  /* Card horizontal strip — bigger gap, no forced snap on desktop */
+  main.relative.overflow-hidden section > div:nth-child(2) {
+    gap: 16px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    padding-bottom: 20px !important;
+    scroll-snap-type: none !important;
+  }
+
+  /* ---------- ANIME CARDS — larger on desktop ---------- */
+  .poster-hover {
+    min-width: 190px !important;
+    max-width: 210px !important;
+    border-radius: 16px !important;
+    transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms !important;
+  }
+  .poster-hover:hover {
+    transform: translateY(-6px) scale(1.03) !important;
+    box-shadow: 0 24px 40px -12px rgba(0,0,0,0.45), 0 0 0 2px hsl(var(--primary) / 0.6) !important;
+    z-index: 5;
+  }
+  .poster-hover p.text-\[10px\] { font-size: 13px !important; line-height: 1.25 !important; }
+  .poster-hover p.text-\[8px\] { font-size: 11px !important; }
+  .poster-hover .absolute.bottom-0 { padding: 12px !important; }
+  .poster-hover span[class*="text-[7px]"],
+  .poster-hover span[class*="text-[8px]"] { font-size: 10px !important; }
+
+  /* Full-page grid views (Series / Movies tabs) — more columns */
+  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 18px !important; }
+  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 18px !important; }
+
+  /* ---------- CATEGORY PILLS ---------- */
+  main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="rounded-xl"],
+  main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="rounded-full"] {
+    padding: 10px 18px !important;
+    font-size: 13px !important;
+  }
+
+  /* ---------- LIVE TV — grid layout instead of stacked list ---------- */
+  main.relative.overflow-hidden .space-y-3:has(> div[class*="aspect-video"]) {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+  }
+  main.relative.overflow-hidden .space-y-3:has(> div[class*="aspect-video"]) > * {
+    margin-top: 0 !important;
+  }
+
+  /* ---------- VIDEO PLAYER — professional desktop layout ---------- */
+  .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
+    max-width: 1240px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+    padding-top: 20px !important;
+  }
+  /* Rounded video shell */
+  .rs-video-player-shell:not(.player-fs-enter) {
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6) !important;
+    max-height: calc(100vh - 130px);
+  }
+  /* Enlarge tap targets in the controls layer */
+  .player-controls-layer button svg { width: 22px !important; height: 22px !important; }
+  .player-controls-layer .h-7 { height: 34px !important; }
+  .player-controls-layer [class*="text-[10px]"],
+  .player-controls-layer [class*="text-[11px]"] { font-size: 13px !important; }
+  .player-controls-layer .max-w-\[78px\],
+  .player-controls-layer .max-w-\[54px\],
+  .player-controls-layer .max-w-\[62px\] { max-width: none !important; }
+  /* Timeline bar taller */
+  .player-controls-layer .h-1 { height: 5px !important; }
+  .player-controls-layer .h-4 { height: 22px !important; }
+
+  /* Episode chips wider so numbers breathe */
+  .rs-video-player-root button[class*="w-12"][class*="h-11"] {
+    width: 56px !important;
+    height: 44px !important;
+    font-size: 14px !important;
+  }
+
+  /* Suggested "For you" grid — 6 across on desktop instead of 3 */
+  .rs-video-player-root .grid.grid-cols-3 {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+  }
+  .rs-video-player-root .grid.grid-cols-3 p.text-xs {
+    font-size: 13px !important;
+    margin-top: 8px !important;
+  }
+
+  /* Focus rings for TV D-pad / keyboard navigation */
+  html.tv-mode button:focus-visible,
+  html.tv-mode a:focus-visible,
+  button:focus-visible {
+    outline: 3px solid hsl(var(--primary)) !important;
+    outline-offset: 3px !important;
+    border-radius: 12px;
+  }
+
+  /* Custom scrollbar on desktop */
+  main.relative.overflow-hidden > div > div::-webkit-scrollbar { width: 10px; }
+  main.relative.overflow-hidden > div > div::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted)); border-radius: 8px;
+  }
+  main.relative.overflow-hidden > div > div::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.6);
+  }
+}
+
+/* Extra-wide (≥1440px) — even more cards per row */
+@media (min-width: 1440px) {
+  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+  .rs-video-player-root .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+  main.relative.overflow-hidden .space-y-3:has(> div[class*="aspect-video"]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Ultra-wide / 4K TV (≥1920px) */
+@media (min-width: 1920px) {
+  main.relative.overflow-hidden > div > div {
+    padding-left: max(60px, calc((100vw - 1720px) / 2)) !important;
+    padding-right: max(60px, calc((100vw - 1720px) / 2)) !important;
+  }
+  .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
+    max-width: 1560px !important;
+  }
+  .poster-hover { min-width: 220px !important; max-width: 240px !important; }
+}
+
