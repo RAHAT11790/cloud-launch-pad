@@ -28,7 +28,7 @@ interface HeroSliderProps {
 
 const SLIDE_DURATION = 8000;
 const TRANSITION_MS = 920;
-const MAX_SLIDES = 500;
+const MAX_SLIDES = 8;
 
 
 const imageReadyCache = new Map<string, Promise<void>>();
