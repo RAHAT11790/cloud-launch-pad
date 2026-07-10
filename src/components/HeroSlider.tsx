@@ -44,7 +44,10 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   useEffect(() => {
     setSettled(false);
     if (slides.length === 0) return;
-    const t = setTimeout(() => setSettled(true), 1500);
+    const t = setTimeout(() => {
+      setSettled(true);
+      setProgressKey((k) => k + 1); // restart CSS progress bar in sync with timer
+    }, 1500);
     return () => clearTimeout(t);
   }, [slides.length]);
 
