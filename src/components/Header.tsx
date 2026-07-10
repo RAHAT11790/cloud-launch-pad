@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useBranding } from "@/hooks/useBranding";
@@ -57,16 +57,35 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     return () => unsub();
   }, []);
 
-  // Pick random titles for placeholder rotation
-  const displayTitles = useMemo(() => {
-    if (animeTitles.length === 0) return ["Search..."];
-    const shuffled = [...animeTitles].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, Math.min(20, shuffled.length));
+  // Pick random titles for placeholder rotation — shuffle ONCE per meaningful
+  // titles change (not on every parent re-render / incremental Firebase snapshot),
+  // otherwise every render swaps `displayTitles[placeholderIdx]` to a new random
+  // string and the placeholder appears to flash through dozens of names/second.
+  const titlesKey = useMemo(() => {
+    // Cheap stable signature: sorted unique length + first/last title.
+    if (!animeTitles || animeTitles.length === 0) return "";
+    const first = animeTitles[0] || "";
+    const last = animeTitles[animeTitles.length - 1] || "";
+    return `${animeTitles.length}|${first}|${last}`;
   }, [animeTitles]);
+
+  const shuffledRef = useRef<string[]>(["Search..."]);
+  const displayTitles = useMemo(() => {
+    if (!animeTitles || animeTitles.length === 0) {
+      shuffledRef.current = ["Search..."];
+      return shuffledRef.current;
+    }
+    const shuffled = [...animeTitles].sort(() => Math.random() - 0.5);
+    shuffledRef.current = shuffled.slice(0, Math.min(20, shuffled.length));
+    return shuffledRef.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titlesKey]);
 
   // Rotate placeholder text
   useEffect(() => {
     if (displayTitles.length <= 1) return;
+    // Reset to first item whenever the list changes so the visible text is stable.
+    setPlaceholderIdx(0);
     const interval = setInterval(() => {
       setAnimating(true);
       setTimeout(() => {
@@ -75,7 +94,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       }, 300);
     }, 3000);
     return () => clearInterval(interval);
-  }, [displayTitles.length]);
+  }, [displayTitles]);
 
   // Track current logged-in user id (reacts instantly to login/logout)
   useEffect(() => {
