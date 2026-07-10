@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Play } from "lucide-react";
-import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
 export interface HeroSlide {
@@ -26,8 +25,8 @@ interface HeroSliderProps {
   onInfo?: (index: number) => void;
 }
 
-const SLIDE_DURATION = 7200;
-const TRANSITION_MS = 760;
+const SLIDE_DURATION = 8200;
+const TRANSITION_MS = 920;
 const MAX_SLIDES = 8;
 
 const imageReadyCache = new Map<string, Promise<void>>();
@@ -64,8 +63,34 @@ const normalizeSlides = (items: HeroSlide[]) => {
   return clean;
 };
 
+const getSlidesSignature = (items: HeroSlide[]) =>
+  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}`).join("|");
+
+const mergeDeckWithoutChangingVisibleSlide = (
+  currentDeck: HeroSlide[],
+  incomingDeck: HeroSlide[],
+  visibleIndex: number
+) => {
+  if (incomingDeck.length === 0) return currentDeck;
+  if (currentDeck.length === 0) return incomingDeck;
+
+  const safeVisibleIndex = Math.max(0, Math.min(visibleIndex, currentDeck.length - 1));
+  const visibleSlide = currentDeck[safeVisibleIndex];
+  if (!visibleSlide) return incomingDeck;
+
+  const freshVisibleSlide = incomingDeck.find((item) => item.id === visibleSlide.id);
+  const pinnedVisibleSlide = freshVisibleSlide ? { ...freshVisibleSlide, ...visibleSlide } : visibleSlide;
+  const nextDeck = incomingDeck.filter((item) => item.id !== visibleSlide.id).slice(0, MAX_SLIDES - 1);
+  nextDeck.splice(Math.min(safeVisibleIndex, nextDeck.length), 0, visibleSlide);
+  nextDeck[Math.min(safeVisibleIndex, nextDeck.length - 1)] = pinnedVisibleSlide;
+  return nextDeck;
+};
+
 const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
-  const [deck, setDeck] = useState<HeroSlide[]>(() => normalizeSlides(slides));
+  const incomingSignature = useMemo(() => getSlidesSignature(slides), [slides]);
+  const incomingDeck = useMemo(() => normalizeSlides(slides), [incomingSignature, slides]);
+
+  const [deck, setDeck] = useState<HeroSlide[]>(() => incomingDeck);
   const [current, setCurrent] = useState(0);
   const [previousSlide, setPreviousSlide] = useState<HeroSlide | null>(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -82,11 +107,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const slidesSignature = useMemo(
-    () => normalizeSlides(slides).map((item) => `${item.id}:${item.backdrop}`).join("|"),
-    [slides]
-  );
+  const lastAppliedSignatureRef = useRef(incomingSignature);
 
   deckRef.current = deck;
   currentRef.current = current;
@@ -102,32 +123,19 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   }, []);
 
   useEffect(() => {
-    const nextDeck = normalizeSlides(slides);
+    if (incomingSignature === lastAppliedSignatureRef.current) return;
+    lastAppliedSignatureRef.current = incomingSignature;
 
     setDeck((prevDeck) => {
-      if (nextDeck.length === 0) return [];
-      if (prevDeck.length === 0) return nextDeck;
-
-      const currentId = prevDeck[currentRef.current]?.id;
-      const preservedIndex = currentId ? nextDeck.findIndex((item) => item.id === currentId) : -1;
-
-      if (preservedIndex >= 0 && preservedIndex !== currentRef.current) {
-        currentRef.current = preservedIndex;
-        setCurrent(preservedIndex);
+      const nextDeck = mergeDeckWithoutChangingVisibleSlide(prevDeck, incomingDeck, currentRef.current);
+      const safeIndex = Math.max(0, Math.min(currentRef.current, Math.max(nextDeck.length - 1, 0)));
+      if (safeIndex !== currentRef.current) {
+        currentRef.current = safeIndex;
+        setCurrent(safeIndex);
       }
-
-      if (preservedIndex < 0) {
-        currentRef.current = 0;
-        setCurrent(0);
-        setPreviousSlide(null);
-        setTransitioning(false);
-        lockRef.current = false;
-        setProgressKey((key) => key + 1);
-      }
-
       return nextDeck;
     });
-  }, [slidesSignature, slides]);
+  }, [incomingDeck, incomingSignature]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -189,7 +197,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   useEffect(() => {
     clearTimer();
-    if (paused || transitioning || deck.length <= 1) return;
+    if (paused || transitioning || lockRef.current || deck.length <= 1) return;
     if (typeof document !== "undefined" && document.hidden) return;
 
     timerRef.current = setTimeout(() => {
@@ -197,7 +205,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     }, SLIDE_DURATION);
 
     return clearTimer;
-  }, [clearTimer, current, deck.length, goTo, paused, progressKey, transitioning]);
+  }, [clearTimer, current, deck.length, goTo, paused, transitioning]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -211,9 +219,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   useEffect(() => {
     if (deck.length === 0) return;
-    const first = deck[0];
+    const first = deck[current] || deck[0];
     void waitForImage(optimizedImageUrl(first.backdrop, "backdrop"));
-  }, [deck]);
+  }, [current, deck]);
 
   useEffect(() => {
     const list = deckRef.current;
@@ -312,31 +320,29 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div className="hero-vignette" aria-hidden />
 
-      <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-5 pb-[72px] pointer-events-none hero-copy-enter">
-        <div className="max-w-[620px]">
+      <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-5 pb-[72px] pointer-events-none hero-copy-enter sm:px-8 sm:pb-[86px]">
+        <div className="max-w-[660px]">
           <div className="flex items-center gap-2 mb-3 pointer-events-auto">
-            <span className="text-[10px] font-black uppercase tracking-[0.16em] text-primary drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]">
+            <span className="hero-kicker">
               {metaLabel}
             </span>
             {slide.year && !slide.isCustom && (
-              <span className="text-[11px] font-semibold text-primary-foreground/75 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+              <span className="hero-submeta">
                 {slide.year}
               </span>
             )}
             {slide.rating && !slide.isCustom && (
-              <span className="text-[11px] font-semibold text-primary-foreground/75 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+              <span className="hero-submeta">
                 ★ {slide.rating}
               </span>
             )}
           </div>
 
           <h1
-            className="max-w-[18ch] text-[34px] leading-[1.02] font-black mb-4 line-clamp-2 pointer-events-auto sm:text-[42px]"
+            className="hero-title pointer-events-auto line-clamp-2"
             style={{
-              ...getAnimeTitleStyle(slide.title),
-              ...(slide.titleColor ? { color: slide.titleColor } : { color: "hsl(var(--primary-foreground))" }),
+              ...(slide.titleColor ? { color: slide.titleColor } : {}),
               ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-              textShadow: "0 4px 26px hsl(0 0% 0% / 0.8)",
               letterSpacing: 0,
             }}
           >
