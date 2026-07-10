@@ -22,11 +22,10 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-// Cap only open-ended browser ranges (`bytes=N-`). RS file servers otherwise
-// answer with the whole remaining file (often 40MB-2GB), which makes Server 1
-// feel slow and causes Server 2/HTTP proxy requests to hang. Bounded ranges let
-// the browser request exactly the next piece it needs and keep seeking snappy.
-const MEDIA_CHUNK_BYTES = 2 * 1024 * 1024;
+// Cap only open-ended browser ranges (`bytes=N-`). Keep the window large enough
+// for smooth RS playback after a seek, but never let mirrors answer with the
+// whole remaining file (often 40MB-2GB), which makes skip/recovery hang.
+const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
