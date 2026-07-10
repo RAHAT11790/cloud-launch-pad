@@ -1886,9 +1886,13 @@ const Index = () => {
     return groups.map((g, i) => ({ key: `${i}-${g.cat}`, title: g.cat, items: g.items.slice(0, MAX_SLOTS) }));
   }, [filteredSeries, filteredMovies, categories, activeSaltItems, homeRefreshTick]);
 
-  // Hero slides: stable session mix from all anime with backdrop. Do not reshuffle
-  // on an interval; that can collide with the slider timer and look like a double swipe.
-  const heroSeedRef = useRef(Math.floor(Date.now() / 86400000) || 1);
+  // Hero slides: randomized mix from all anime with backdrop
+  const [heroRotation, setHeroRotation] = useState(0);
+  
+  useEffect(() => {
+    const timer = setInterval(() => { setHeroRotation(prev => prev + 1); }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
 
   // Pinned hero posts from Firebase
@@ -1945,7 +1949,7 @@ const Index = () => {
     
     // Seeded shuffle based on rotation
     const shuffled = [...withBackdrop];
-    let seed = heroSeedRef.current;
+    let seed = heroRotation;
     for (let i = shuffled.length - 1; i > 0; i--) {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       const j = seed % (i + 1);
@@ -2007,7 +2011,7 @@ const Index = () => {
     }
 
     return randomSlides;
-  }, [allSeries, pinnedHeroPosts]);
+  }, [allSeries, heroRotation, pinnedHeroPosts]);
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
