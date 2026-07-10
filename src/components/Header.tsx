@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import { useBranding } from "@/hooks/useBranding";
