@@ -31,30 +31,37 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [current, setCurrent] = useState(0);
   const [progressKey, setProgressKey] = useState(0); // forces progress restart
   const [paused, setPaused] = useState(false);
+  // Internal, stable snapshot of the slides array. We do NOT render from the
+  // `slides` prop directly — the parent re-shuffles/re-orders it as Firebase
+  // snapshots stream in during the first few seconds, which visually looked
+  // like the slider was rapidly scrolling through many cards (even though
+  // `current` was still 0). Rendering from this snapshot fully decouples us
+  // from that churn.
+  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>(slides);
   const [settled, setSettled] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const slidesLenRef = useRef(slides.length);
-  slidesLenRef.current = slides.length;
+  const slidesLenRef = useRef(renderSlides.length);
+  slidesLenRef.current = renderSlides.length;
 
-  // Wait until the slides array has been STABLE for ~1.5s (Firebase's initial
-  // snapshot burst finished) before starting auto-advance. Otherwise the
-  // rapid prop churn made the slider "scroll very fast" during the first
-  // 5-10 seconds after page load.
+  // Debounce: only adopt the parent's slides after they've been STABLE for
+  // 1.5s (no new prop update in that window). Then flip `settled` so the
+  // auto-advance timer + progress bar can start.
   useEffect(() => {
-    setSettled(false);
-    if (slides.length === 0) return;
+    if (!slides || slides.length === 0) return;
     const t = setTimeout(() => {
+      setRenderSlides(slides);
+      setCurrent(0);
+      setProgressKey((k) => k + 1);
       setSettled(true);
-      setProgressKey((k) => k + 1); // restart CSS progress bar in sync with timer
     }, 1500);
     return () => clearTimeout(t);
-  }, [slides.length]);
+  }, [slides]);
 
-  // Clamp current if slides change
+  // Clamp current if renderSlides changes
   useEffect(() => {
-    if (slides.length > 0 && current >= slides.length) setCurrent(0);
-  }, [slides.length, current]);
+    if (renderSlides.length > 0 && current >= renderSlides.length) setCurrent(0);
+  }, [renderSlides.length, current]);
 
   // Schedule next slide — only when settled, not paused, tab visible.
   useEffect(() => {
