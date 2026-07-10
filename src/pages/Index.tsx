@@ -128,12 +128,8 @@ const buildAnSyntheticMaster = (
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
-  // Some AN metadata reports browser-hostile/uppercase codec strings even when
-  // the underlying HLS plays as normal H.264. A bad CODECS attr makes hls.js
-  // reject the manifest before it requests the playlist, so keep this stable.
-  const codecs = "avc1.4d401f,mp4a.40.2";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`},CODECS="${codecs.replace(/"/g, "")}"${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`}${audioRef}`,
   );
   lines.push(buildAnHlsPlaybackUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
