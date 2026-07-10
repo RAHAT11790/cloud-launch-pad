@@ -1554,9 +1554,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
   /* ---------- ANIME CARDS — larger on desktop ---------- */
   .poster-hover {
-    min-width: 190px !important;
-    max-width: 210px !important;
-    border-radius: 16px !important;
+    min-width: 230px !important;
+    max-width: 250px !important;
+    border-radius: 18px !important;
     transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms !important;
   }
   .poster-hover:hover {
@@ -1564,15 +1564,15 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     box-shadow: 0 24px 40px -12px rgba(0,0,0,0.45), 0 0 0 2px hsl(var(--primary) / 0.6) !important;
     z-index: 5;
   }
-  .poster-hover p.text-\[10px\] { font-size: 13px !important; line-height: 1.25 !important; }
-  .poster-hover p.text-\[8px\] { font-size: 11px !important; }
-  .poster-hover .absolute.bottom-0 { padding: 12px !important; }
+  .poster-hover p.text-\[10px\] { font-size: 14px !important; line-height: 1.25 !important; }
+  .poster-hover p.text-\[8px\] { font-size: 12px !important; }
+  .poster-hover .absolute.bottom-0 { padding: 14px !important; }
   .poster-hover span[class*="text-[7px]"],
-  .poster-hover span[class*="text-[8px]"] { font-size: 10px !important; }
+  .poster-hover span[class*="text-[8px]"] { font-size: 11px !important; }
 
   /* Full-page grid views (Series / Movies tabs) — more columns */
-  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 18px !important; }
-  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 18px !important; }
+  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 20px !important; }
+  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 20px !important; }
 
   /* ---------- CATEGORY PILLS ---------- */
   main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="rounded-xl"],
@@ -1593,7 +1593,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
   /* ---------- VIDEO PLAYER — professional desktop layout ---------- */
   .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
-    max-width: 1240px !important;
+    max-width: 1280px !important;
     margin-left: auto !important;
     margin-right: auto !important;
     padding-left: 24px !important;
@@ -1607,28 +1607,47 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6) !important;
     max-height: calc(100vh - 130px);
   }
-  /* Enlarge tap targets in the controls layer */
-  .player-controls-layer button svg { width: 22px !important; height: 22px !important; }
-  .player-controls-layer .h-7 { height: 34px !important; }
+  /* Controls layer — scale up to match large player */
+  .player-controls-layer { padding: 18px 24px !important; }
+  .player-controls-layer button svg { width: 26px !important; height: 26px !important; }
+  .player-controls-layer button { min-width: 40px; min-height: 40px; }
+  .player-controls-layer .h-7 { height: 40px !important; }
+  .player-controls-layer .h-8 { height: 42px !important; }
+  .player-controls-layer .w-7 { width: 40px !important; }
+  .player-controls-layer .w-8 { width: 42px !important; }
   .player-controls-layer [class*="text-[10px]"],
-  .player-controls-layer [class*="text-[11px]"] { font-size: 13px !important; }
+  .player-controls-layer [class*="text-[11px]"] { font-size: 14px !important; }
+  .player-controls-layer [class*="text-[12px]"],
+  .player-controls-layer .text-xs { font-size: 14px !important; }
   .player-controls-layer .max-w-\[78px\],
   .player-controls-layer .max-w-\[54px\],
   .player-controls-layer .max-w-\[62px\] { max-width: none !important; }
-  /* Timeline bar taller */
-  .player-controls-layer .h-1 { height: 5px !important; }
-  .player-controls-layer .h-4 { height: 22px !important; }
+  /* Center play/pause big button */
+  .player-controls-layer .rounded-full[class*="w-16"],
+  .player-controls-layer .rounded-full[class*="w-14"] {
+    width: 88px !important; height: 88px !important;
+  }
+  .player-controls-layer .rounded-full[class*="w-16"] svg,
+  .player-controls-layer .rounded-full[class*="w-14"] svg {
+    width: 40px !important; height: 40px !important;
+  }
+  /* Timeline bar taller & clearer */
+  .player-controls-layer .h-1 { height: 6px !important; }
+  .player-controls-layer .h-4 { height: 24px !important; }
+  /* Top bar (title / quality / server chips) */
+  .player-controls-layer .absolute.top-0 button,
+  .player-controls-layer .absolute.top-0 span { font-size: 14px !important; }
 
   /* Episode chips wider so numbers breathe */
   .rs-video-player-root button[class*="w-12"][class*="h-11"] {
-    width: 56px !important;
-    height: 44px !important;
-    font-size: 14px !important;
+    width: 60px !important;
+    height: 48px !important;
+    font-size: 15px !important;
   }
 
-  /* Suggested "For you" grid — 6 across on desktop instead of 3 */
+  /* Suggested "For you" grid — keep tighter (user says these look right) */
   .rs-video-player-root .grid.grid-cols-3 {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
     gap: 16px !important;
   }
   .rs-video-player-root .grid.grid-cols-3 p.text-xs {
@@ -1657,12 +1676,13 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
 /* Extra-wide (≥1440px) — even more cards per row */
 @media (min-width: 1440px) {
-  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
-  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
-  .rs-video-player-root .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+  main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+  .rs-video-player-root .grid.grid-cols-3 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
   main.relative.overflow-hidden .space-y-3:has(> div[class*="aspect-video"]) {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
+  .poster-hover { min-width: 250px !important; max-width: 270px !important; }
 }
 
 /* Ultra-wide / 4K TV (≥1920px) */
@@ -1672,8 +1692,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     padding-right: max(60px, calc((100vw - 1720px) / 2)) !important;
   }
   .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
-    max-width: 1560px !important;
+    max-width: 1620px !important;
   }
-  .poster-hover { min-width: 220px !important; max-width: 240px !important; }
+  .poster-hover { min-width: 270px !important; max-width: 290px !important; }
+  main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
 }
 
