@@ -1969,7 +1969,7 @@ const Index = () => {
       return "Multiple";
     };
 
-    const randomSlides = shuffled.slice(0, Math.min(6, shuffled.length)).map(item => ({
+    const randomSlides = shuffled.map(item => ({
       id: item.id,
       title: item.title,
       backdrop: item.backdrop,
