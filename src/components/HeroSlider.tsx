@@ -359,9 +359,6 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
               {slide.year && !slide.isCustom && (
                 <span className="hero-info-dot">{slide.year}</span>
               )}
-              {!slide.isCustom && (
-                <span className="hero-info-dot">{metaTypeLabel}</span>
-              )}
               {slide.episodeInfo && !slide.isCustom && (
                 <span className="hero-info-dot">{slide.episodeInfo}</span>
               )}
@@ -375,9 +372,10 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
             className="hero-watch-btn"
             role="presentation"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
+            <Play className="w-3 h-3 fill-current" />
             <span>WATCH</span>
           </span>
+
         </button>
 
         {deck.length > 1 && (
