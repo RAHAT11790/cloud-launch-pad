@@ -1969,7 +1969,7 @@ const Index = () => {
       return "Multiple";
     };
 
-    const randomSlides = shuffled.slice(0, Math.min(6, shuffled.length)).map(item => ({
+    const randomSlides = shuffled.map(item => ({
       id: item.id,
       title: item.title,
       backdrop: item.backdrop,
@@ -2003,7 +2003,7 @@ const Index = () => {
 
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
       const filtered = randomSlides.filter(s => !pinnedIds.has(s.id));
-      return [...pinnedSlides, ...filtered].slice(0, 8);
+      return [...pinnedSlides, ...filtered];
     }
 
     return randomSlides;
