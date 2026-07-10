@@ -2142,7 +2142,7 @@ const Index = () => {
             toast.error("Could not load this movie from AnimeSalt");
             return;
           }
-          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 85, completed: [...s.completed, "Movie stream ready"] }));
+          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 85, completed: Array.from(new Set([...s.completed, "Movie stream ready"])) }));
           const enriched: AnimeItem = {
             ...playableAnime,
             ...resolved.fields,
