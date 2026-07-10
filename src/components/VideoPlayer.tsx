@@ -3794,6 +3794,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, delay);
     };
     const onCanPlay = () => {
+      clearSeekRescueTimer();
       markPlaybackSourceHealthy();
       seekRecoveryUntilRef.current = 0;
       setVideoError(false);
@@ -3808,6 +3809,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     };
     const onCanPlayThrough = () => {
+      clearSeekRescueTimer();
       markPlaybackSourceHealthy();
       seekRecoveryUntilRef.current = 0;
       setIsBuffering(false);
@@ -3824,6 +3826,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, 400);
     };
     const onPlaying = () => {
+      clearSeekRescueTimer();
       markPlaybackSourceHealthy();
       seekRecoveryUntilRef.current = 0;
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -3836,6 +3839,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
+      clearSeekRescueTimer();
       seekRecoveryUntilRef.current = 0;
       markPlaybackSourceHealthy();
       setIsBuffering(false);
@@ -3927,15 +3931,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
     return () => {
-      if (seekRescueTimerRef.current) {
-        clearTimeout(seekRescueTimerRef.current);
-        seekRescueTimerRef.current = null;
-      }
+      clearSeekRescueTimer();
       const v = videoRef.current;
       if (v) {
         try { v.pause(); } catch {}
