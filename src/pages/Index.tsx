@@ -2003,7 +2003,7 @@ const Index = () => {
 
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
       const filtered = randomSlides.filter(s => !pinnedIds.has(s.id));
-      return [...pinnedSlides, ...filtered].slice(0, 8);
+      return [...pinnedSlides, ...filtered];
     }
 
     return randomSlides;
