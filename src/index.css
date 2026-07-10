@@ -571,17 +571,41 @@ div[style*="z-index: 2147483647"],
   }
   .hero-info-title {
     display: block;
-    color: hsl(var(--primary-foreground));
     font-size: 13.5px;
     font-weight: 900;
     line-height: 1.15;
-    letter-spacing: 0.2px;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0 2px 10px hsl(0 0% 0% / 0.6);
+    color: #fff;
+    background: linear-gradient(
+      90deg,
+      #ff5e7e 0%,
+      #ffb86b 20%,
+      #ffe66d 40%,
+      #6ee7b7 60%,
+      #60a5fa 80%,
+      #c084fc 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: heroTitleRgb 8s linear infinite;
+    text-shadow: 0 2px 12px hsl(0 0% 0% / 0.55);
+    filter: drop-shadow(0 1px 6px hsl(0 0% 0% / 0.4));
+    will-change: background-position;
   }
+  @keyframes heroTitleRgb {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-info-title { animation: none; }
+  }
+
   .hero-info-meta {
     display: flex;
     align-items: center;
