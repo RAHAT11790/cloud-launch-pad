@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useMemo } from "react";
+import { useState, useEffect, forwardRef, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Zap, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
