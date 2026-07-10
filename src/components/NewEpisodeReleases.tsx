@@ -150,13 +150,37 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
+  const openingRef = useRef<string | null>(null);
   const handleClick = (release: EpisodeRelease, startEpisode?: number) => {
+    if (openingRef.current === release.id) return;
+    openingRef.current = release.id;
+    window.setTimeout(() => { if (openingRef.current === release.id) openingRef.current = null; }, 1000);
     const content = getContent(release.contentId);
+    const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
+    const eIdx = typeof startEpisode === "number"
+      ? Math.max(0, startEpisode - 1)
+      : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
     if (content) {
-      const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
-      const eIdx = typeof startEpisode === "number" ? Math.max(0, startEpisode - 1) : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
       onCardClick(content, sIdx, eIdx);
+      return;
     }
+    // Fallback: content wasn't in the local index (rare — Firebase snapshot
+    // race after a fresh publish). Synthesize a minimal AnimeItem from the
+    // release payload so navigation still works instead of the tap being a no-op.
+    const synth: any = {
+      id: release.contentId,
+      title: release.title || "New Release",
+      poster: release.poster || "",
+      backdrop: release.poster || "",
+      year: release.year || "",
+      rating: release.rating || "",
+      type: "webseries",
+      seasons: [],
+      category: "",
+      storyline: "",
+      language: "",
+    };
+    onCardClick(synth, sIdx, eIdx);
   };
 
   const releaseModal = (
