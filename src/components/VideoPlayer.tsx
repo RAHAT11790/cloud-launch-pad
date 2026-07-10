@@ -3173,6 +3173,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
+    sourceHealthRef.current.clear();
+    seekRecoveryUntilRef.current = 0;
+    slowSeekEventsRef.current = [];
+    autoQualityShiftCountRef.current = 0;
     const explicitSeek = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
     const seekTarget = explicitSeek || preservedTime || 0;
     pendingSeek.current = seekTarget;
@@ -3697,6 +3701,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         v.play().catch(() => {});
       }
     };
+    const onLoadedData = () => {
+      markPlaybackSourceHealthy();
+      applyPendingSeek(v);
+    };
     const onPlay = () => {
       userPlaybackIntentRef.current = true;
       setPlaying(true);
@@ -3866,6 +3874,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
     };
     v.addEventListener("loadedmetadata", onLoaded);
+    v.addEventListener("loadeddata", onLoadedData);
     v.addEventListener("timeupdate", onTimeUpdate);
     v.addEventListener("durationchange", onDurationChange);
     v.addEventListener("play", onPlay);
@@ -3890,6 +3899,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (stalledTimer) clearTimeout(stalledTimer);
       if (hardStallTimer) clearTimeout(hardStallTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
+      v.removeEventListener("loadeddata", onLoadedData);
       v.removeEventListener("timeupdate", onTimeUpdate);
       v.removeEventListener("durationchange", onDurationChange);
       v.removeEventListener("play", onPlay);
@@ -3912,6 +3922,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
     return () => {
+      if (seekRescueTimerRef.current) {
+        clearTimeout(seekRescueTimerRef.current);
+        seekRescueTimerRef.current = null;
+      }
       const v = videoRef.current;
       if (v) {
         try { v.pause(); } catch {}
