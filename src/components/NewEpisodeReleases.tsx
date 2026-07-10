@@ -54,6 +54,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   const [releases, setReleases] = useState<EpisodeRelease[]>(() => readReleaseCache());
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
+  const openingRef = useRef<string | null>(null);
 
   useEffect(() => {
     const relRef = ref(db, "newEpisodeReleases");
