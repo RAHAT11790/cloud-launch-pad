@@ -4057,24 +4057,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     clearSeekRescueTimer();
     seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
     if (!buffered) setIsBuffering(true);
-    try {
-      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
-      else v.currentTime = target;
-    } catch {
-      try { v.currentTime = target; } catch {}
-    }
     const directSrcAtSeek = currentSrc;
     const rawSourceAtSeek = activeSourceBaseRef.current || sourceBaseRef.current || src;
     if (!buffered && proxyUrl && rawSourceAtSeek && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
-      seekRescueTimerRef.current = setTimeout(() => {
-        const liveVideo = videoRef.current;
-        if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
-        // If canplay/seeked/playing fired, this timer is cleared before running.
-        // Reaching this point means the direct server has not delivered the seek
-        // quickly enough, even if readyState is stale from the previous buffer.
-        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
-          .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
-        if (!proxyCandidate) return;
+      const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
+        .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
+      if (proxyCandidate) {
         slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
         pendingSeek.current = target;
         mediaRecoverySeekRef.current = target;
@@ -4082,7 +4070,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         rsSoftRetriesRef.current = 0;
         setCurrentSrc(proxyCandidate);
         setIsBuffering(true);
-      }, RS_SEEK_PROXY_RESCUE_MS);
+        if (wasPlaying && !adGateActiveRef.current) {
+          window.setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 0);
+        }
+        return;
+      }
+    }
+    try {
+      if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
+      else v.currentTime = target;
+    } catch {
+      try { v.currentTime = target; } catch {}
     }
     if (wasPlaying && !adGateActiveRef.current) {
       window.setTimeout(() => { v.play().catch(() => {}); }, 0);
