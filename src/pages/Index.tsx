@@ -2169,7 +2169,8 @@ const Index = () => {
             toast.error("Could not load episodes from AnimeSalt");
             return;
           }
-          setLoadingDetails((s) => ({ ...s, progress: 55, completed: [...s.completed, `Loaded ${seasons.length} season${seasons.length > 1 ? "s" : ""}`] }));
+          const seasonLabels = seasons.slice(0, 3).map((_, i) => `Season ${i + 1} loaded`);
+          setLoadingDetails((s) => ({ ...s, progress: 55, completed: seasonLabels }));
           const targetSIdx = typeof sIdx === "number" ? Math.min(sIdx, seasons.length - 1) : 0;
           const epList = seasons[targetSIdx]?.episodes || [];
           const targetEIdx = typeof eIdx === "number" ? Math.min(eIdx, Math.max(epList.length - 1, 0)) : 0;
@@ -2184,7 +2185,7 @@ const Index = () => {
             }
           }
           void warmAnSeriesPlaybackCache(slug, seasons);
-          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 95, completed: [...s.completed, "Audio tracks ready"] }));
+          setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 95, completed: Array.from(new Set([...s.completed, "Audio tracks ready"])) }));
           const enriched: AnimeItem = {
             ...playableAnime,
             seasons,
