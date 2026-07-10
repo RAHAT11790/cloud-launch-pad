@@ -800,6 +800,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const sourceHealthRef = useRef<Map<string, number>>(new Map());
   const seekRecoveryUntilRef = useRef(0);
   const seekRescueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeSeekTargetRef = useRef<number | null>(null);
   const slowSeekEventsRef = useRef<number[]>([]);
   const autoQualityShiftCountRef = useRef(0);
   const [isBuffering, setIsBuffering] = useState(true);
@@ -2015,6 +2016,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       seekRescueTimerRef.current = null;
     }
   }, []);
+
+  const finishSeekRecoveryIfReady = useCallback((v?: HTMLVideoElement | null) => {
+    const target = activeSeekTargetRef.current;
+    if (target === null) {
+      clearSeekRescueTimer();
+      seekRecoveryUntilRef.current = 0;
+      return true;
+    }
+    const media = v || videoRef.current;
+    if (!media) return false;
+    const reached = Math.abs((media.currentTime || 0) - target) <= 3;
+    const hasFutureData = media.readyState >= 3;
+    if (reached && hasFutureData) {
+      activeSeekTargetRef.current = null;
+      clearSeekRescueTimer();
+      seekRecoveryUntilRef.current = 0;
+      return true;
+    }
+    return false;
+  }, [clearSeekRescueTimer]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
@@ -4055,27 +4076,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const wasPlaying = !v.paused || userPlaybackIntentRef.current;
     const buffered = isTimeBuffered(v, target);
     clearSeekRescueTimer();
+    activeSeekTargetRef.current = buffered ? null : target;
     seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
     if (!buffered) setIsBuffering(true);
     const directSrcAtSeek = currentSrc;
     const rawSourceAtSeek = activeSourceBaseRef.current || sourceBaseRef.current || src;
-    if (!buffered && proxyUrl && rawSourceAtSeek && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
-      const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
-        .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
-      if (proxyCandidate) {
-        slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
-        pendingSeek.current = target;
-        mediaRecoverySeekRef.current = target;
-        retryAttemptsRef.current.clear();
-        rsSoftRetriesRef.current = 0;
-        setCurrentSrc(proxyCandidate);
-        setIsBuffering(true);
-        if (wasPlaying && !adGateActiveRef.current) {
-          window.setTimeout(() => { videoRef.current?.play().catch(() => {}); }, 0);
-        }
-        return;
-      }
-    }
     try {
       if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(target);
       else v.currentTime = target;
@@ -4085,7 +4090,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (wasPlaying && !adGateActiveRef.current) {
       window.setTimeout(() => { v.play().catch(() => {}); }, 0);
     }
-  }, [cdnEnabled, clearSeekRescueTimer, currentSrc, isTimeBuffered, proxyApiKey, proxyUrl, src]);
+    if (!buffered && proxyUrl && rawSourceAtSeek && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
+      seekRescueTimerRef.current = setTimeout(() => {
+        const liveVideo = videoRef.current;
+        if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
+        if (finishSeekRecoveryIfReady(liveVideo)) return;
+        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
+          .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
+        if (!proxyCandidate) return;
+        slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
+        pendingSeek.current = target;
+        mediaRecoverySeekRef.current = target;
+        retryAttemptsRef.current.clear();
+        rsSoftRetriesRef.current = 0;
+        setCurrentSrc(proxyCandidate);
+        setIsBuffering(true);
+      }, RS_SEEK_PROXY_RESCUE_MS);
+    }
+  }, [cdnEnabled, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, isTimeBuffered, proxyApiKey, proxyUrl, src]);
 
   const showSkipPill = useCallback((seconds: number) => {
     const side: "left" | "right" = seconds > 0 ? "right" : "left";
