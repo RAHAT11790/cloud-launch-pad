@@ -57,10 +57,15 @@ interface Props {
   onEditSeries: (id: string) => void;
 }
 
+// Module-level cache — see AnimeCard.tsx `watchlistCacheByUser` for the same
+// pattern. Prevents the empty-grid flash + "loading details" spinner every
+// time the admin user re-opens the Weekly Episode tab.
+let weeklySchedulesCache: Record<string, Schedule> = {};
+
 export default function WeeklyEpisodeManager({
   webseriesData, glassCard, inputClass, selectClass, btnPrimary, btnSecondary, onEditSeries,
 }: Props) {
-  const [schedules, setSchedules] = useState<Record<string, Schedule>>({});
+  const [schedules, setSchedules] = useState<Record<string, Schedule>>(() => weeklySchedulesCache);
   const [activeDay, setActiveDay] = useState<Day>(todayName());
 
   // Picker state
@@ -79,10 +84,13 @@ export default function WeeklyEpisodeManager({
 
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklySchedule"), snap => {
-      startTransition(() => setSchedules(snap.val() || {}));
+      const next = snap.val() || {};
+      weeklySchedulesCache = next;
+      startTransition(() => setSchedules(next));
     });
     return () => unsub();
   }, []);
+
 
   const seriesById = useMemo(() => {
     const map: Record<string, any> = {};
