@@ -110,7 +110,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       i.decoding = "async";
       i.src = optimizedImageUrl(s.backdrop, "backdrop");
     });
-  }, [current, slides]);
+  }, [current, renderSlides]);
 
   const goTo = useCallback((idx: number) => {
     setCurrent(((idx % renderSlides.length) + renderSlides.length) % renderSlides.length);
