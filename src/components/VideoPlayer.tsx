@@ -2737,6 +2737,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
+      console.warn("[HLS] playback error", {
+        type: data.type,
+        details: data.details,
+        fatal: data.fatal,
+        code: data.response?.code,
+      });
       if (!data.fatal) return;
       const savedBeforeRecovery = preserveResumePoint(videoRef.current?.currentTime || 0);
       const recoverableTrackDetails = new Set([
@@ -2756,11 +2762,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
 
       hlsFatalRetriesRef.current += 1;
-      const fatalRetryLimit = manualQualitySelectedRef.current ? 5 : 2;
+      const fatalRetryLimit = isAnimeSaltContent ? 8 : (manualQualitySelectedRef.current ? 5 : 2);
       if (hlsFatalRetriesRef.current > fatalRetryLimit) {
         try { hls.destroy(); } catch {}
         hlsRef.current = null;
-        tryNextPlaybackRouteRef.current(savedBeforeRecovery);
+        if (!isAnimeSaltContent || [403, 410].includes(Number(data.response?.code || 0))) {
+          tryNextPlaybackRouteRef.current(savedBeforeRecovery);
+        } else {
+          setVideoError(false);
+          setIsBuffering(false);
+        }
         return;
       }
 
