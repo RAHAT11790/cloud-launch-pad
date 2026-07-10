@@ -26,36 +26,81 @@ interface HeroSliderProps {
 }
 
 const SLIDE_DURATION = 6500;
-const XFADE_MS = 900;
+const XFADE_MS = 820;
+
+const imageReadyCache = new Map<string, Promise<void>>();
+
+const waitForImage = (src: string) => {
+  if (!src || typeof window === "undefined") return Promise.resolve();
+  const cached = imageReadyCache.get(src);
+  if (cached) return cached;
+
+  const promise = new Promise<void>((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = src;
+    if (img.complete) resolve();
+  });
+  imageReadyCache.set(src, promise);
+  return promise;
+};
 
 const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [current, setCurrent] = useState(0);
-  const [previous, setPrevious] = useState<number | null>(null);
+  const [previousSlide, setPreviousSlide] = useState<HeroSlide | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
   const [paused, setPaused] = useState(false);
   const [dragDx, setDragDx] = useState(0);
-  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>(slides);
+  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>([]);
   const [settled, setSettled] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const xfadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const slidesLenRef = useRef(renderSlides.length);
+  const renderSlidesRef = useRef(renderSlides);
+  const currentRef = useRef(current);
+  const transitionLockedRef = useRef(false);
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   slidesLenRef.current = renderSlides.length;
+  renderSlidesRef.current = renderSlides;
+  currentRef.current = current;
 
   // Content-signature debounce so parent reference churn doesn't shuffle us.
-  const slidesSignature = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
+  const slidesSignature = useMemo(() => slides.map((s) => `${s.id}:${s.backdrop}`).join("|"), [slides]);
   useEffect(() => {
-    if (!slides || slides.length === 0) return;
+    if (!slides || slides.length === 0) {
+      if (settleRef.current) clearTimeout(settleRef.current);
+      setRenderSlides([]);
+      setPreviousSlide(null);
+      setTransitioning(false);
+      transitionLockedRef.current = false;
+      setSettled(true);
+      return;
+    }
     const snapshot = slides;
-    const t = setTimeout(() => {
+    setSettled(false);
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(() => {
+      const currentId = renderSlidesRef.current[currentRef.current]?.id;
+      const preservedIndex = currentId ? snapshot.findIndex((s) => s.id === currentId) : -1;
+      const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
       setRenderSlides(snapshot);
-      setCurrent(0);
-      setPrevious(null);
+      setCurrent(nextIndex);
+      currentRef.current = nextIndex;
+      setPreviousSlide(null);
+      setTransitioning(false);
+      transitionLockedRef.current = false;
       setProgressKey((k) => k + 1);
       setSettled(true);
-    }, 1500);
-    return () => clearTimeout(t);
+    }, 1200);
+    return () => {
+      if (settleRef.current) clearTimeout(settleRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slidesSignature]);
 
@@ -63,31 +108,56 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     if (renderSlides.length > 0 && current >= renderSlides.length) setCurrent(0);
   }, [renderSlides.length, current]);
 
-  // Advance timer — one card at a time, no batching.
+  const goTo = useCallback((idx: number) => {
+    const list = renderSlidesRef.current;
+    const n = list.length;
+    if (n <= 1 || transitionLockedRef.current) return;
+
+    const from = currentRef.current;
+    const next = ((idx % n) + n) % n;
+    if (next === from) return;
+
+    const fromSlide = list[from];
+    const nextSlide = list[next];
+    if (!fromSlide || !nextSlide) return;
+
+    transitionLockedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    waitForImage(optimizedImageUrl(nextSlide.backdrop, "backdrop")).finally(() => {
+      const latest = renderSlidesRef.current;
+      const safeNext = latest.findIndex((s) => s.id === nextSlide.id);
+      const safeFrom = latest[currentRef.current];
+      if (safeNext < 0 || !safeFrom) {
+        transitionLockedRef.current = false;
+        return;
+      }
+
+      setPreviousSlide(safeFrom);
+      setTransitioning(true);
+      currentRef.current = safeNext;
+      setCurrent(safeNext);
+
+      if (xfadeRef.current) clearTimeout(xfadeRef.current);
+      xfadeRef.current = setTimeout(() => {
+        setPreviousSlide(null);
+        setTransitioning(false);
+        transitionLockedRef.current = false;
+        setProgressKey((k) => k + 1);
+      }, XFADE_MS + 40);
+    });
+  }, []);
+
+  // Advance timer — one card at a time, locked during image-load + crossfade.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!settled) return;
+    if (!settled || transitioning) return;
     if (slidesLenRef.current <= 1) return;
     if (paused) return;
     if (typeof document !== "undefined" && document.hidden) return;
-    timerRef.current = setTimeout(() => {
-      setCurrent((c) => {
-        const next = (c + 1) % Math.max(1, slidesLenRef.current);
-        setPrevious(c);
-        return next;
-      });
-      setProgressKey((k) => k + 1);
-    }, SLIDE_DURATION);
+    timerRef.current = setTimeout(() => goTo(currentRef.current + 1), SLIDE_DURATION);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [current, progressKey, paused, settled]);
-
-  // Clear the outgoing "previous" layer after the cross-fade completes.
-  useEffect(() => {
-    if (previous === null) return;
-    if (xfadeRef.current) clearTimeout(xfadeRef.current);
-    xfadeRef.current = setTimeout(() => setPrevious(null), XFADE_MS + 40);
-    return () => { if (xfadeRef.current) clearTimeout(xfadeRef.current); };
-  }, [previous, current]);
+  }, [goTo, current, paused, settled, transitioning, renderSlides.length]);
 
   useEffect(() => {
     const onVis = () => {
@@ -98,7 +168,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       }
     };
     const onBlur = () => { if (timerRef.current) clearTimeout(timerRef.current); };
-    const onFocus = () => setProgressKey((k) => k + 1);
+    const onFocus = () => {
+      if (!transitionLockedRef.current) setProgressKey((k) => k + 1);
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
@@ -121,16 +193,6 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       i.src = optimizedImageUrl(s.backdrop, "backdrop");
     });
   }, [current, renderSlides]);
-
-  const goTo = useCallback((idx: number) => {
-    setCurrent((c) => {
-      const n = renderSlides.length || 1;
-      const next = ((idx % n) + n) % n;
-      if (next !== c) setPrevious(c);
-      return next;
-    });
-    setProgressKey((k) => k + 1);
-  }, [renderSlides.length]);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.changedTouches[0];
@@ -160,16 +222,18 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   if (renderSlides.length === 0) {
     return (
-      <div className="relative w-full h-[42vh] min-h-[300px] bg-card flex items-center justify-center rounded-b-3xl">
-        <p className="text-muted-foreground">No content available</p>
+      <div
+        data-no-swipe="true"
+        className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl bg-card flex items-center justify-center"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-muted/40 via-card to-background" />
+        <p className="relative z-10 text-muted-foreground">{settled ? "No content available" : ""}</p>
       </div>
     );
   }
 
   const slide = renderSlides[current];
   if (!slide) return null;
-  const prevSlide = previous !== null ? renderSlides[previous] : null;
-
   return (
     <div
       data-no-swipe="true"
@@ -179,53 +243,36 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Outgoing layer — fades out */}
-      {prevSlide && (
+      {/* Outgoing layer — deterministic single-card fade, no imperative ref race */}
+      {previousSlide && (
         <div
-          key={`prev-${prevSlide.id}-${previous}`}
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            opacity: 0,
-            transition: `opacity ${XFADE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
-            willChange: "opacity",
-          }}
-          ref={(el) => {
-            if (!el) return;
-            // Kick off fade next frame so the initial opacity:1 paints first
-            requestAnimationFrame(() => { el.style.opacity = "0"; });
-            el.style.opacity = "1";
-          }}
+          key={`prev-${previousSlide.id}`}
+          className="hero-layer hero-layer-exit"
         >
           <img
-            src={optimizedImageUrl(prevSlide.backdrop, "backdrop")}
+            src={optimizedImageUrl(previousSlide.backdrop, "backdrop")}
             alt=""
             aria-hidden
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover hero-image"
             draggable={false}
-            style={{ transform: "scale(1.08)" }}
           />
         </div>
       )}
 
-      {/* Active layer — fades in with Ken Burns zoom */}
+      {/* Active layer — preloaded before transition, then one smooth fade-in */}
       <div
         key={`cur-${slide.id}-${current}`}
-        className="absolute inset-0 pointer-events-none"
+        className={`hero-layer ${previousSlide ? "hero-layer-enter" : "hero-layer-current"}`}
         style={{
-          opacity: prevSlide ? 0 : 1,
           transform: `translate3d(${dragDx * 0.35}px, 0, 0)`,
-          transition: `opacity ${XFADE_MS}ms cubic-bezier(0.4, 0, 0.2, 1), transform 240ms ease-out`,
+          transition: "transform 240ms ease-out",
           willChange: "opacity, transform",
-        }}
-        ref={(el) => {
-          if (!el || !prevSlide) return;
-          requestAnimationFrame(() => { el.style.opacity = "1"; });
         }}
       >
         <img
           src={optimizedImageUrl(slide.backdrop, "backdrop")}
           alt={slide.title}
-          className="absolute inset-0 w-full h-full object-cover hero-kenburns"
+          className="absolute inset-0 w-full h-full object-cover hero-image hero-kenburns"
           loading="eager"
           decoding="async"
           draggable={false}
@@ -312,7 +359,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
             aria-label={`Go to slide ${i + 1}`}
           >
             <div className={`absolute inset-0 rounded-full ${i === current ? "bg-white/40" : "bg-white/25"}`} />
-            {i === current && !paused && settled && (
+            {i === current && !paused && settled && !transitioning && (
               <div
                 key={`prog-${current}-${progressKey}`}
                 className="absolute inset-0 rounded-full gradient-primary hero-progress-bar"
