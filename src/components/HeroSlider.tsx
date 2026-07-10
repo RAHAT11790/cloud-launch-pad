@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { Play, Info, Star } from "lucide-react";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
