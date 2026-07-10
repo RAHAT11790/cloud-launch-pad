@@ -455,6 +455,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
+  const currentSrcRef = useRef('');
+  useEffect(() => { currentSrcRef.current = currentSrc; }, [currentSrc]);
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
@@ -1979,6 +1981,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const markPlaybackSourceHealthy = useCallback((extraSource?: string) => {
     const now = Date.now();
+    rsSoftRetriesRef.current = 0;
     [extraSource, currentSrc, activeSourceBaseRef.current, sourceBaseRef.current]
       .map((value) => String(value || "").trim())
       .filter(Boolean)
@@ -4060,7 +4063,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!buffered && proxyUrl && rawSourceAtSeek && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
       seekRescueTimerRef.current = setTimeout(() => {
         const liveVideo = videoRef.current;
-        if (!liveVideo || currentSrc !== directSrcAtSeek) return;
+        if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
         const stillWaitingNearTarget = liveVideo.readyState < 3 || Math.abs((liveVideo.currentTime || 0) - target) > 2;
         if (!stillWaitingNearTarget) return;
         const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
