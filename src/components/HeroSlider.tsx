@@ -44,19 +44,27 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const slidesLenRef = useRef(renderSlides.length);
   slidesLenRef.current = renderSlides.length;
 
-  // Debounce: only adopt the parent's slides after they've been STABLE for
-  // 1.5s (no new prop update in that window). Then flip `settled` so the
-  // auto-advance timer + progress bar can start.
+  // Debounce: adopt parent's slides only after their CONTENT has been stable
+  // for 1.5s. We key on a cheap content signature (length + joined ids) so
+  // that reference-only re-renders from the parent (which happen on every
+  // Firebase snapshot even when no slide actually changed) don't reset the
+  // debounce forever — which would freeze the slider on an empty snapshot.
+  const slidesSignature = useMemo(
+    () => slides.map((s) => s.id).join("|"),
+    [slides],
+  );
   useEffect(() => {
     if (!slides || slides.length === 0) return;
+    const snapshot = slides;
     const t = setTimeout(() => {
-      setRenderSlides(slides);
+      setRenderSlides(snapshot);
       setCurrent(0);
       setProgressKey((k) => k + 1);
       setSettled(true);
     }, 1500);
     return () => clearTimeout(t);
-  }, [slides]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slidesSignature]);
 
   // Clamp current if renderSlides changes
   useEffect(() => {
