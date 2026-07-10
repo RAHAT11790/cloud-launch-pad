@@ -60,15 +60,28 @@ const emptyDraft = (): Omit<CustomTask, "id" | "createdAt" | "updatedAt"> => ({
   minSeconds: 10,
 });
 
+// ---------------------------------------------------------------------------
+// Module-level cache: keeps the last-known snapshot of tasks / users / refCounts
+// alive across tab switches in the admin panel. Re-mount paints INSTANTLY from
+// the cache and shows no loading spinner; Firebase listeners still update live
+// in the background and refresh the cache for the next re-mount.
+// ---------------------------------------------------------------------------
+let dailyTasksCache: CustomTask[] = [];
+let dailyUsersCache: UserRow[] = [];
+let dailyRefCountsCache: Record<string, { count: number; earnings: number }> = {};
+
 export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, btnSecondary }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [tasks, setTasks] = useState<CustomTask[]>([]);
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [refCounts, setRefCounts] = useState<Record<string, { count: number; earnings: number }>>({});
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<CustomTask[]>(() => dailyTasksCache);
+  const [users, setUsers] = useState<UserRow[]>(() => dailyUsersCache);
+  const [refCounts, setRefCounts] = useState<Record<string, { count: number; earnings: number }>>(() => dailyRefCountsCache);
+  const [loading, setLoading] = useState(dailyUsersCache.length === 0);
 
   /* live tasks */
-  useEffect(() => subscribeCustomTasks(setTasks), []);
+  useEffect(() => subscribeCustomTasks((next) => {
+    dailyTasksCache = next;
+    setTasks(next);
+  }), []);
 
   /* live users */
   useEffect(() => {
@@ -85,6 +98,7 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
           (s: number, r: any) => s + Number(r?.amount || 0), 0,
         ) as number,
       }));
+      dailyUsersCache = rows;
       setUsers(rows);
       setLoading(false);
     });
@@ -100,10 +114,12 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
         const visitors = v?.visitors ? Object.keys(v.visitors).length : 0;
         map[refUid] = { count: visitors, earnings: 0 };
       });
+      dailyRefCountsCache = map;
       setRefCounts(map);
     });
     return () => un();
   }, []);
+
 
   const totalCoins = useMemo(() => users.reduce((s, u) => s + u.coins, 0), [users]);
   const bannedCount = useMemo(() => users.filter((u) => u.banned).length, [users]);
