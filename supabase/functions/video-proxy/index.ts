@@ -26,6 +26,9 @@ const PASS = ["content-type", "content-length", "content-range", "accept-ranges"
 // for smooth RS playback after a seek, but never let mirrors answer with the
 // whole remaining file (often 40MB-2GB), which makes skip/recovery hang.
 const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
+const FASTSTART_WINDOW_BYTES = 8 * 1024 * 1024;
+const FASTSTART_HEAD_BYTES = 2 * 1024 * 1024;
+const FASTSTART_TAIL_BYTES = 16 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
@@ -125,6 +128,187 @@ function parseContentRange(value: string | null) {
   const total = m[3] === "*" ? NaN : Number(m[3]);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return { start, end, total };
+}
+
+function readUint64(view: DataView, offset: number) {
+  const hi = view.getUint32(offset);
+  const lo = view.getUint32(offset + 4);
+  return hi * 2 ** 32 + lo;
+}
+
+function atomAt(buf: Uint8Array, offset: number) {
+  if (offset + 8 > buf.byteLength) return null;
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let size = view.getUint32(offset);
+  const type = String.fromCharCode(buf[offset + 4], buf[offset + 5], buf[offset + 6], buf[offset + 7]);
+  let header = 8;
+  if (size === 1) {
+    if (offset + 16 > buf.byteLength) return null;
+    size = readUint64(view, offset + 8);
+    header = 16;
+  }
+  if (!size || size < header || offset + size > buf.byteLength) return null;
+  return { size, type, header };
+}
+
+const MP4_CONTAINER_ATOMS = new Set(["moov", "trak", "mdia", "minf", "stbl", "edts", "dinf", "udta", "meta", "ilst", "mvex", "moof", "traf"]);
+
+function patchChunkOffsets(buf: Uint8Array, delta: number, start = 0, end = buf.byteLength) {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let offset = start;
+  while (offset + 8 <= end) {
+    const atom = atomAt(buf, offset);
+    if (!atom || offset + atom.size > end) break;
+    const payload = offset + atom.header;
+    if (atom.type === "stco" && payload + 8 <= offset + atom.size) {
+      const count = view.getUint32(payload + 4);
+      let p = payload + 8;
+      for (let i = 0; i < count && p + 4 <= offset + atom.size; i += 1, p += 4) {
+        view.setUint32(p, (view.getUint32(p) + delta) >>> 0);
+      }
+    } else if (atom.type === "co64" && payload + 8 <= offset + atom.size) {
+      const count = view.getUint32(payload + 4);
+      let p = payload + 8;
+      for (let i = 0; i < count && p + 8 <= offset + atom.size; i += 1, p += 8) {
+        const next = BigInt(Math.round(readUint64(view, p) + delta));
+        view.setBigUint64(p, next);
+      }
+    } else if (MP4_CONTAINER_ATOMS.has(atom.type)) {
+      patchChunkOffsets(buf, delta, atom.type === "meta" ? payload + 4 : payload, offset + atom.size);
+    }
+    offset += atom.size;
+  }
+}
+
+function concatBytes(parts: Uint8Array[]) {
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const out = new Uint8Array(total);
+  let cursor = 0;
+  for (const part of parts) { out.set(part, cursor); cursor += part.byteLength; }
+  return out;
+}
+
+function parseRequestedRange(range: string | null, total: number) {
+  const raw = String(range || "").trim();
+  const m = raw.match(/^bytes=(\d+)-(\d*)$/i);
+  if (!m) return { start: 0, end: Math.min(total - 1, FASTSTART_WINDOW_BYTES - 1) };
+  const start = Math.max(0, Number(m[1]));
+  const explicitEnd = m[2] ? Number(m[2]) : NaN;
+  const end = Number.isFinite(explicitEnd)
+    ? Math.min(total - 1, explicitEnd)
+    : Math.min(total - 1, start + FASTSTART_WINDOW_BYTES - 1);
+  return { start, end: Math.max(start, end) };
+}
+
+async function fetchRangeBytes(target: URL, range: string, baseHeaders: Record<string, string>, signal: AbortSignal) {
+  const origin = `${target.protocol}//${target.host}`;
+  const attempts = [
+    { ...baseHeaders, range },
+    { ...baseHeaders, range, Referer: `${origin}/` },
+    { ...baseHeaders, range, Referer: `${origin}/`, Origin: origin },
+  ];
+  let lastError = "";
+  for (const headers of attempts) {
+    try {
+      const res = await fetch(target.toString(), { method: "GET", headers, redirect: "follow", signal });
+      if (res.ok || res.status === 206) return new Uint8Array(await res.arrayBuffer());
+      lastError = `HTTP ${res.status}`;
+      try { await res.body?.cancel(); } catch {}
+    } catch (e) { lastError = (e as Error)?.message || String(e); }
+  }
+  throw new Error(lastError || "range fetch failed");
+}
+
+async function probeTotalSize(target: URL, baseHeaders: Record<string, string>, signal: AbortSignal) {
+  const origin = `${target.protocol}//${target.host}`;
+  const attempts = [
+    { ...baseHeaders, range: "bytes=0-0" },
+    { ...baseHeaders, range: "bytes=0-0", Referer: `${origin}/` },
+    { ...baseHeaders, range: "bytes=0-0", Referer: `${origin}/`, Origin: origin },
+  ];
+  for (const headers of attempts) {
+    const res = await fetch(target.toString(), { method: "GET", headers, redirect: "follow", signal });
+    const cr = parseContentRange(res.headers.get("content-range"));
+    const len = Number(res.headers.get("content-length") || 0);
+    try { await res.body?.cancel(); } catch {}
+    if (cr && Number.isFinite(cr.total) && cr.total > 0) return cr.total;
+    if (len > 0 && res.status === 200) return len;
+  }
+  return 0;
+}
+
+function findMoovInTail(tail: Uint8Array, tailStart: number) {
+  const view = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  for (let i = 0; i + 8 <= tail.byteLength; i += 1) {
+    if (tail[i + 4] !== 0x6d || tail[i + 5] !== 0x6f || tail[i + 6] !== 0x6f || tail[i + 7] !== 0x76) continue;
+    let size = view.getUint32(i);
+    let header = 8;
+    if (size === 1 && i + 16 <= tail.byteLength) { size = readUint64(view, i + 8); header = 16; }
+    if (size >= header && tailStart + i + size <= tailStart + tail.byteLength) return { start: tailStart + i, size };
+  }
+  return null;
+}
+
+async function tryFaststartMp4(
+  req: Request,
+  target: URL,
+  rawRange: string | null,
+  baseHeaders: Record<string, string>,
+  signal: AbortSignal,
+) {
+  if (req.method !== "GET" && req.method !== "HEAD") return null;
+  if (!isDirectMp4Like(target)) return null;
+  const total = await probeTotalSize(target, baseHeaders, signal);
+  if (!total || total < 1024 * 1024) return null;
+  const headEnd = Math.min(total - 1, FASTSTART_HEAD_BYTES - 1);
+  const head = await fetchRangeBytes(target, `bytes=0-${headEnd}`, baseHeaders, signal);
+  const ftyp = atomAt(head, 0);
+  if (!ftyp || ftyp.type !== "ftyp") return null;
+  const second = atomAt(head, ftyp.size);
+  if (second?.type === "moov") return null;
+  const tailStart = Math.max(0, total - FASTSTART_TAIL_BYTES);
+  const tail = await fetchRangeBytes(target, `bytes=${tailStart}-${total - 1}`, baseHeaders, signal);
+  const moovMeta = findMoovInTail(tail, tailStart);
+  if (!moovMeta || moovMeta.start < ftyp.size || moovMeta.start + moovMeta.size > total) return null;
+  const moov = moovMeta.start >= tailStart && moovMeta.start + moovMeta.size <= total
+    ? tail.slice(moovMeta.start - tailStart, moovMeta.start - tailStart + moovMeta.size)
+    : await fetchRangeBytes(target, `bytes=${moovMeta.start}-${moovMeta.start + moovMeta.size - 1}`, baseHeaders, signal);
+  const patchedMoov = new Uint8Array(moov);
+  patchChunkOffsets(patchedMoov, moovMeta.size);
+
+  const { start, end } = parseRequestedRange(rawRange, total);
+  const headers = new Headers(cors);
+  headers.set("content-type", "video/mp4");
+  headers.set("accept-ranges", "bytes");
+  headers.set("content-range", `bytes ${start}-${end}/${total}`);
+  headers.set("content-length", String(end - start + 1));
+  headers.set("cache-control", "public, max-age=604800, immutable");
+  headers.set("content-disposition", "inline");
+  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  headers.set("Timing-Allow-Origin", "*");
+  headers.set("x-rs-faststart", "1");
+  if (req.method === "HEAD") return new Response(null, { status: 206, headers });
+
+  const ftypBytes = head.slice(0, ftyp.size);
+  const parts: Uint8Array[] = [];
+  const pushVirtual = async (from: number, to: number) => {
+    if (to < from) return;
+    const ftypEnd = ftypBytes.byteLength - 1;
+    const moovStart = ftypBytes.byteLength;
+    const moovEnd = moovStart + patchedMoov.byteLength - 1;
+    if (from <= ftypEnd) parts.push(ftypBytes.slice(from, Math.min(to, ftypEnd) + 1));
+    if (to >= moovStart && from <= moovEnd) parts.push(patchedMoov.slice(Math.max(from, moovStart) - moovStart, Math.min(to, moovEnd) - moovStart + 1));
+    const mediaStart = moovEnd + 1;
+    if (to >= mediaStart) {
+      const virtualFrom = Math.max(from, mediaStart);
+      const virtualTo = to;
+      const originalFrom = virtualFrom - patchedMoov.byteLength;
+      const originalTo = Math.min(moovMeta.start - 1, virtualTo - patchedMoov.byteLength);
+      if (originalTo >= originalFrom) parts.push(await fetchRangeBytes(target, `bytes=${originalFrom}-${originalTo}`, baseHeaders, signal));
+    }
+  };
+  await pushVirtual(start, end);
+  return new Response(concatBytes(parts), { status: 206, headers });
 }
 
 async function drainReader(reader: ReadableStreamDefaultReader<Uint8Array>, controller: ReadableStreamDefaultController<Uint8Array>) {
