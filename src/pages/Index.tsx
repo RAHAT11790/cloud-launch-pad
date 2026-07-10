@@ -65,6 +65,7 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
+const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
 const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url, AN_PLAYBACK_HLS_PREFIX);
 
 const isAnPlayableHlsUrl = (url?: string | null) => {
@@ -513,6 +514,7 @@ import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetada
 import { usePremium } from "@/hooks/usePremium";
 import { isEpisodeLocked, isSeriesLocked } from "@/lib/premiumAccess";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { supabase } from "@/integrations/supabase/client";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
