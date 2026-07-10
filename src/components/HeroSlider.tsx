@@ -31,24 +31,32 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [current, setCurrent] = useState(0);
   const [progressKey, setProgressKey] = useState(0); // forces progress restart
   const [paused, setPaused] = useState(false);
+  const [settled, setSettled] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const slidesLenRef = useRef(slides.length);
   slidesLenRef.current = slides.length;
+
+  // Wait until the slides array has been STABLE for ~1.5s (Firebase's initial
+  // snapshot burst finished) before starting auto-advance. Otherwise the
+  // rapid prop churn made the slider "scroll very fast" during the first
+  // 5-10 seconds after page load.
+  useEffect(() => {
+    setSettled(false);
+    if (slides.length === 0) return;
+    const t = setTimeout(() => setSettled(true), 1500);
+    return () => clearTimeout(t);
+  }, [slides.length]);
 
   // Clamp current if slides change
   useEffect(() => {
     if (slides.length > 0 && current >= slides.length) setCurrent(0);
   }, [slides.length, current]);
 
-  // Schedule next slide — only re-runs when `current`/`progressKey` change
-  // (i.e. an actual slide advance or manual restart), NOT on every parent
-  // re-render / Firebase snapshot that shuffles the `slides` array identity.
-  // Previously scheduleNext depended on `slides.length` + `paused`, so
-  // incremental Firebase loads reset the timer many times in the first few
-  // seconds and made auto-advance look like it was flashing through slides.
+  // Schedule next slide — only when settled, not paused, tab visible.
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (!settled) return;
     if (slidesLenRef.current <= 1) return;
     if (paused) return;
     if (typeof document !== "undefined" && document.hidden) return;
@@ -57,7 +65,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       setProgressKey((k) => k + 1);
     }, SLIDE_DURATION);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [current, progressKey, paused]);
+  }, [current, progressKey, paused, settled]);
 
   // Pause on tab hidden / blur; resume on focus
   useEffect(() => {
