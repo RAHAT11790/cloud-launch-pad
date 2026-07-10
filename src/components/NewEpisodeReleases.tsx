@@ -151,7 +151,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const openingRef = useRef<string | null>(null);
   const handleClick = (release: EpisodeRelease, startEpisode?: number) => {
     if (openingRef.current === release.id) return;
     openingRef.current = release.id;
