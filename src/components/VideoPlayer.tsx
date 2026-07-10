@@ -90,10 +90,10 @@ const isVideoProxyPlaybackUrl = (value: string, configuredBase?: string): boolea
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
 const RS_VALID_SOURCE_TTL_MS = 10 * 60 * 1000;
-const RS_SEEK_GRACE_MS = 25_000;
-const RS_SEEK_PROXY_RESCUE_MS = 900;
+const RS_SEEK_GRACE_MS = 60_000;
+const RS_SEEK_PROXY_RESCUE_MS = 18_000;
 const RS_NORMAL_RELOAD_LIMIT = 2;
-const RS_SEEK_RELOAD_LIMIT = 6;
+const RS_SEEK_RELOAD_LIMIT = 2;
 
 const normalizeVideoServersValue = (val: unknown): VideoServerOption[] => {
   let servers: VideoServerOption[] = [];
@@ -194,8 +194,8 @@ const isBypassSource = (url: string): boolean => {
 
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
   // http:// sources must use video-proxy because an HTTPS app cannot play raw HTTP.
-  // HTTPS RS files should play DIRECT first: routing every healthy HTTPS server
-  // through video-proxy adds an extra hop and was the main source of RS latency.
+  // HTTPS RS files play DIRECT first; testing showed proxying MP4 seek makes the
+  // browser walk sequential byte windows and delays playback even more.
   const isHttp = isInsecureHttpSource(url);
 
   if (isHttp) {
@@ -207,9 +207,9 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
+  addCandidate(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
-  addCandidate(url);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
   return candidates;
 };
@@ -672,23 +672,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   
   // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
-  // It is used only for http:// playback rescue. HTTPS servers play directly
-  // through the native <video> tag and never go through video-proxy.
+  // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
   useEffect(() => {
     let cancelled = false;
     let routerBase = "";
     let overrideRaw: any = null;
     const applyProxyRoute = () => {
       if (cancelled) return;
-      if (isAnHls) { setProxyUrl(""); setProxyApiKey(""); return; }
+      if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
       const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
       const backendProxyUrl = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")
         ? `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")}/functions/v1/video-proxy`
         : "";
       const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      // Admin override wins. Otherwise keep a backend video-proxy ready so RS
-      // HTTPS sources can be rescued during slow far-seeks without changing server.
+      // Admin override wins. Otherwise keep a backend video-proxy ready for HTTP
+      // sources and last-resort fallback without forcing HTTPS RS through it.
       const finalUrl = enabled ? overrideUrl : (selfHostedUrl || backendProxyUrl);
       setProxyUrl(finalUrl);
       setProxyApiKey('');
@@ -1950,7 +1949,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
-  }, [cdnEnabled, proxyUrl, proxyApiKey, preferProxy]);
+  }, [cdnEnabled, noProxy, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     if (isBypassSource(rawUrl)) return rawUrl;
@@ -2141,6 +2140,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     const savedTime = lastKnownTime || v?.currentTime || lastPlaybackPositionRef.current || 0;
     const isSeekRecovery = Date.now() < seekRecoveryUntilRef.current;
+    if (isSeekRecovery && isCurrentPlaybackSourceValid()) {
+      // A far seek on non-faststart MP4 can legitimately take 15-30s while the
+      // browser walks MP4 byte ranges. Treat it as buffering, not expired. Route
+      // switching here aborts the in-flight range and creates the endless loader.
+      return false;
+    }
     const reloadCurrentHealthyRoute = (limit: number, delayBase = 220) => {
       rsSoftRetriesRef.current = (rsSoftRetriesRef.current || 0) + 1;
       if (rsSoftRetriesRef.current > limit || !v) return false;
@@ -2163,11 +2168,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
 
     // RS rule: a source that already played or produced media metadata is VALID.
-    // During seek/range stalls, do not downgrade quality or hop servers; retry the
-    // same route first and keep the user's selected server/quality stable.
-    if (isCurrentPlaybackSourceValid()) {
-      if (isSeekRecovery && reloadCurrentHealthyRoute(RS_SEEK_RELOAD_LIMIT, 120)) return true;
-      if (!isSeekRecovery && reloadCurrentHealthyRoute(RS_NORMAL_RELOAD_LIMIT, 350)) return true;
+    // Normal stalls can soft-reload, but seek stalls must NOT call load() on the
+    // same URL: that aborts the exact range request the browser is waiting for
+    // and restarts from byte 0, which is the endless spinner users see after drag seek.
+    if (isCurrentPlaybackSourceValid() && !isSeekRecovery) {
+      if (reloadCurrentHealthyRoute(RS_NORMAL_RELOAD_LIMIT, 350)) return true;
     }
 
     const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
@@ -2176,7 +2181,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
 
-    // Same quality, alternate route first (admin proxy → built-in proxy, etc.)
+    // Same quality, alternate route first (proxy ↔ direct) before touching quality/server.
     const sameQualityRouteFallback = buildPlaybackCandidates(
       activeSourceBaseRef.current,
       cdnEnabled,
@@ -2186,8 +2191,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
 
     if (sameQualityRouteFallback) {
-      pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
+      pendingSeek.current = activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0);
+      mediaRecoverySeekRef.current = pendingSeek.current;
+      seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
+      rsSoftRetriesRef.current = 0;
       setCurrentSrc(sameQualityRouteFallback);
+      setVideoError(false);
+      setIsBuffering(true);
       return true;
     }
 
@@ -2297,7 +2307,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
@@ -3237,6 +3247,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
+    if (activeSeekTargetRef.current !== null) return;
     if (isHlsLikeUrl(activeSourceBaseRef.current)) return;
     if (!noServerSwitch && isInsecureHttpSource(activeSourceBaseRef.current) && !effectiveVideoServers.length && !videoServersLoaded) return;
     const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
@@ -3249,6 +3260,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // domain swap has produced the final http:// URL.
   useEffect(() => {
     if (!playbackRouteReady || !effectiveVideoServers.length) return;
+    if (activeSeekTargetRef.current !== null) return;
     if (isHlsLikeUrl(sourceBaseRef.current || src)) return;
     const safeServerIndex = Math.min(activeServerIndex, effectiveVideoServers.length - 1);
     if (safeServerIndex !== activeServerIndex) setActiveServerIndex(safeServerIndex);
@@ -3276,6 +3288,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
+      if (activeSeekTargetRef.current !== null && isCurrentPlaybackSourceValid()) return;
       if (v.readyState < 2) {
         tryNextPlaybackRoute(v.currentTime || 0);
       }
@@ -3833,8 +3846,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       finishSeekRecoveryIfReady(v);
       setIsBuffering(false);
     };
-    // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
+    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
+    let hardStallTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearStallRecoveryTimers = () => {
+      if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+      if (hardStallTimer) { clearTimeout(hardStallTimer); hardStallTimer = null; }
+    };
+
+    const scheduleHardStallRecovery = (delay: number) => {
+      if (hardStallTimer) clearTimeout(hardStallTimer);
+      hardStallTimer = setTimeout(() => {
+        if (adGateActiveRef.current || v.paused || !userPlaybackIntentRef.current) return;
+        const seekTarget = activeSeekTargetRef.current;
+        const seekStillStuck = seekTarget !== null && !finishSeekRecoveryIfReady(v);
+        const playbackStillStuck = v.readyState < 3;
+        if (!seekStillStuck && !playbackStillStuck) return;
+        if (seekStillStuck) {
+          slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
+        }
+        tryNextPlaybackRoute(seekTarget ?? (lastKnownTime || v.currentTime || 0));
+      }, delay);
+    };
+
+    // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     const onWaiting = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
       preserveResumePoint(lastKnownTime || v.currentTime || 0);
@@ -3843,11 +3879,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 400);
+      scheduleHardStallRecovery(activeSeekTargetRef.current !== null ? 45_000 : 9000);
     };
     const onPlaying = () => {
       markPlaybackSourceHealthy();
       finishSeekRecoveryIfReady(v);
-      if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      clearStallRecoveryTimers();
       setIsBuffering(false);
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
     };
@@ -3859,28 +3896,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onSeeked = () => {
       markPlaybackSourceHealthy();
       finishSeekRecoveryIfReady(v);
+      if (finishSeekRecoveryIfReady(v)) clearStallRecoveryTimers();
       setIsBuffering(false);
     };
-    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
-    let hardStallTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
-      if (hardStallTimer) clearTimeout(hardStallTimer);
       const raw = activeSourceBaseRef.current || sourceBaseRef.current || currentSrc;
-      const stallDelay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
-        ? 12000
-        : /^https:\/\//i.test(raw)
-          ? 15000
-          : 9000;
-      hardStallTimer = setTimeout(() => {
-        if (v.readyState < 2 && !v.paused) {
-          tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
-        }
-      }, stallDelay);
+      const stallDelay = activeSeekTargetRef.current !== null
+        ? 45_000
+        : isVideoProxyPlaybackUrl(currentSrc, proxyUrl)
+          ? 5500
+          : manualQualitySelectedRef.current || isInsecureHttpSource(raw)
+            ? 8000
+            : 6500;
+      scheduleHardStallRecovery(stallDelay);
     };
     const onTimeUpdate = () => {
       const ct = v.currentTime;
@@ -3927,8 +3960,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     return () => {
       cancelAnimationFrame(rafId.current);
-      if (stalledTimer) clearTimeout(stalledTimer);
-      if (hardStallTimer) clearTimeout(hardStallTimer);
+      clearStallRecoveryTimers();
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("loadeddata", onLoadedData);
       v.removeEventListener("timeupdate", onTimeUpdate);
@@ -4086,7 +4118,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (wasPlaying && !adGateActiveRef.current) {
       window.setTimeout(() => { v.play().catch(() => {}); }, 0);
     }
-    if (!buffered && proxyUrl && rawSourceAtSeek && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
+    if (!buffered && proxyUrl && rawSourceAtSeek && isInsecureHttpSource(rawSourceAtSeek) && !isHlsLikeUrl(rawSourceAtSeek) && !isVideoProxyPlaybackUrl(directSrcAtSeek, proxyUrl)) {
       seekRescueTimerRef.current = setTimeout(() => {
         const liveVideo = videoRef.current;
         if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
@@ -4234,6 +4266,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
   const isSeeking = useRef(false);
+  const pendingTouchSeekRef = useRef<number | null>(null);
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -4247,12 +4280,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = target;
-    fastSeekTo(v, target);
+    pendingTouchSeekRef.current = target;
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${pct * 100}%`;
     }
+    if (timeDisplayRef.current && v.duration > 0) {
+      timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
+    }
+    setCurrentTime(target);
     resetHideTimer();
-  }, [fastSeekTo, getSafeSeekTime, resetHideTimer]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -4266,7 +4303,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = null;
     mediaRecoverySeekRef.current = null;
     lastPlaybackPositionRef.current = target;
-    fastSeekTo(v, target);
+    pendingTouchSeekRef.current = target;
 
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;
@@ -4274,13 +4311,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [fastSeekTo, getSafeSeekTime]);
+    setCurrentTime(target);
+  }, [getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     isSeeking.current = false;
+    const v = videoRef.current;
+    const target = pendingTouchSeekRef.current;
+    pendingTouchSeekRef.current = null;
+    if (v && target !== null) {
+      manualSeekUntilRef.current = Date.now() + 3500;
+      pendingSeek.current = null;
+      mediaRecoverySeekRef.current = null;
+      lastPlaybackPositionRef.current = target;
+      fastSeekTo(v, target);
+    }
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [fastSeekTo, resetHideTimer]);
 
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
