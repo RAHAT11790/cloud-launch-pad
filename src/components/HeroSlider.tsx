@@ -25,8 +25,11 @@ interface HeroSliderProps {
   onInfo: (index: number) => void;
 }
 
-const SLIDE_DURATION = 6500;
-const XFADE_MS = 820;
+const SLIDE_DURATION = 6800;
+const TRANSITION_MS = 1080;
+
+const HERO_MOTIONS = ["pan", "veil", "depth", "rise", "prism"] as const;
+type HeroMotion = typeof HERO_MOTIONS[number];
 
 const imageReadyCache = new Map<string, Promise<void>>();
 
@@ -38,10 +41,15 @@ const waitForImage = (src: string) => {
   const promise = new Promise<void>((resolve) => {
     const img = new Image();
     img.decoding = "async";
-    img.onload = () => resolve();
+    const done = () => {
+      const decode = img.decode?.();
+      if (decode) decode.catch(() => undefined).finally(resolve);
+      else resolve();
+    };
+    img.onload = done;
     img.onerror = () => resolve();
     img.src = src;
-    if (img.complete) resolve();
+    if (img.complete) done();
   });
   imageReadyCache.set(src, promise);
   return promise;
@@ -49,58 +57,71 @@ const waitForImage = (src: string) => {
 
 const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [current, setCurrent] = useState(0);
-  const [previousSlide, setPreviousSlide] = useState<HeroSlide | null>(null);
+  const [outgoingSlide, setOutgoingSlide] = useState<HeroSlide | null>(null);
+  const [motion, setMotion] = useState<HeroMotion>("pan");
+  const [motionKey, setMotionKey] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
   const [paused, setPaused] = useState(false);
   const [dragDx, setDragDx] = useState(0);
-  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>([]);
-  const [settled, setSettled] = useState(false);
+  const [renderSlides, setRenderSlides] = useState<HeroSlide[]>(() => slides.filter((s) => !!s?.backdrop));
+  const [settled, setSettled] = useState(() => slides.length > 0);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const xfadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transitionCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const slidesLenRef = useRef(renderSlides.length);
   const renderSlidesRef = useRef(renderSlides);
   const currentRef = useRef(current);
   const transitionLockedRef = useRef(false);
-  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transitionRunRef = useRef(0);
+  const motionIndexRef = useRef(0);
+  const mountedRef = useRef(false);
 
   slidesLenRef.current = renderSlides.length;
   renderSlidesRef.current = renderSlides;
   currentRef.current = current;
 
-  // Content-signature debounce so parent reference churn doesn't shuffle us.
-  const slidesSignature = useMemo(() => slides.map((s) => `${s.id}:${s.backdrop}`).join("|"), [slides]);
+  // Primitive signature: parent array reference churn will not reset the slider.
+  const slidesSignature = useMemo(
+    () => slides.filter((s) => !!s?.backdrop).map((s) => `${s.id}:${s.backdrop}:${s.title}`).join("|"),
+    [slides],
+  );
+
   useEffect(() => {
-    if (!slides || slides.length === 0) {
-      if (settleRef.current) clearTimeout(settleRef.current);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (transitionCleanupRef.current) clearTimeout(transitionCleanupRef.current);
+      transitionRunRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    const snapshot = slides.filter((s) => !!s?.backdrop).slice(0, 8);
+    transitionRunRef.current += 1;
+
+    if (snapshot.length === 0) {
       setRenderSlides([]);
-      setPreviousSlide(null);
+      setOutgoingSlide(null);
       setTransitioning(false);
       transitionLockedRef.current = false;
       setSettled(true);
       return;
     }
-    const snapshot = slides;
-    setSettled(false);
-    if (settleRef.current) clearTimeout(settleRef.current);
-    settleRef.current = setTimeout(() => {
-      const currentId = renderSlidesRef.current[currentRef.current]?.id;
-      const preservedIndex = currentId ? snapshot.findIndex((s) => s.id === currentId) : -1;
-      const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
-      setRenderSlides(snapshot);
-      setCurrent(nextIndex);
-      currentRef.current = nextIndex;
-      setPreviousSlide(null);
-      setTransitioning(false);
-      transitionLockedRef.current = false;
-      setProgressKey((k) => k + 1);
-      setSettled(true);
-    }, 1200);
-    return () => {
-      if (settleRef.current) clearTimeout(settleRef.current);
-    };
+
+    const currentId = renderSlidesRef.current[currentRef.current]?.id;
+    const preservedIndex = currentId ? snapshot.findIndex((s) => s.id === currentId) : -1;
+    const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
+    setRenderSlides(snapshot);
+    setCurrent(nextIndex);
+    currentRef.current = nextIndex;
+    setOutgoingSlide(null);
+    setTransitioning(false);
+    transitionLockedRef.current = false;
+    setProgressKey((k) => k + 1);
+    setSettled(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slidesSignature]);
 
@@ -123,8 +144,14 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
     transitionLockedRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (transitionCleanupRef.current) clearTimeout(transitionCleanupRef.current);
+
+    const runId = ++transitionRunRef.current;
+    const nextMotion = HERO_MOTIONS[motionIndexRef.current % HERO_MOTIONS.length];
+    motionIndexRef.current += 1;
 
     waitForImage(optimizedImageUrl(nextSlide.backdrop, "backdrop")).finally(() => {
+      if (!mountedRef.current || runId !== transitionRunRef.current) return;
       const latest = renderSlidesRef.current;
       const safeNext = latest.findIndex((s) => s.id === nextSlide.id);
       const safeFrom = latest[currentRef.current];
@@ -133,18 +160,20 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
         return;
       }
 
-      setPreviousSlide(safeFrom);
+      setMotion(nextMotion);
+      setMotionKey(runId);
+      setOutgoingSlide(safeFrom);
       setTransitioning(true);
       currentRef.current = safeNext;
       setCurrent(safeNext);
 
-      if (xfadeRef.current) clearTimeout(xfadeRef.current);
-      xfadeRef.current = setTimeout(() => {
-        setPreviousSlide(null);
+      transitionCleanupRef.current = setTimeout(() => {
+        if (!mountedRef.current || runId !== transitionRunRef.current) return;
+        setOutgoingSlide(null);
         setTransitioning(false);
         transitionLockedRef.current = false;
         setProgressKey((k) => k + 1);
-      }, XFADE_MS + 40);
+      }, TRANSITION_MS + 80);
     });
   }, []);
 
@@ -185,12 +214,10 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   useEffect(() => {
     if (renderSlides.length <= 1) return;
     const n = renderSlides.length;
-    [(current + 1) % n, (current - 1 + n) % n].forEach((idx) => {
+    [(current + 1) % n, (current + 2) % n, (current - 1 + n) % n].forEach((idx) => {
       const s = renderSlides[idx];
       if (!s?.backdrop) return;
-      const i = new Image();
-      i.decoding = "async";
-      i.src = optimizedImageUrl(s.backdrop, "backdrop");
+      void waitForImage(optimizedImageUrl(s.backdrop, "backdrop"));
     });
   }, [current, renderSlides]);
 
@@ -224,7 +251,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     return (
       <div
         data-no-swipe="true"
-        className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl bg-card flex items-center justify-center"
+        className="relative w-full h-[46vh] min-h-[320px] max-h-[520px] overflow-hidden rounded-b-3xl bg-card flex items-center justify-center"
       >
         <div className="absolute inset-0 bg-gradient-to-b from-muted/40 via-card to-background" />
         <p className="relative z-10 text-muted-foreground">{settled ? "No content available" : ""}</p>
@@ -237,36 +264,20 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   return (
     <div
       data-no-swipe="true"
-      className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl bg-black select-none"
-      style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)", touchAction: "pan-y pinch-zoom" }}
+      className="hero-stage relative w-full h-[46vh] min-h-[320px] max-h-[520px] overflow-hidden rounded-b-3xl select-none"
+      style={{ touchAction: "pan-y pinch-zoom" }}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Outgoing layer — deterministic single-card fade, no imperative ref race */}
-      {previousSlide && (
-        <div
-          key={`prev-${previousSlide.id}`}
-          className="hero-layer hero-layer-exit"
-        >
-          <img
-            src={optimizedImageUrl(previousSlide.backdrop, "backdrop")}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 w-full h-full object-cover hero-image"
-            draggable={false}
-          />
-        </div>
-      )}
-
-      {/* Active layer — preloaded before transition, then one smooth fade-in */}
       <div
-        key={`cur-${slide.id}-${current}`}
-        className={`hero-layer ${previousSlide ? "hero-layer-enter" : "hero-layer-current"}`}
+        key={`cur-${slide.id}-${current}-${motionKey}`}
+        className={`hero-layer hero-layer-in ${outgoingSlide ? `hero-motion-${motion}` : "hero-layer-current"}`}
         style={{
-          transform: `translate3d(${dragDx * 0.35}px, 0, 0)`,
-          transition: "transform 240ms ease-out",
-          willChange: "opacity, transform",
+          backgroundImage: `url(${optimizedImageUrl(slide.backdrop, "backdrop")})`,
+          transform: `translate3d(${dragDx * 0.28}px, 0, 0)`,
         }}
       >
         <img
@@ -279,19 +290,37 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
         />
       </div>
 
+      {/* Outgoing layer stays above the already-loaded incoming slide; this removes black/white flash. */}
+      {outgoingSlide && (
+        <div
+          key={`out-${outgoingSlide.id}-${motionKey}`}
+          className={`hero-layer hero-layer-out hero-motion-${motion}`}
+          style={{ backgroundImage: `url(${optimizedImageUrl(outgoingSlide.backdrop, "backdrop")})` }}
+        >
+          <img
+            src={optimizedImageUrl(outgoingSlide.backdrop, "backdrop")}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-full object-cover hero-image"
+            draggable={false}
+          />
+        </div>
+      )}
+
       {/* Gradient overlays */}
-      <div className="absolute inset-0 pointer-events-none" style={{
+      <div className="hero-vignette absolute inset-0 pointer-events-none" style={{
         background: `
-          linear-gradient(to top, hsl(var(--background)) 0%, hsla(var(--background)/0.55) 28%, transparent 60%),
-          linear-gradient(to bottom, hsla(var(--background)/0.35) 0%, transparent 22%)
+          linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.68) 25%, hsl(var(--background) / 0.18) 56%, transparent 74%),
+          linear-gradient(to bottom, hsl(var(--background) / 0.34) 0%, transparent 25%),
+          radial-gradient(circle at 18% 65%, hsl(var(--primary) / 0.18), transparent 34%)
         `,
       }} />
 
       {/* Content */}
-      <div key={`info-${slide.id}-${current}`} className="absolute bottom-[80px] left-0 right-0 px-5 z-10 pointer-events-none hero-fade-in">
+      <div key={`info-${slide.id}-${current}`} className="absolute bottom-[84px] left-0 right-0 px-5 z-10 pointer-events-none hero-fade-in">
         <div className="max-w-lg">
           <h1
-            className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] pointer-events-auto"
+            className="text-[28px] leading-[1.05] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_5px_22px_rgba(0,0,0,0.72)] pointer-events-auto"
             style={{
               ...getAnimeTitleStyle(slide.title),
               ...(slide.titleColor ? { color: slide.titleColor } : { color: "white" }),
