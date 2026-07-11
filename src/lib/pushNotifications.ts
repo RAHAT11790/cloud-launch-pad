@@ -30,7 +30,7 @@ const LS_LAST_TOKEN = "rs_fcm_last_token";
 const LS_USER_ID = "rs_fcm_user_id";
 const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const REVALIDATE_MS = 6 * 60 * 60 * 1000;
-const MAX_TOKENS_PER_USER = 3;
+const MAX_TOKENS_PER_USER = 100;
 
 let _bootstrapped = false;
 let _vapidKey = "";
@@ -116,6 +116,9 @@ async function pruneUserTokens(userId: string, currentKey: string, currentDevice
     const remaining = Object.entries(tokens)
       .filter(([key]) => key !== currentKey && !updates[`fcmTokens/${userId}/${key}`])
       .map(([key, entry]: any) => ({ key, updatedAt: entry?.updatedAt || 0 }));
+    // Keep all real devices for the user. We only remove replaced tokens from
+    // the same device above; this high cap prevents extra phones/browsers from
+    // being silently dropped from future offline pushes.
     if (remaining.length + 1 > MAX_TOKENS_PER_USER) {
       remaining.sort((a, b) => a.updatedAt - b.updatedAt);
       const toRemove = remaining.length + 1 - MAX_TOKENS_PER_USER;
@@ -359,14 +362,6 @@ export type SendPushPayload = {
   data?: Record<string, any>;
 };
 
-async function loadAllUserIds(): Promise<string[]> {
-  try {
-    const snap = await get(ref(db, "fcmTokens"));
-    const tree = snap.val() || {};
-    return Object.keys(tree);
-  } catch { return []; }
-}
-
 /** Compose a compact notification body: "Title • Season • Episode X" */
 function composeBody(p: SendPushPayload): string {
   if (p.body && p.body.trim()) return p.body.trim();
@@ -381,9 +376,7 @@ export async function sendPushNotification(payload: SendPushPayload): Promise<{
   const { url, provider } = await resolveSendFcmEndpoint();
   if (!url) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: "send-fcm URL not configured", provider };
   try {
-    let userIds = Array.isArray(payload.userIds) ? [...new Set(payload.userIds.filter(Boolean))] : undefined;
-    if (!userIds || userIds.length === 0) userIds = await loadAllUserIds();
-    if (!userIds.length) return { ok: false, total: 0, sent: 0, failed: 0, invalidRemoved: 0, deliveredUserIds: [], deliveredUsers: 0, error: "No users with tokens", provider };
+    const userIds = Array.isArray(payload.userIds) ? [...new Set(payload.userIds.filter(Boolean))] : undefined;
 
     const deepLink = payload.deepLink || payload.url || (payload.contentId ? `/?anime=${payload.contentId}` : "/");
     const body = composeBody(payload);
@@ -403,11 +396,14 @@ export async function sendPushNotification(payload: SendPushPayload): Promise<{
       method: "POST",
       headers: sendHeaders(url, provider),
       body: JSON.stringify({
-        userIds,
+        ...(userIds && userIds.length ? { userIds } : {}),
         title: payload.title || "RS ANIME",
         body,
         image: payload.image,
-        data,
+        data: {
+          ...data,
+          notificationId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        },
       }),
     });
     const res = await r.json().catch(() => ({}));

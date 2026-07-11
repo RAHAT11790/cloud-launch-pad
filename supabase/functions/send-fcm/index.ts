@@ -150,11 +150,7 @@ serve(async (req) => {
     const { tokens, userIds, title, body: msgBody, image, icon, badge, data } = body || {};
     const inTokens: string[] = Array.isArray(tokens) ? tokens.filter(Boolean) : [];
     const inUsers: string[] = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
-    if (!inTokens.length && !inUsers.length) {
-      return new Response(JSON.stringify({ error: "No tokens or userIds provided" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const sendToAllSavedTokens = !inTokens.length && !inUsers.length;
     const saJson = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
     if (!saJson) return new Response(JSON.stringify({ error: "FIREBASE_SERVICE_ACCOUNT_KEY missing" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     const sa: ServiceAccount = JSON.parse(saJson);
@@ -174,9 +170,9 @@ serve(async (req) => {
     let resolvedTokens = [...new Set(inTokens)];
     let pathsByToken: Record<string, string[]> = {};
     let usersByToken: Record<string, string[]> = {};
-    if (!resolvedTokens.length && inUsers.length) {
+    if (!resolvedTokens.length && (inUsers.length || sendToAllSavedTokens)) {
       try {
-        const l = await fetchTokens(sa, accessToken, inUsers);
+        const l = await fetchTokens(sa, accessToken, inUsers.length ? inUsers : undefined);
         resolvedTokens = l.tokens;
         pathsByToken = l.tokenPathsByToken;
         usersByToken = l.tokenUserIdsByToken;
@@ -200,7 +196,7 @@ serve(async (req) => {
     const invalid: string[] = [];
     const deliveredUserIds = new Set<string>();
     const failReasons = { invalid: 0, transient: 0, other: 0 };
-    const concurrency = Math.min(30, resolvedTokens.length);
+    const concurrency = Math.min(75, resolvedTokens.length);
     let idx = 0;
     const worker = async () => {
       while (idx < resolvedTokens.length) {
@@ -262,7 +258,7 @@ serve(async (req) => {
             data: dataPayload,
           },
         };
-        const r = await sendOne(sa.project_id, accessToken, message);
+        const r = await sendOne(sa.project_id, accessToken, message, 4);
         if (r.ok) {
           success++;
           (usersByToken[token] || []).forEach((uid) => deliveredUserIds.add(uid));

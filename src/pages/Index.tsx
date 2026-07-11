@@ -257,13 +257,14 @@ const buildAnMoviePlayback = (anime: AnimeItem) => {
 
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   if (getMovieSrc(anime)) return true;
+  if (hasMovieParts(anime) && anime.parts?.some((part) => !!getMoviePartSrc(part))) return true;
   const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
   return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
 const fullFirebaseItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
 
-const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | null> => {
+const loadFullFirebaseAnimeItem = async (anime: AnimeItem, opts: { forceFresh?: boolean } = {}): Promise<AnimeItem | null> => {
   const collection = anime.type === "movie" ? "movies" : "webseries";
   const candidates = Array.from(new Set([
     anime.id,
@@ -273,10 +274,10 @@ const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | 
     anime.type === "webseries" && anime.animeSaltSlug ? `an_${sanitizeFirebaseKey(anime.animeSaltSlug)}` : "",
   ].filter(Boolean)));
   const cacheId = candidates[0] || anime.id;
-  const cached = readFullFirebaseItemCache(anime.type, cacheId);
+  const cached = opts.forceFresh ? null : readFullFirebaseItemCache(anime.type, cacheId);
   if (cached) return { ...anime, ...cached, id: cached.id || anime.id };
 
-  const loadKey = `${collection}:${candidates.join("|")}`;
+  const loadKey = `${opts.forceFresh ? "fresh" : "cached"}:${collection}:${candidates.join("|")}`;
   const pending = fullFirebaseItemLoadCache.get(loadKey);
   if (pending) return pending;
 
@@ -317,11 +318,11 @@ const loadAnimeSaltPremiumMeta = async (anime: AnimeItem): Promise<Partial<Anime
   }
 };
 
-const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400): Promise<AnimeItem | null> => {
+const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400, opts: { forceFresh?: boolean } = {}): Promise<AnimeItem | null> => {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
-      loadFullFirebaseAnimeItem(anime),
+      loadFullFirebaseAnimeItem(anime, opts),
       new Promise<null>((resolve) => {
         timer = setTimeout(() => resolve(null), timeoutMs);
       }),
@@ -678,7 +679,7 @@ const preloadImage = (src?: string | null) => {
 // Ultra-opt: warm the saved Firebase row on pointerdown for RS/admin content.
 // AN playback is API-driven because AnimeSalt HLS links expire; never require
 // Admin-saved media URLs for AN cards.
-const prefetchAnimePlayback = (anime: AnimeItem) => {
+const prefetchAnimePlayback = (anime: AnimeItem, opts?: { forceFresh?: boolean }) => {
   if (!anime) return;
   const isAn = anime.source === "animesalt"
     || String(anime.id || "").startsWith("as_")
@@ -687,7 +688,7 @@ const prefetchAnimePlayback = (anime: AnimeItem) => {
     || !!anime.anSlug
     || !!anime.animeSaltSlug;
   if (isAn) return;
-  try { loadFullFirebaseAnimeItem(anime); } catch {}
+  try { loadFullFirebaseAnimeItem(anime, { forceFresh: !!opts?.forceFresh }); } catch {}
 };
 
 const getCardSourceBadge = (anime: AnimeItem | any) => {
@@ -2271,8 +2272,13 @@ const Index = () => {
     // before calling handlePlay(). Reloading the old Firebase row here replaces
     // those fresh URLs with stale animesalt:// sentinels, which caused the
     // "no saved Firebase HLS URL" toast and blocked every AN video.
+    const forceFreshPlayback = !!(anime as any).__rsForceFreshPlayback;
+    const alreadyRetriedFresh = !!(anime as any).__rsRetriedFreshPlayback;
     if (!isAnimeSaltContentEarlyReload) {
-      anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+      const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
+      if (needsFullHydration) {
+        anime = (await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 3600 : 1400, { forceFresh: forceFreshPlayback })) || anime;
+      }
       if (resolvedSeasonIdx === undefined || resolvedEpIdx === undefined) {
         const fullDefaultTarget = getDefaultWatchTarget(anime);
         resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
@@ -2403,6 +2409,12 @@ const Index = () => {
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
+      if (!isAnimeSaltContent && !alreadyRetriedFresh) {
+        const fresh = await loadFullFirebaseAnimeItemWithTimeout(anime, 3600, { forceFresh: true });
+        if (fresh && hasStoredFirebasePlayback(fresh)) {
+          return handlePlay({ ...(fresh as any), __rsRetriedFreshPlayback: true } as AnimeItem, resolvedSeasonIdx, resolvedEpIdx);
+        }
+      }
       // No src resolved — fail silently; the LoadingDetailsOverlay path already
       // surfaces explicit errors for AN content. RS content shouldn't reach this
       // branch in practice (loadFullFirebaseAnimeItemWithTimeout fills src).
