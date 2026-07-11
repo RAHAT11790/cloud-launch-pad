@@ -1,4 +1,4 @@
-import type { AnimeItem, AudioTrack, Episode, Season, SubtitleTrack } from "@/data/animeData";
+import type { AnimeItem, AudioTrack, Episode, MoviePart, Season, SubtitleTrack } from "@/data/animeData";
 import {
   normalizeCastFrom,
   normalizeCategoryFrom,
