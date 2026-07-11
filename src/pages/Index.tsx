@@ -192,6 +192,21 @@ const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink1080, anime.movieLink720, anime.movieLink480, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
+const hasMovieParts = (anime: AnimeItem): boolean =>
+  anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0;
+
+const getMoviePartSrc = (part: any): string =>
+  [part?.link, part?.link1080, part?.link720, part?.link480, part?.link4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+
+const getMoviePartQualityOptions = (part: any): { label: string; src: string }[] => {
+  const q: { label: string; src: string }[] = [];
+  if (!isInvalidPlaybackUrl(part?.link480)) q.push({ label: "480p", src: part.link480 });
+  if (!isInvalidPlaybackUrl(part?.link720)) q.push({ label: "720p", src: part.link720 });
+  if (!isInvalidPlaybackUrl(part?.link1080)) q.push({ label: "1080p", src: part.link1080 });
+  if (!isInvalidPlaybackUrl(part?.link4k)) q.push({ label: "4K", src: part.link4k });
+  return q;
+};
+
 const routeItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
 
 const loadFirebaseAnimeItemByRouteId = async (routeId: string): Promise<AnimeItem | null> => {
