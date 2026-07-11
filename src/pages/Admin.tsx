@@ -7438,13 +7438,18 @@ ${tgBulkFooter}
  </>
  )}
 
- {/* Movie Save + Notify Modal */}
+ </div>
+ )}
+ </div>
+ )}
+
+ {/* Movie Save + Notify Modal — rendered at page level so tab switching after saveMovie() cannot unmount it (was causing flash-and-close bug) */}
  {mvSaveNotifyModal && (() => {
  const ctx = mvNotifyContextRef.current;
  const ctxForm = ctx?.form;
  const ctxMovieId = ctx?.movieId || "";
  return (
- <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => setMvSaveNotifyModal(false)}>
+ <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; setMvPartsAutoRange(null); }}>
  <div className="admin-optimized-panel admin-scroll-smooth bg-[#16162A] border border-white/10 rounded-2xl w-full max-w-[440px] max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
  <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> New Movie Release</h3>
  <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — Movie will be posted as a new release` : "Movie release"}</p>
@@ -7455,7 +7460,6 @@ ${tgBulkFooter}
  </div>
  )}
 
- {/* Auto-detected tracking info: parts vs. full movie */}
  <div className="mb-3 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
    <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider mb-1">Auto-tracked</p>
    {mvPartsAutoRange ? (
@@ -7514,13 +7518,11 @@ ${tgBulkFooter}
  setAdminBusyTask(null);
  toast.success("✅ New Release added!");
 
- // FCM push
  try {
  const pushMod = await import("@/lib/pushNotifications");
  const pushTitle = buildBrowserPushTitle(ctxForm.title);
  const pushBody = `${ctxForm.title} • ${releaseLabel}`;
  const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
- // Deep-link: if parts, point to the first newly-added part (epIdx = partStart-1)
  const deepLink = partsRange
    ? buildEpisodeShareUrl(ctxMovieId, 0, Math.max(0, partsRange.start - 1)).replace(/^https?:\/\/[^/]+/, "")
    : buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
@@ -7545,7 +7547,6 @@ ${tgBulkFooter}
  toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
  }
 
-  // Close modal + redirect to telegram-post with this movie preselected
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
  mvNotifyContextRef.current = null;
@@ -7556,7 +7557,6 @@ ${tgBulkFooter}
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  } else {
- // Fallback: fill directly from moviesData
  const mv = moviesData.find(m => m.id === movieIdForRedirect);
  if (mv) {
  setTgSelectedRelease(movieIdForRedirect);
@@ -7588,10 +7588,6 @@ ${tgBulkFooter}
  </div>
  );
  })()}
- </div>
- )}
- </div>
- )}
 
  {/* ==================== USERS ==================== */}
  {activeSection === "users" && (
