@@ -7460,6 +7460,21 @@ ${tgBulkFooter}
  </div>
  )}
 
+ {/* Auto-detected tracking info: parts vs. full movie */}
+ <div className="mb-3 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
+   <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider mb-1">Auto-tracked</p>
+   {mvPartsAutoRange ? (
+     <p className="text-[12px] font-semibold text-purple-100">
+       Part {mvPartsAutoRange.start}{mvPartsAutoRange.end !== mvPartsAutoRange.start ? `-${mvPartsAutoRange.end}` : ""} Added
+     </p>
+   ) : (
+     <p className="text-[12px] font-semibold text-purple-100">Full Movie Added</p>
+   )}
+   <p className="text-[9px] text-purple-200/70 mt-0.5">
+     {mvPartsAutoRange ? "New parts detected since edit start — users will see this in the notification." : "No new parts detected — sending as a full-movie release."}
+   </p>
+ </div>
+
  <div className="mb-3 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1">This will do</p>
  <ul className="text-[11px] text-emerald-100 space-y-0.5 list-disc pl-4">
@@ -7471,7 +7486,7 @@ ${tgBulkFooter}
 
  <div className="flex gap-2">
  <button
- onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; }}
+ onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; setMvPartsAutoRange(null); }}
  className="flex-1 py-3 rounded-lg text-sm font-bold bg-zinc-700 text-white flex items-center justify-center gap-2"
  >
  <X size={14} /> Cancel
@@ -7482,6 +7497,10 @@ ${tgBulkFooter}
  try {
  setAdminBusyTask("Adding new release…");
  await yieldAdminFrame();
+ const partsRange = mvPartsAutoRange;
+ const releaseLabel = partsRange
+   ? `Part ${partsRange.start}${partsRange.end !== partsRange.start ? `-${partsRange.end}` : ""} Added`
+   : "Full Movie Added";
  const newRelease: any = {
  contentId: ctxMovieId,
  contentType: "movie",
@@ -7490,7 +7509,9 @@ ${tgBulkFooter}
  year: ctxForm.year || "N/A",
  rating: ctxForm.rating || "N/A",
  visibility: ctxForm.visibility || "public",
- episodeInfo: { type: "movie", seasonName: "Movie" },
+ episodeInfo: partsRange
+   ? { type: "movie-parts", seasonName: "Movie", partStart: partsRange.start, partEnd: partsRange.end, label: releaseLabel }
+   : { type: "movie", seasonName: "Movie", label: releaseLabel },
  timestamp: Date.now(),
  active: true,
  };
@@ -7502,9 +7523,12 @@ ${tgBulkFooter}
  try {
  const pushMod = await import("@/lib/pushNotifications");
  const pushTitle = buildBrowserPushTitle(ctxForm.title);
- const pushBody = `${ctxForm.title} • Movie release`;
+ const pushBody = `${ctxForm.title} • ${releaseLabel}`;
  const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
- const deepLink = buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
+ // Deep-link: if parts, point to the first newly-added part (epIdx = partStart-1)
+ const deepLink = partsRange
+   ? buildEpisodeShareUrl(ctxMovieId, 0, Math.max(0, partsRange.start - 1)).replace(/^https?:\/\/[^/]+/, "")
+   : buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
  const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
  setAdminBusyTask("Sending push to users…");
  const pushResult = await pushMod.sendPushNotification({
