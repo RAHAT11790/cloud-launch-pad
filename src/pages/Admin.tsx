@@ -7418,7 +7418,8 @@ ${tgBulkFooter}
    const currentNums = capturedParts.map(p => Number(p.partNumber || 0)).filter(n => n > 0).sort((a, b) => a - b);
    const addedNums = currentNums.filter(n => !baseline.has(n));
    let autoRange: { start: number; end: number } | null = null;
-   if (addedNums.length > 0) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
+   // Single "Main" part → treat as full movie (no per-part range), otherwise show which parts were added.
+   if (addedNums.length > 0 && capturedParts.length > 1) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
    setMvPartsAutoRange(autoRange);
 
    mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm, parts: capturedParts, addedParts: addedNums };
