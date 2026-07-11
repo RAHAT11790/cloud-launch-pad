@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Play } from "lucide-react";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { getAnimeFont } from "@/lib/animeFonts";
 
 export interface HeroSlide {
   id: string;
