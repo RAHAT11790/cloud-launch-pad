@@ -3705,7 +3705,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!movieForm) return;
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
- if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
+  {
+    const hasParts = (mvPartsData || []).some(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
+    if (!movieForm.movieLink && !hasParts) { toast.error("Please enter movie link or add at least one part"); return; }
+  }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
 
