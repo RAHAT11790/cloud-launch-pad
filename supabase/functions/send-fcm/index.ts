@@ -205,9 +205,18 @@ serve(async (req) => {
       while (idx < resolvedTokens.length) {
         const i = idx++;
         const token = resolvedTokens[i];
-        // Data-only message: SW's onBackgroundMessage is guaranteed to fire
-        // and controls display fully. Avoids Chrome's silent auto-display
-        // path that many users report as "notification never arrived".
+        // ULTRA-RELIABLE OFFLINE DELIVERY
+        // ---------------------------------
+        // Old code sent data-only messages. Chrome enforces the "user-visible
+        // push" rule: after ~3 data-only pushes without a visible notification
+        // the browser silently drops future pushes if the tab isn't open.
+        // That's exactly why "offline users never get notifications" happened.
+        //
+        // Fix: use BOTH `webpush.notification` (browser DISPLAYS it natively,
+        // no SW needed, works even when user is offline — the push service
+        // holds it for up to TTL=4 weeks and delivers on next connect) AND
+        // `data` (SW still gets it via onBackgroundMessage when the site is
+        // open, for click routing/analytics).
         const dataPayload: Record<string, string> = {
           ...normalized,
           title: String(title || "RS ANIME"),
@@ -217,13 +226,31 @@ serve(async (req) => {
         };
         if (imageUrl) dataPayload.image = imageUrl;
         if (clickLink) dataPayload.url = clickLink;
+
+        const webpushNotification: Record<string, unknown> = {
+          title: String(title || "RS ANIME"),
+          body: String(msgBody || ""),
+          icon: iconUrl,
+          badge: badgeUrl,
+          requireInteraction: false,
+          renotify: true,
+          tag: normalized.contentId ? `rsanime-${normalized.contentId}` : `rsanime-${Date.now()}-${i}`,
+          vibrate: [200, 100, 200],
+        };
+        if (imageUrl) webpushNotification.image = imageUrl;
+
         const message = {
           message: {
             token,
             webpush: {
+              // TTL=2419200s (28d) → FCM/browser push service holds for offline
+              // users and auto-delivers when their device reconnects.
               headers: { Urgency: "high", TTL: "2419200" },
+              notification: webpushNotification,
               fcm_options: clickLink ? { link: clickLink } : undefined,
+              data: dataPayload,
             },
+            // Top-level data for SW onBackgroundMessage (when site is open)
             data: dataPayload,
           },
         };

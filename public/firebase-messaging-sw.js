@@ -44,13 +44,12 @@ async function showFromData(d) {
 }
 
 messaging.onBackgroundMessage((payload) => {
-  const d = { ...(payload.data || {}) };
-  if (payload.notification) {
-    d.title = d.title || payload.notification.title;
-    d.body = d.body || payload.notification.body;
-    d.image = d.image || payload.notification.image;
-    d.icon = d.icon || payload.notification.icon;
-  }
+  // If the server sent `webpush.notification`, Chrome/Edge already displayed
+  // it natively via the browser push service (works even when tab is closed
+  // and queues for offline devices). We MUST NOT show a second one here or
+  // users would see duplicates. Only render when it's a data-only payload.
+  if (payload && payload.notification) return;
+  const d = { ...(payload?.data || {}) };
   return showFromData(d);
 });
 

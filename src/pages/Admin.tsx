@@ -4449,167 +4449,214 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  };
 
- // JSON import for Web Series seasons
- const wsParseJsonEpisodes = (jsonData: any) => {
- try {
- let episodes: any[] = [];
- let seasonName = '';
+  // ============ JSON import — SMART MERGE ============
+  // Only fields ACTUALLY PRESENT (non-empty) in the JSON overwrite existing values.
+  // Missing / empty fields leave existing links untouched → paste a 480p-only JSON
+  // and every other quality (720p/1080p/4K) stays intact.
+  const QUALITY_FIELDS = ['title', 'link', 'link480', 'link720', 'link1080', 'link4k'] as const;
+  const hasVal = (v: any) => v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
 
- if (Array.isArray(jsonData)) {
- episodes = jsonData;
- } else if (jsonData.episodes && Array.isArray(jsonData.episodes)) {
- episodes = jsonData.episodes;
- seasonName = jsonData.name || jsonData.season || '';
- } else if (jsonData.seasons && Array.isArray(jsonData.seasons)) {
- const newSeasons = jsonData.seasons.map((s: any, sIdx: number) => ({
- name: s.name || `Season ${seasonsData.length + sIdx + 1}`,
- seasonNumber: seasonsData.length + sIdx + 1,
- episodes: (s.episodes || []).map((ep: any, eIdx: number) => ({
- episodeNumber: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- qualityLinks: ep.qualityLinks || {},
- audioTracks: normalizeAudioTrackList(ep.audioTracks),
- defaultAudio: normalizeAudioTrackList(ep.audioTracks).find((track: any) => track?.isDefault) || normalizeAudioTrackList(ep.audioTracks)[0] || null,
- })),
- }));
- setSeasonsData(prev => {
- const updated = [...prev, ...newSeasons];
- // Auto-expand all new seasons
- const expandMap: Record<number, boolean> = {};
- for (let i = prev.length; i < updated.length; i++) expandMap[i] = true;
- setExpandedSeasons(p => ({ ...p, ...expandMap }));
- return updated;
- });
- toast.success(`${newSeasons.length} Season JSON from import done!`);
- setWsJsonImportMode(false);
- setWsJsonPasteText('');
- return;
- } else {
- toast.error('Invalid JSON format. An episodes or seasons array is required.');
- return;
- }
+  const mergeEpisodeSmart = (existing: any, incoming: any) => {
+    const out: any = { ...(existing || {}) };
+    QUALITY_FIELDS.forEach((f) => { if (hasVal(incoming?.[f])) out[f] = incoming[f]; });
+    if (incoming?.qualityLinks && typeof incoming.qualityLinks === 'object') {
+      const merged: any = { ...(existing?.qualityLinks || {}) };
+      Object.entries(incoming.qualityLinks).forEach(([k, v]) => { if (hasVal(v)) merged[k] = v; });
+      out.qualityLinks = merged;
+    }
+    if (Array.isArray(incoming?.audioTracks) && incoming.audioTracks.length > 0) {
+      out.audioTracks = normalizeAudioTrackList(incoming.audioTracks);
+    }
+    if (incoming?.episodeNumber != null) out.episodeNumber = incoming.episodeNumber;
+    return out;
+  };
 
- if (episodes.length === 0) {
- toast.error('No episodes found in the JSON');
- return;
- }
+  const buildFreshEpisode = (raw: any, eIdx: number) => {
+    const num = raw?.episodeNumber || raw?.number || eIdx + 1;
+    return {
+      episodeNumber: num,
+      title: raw?.title || `Episode ${num}`,
+      link: raw?.link || '',
+      link480: raw?.link480 || '',
+      link720: raw?.link720 || '',
+      link1080: raw?.link1080 || '',
+      link4k: raw?.link4k || '',
+      qualityLinks: raw?.qualityLinks || {},
+      audioTracks: normalizeAudioTrackList(raw?.audioTracks),
+    };
+  };
 
- const mappedEpisodes = episodes.map((ep: any, eIdx: number) => ({
- episodeNumber: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- qualityLinks: ep.qualityLinks || {},
- audioTracks: normalizeAudioTrackList(ep.audioTracks),
- }));
+  const smartMergeEpisodesInto = (existingList: any[], incoming: any[]) => {
+    const list = [...(existingList || [])];
+    let updated = 0, added = 0;
+    incoming.forEach((raw: any, eIdx: number) => {
+      const num = raw?.episodeNumber || raw?.number || eIdx + 1;
+      const idx = list.findIndex((e: any) => Number(e?.episodeNumber) === Number(num));
+      if (idx >= 0) {
+        list[idx] = mergeEpisodeSmart(list[idx], { ...raw, episodeNumber: num });
+        updated++;
+      } else {
+        list.push(buildFreshEpisode(raw, eIdx));
+        added++;
+      }
+    });
+    list.sort((a: any, b: any) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
+    return { list, updated, added };
+  };
 
- const newSeason: Season = {
- name: seasonName || `Season ${seasonsData.length + 1}`,
- seasonNumber: seasonsData.length + 1,
- episodes: mappedEpisodes,
- };
- setSeasonsData(prev => {
- const newIdx = prev.length;
- setExpandedSeasons(p => ({ ...p, [newIdx]: true }));
- return [...prev, newSeason];
- });
- toast.success(`${mappedEpisodes.length} episodes imported from JSON!`);
- setWsJsonImportMode(false);
- setWsJsonPasteText('');
- } catch (err: any) {
- toast.error('JSON parse failed: ' + err.message);
- }
- };
+  // JSON import for Web Series seasons (top-level paste)
+  const wsParseJsonEpisodes = (jsonData: any) => {
+    try {
+      let episodes: any[] = [];
+      let seasonName = '';
 
- const wsHandleJsonPaste = () => {
- if (!wsJsonPasteText.trim()) { toast.error('Paste JSON text'); return; }
- try {
- const parsed = JSON.parse(wsJsonPasteText.trim());
- wsParseJsonEpisodes(parsed);
- } catch {
- toast.error('Invalid JSON. Please provide valid JSON format.');
- }
- };
+      if (Array.isArray(jsonData)) {
+        episodes = jsonData;
+      } else if (jsonData.episodes && Array.isArray(jsonData.episodes)) {
+        episodes = jsonData.episodes;
+        seasonName = jsonData.name || jsonData.season || '';
+      } else if (jsonData.seasons && Array.isArray(jsonData.seasons)) {
+        // Smart merge: if a season with same seasonNumber (or same name) already
+        // exists → merge episode-level (only present fields overwrite).
+        // Otherwise append as a new season.
+        let mergedSeasons = 0, appendedSeasons = 0, mergedEps = 0, addedEps = 0;
+        setSeasonsData(prev => {
+          const copy = [...prev];
+          const expandMap: Record<number, boolean> = {};
+          jsonData.seasons.forEach((s: any, sIdx: number) => {
+            const incomingEps = Array.isArray(s.episodes) ? s.episodes : [];
+            const wantedNum = s.seasonNumber || s.season || null;
+            const wantedName = (s.name || '').trim().toLowerCase();
+            let matchIdx = -1;
+            if (wantedNum != null) matchIdx = copy.findIndex((x: any) => Number(x?.seasonNumber) === Number(wantedNum));
+            if (matchIdx < 0 && wantedName) matchIdx = copy.findIndex((x: any) => (x?.name || '').trim().toLowerCase() === wantedName);
+            if (matchIdx >= 0) {
+              const merged = smartMergeEpisodesInto(copy[matchIdx].episodes || [], incomingEps);
+              copy[matchIdx] = { ...copy[matchIdx], episodes: merged.list };
+              expandMap[matchIdx] = true;
+              mergedSeasons++; mergedEps += merged.updated; addedEps += merged.added;
+            } else {
+              const newIdx = copy.length;
+              copy.push({
+                name: s.name || `Season ${copy.length + 1}`,
+                seasonNumber: s.seasonNumber || copy.length + 1,
+                episodes: incomingEps.map((ep: any, eIdx: number) => buildFreshEpisode(ep, eIdx)),
+              });
+              expandMap[newIdx] = true;
+              appendedSeasons++; addedEps += incomingEps.length;
+            }
+          });
+          setExpandedSeasons(p => ({ ...p, ...expandMap }));
+          return copy;
+        });
+        toast.success(`Merged ${mergedSeasons} season(s), added ${appendedSeasons} • ${mergedEps} episodes updated, ${addedEps} added`);
+        setWsJsonImportMode(false);
+        setWsJsonPasteText('');
+        return;
+      } else {
+        toast.error('Invalid JSON format. An episodes or seasons array is required.');
+        return;
+      }
 
- const wsHandleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
- const files = e.target.files;
- if (!files || files.length === 0) return;
- let processed = 0, failed = 0;
- const totalFiles = files.length;
- Array.from(files).forEach(file => {
- const reader = new FileReader();
- reader.onload = (ev) => {
- try {
- const parsed = JSON.parse(ev.target?.result as string);
- wsParseJsonEpisodes(parsed);
- processed++;
- } catch {
- failed++;
- }
- if (processed + failed === totalFiles) {
- if (failed > 0) toast.error(`${failed} files failed to parse`);
- if (processed > 0) toast.success(`${processed} files imported successfully`);
- }
- };
- reader.readAsText(file);
- });
- if (wsJsonFileRef.current) wsJsonFileRef.current.value = '';
- };
+      if (episodes.length === 0) {
+        toast.error('No episodes found in the JSON');
+        return;
+      }
 
- // Per-season JSON import for Web Series
- const wsImportJsonToSeason = (sIdx: number, jsonData: any) => {
- try {
- let episodes: any[] = [];
- if (Array.isArray(jsonData)) {
- episodes = jsonData;
- } else if (jsonData.episodes && Array.isArray(jsonData.episodes)) {
- episodes = jsonData.episodes;
- } else {
- toast.error('Invalid JSON. An episodes array is required.');
- return;
- }
- if (episodes.length === 0) { toast.error('No episodes found'); return; }
- const mapped = episodes.map((ep: any, eIdx: number) => ({
- episodeNumber: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- qualityLinks: ep.qualityLinks || {},
- audioTracks: normalizeAudioTrackList(ep.audioTracks),
- }));
- setSeasonsData(prev => {
- const copy = [...prev];
- const existing = [...(copy[sIdx]?.episodes || [])];
- // Merge: update matching episodeNumbers, append new ones
- mapped.forEach((newEp: any) => {
- const idx = existing.findIndex((e: any) => e.episodeNumber === newEp.episodeNumber);
- if (idx >= 0) {
- existing[idx] = newEp;
- } else {
- existing.push(newEp);
- }
- });
- existing.sort((a: any, b: any) => a.episodeNumber - b.episodeNumber);
- copy[sIdx] = { ...copy[sIdx], episodes: existing };
- return copy;
- });
- setExpandedSeasons(p => ({ ...p, [sIdx]: true }));
- toast.success(`${mapped.length} episodes imported to "${seasonsData[sIdx]?.name}" season!`);
- } catch (err: any) {
- toast.error('JSON parse failed: ' + err.message);
- }
- };
+      // Flat episodes JSON at top-level:
+      // → if a season with the given name matches existing, MERGE into it
+      // → else create a new season
+      const wantedName = seasonName.trim().toLowerCase();
+      let didMerge = false, mergedCount = 0, addedCount = 0, targetName = '';
+      setSeasonsData(prev => {
+        const copy = [...prev];
+        let idx = -1;
+        if (wantedName) idx = copy.findIndex((x: any) => (x?.name || '').trim().toLowerCase() === wantedName);
+        if (idx >= 0) {
+          const merged = smartMergeEpisodesInto(copy[idx].episodes || [], episodes);
+          copy[idx] = { ...copy[idx], episodes: merged.list };
+          setExpandedSeasons(p => ({ ...p, [idx]: true }));
+          didMerge = true; mergedCount = merged.updated; addedCount = merged.added;
+          targetName = copy[idx].name;
+          return copy;
+        }
+        const newIdx = copy.length;
+        const newSeason: Season = {
+          name: seasonName || `Season ${copy.length + 1}`,
+          seasonNumber: copy.length + 1,
+          episodes: episodes.map((ep: any, eIdx: number) => buildFreshEpisode(ep, eIdx)),
+        };
+        setExpandedSeasons(p => ({ ...p, [newIdx]: true }));
+        targetName = newSeason.name;
+        addedCount = episodes.length;
+        return [...copy, newSeason];
+      });
+      if (didMerge) toast.success(`"${targetName}": ${mergedCount} updated, ${addedCount} added (existing links preserved)`);
+      else toast.success(`${addedCount} episodes imported into "${targetName}"`);
+      setWsJsonImportMode(false);
+      setWsJsonPasteText('');
+    } catch (err: any) {
+      toast.error('JSON parse failed: ' + err.message);
+    }
+  };
+
+  const wsHandleJsonPaste = () => {
+    if (!wsJsonPasteText.trim()) { toast.error('Paste JSON text'); return; }
+    try {
+      const parsed = JSON.parse(wsJsonPasteText.trim());
+      wsParseJsonEpisodes(parsed);
+    } catch {
+      toast.error('Invalid JSON. Please provide valid JSON format.');
+    }
+  };
+
+  const wsHandleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    let processed = 0, failed = 0;
+    const totalFiles = files.length;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string);
+          wsParseJsonEpisodes(parsed);
+          processed++;
+        } catch {
+          failed++;
+        }
+        if (processed + failed === totalFiles) {
+          if (failed > 0) toast.error(`${failed} files failed to parse`);
+          if (processed > 0) toast.success(`${processed} files imported successfully`);
+        }
+      };
+      reader.readAsText(file);
+    });
+    if (wsJsonFileRef.current) wsJsonFileRef.current.value = '';
+  };
+
+  // Per-season JSON import — SMART MERGE (only present fields overwrite)
+  const wsImportJsonToSeason = (sIdx: number, jsonData: any) => {
+    try {
+      let episodes: any[] = [];
+      if (Array.isArray(jsonData)) episodes = jsonData;
+      else if (jsonData.episodes && Array.isArray(jsonData.episodes)) episodes = jsonData.episodes;
+      else { toast.error('Invalid JSON. An episodes array is required.'); return; }
+      if (episodes.length === 0) { toast.error('No episodes found'); return; }
+      let updated = 0, added = 0;
+      setSeasonsData(prev => {
+        const copy = [...prev];
+        const merged = smartMergeEpisodesInto(copy[sIdx]?.episodes || [], episodes);
+        updated = merged.updated; added = merged.added;
+        copy[sIdx] = { ...copy[sIdx], episodes: merged.list };
+        return copy;
+      });
+      setExpandedSeasons(p => ({ ...p, [sIdx]: true }));
+      toast.success(`"${seasonsData[sIdx]?.name}": ${updated} updated, ${added} added — existing quality links preserved ✓`);
+    } catch (err: any) {
+      toast.error('JSON parse failed: ' + err.message);
+    }
+  };
 
  const wsHandleSeasonJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
  const files = e.target.files;
@@ -4617,49 +4664,38 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const targetIdx = wsSeasonJsonTarget;
  let processed = 0, failed = 0;
  const totalFiles = files.length;
- // Collect all episodes first, then do ONE state update
- const allEpisodes: any[] = [];
- Array.from(files).forEach(file => {
- const reader = new FileReader();
- reader.onload = (ev) => {
- try {
- const parsed = JSON.parse(ev.target?.result as string);
- let eps: any[] = [];
- if (Array.isArray(parsed)) eps = parsed;
- else if (parsed.episodes && Array.isArray(parsed.episodes)) eps = parsed.episodes;
- eps.forEach((ep: any, eIdx: number) => {
- allEpisodes.push({
- episodeNumber: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- });
- });
- processed++;
- } catch { failed++; }
- // When ALL files are done, do a single state update
- if (processed + failed === totalFiles) {
- if (allEpisodes.length > 0) {
- setSeasonsData(prev => {
- const copy = [...prev];
- const existing = [...(copy[targetIdx]?.episodes || [])];
- allEpisodes.forEach((newEp: any) => {
- const idx = existing.findIndex((e: any) => e.episodeNumber === newEp.episodeNumber);
- if (idx >= 0) existing[idx] = newEp;
- else existing.push(newEp);
- });
- existing.sort((a: any, b: any) => a.episodeNumber - b.episodeNumber);
- copy[targetIdx] = { ...copy[targetIdx], episodes: existing };
- return copy;
- });
- setExpandedSeasons(p => ({ ...p, [targetIdx]: true }));
- }
- if (failed > 0) toast.error(`${failed} files failed to parse`);
- toast.success(`${allEpisodes.length} episodes imported (from ${processed} files)`);
- }
+  // Collect raw incoming episodes (KEEP original fields — merge later so
+  // empty qualities from one file don't wipe good links from another)
+  const allEpisodes: any[] = [];
+  Array.from(files).forEach(file => {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+  try {
+  const parsed = JSON.parse(ev.target?.result as string);
+  let eps: any[] = [];
+  if (Array.isArray(parsed)) eps = parsed;
+  else if (parsed.episodes && Array.isArray(parsed.episodes)) eps = parsed.episodes;
+  eps.forEach((ep: any, eIdx: number) => {
+  // Keep raw — smartMergeEpisodesInto handles present-fields-only overwrite
+  allEpisodes.push({ ...ep, episodeNumber: ep.episodeNumber || ep.number || eIdx + 1 });
+  });
+  processed++;
+  } catch { failed++; }
+  if (processed + failed === totalFiles) {
+  if (allEpisodes.length > 0) {
+  let updated = 0, added = 0;
+  setSeasonsData(prev => {
+  const copy = [...prev];
+  const merged = smartMergeEpisodesInto(copy[targetIdx]?.episodes || [], allEpisodes);
+  updated = merged.updated; added = merged.added;
+  copy[targetIdx] = { ...copy[targetIdx], episodes: merged.list };
+  return copy;
+  });
+  setExpandedSeasons(p => ({ ...p, [targetIdx]: true }));
+  toast.success(`${updated} updated, ${added} added (from ${processed} files) — existing links preserved ✓`);
+  }
+  if (failed > 0) toast.error(`${failed} files failed to parse`);
+  }
  };
  reader.readAsText(file);
  });
