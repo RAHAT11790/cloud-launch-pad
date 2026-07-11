@@ -3706,8 +3706,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
   {
-    const hasParts = (mvPartsData || []).some(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
-    if (!movieForm.movieLink && !hasParts) { toast.error("Please enter movie link or add at least one part"); return; }
+    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
+    if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a default link"); return; }
   }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
