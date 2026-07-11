@@ -10590,7 +10590,7 @@ const AnalyticsSection = memo(({
  {visibleStats.length === 0 ? (
  <p className="text-[#957DAD] text-[13px] text-center py-5">No views today yet</p>
  ) : (
- <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1" style={{ contentVisibility: "auto" } as any}>
+ <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
  {visibleStats.map((item, idx) => (
  <div key={item.animeId} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-3 border border-white/5">
  <span className="text-[11px] text-[#957DAD] font-bold w-5">#{idx + 1}</span>
