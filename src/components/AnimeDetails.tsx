@@ -264,11 +264,14 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         <div className="flex gap-2.5 mb-5">
           <button
             onClick={() => {
-              const hasParts = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0;
-              if ((anime.type === "webseries" && anime.seasons) || hasParts) { onPlay(anime, 0, 0); } else { onPlay(anime); }
+              const hasMultiParts = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 1;
+              const hasSinglePart = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length === 1;
+              if ((anime.type === "webseries" && anime.seasons) || hasMultiParts) { onPlay(anime, 0, 0); }
+              else if (hasSinglePart) { onPlay(anime, 0, 0); }
+              else { onPlay(anime); }
             }}
             className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
-            {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : (Array.isArray(anime.parts) && anime.parts.length > 0 ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>)}
+            {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : (Array.isArray(anime.parts) && anime.parts.length > 1 ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>)}
           </button>
           <button onClick={toggleWatchlist}
             className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
