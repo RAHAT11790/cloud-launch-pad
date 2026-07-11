@@ -73,6 +73,8 @@ export interface AnimeItem {
   movieLink720?: string;
   movieLink1080?: string;
   movieLink4k?: string;
+  /** For movies split into multiple parts. When present, playback uses parts[] instead of movieLink*. */
+  parts?: MoviePart[];
   trailer?: string;
   createdAt?: number;
   updatedAt?: number;
