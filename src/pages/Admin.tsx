@@ -7380,7 +7380,7 @@ ${tgBulkFooter}
        </div>
        <div className="grid grid-cols-1 gap-2 mb-2">
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
-           className={`${inputClass} !py-2 !text-xs`} placeholder={`Part ${p.partNumber} title (optional)`} />
+           className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
        </div>
        <div className="space-y-2">
          <div>
