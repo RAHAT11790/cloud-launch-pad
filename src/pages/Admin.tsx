@@ -3692,7 +3692,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
   setMovieCast(cast);
- setMvPartsData([]);
+ setMvPartsData([{ partNumber: 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }]);
  mvPartsBaselineRef.current = new Set();
  setMovieResults([]);
  setMovieEditId("");
