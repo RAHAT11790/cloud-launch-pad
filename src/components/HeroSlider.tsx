@@ -290,7 +290,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   const posterSrc = slide.poster || slide.backdrop;
   const titleLength = Math.max(8, Math.min(34, slide.title.length));
-  const titleWriteDuration = 1050 + titleLength * 26;
+  const titleWriteDuration = 700 + titleLength * 14;
+  const titleFontFamily = slide.titleFont || getAnimeFont(slide.title);
 
   return (
     <section
