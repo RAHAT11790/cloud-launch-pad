@@ -673,7 +673,7 @@ div[style*="z-index: 2147483647"],
   }
   @media (min-width: 640px) {
     .hero-title-text { font-size: clamp(28px, 3.4vw, 40px); letter-spacing: 0.045em; }
-    .hero-title-logo-wrap { top: 50%; }
+    .hero-title-logo-wrap { top: 40%; }
   }
 
 
