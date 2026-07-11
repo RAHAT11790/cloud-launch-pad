@@ -10561,7 +10561,7 @@ const AnalyticsSection = memo(({
  {visibleUsers.length === 0 ? (
  <p className="text-[#957DAD] text-[13px] text-center py-5">No user activity yet today</p>
  ) : (
- <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1" style={{ contentVisibility: "auto" } as any}>
+ <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
  {visibleUsers.map((u, idx) => (
  <div key={u.uid} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-2.5 border border-white/5">
  <span className="text-[11px] text-[#957DAD] font-bold w-6 text-center">#{idx + 1}</span>
