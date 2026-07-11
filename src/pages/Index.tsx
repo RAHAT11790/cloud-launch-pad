@@ -2272,8 +2272,13 @@ const Index = () => {
     // before calling handlePlay(). Reloading the old Firebase row here replaces
     // those fresh URLs with stale animesalt:// sentinels, which caused the
     // "no saved Firebase HLS URL" toast and blocked every AN video.
+    const forceFreshPlayback = !!(anime as any).__rsForceFreshPlayback;
+    const alreadyRetriedFresh = !!(anime as any).__rsRetriedFreshPlayback;
     if (!isAnimeSaltContentEarlyReload) {
-      anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
+      const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
+      if (needsFullHydration) {
+        anime = (await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 3600 : 1400, { forceFresh: forceFreshPlayback })) || anime;
+      }
       if (resolvedSeasonIdx === undefined || resolvedEpIdx === undefined) {
         const fullDefaultTarget = getDefaultWatchTarget(anime);
         resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
@@ -2404,6 +2409,12 @@ const Index = () => {
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
+      if (!isAnimeSaltContent && !alreadyRetriedFresh) {
+        const fresh = await loadFullFirebaseAnimeItemWithTimeout(anime, 3600, { forceFresh: true });
+        if (fresh && hasStoredFirebasePlayback(fresh)) {
+          return handlePlay({ ...(fresh as any), __rsRetriedFreshPlayback: true } as AnimeItem, resolvedSeasonIdx, resolvedEpIdx);
+        }
+      }
       // No src resolved — fail silently; the LoadingDetailsOverlay path already
       // surfaces explicit errors for AN content. RS content shouldn't reach this
       // branch in practice (loadFullFirebaseAnimeItemWithTimeout fills src).
