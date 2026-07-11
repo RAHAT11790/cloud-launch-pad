@@ -18,6 +18,8 @@ import anApiSrc         from "../../cloudflare-workers/an-api.js?raw";
 import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
 import sendFcmSrc       from "../../cloudflare-workers/send-fcm.js?raw";
+import animeSearchBotSrc from "../../cloudflare-workers/anime-search-bot.js?raw";
+
 
 export type CfLibraryEntry = {
   slug: string;
