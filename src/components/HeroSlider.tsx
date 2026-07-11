@@ -67,7 +67,7 @@ const normalizeSlides = (items: HeroSlide[]) => {
 };
 
 const getSlidesSignature = (items: HeroSlide[]) =>
-  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}`).join("|");
+  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}:${item.titleLogo || ""}`).join("|");
 
 const mergeDeckWithoutChangingVisibleSlide = (
   currentDeck: HeroSlide[],
@@ -82,7 +82,7 @@ const mergeDeckWithoutChangingVisibleSlide = (
   if (!visibleSlide) return incomingDeck;
 
   const freshVisibleSlide = incomingDeck.find((item) => item.id === visibleSlide.id);
-  const pinnedVisibleSlide = freshVisibleSlide ? { ...freshVisibleSlide, ...visibleSlide } : visibleSlide;
+  const pinnedVisibleSlide = freshVisibleSlide ? { ...visibleSlide, ...freshVisibleSlide } : visibleSlide;
   const nextDeck = incomingDeck.filter((item) => item.id !== visibleSlide.id).slice(0, MAX_SLIDES - 1);
   nextDeck.splice(Math.min(safeVisibleIndex, nextDeck.length), 0, visibleSlide);
   nextDeck[Math.min(safeVisibleIndex, nextDeck.length - 1)] = pinnedVisibleSlide;
@@ -325,19 +325,20 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div className="hero-vignette" aria-hidden />
 
+      {slide.titleLogo && (
+        <div key={`logo-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
+          <img
+            src={slide.titleLogo}
+            alt={slide.title}
+            className="hero-title-logo"
+            draggable={false}
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+      )}
+
       <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
-        {slide.titleLogo && (
-          <div className="hero-title-logo-wrap" aria-hidden>
-            <img
-              src={slide.titleLogo}
-              alt={slide.title}
-              className="hero-title-logo"
-              draggable={false}
-              loading="eager"
-              decoding="async"
-            />
-          </div>
-        )}
         <button
           type="button"
           onClick={handlePrimary}

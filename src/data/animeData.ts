@@ -84,6 +84,7 @@ export interface AnimeItem {
   cast?: { name: string; character?: string; photo?: string }[];
   premium?: boolean;
   premiumEpisodes?: Record<string, boolean>;
+  logo?: string;
 }
 
 export const categories = ["Action", "Romance", "Fantasy", "Sci-Fi", "Horror", "Comedy"];

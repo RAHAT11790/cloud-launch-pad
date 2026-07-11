@@ -49,6 +49,7 @@ export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminCon
   title: String(item?.title || "Untitled"),
   poster: String(item?.poster || item?.image || ""),
   backdrop: String(item?.backdrop || item?.poster || ""),
+  logo: String(item?.logo || item?.titleLogo || ""),
   year: String(item?.year || ""),
   rating: String(item?.rating || ""),
   language: String(item?.language || item?.baseLanguage || ""),
