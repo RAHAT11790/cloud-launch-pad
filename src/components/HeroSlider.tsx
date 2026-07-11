@@ -333,13 +333,14 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
           className="hero-title-text hero-title-handwrite"
           data-title={slide.title}
           style={{
-            ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
+            fontFamily: titleFontFamily,
             ["--hero-title-write" as any]: `${titleWriteDuration}ms`,
           }}
         >
           {slide.title}
         </span>
       </div>
+
 
       <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
         <button
