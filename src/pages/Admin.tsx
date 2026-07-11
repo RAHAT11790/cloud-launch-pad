@@ -2596,6 +2596,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Auto-detected ranges shown in modal (read-only hint). Filled when Save+Notify is clicked.
  const [wsAutoRanges, setWsAutoRanges] = useState<Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }>>([]);
 
+ // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
+ const [mvSaveNotifyModal, setMvSaveNotifyModal] = useState(false);
+ const mvNotifyContextRef = useRef<{ movieId: string; form: any } | null>(null);
+
  const formatEpisodeRangeLabel = useCallback((seasonValue?: string | number, start?: string | number, end?: string | number) => {
  const seasonText = String(seasonValue ?? "").trim() || "01";
  const startText = String(start ?? "").trim() || "01";
