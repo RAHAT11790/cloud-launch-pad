@@ -7375,7 +7375,7 @@ ${tgBulkFooter}
    {mvPartsData.map((p, pIdx) => (
      <div key={pIdx} className="bg-black/30 rounded-xl p-3 mb-3 border border-white/5">
        <div className="flex items-center justify-between mb-3">
-         <span className="text-xs font-semibold text-purple-400">Part {p.partNumber}</span>
+         <span className="text-xs font-semibold text-purple-400">{mvPartsData.length === 1 ? "Main" : `Part ${p.partNumber}`}</span>
          <button onClick={() => removeMoviePart(pIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={12} /></button>
        </div>
        <div className="grid grid-cols-1 gap-2 mb-2">
