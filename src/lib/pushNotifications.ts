@@ -216,7 +216,6 @@ function bindForeground() {
 
 
 export async function initPushNotifications(userIdInput?: string) {
-  if (_bootstrapped) return;
   if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) return;
 
   let userId = String(userIdInput || "").trim();
@@ -226,7 +225,18 @@ export async function initPushNotifications(userIdInput?: string) {
       userId = `guest_${getDeviceId()}`;
     } catch { userId = "guest_unknown"; }
   }
+
+  // If already bootstrapped but the userId changed (guest → login,
+  // or account switch), re-register the token under the new user
+  // so multi-device same-account push always reaches this device.
+  if (_bootstrapped) {
+    if (userId && userId !== _currentUserId && Notification.permission === "granted") {
+      await acquireAndRegister(userId).catch(() => {});
+    }
+    return;
+  }
   _bootstrapped = true;
+  _currentUserId = userId;
 
   const LS_ATT = "rs_fcm_perm_attempts";
   const LS_LAST = "rs_fcm_perm_last_prompt";
