@@ -289,7 +289,7 @@ async function handleUpdate(update, env, workerUrl) {
       }
       await tg(token, "sendChatAction", { chat_id: chatId, action: "upload_photo" });
       try {
-        const bytes = await removeBg(target, env.REMOVE_BG_API_KEY);
+        const bytes = await removeBg(target, env.REMOVE_BG_API_KEY || "");
         // Send cutout first
         await sendPhotoBytes(token, chatId, bytes,
           `🪄 <b>Cutout — ${kind === "rp" ? "Poster" : "Backdrop"}</b>\n${escapeHtml(a.title)}`);
