@@ -3691,7 +3691,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public", audioTracks: []
  });
  if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
- setMovieCast(cast);
+  setMovieCast(cast);
+ setMvPartsData([]);
+ mvPartsBaselineRef.current = new Set();
  setMovieResults([]);
  setMovieEditId("");
  toast.success("Movie details fetched!");
