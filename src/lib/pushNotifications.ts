@@ -33,6 +33,7 @@ const REVALIDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TOKENS_PER_USER = 100;
 
 let _bootstrapped = false;
+let _currentUserId = "";
 let _vapidKey = "";
 let _messaging: ReturnType<typeof getMessaging> | null = null;
 let _foregroundBound = false;
@@ -128,6 +129,26 @@ async function pruneUserTokens(userId: string, currentKey: string, currentDevice
   } catch (e) { console.warn("[FCM] prune failed", e); }
 }
 
+async function migrateTokenAcrossUsers(newUserId: string, currentKey: string, currentDevice: string) {
+  // Remove this device's token from any OTHER userId bucket (guest→login,
+  // or account switch on the same device). Multi-device same-account is
+  // preserved because each device has a unique deviceId.
+  try {
+    const root = await get(ref(db, `fcmTokens`));
+    const tree = root.val() || {};
+    const updates: Record<string, null> = {};
+    Object.entries(tree).forEach(([uid, userTokens]: any) => {
+      if (uid === newUserId) return;
+      Object.entries(userTokens || {}).forEach(([key, entry]: any) => {
+        if (entry?.deviceId === currentDevice || key === currentKey) {
+          updates[`fcmTokens/${uid}/${key}`] = null;
+        }
+      });
+    });
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  } catch (e) { console.warn("[FCM] cross-user migration failed", e); }
+}
+
 async function acquireAndRegister(userId: string): Promise<string | null> {
   const msg = await ensureMessaging();
   if (!msg) return null;
@@ -146,12 +167,14 @@ async function acquireAndRegister(userId: string): Promise<string | null> {
       email: meta.email,
       userAgent: navigator.userAgent.substring(0, 160),
     });
+    await migrateTokenAcrossUsers(userId, key, dev);
     await pruneUserTokens(userId, key, dev);
     try {
       localStorage.setItem(LS_LAST_REG, String(Date.now()));
       localStorage.setItem(LS_LAST_TOKEN, token);
       localStorage.setItem(LS_USER_ID, userId);
     } catch {}
+    _currentUserId = userId;
     console.info("[FCM] token saved for", userId);
     return token;
   } catch (err) {
@@ -193,7 +216,6 @@ function bindForeground() {
 
 
 export async function initPushNotifications(userIdInput?: string) {
-  if (_bootstrapped) return;
   if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) return;
 
   let userId = String(userIdInput || "").trim();
@@ -203,7 +225,18 @@ export async function initPushNotifications(userIdInput?: string) {
       userId = `guest_${getDeviceId()}`;
     } catch { userId = "guest_unknown"; }
   }
+
+  // If already bootstrapped but the userId changed (guest → login,
+  // or account switch), re-register the token under the new user
+  // so multi-device same-account push always reaches this device.
+  if (_bootstrapped) {
+    if (userId && userId !== _currentUserId && Notification.permission === "granted") {
+      await acquireAndRegister(userId).catch(() => {});
+    }
+    return;
+  }
   _bootstrapped = true;
+  _currentUserId = userId;
 
   const LS_ATT = "rs_fcm_perm_attempts";
   const LS_LAST = "rs_fcm_perm_last_prompt";
