@@ -7307,33 +7307,7 @@ ${tgBulkFooter}
  </div>
  </div>
  )}
- <div className="mb-4">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Movie Link (Default) <span className="text-purple-500">*</span></label>
- <input value={movieForm.movieLink || ""} onChange={e => setMovieForm({ ...movieForm, movieLink: e.target.value })}
- className={inputClass} placeholder="Movie streaming/embed link" />
- </div>
- {/* Quality Links */}
- <div className="mb-4 space-y-2">
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Quality Links (Optional)</label>
- {[
- { key: "movieLink480", label: "480p" },
- { key: "movieLink720", label: "720p" },
- { key: "movieLink1080", label: "1080p" },
- { key: "movieLink4k", label: "4K" },
- ].map(q => (
- <div key={q.key} className="flex items-center gap-2">
- <span className="text-[10px] text-[#D1C4E9] w-12 flex-shrink-0">{q.label}</span>
- <input value={movieForm[q.key] || ""} onChange={e => setMovieForm({ ...movieForm, [q.key]: e.target.value })}
- className={`${inputClass} flex-1 !py-2 !text-xs`} placeholder={`${q.label} link (optional)`} />
- </div>
- ))}
- </div>
- <div className="mb-4">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Download Link (Manual)</label>
- <input value={movieForm.downloadLink || ""} onChange={e => setMovieForm({ ...movieForm, downloadLink: e.target.value })}
- className={inputClass} placeholder="Download link" />
- </div>
- </div>
+ {/* Legacy top-level Movie Link / Quality / Download Link removed — parts-only flow. */}
 
  {/* ==================== MOVIE PARTS (mirrors Web Series episodes) ==================== */}
  <div className={`${glassCard} p-4 mb-4`}>
