@@ -325,7 +325,6 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div className="hero-vignette" aria-hidden />
 
-      <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
       {slide.titleLogo && (
         <div key={`logo-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
           <img
