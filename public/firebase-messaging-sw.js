@@ -1,4 +1,4 @@
-// Firebase Messaging Service Worker — background push
+// Firebase Messaging Service Worker — background push (data-only pattern)
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
 
@@ -11,28 +11,63 @@ firebase.initializeApp({
   appId: "1:843989457516:web:57e0577d092183eedd9649",
 });
 
-const BRAND_ICON = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+const BRAND_ICON = "https://i.ibb.co/gLc93Bc3/android-chrome-512x512.png";
+const BRAND_BADGE = "/notification-badge.svg";
 const messaging = firebase.messaging();
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
-messaging.onBackgroundMessage((payload) => {
-  const n = payload.notification || {};
-  const d = payload.data || {};
-  const title = n.title || d.title || "RS ANIME";
+// Unified renderer used by both onBackgroundMessage and raw push events.
+async function showFromData(d) {
+  d = d || {};
+  const title = d.title || "RS ANIME";
   const options = {
-    body: n.body || d.body || "",
-    icon: n.icon || d.icon || BRAND_ICON,
-    badge: BRAND_ICON,
-    image: n.image || d.image || undefined,
+    body: d.body || "",
+    icon: d.icon || BRAND_ICON,
+    badge: d.badge || BRAND_BADGE,
+    image: d.image || undefined,
     vibrate: [200, 100, 200],
     tag: d.contentId ? `rsanime-${d.contentId}` : `rsanime-${Date.now()}`,
     renotify: true,
     requireInteraction: false,
+    silent: false,
     data: { url: d.url || d.deepLink || "/", ...d },
   };
-  self.registration.showNotification(title, options);
+  try {
+    await self.registration.showNotification(title, options);
+  } catch (e) {
+    // Fallback without image if image failed to load
+    delete options.image;
+    await self.registration.showNotification(title, options);
+  }
+}
+
+messaging.onBackgroundMessage((payload) => {
+  const d = { ...(payload.data || {}) };
+  if (payload.notification) {
+    d.title = d.title || payload.notification.title;
+    d.body = d.body || payload.notification.body;
+    d.image = d.image || payload.notification.image;
+    d.icon = d.icon || payload.notification.icon;
+  }
+  return showFromData(d);
+});
+
+// Fallback: catch raw push events (some Chrome versions bypass FCM SDK path).
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload = {};
+  try { payload = event.data.json(); } catch { payload = { data: { body: event.data.text() } }; }
+  const d = { ...(payload.data || {}) };
+  if (payload.notification) {
+    d.title = d.title || payload.notification.title;
+    d.body = d.body || payload.notification.body;
+    d.image = d.image || payload.notification.image;
+    d.icon = d.icon || payload.notification.icon;
+  }
+  // Only render if the FCM SDK path didn't already handle it (SDK sets a tag).
+  event.waitUntil(showFromData(d));
 });
 
 self.addEventListener("notificationclick", (event) => {
