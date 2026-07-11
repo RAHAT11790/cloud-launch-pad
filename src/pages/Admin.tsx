@@ -3692,7 +3692,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
   setMovieCast(cast);
- setMvPartsData([]);
+ setMvPartsData([{ partNumber: 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }]);
  mvPartsBaselineRef.current = new Set();
  setMovieResults([]);
  setMovieEditId("");
@@ -3706,8 +3706,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
   {
-    const hasParts = (mvPartsData || []).some(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
-    if (!movieForm.movieLink && !hasParts) { toast.error("Please enter movie link or add at least one part"); return; }
+    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
+    if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a default link"); return; }
   }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
@@ -3778,13 +3778,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
  });
   setMovieCast(data.cast || []);
- // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing
+ // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing.
+ // Backwards-compat: if the movie has no parts but has legacy top-level links,
+ // hoist them into a single "Main" part so the new parts-only editor works.
  {
    const rawParts = Array.isArray(data.parts) ? data.parts : (data.parts && typeof data.parts === "object" ? Object.values(data.parts) : []);
-   const hydrated: MoviePartEditor[] = (rawParts as any[])
+   let hydrated: MoviePartEditor[] = (rawParts as any[])
      .map((p: any, i: number) => ({
        partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
-       title: p?.title || `Part ${i + 1}`,
+       title: p?.title || "",
        link: p?.link || "",
        link480: p?.link480 || "",
        link720: p?.link720 || "",
@@ -3792,6 +3794,20 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
        link4k: p?.link4k || "",
      }))
      .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   if (hydrated.length === 0 && (data.movieLink || data.movieLink480 || data.movieLink720 || data.movieLink1080 || data.movieLink4k)) {
+     hydrated = [{
+       partNumber: 1,
+       title: "",
+       link: data.movieLink || "",
+       link480: data.movieLink480 || "",
+       link720: data.movieLink720 || "",
+       link1080: data.movieLink1080 || "",
+       link4k: data.movieLink4k || "",
+     }];
+   }
+   if (hydrated.length === 0) {
+     hydrated = [{ partNumber: 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+   }
    setMvPartsData(hydrated);
    mvPartsBaselineRef.current = new Set(hydrated.map(p => Number(p.partNumber || 0)).filter(n => n > 0));
  }
@@ -4758,7 +4774,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const addMoviePart = () => {
    setMvPartsData(prev => {
      const nextNum = (prev.reduce((m, p) => Math.max(m, Number(p.partNumber || 0)), 0) || prev.length) + 1;
-     return [...prev, { partNumber: nextNum, title: `Part ${nextNum}`, link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+     return [...prev, { partNumber: nextNum, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }];
    });
  };
  const removeMoviePart = (idx: number) => {
@@ -7030,7 +7046,7 @@ ${tgBulkFooter}
  <button onClick={() => setMoviesTab("mv-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Add New
  </button>
- <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", movieLink: "" }); setMovieCast([]); setMvPartsData([]); mvPartsBaselineRef.current = new Set(); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+ <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official" }); setMovieCast([]); setMvPartsData([{ partNumber: 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }]); mvPartsBaselineRef.current = new Set(); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Manual
  </button>
   {/* AN Movies tab removed — AN is API-only */}
@@ -7291,33 +7307,9 @@ ${tgBulkFooter}
  </div>
  </div>
  )}
- <div className="mb-4">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Movie Link (Default) <span className="text-purple-500">*</span></label>
- <input value={movieForm.movieLink || ""} onChange={e => setMovieForm({ ...movieForm, movieLink: e.target.value })}
- className={inputClass} placeholder="Movie streaming/embed link" />
+ {/* Legacy top-level Movie Link / Quality / Download Link removed — parts-only flow. */}
  </div>
- {/* Quality Links */}
- <div className="mb-4 space-y-2">
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Quality Links (Optional)</label>
- {[
- { key: "movieLink480", label: "480p" },
- { key: "movieLink720", label: "720p" },
- { key: "movieLink1080", label: "1080p" },
- { key: "movieLink4k", label: "4K" },
- ].map(q => (
- <div key={q.key} className="flex items-center gap-2">
- <span className="text-[10px] text-[#D1C4E9] w-12 flex-shrink-0">{q.label}</span>
- <input value={movieForm[q.key] || ""} onChange={e => setMovieForm({ ...movieForm, [q.key]: e.target.value })}
- className={`${inputClass} flex-1 !py-2 !text-xs`} placeholder={`${q.label} link (optional)`} />
- </div>
- ))}
- </div>
- <div className="mb-4">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Download Link (Manual)</label>
- <input value={movieForm.downloadLink || ""} onChange={e => setMovieForm({ ...movieForm, downloadLink: e.target.value })}
- className={inputClass} placeholder="Download link" />
- </div>
- </div>
+
 
  {/* ==================== MOVIE PARTS (mirrors Web Series episodes) ==================== */}
  <div className={`${glassCard} p-4 mb-4`}>
@@ -7335,7 +7327,7 @@ ${tgBulkFooter}
      </div>
    </div>
    <p className="text-[10px] text-zinc-500 mb-3">
-     Empty parts list → single-movie mode (top-level Movie Link is used). Add parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes.
+     Single part → shown as "Main" (plays like a normal movie). Add more parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes. Download uses each part's quality links automatically — no separate download field needed.
    </p>
 
    {mvPartsJsonImportMode && (
@@ -7383,12 +7375,12 @@ ${tgBulkFooter}
    {mvPartsData.map((p, pIdx) => (
      <div key={pIdx} className="bg-black/30 rounded-xl p-3 mb-3 border border-white/5">
        <div className="flex items-center justify-between mb-3">
-         <span className="text-xs font-semibold text-purple-400">Part {p.partNumber}</span>
+         <span className="text-xs font-semibold text-purple-400">{mvPartsData.length === 1 ? "Main" : `Part ${p.partNumber}`}</span>
          <button onClick={() => removeMoviePart(pIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={12} /></button>
        </div>
        <div className="grid grid-cols-1 gap-2 mb-2">
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
-           className={`${inputClass} !py-2 !text-xs`} placeholder={`Part ${p.partNumber} title (optional)`} />
+           className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
        </div>
        <div className="space-y-2">
          <div>
@@ -7426,7 +7418,8 @@ ${tgBulkFooter}
    const currentNums = capturedParts.map(p => Number(p.partNumber || 0)).filter(n => n > 0).sort((a, b) => a - b);
    const addedNums = currentNums.filter(n => !baseline.has(n));
    let autoRange: { start: number; end: number } | null = null;
-   if (addedNums.length > 0) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
+   // Single "Main" part → treat as full movie (no per-part range), otherwise show which parts were added.
+   if (addedNums.length > 0 && capturedParts.length > 1) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
    setMvPartsAutoRange(autoRange);
 
    mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm, parts: capturedParts, addedParts: addedNums };
@@ -7446,13 +7439,18 @@ ${tgBulkFooter}
  </>
  )}
 
- {/* Movie Save + Notify Modal */}
+ </div>
+ )}
+ </div>
+ )}
+
+ {/* Movie Save + Notify Modal — rendered at page level so tab switching after saveMovie() cannot unmount it (was causing flash-and-close bug) */}
  {mvSaveNotifyModal && (() => {
  const ctx = mvNotifyContextRef.current;
  const ctxForm = ctx?.form;
  const ctxMovieId = ctx?.movieId || "";
  return (
- <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => setMvSaveNotifyModal(false)}>
+ <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; setMvPartsAutoRange(null); }}>
  <div className="admin-optimized-panel admin-scroll-smooth bg-[#16162A] border border-white/10 rounded-2xl w-full max-w-[440px] max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
  <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> New Movie Release</h3>
  <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — Movie will be posted as a new release` : "Movie release"}</p>
@@ -7463,7 +7461,6 @@ ${tgBulkFooter}
  </div>
  )}
 
- {/* Auto-detected tracking info: parts vs. full movie */}
  <div className="mb-3 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
    <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider mb-1">Auto-tracked</p>
    {mvPartsAutoRange ? (
@@ -7522,13 +7519,11 @@ ${tgBulkFooter}
  setAdminBusyTask(null);
  toast.success("✅ New Release added!");
 
- // FCM push
  try {
  const pushMod = await import("@/lib/pushNotifications");
  const pushTitle = buildBrowserPushTitle(ctxForm.title);
  const pushBody = `${ctxForm.title} • ${releaseLabel}`;
  const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
- // Deep-link: if parts, point to the first newly-added part (epIdx = partStart-1)
  const deepLink = partsRange
    ? buildEpisodeShareUrl(ctxMovieId, 0, Math.max(0, partsRange.start - 1)).replace(/^https?:\/\/[^/]+/, "")
    : buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
@@ -7553,7 +7548,6 @@ ${tgBulkFooter}
  toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
  }
 
-  // Close modal + redirect to telegram-post with this movie preselected
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
  mvNotifyContextRef.current = null;
@@ -7564,7 +7558,6 @@ ${tgBulkFooter}
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  } else {
- // Fallback: fill directly from moviesData
  const mv = moviesData.find(m => m.id === movieIdForRedirect);
  if (mv) {
  setTgSelectedRelease(movieIdForRedirect);
@@ -7596,10 +7589,6 @@ ${tgBulkFooter}
  </div>
  );
  })()}
- </div>
- )}
- </div>
- )}
 
  {/* ==================== USERS ==================== */}
  {activeSection === "users" && (
