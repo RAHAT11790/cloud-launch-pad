@@ -622,7 +622,7 @@ div[style*="z-index: 2147483647"],
     background: transparent;
   }
   .hero-title-text {
-    display: block;
+    display: inline-block;
     max-width: 86%;
     white-space: normal;
     overflow-wrap: break-word;
@@ -634,8 +634,17 @@ div[style*="z-index: 2147483647"],
     letter-spacing: 0.035em;
     text-align: center;
     text-transform: uppercase;
-    background: transparent;
+    padding: 10px 20px;
+    border-radius: 14px;
+    background:
+      radial-gradient(120% 140% at 50% 50%, rgba(10, 10, 14, 0.55) 0%, rgba(10, 10, 14, 0.28) 60%, rgba(10, 10, 14, 0) 100%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+            backdrop-filter: blur(6px) saturate(120%);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 8px 24px -12px rgba(0, 0, 0, 0.55);
   }
+
   /* Match the "watch" info-card title: same RGB gradient sweep, no background box, no heavy shadow */
   .hero-title-handwrite {
     position: relative;
