@@ -611,7 +611,7 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 0;
     right: 0;
-    top: 34%;
+    top: 30%;
     transform: translateY(-50%);
     z-index: 9;
     display: flex;
