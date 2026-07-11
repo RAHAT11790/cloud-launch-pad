@@ -3778,13 +3778,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
  });
   setMovieCast(data.cast || []);
- // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing
+ // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing.
+ // Backwards-compat: if the movie has no parts but has legacy top-level links,
+ // hoist them into a single "Main" part so the new parts-only editor works.
  {
    const rawParts = Array.isArray(data.parts) ? data.parts : (data.parts && typeof data.parts === "object" ? Object.values(data.parts) : []);
-   const hydrated: MoviePartEditor[] = (rawParts as any[])
+   let hydrated: MoviePartEditor[] = (rawParts as any[])
      .map((p: any, i: number) => ({
        partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
-       title: p?.title || `Part ${i + 1}`,
+       title: p?.title || "",
        link: p?.link || "",
        link480: p?.link480 || "",
        link720: p?.link720 || "",
@@ -3792,6 +3794,20 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
        link4k: p?.link4k || "",
      }))
      .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   if (hydrated.length === 0 && (data.movieLink || data.movieLink480 || data.movieLink720 || data.movieLink1080 || data.movieLink4k)) {
+     hydrated = [{
+       partNumber: 1,
+       title: "",
+       link: data.movieLink || "",
+       link480: data.movieLink480 || "",
+       link720: data.movieLink720 || "",
+       link1080: data.movieLink1080 || "",
+       link4k: data.movieLink4k || "",
+     }];
+   }
+   if (hydrated.length === 0) {
+     hydrated = [{ partNumber: 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+   }
    setMvPartsData(hydrated);
    mvPartsBaselineRef.current = new Set(hydrated.map(p => Number(p.partNumber || 0)).filter(n => n > 0));
  }
