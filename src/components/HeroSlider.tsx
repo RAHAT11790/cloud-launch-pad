@@ -67,7 +67,7 @@ const normalizeSlides = (items: HeroSlide[]) => {
 };
 
 const getSlidesSignature = (items: HeroSlide[]) =>
-  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}`).join("|");
+  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}:${item.titleLogo || ""}`).join("|");
 
 const mergeDeckWithoutChangingVisibleSlide = (
   currentDeck: HeroSlide[],
