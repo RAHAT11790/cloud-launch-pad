@@ -197,6 +197,7 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
     movieLink720: item?.movieLink720 || undefined,
     movieLink1080: item?.movieLink1080 || undefined,
     movieLink4k: item?.movieLink4k || undefined,
+    parts: mapMovieParts(item?.parts),
     trailer: item?.trailer || undefined,
     seasons: undefined,
     createdAt: item?.createdAt || 0,
