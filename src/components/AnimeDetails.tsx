@@ -408,7 +408,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         )}
 
         {/* Parts List for movies with multiple parts */}
-        {anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0 && (
+        {anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 1 && (
           <div className="mb-5">
             <div className="glass-card p-3.5 rounded-xl">
               <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">Parts</h3>
