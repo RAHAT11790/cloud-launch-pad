@@ -18,7 +18,6 @@ export interface HeroSlide {
   titleFont?: string;
   episodeInfo?: string;
   languageInfo?: string;
-  titleLogo?: string;
 }
 
 interface HeroSliderProps {
