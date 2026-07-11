@@ -4758,7 +4758,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const addMoviePart = () => {
    setMvPartsData(prev => {
      const nextNum = (prev.reduce((m, p) => Math.max(m, Number(p.partNumber || 0)), 0) || prev.length) + 1;
-     return [...prev, { partNumber: nextNum, title: `Part ${nextNum}`, link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+     return [...prev, { partNumber: nextNum, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }];
    });
  };
  const removeMoviePart = (idx: number) => {
