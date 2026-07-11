@@ -82,7 +82,7 @@ const mergeDeckWithoutChangingVisibleSlide = (
   if (!visibleSlide) return incomingDeck;
 
   const freshVisibleSlide = incomingDeck.find((item) => item.id === visibleSlide.id);
-  const pinnedVisibleSlide = freshVisibleSlide ? { ...freshVisibleSlide, ...visibleSlide } : visibleSlide;
+  const pinnedVisibleSlide = freshVisibleSlide ? { ...visibleSlide, ...freshVisibleSlide } : visibleSlide;
   const nextDeck = incomingDeck.filter((item) => item.id !== visibleSlide.id).slice(0, MAX_SLIDES - 1);
   nextDeck.splice(Math.min(safeVisibleIndex, nextDeck.length), 0, visibleSlide);
   nextDeck[Math.min(safeVisibleIndex, nextDeck.length - 1)] = pinnedVisibleSlide;
