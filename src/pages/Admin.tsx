@@ -7550,10 +7550,11 @@ ${tgBulkFooter}
  toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
  }
 
- // Close modal + redirect to telegram-post with this movie preselected
+  // Close modal + redirect to telegram-post with this movie preselected
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
  mvNotifyContextRef.current = null;
+ setMvPartsAutoRange(null);
  setActiveSection("telegram-post");
  setTimeout(async () => {
  const matching = releasesData.find(r => r.contentId === movieIdForRedirect);
