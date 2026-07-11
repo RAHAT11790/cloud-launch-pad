@@ -2596,9 +2596,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Auto-detected ranges shown in modal (read-only hint). Filled when Save+Notify is clicked.
  const [wsAutoRanges, setWsAutoRanges] = useState<Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }>>([]);
 
- // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
+  // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
  const [mvSaveNotifyModal, setMvSaveNotifyModal] = useState(false);
- const mvNotifyContextRef = useRef<{ movieId: string; form: any } | null>(null);
+ const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts: any[]; addedParts: number[] } | null>(null);
+
+ // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
+ type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string };
+ const [mvPartsData, setMvPartsData] = useState<MoviePartEditor[]>([]);
+ const [mvPartsJsonImportMode, setMvPartsJsonImportMode] = useState(false);
+ const [mvJsonPasteText, setMvJsonPasteText] = useState("");
+ const mvJsonFileRef = useRef<HTMLInputElement | null>(null);
+ // Baseline: Set of partNumbers present when edit started (to detect newly-added parts on Save+Notify)
+ const mvPartsBaselineRef = useRef<Set<number>>(new Set());
+ const [mvPartsAutoRange, setMvPartsAutoRange] = useState<{ start: number; end: number } | null>(null);
 
  const formatEpisodeRangeLabel = useCallback((seasonValue?: string | number, start?: string | number, end?: string | number) => {
  const seasonText = String(seasonValue ?? "").trim() || "01";
