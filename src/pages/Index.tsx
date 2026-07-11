@@ -679,7 +679,7 @@ const preloadImage = (src?: string | null) => {
 // Ultra-opt: warm the saved Firebase row on pointerdown for RS/admin content.
 // AN playback is API-driven because AnimeSalt HLS links expire; never require
 // Admin-saved media URLs for AN cards.
-const prefetchAnimePlayback = (anime: AnimeItem) => {
+const prefetchAnimePlayback = (anime: AnimeItem, opts?: { forceFresh?: boolean }) => {
   if (!anime) return;
   const isAn = anime.source === "animesalt"
     || String(anime.id || "").startsWith("as_")
@@ -688,7 +688,7 @@ const prefetchAnimePlayback = (anime: AnimeItem) => {
     || !!anime.anSlug
     || !!anime.animeSaltSlug;
   if (isAn) return;
-  try { loadFullFirebaseAnimeItem(anime); } catch {}
+  try { loadFullFirebaseAnimeItem(anime, { forceFresh: !!opts?.forceFresh }); } catch {}
 };
 
 const getCardSourceBadge = (anime: AnimeItem | any) => {
