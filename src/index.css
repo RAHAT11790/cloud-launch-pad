@@ -623,15 +623,15 @@ div[style*="z-index: 2147483647"],
   }
   .hero-title-text {
     display: block;
-    max-width: 92%;
+    max-width: 86%;
     white-space: normal;
     overflow-wrap: break-word;
     word-break: normal;
     font-family: "Bebas Neue", "Oswald", system-ui, sans-serif;
-    font-weight: 900;
-    font-size: clamp(34px, 9.2vw, 58px);
-    line-height: 1.02;
-    letter-spacing: 0.04em;
+    font-weight: 800;
+    font-size: clamp(22px, 5.6vw, 32px);
+    line-height: 1.05;
+    letter-spacing: 0.035em;
     text-align: center;
     text-transform: uppercase;
     background: transparent;
