@@ -3707,19 +3707,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
 
- const data = {
- ...movieForm,
- cast: movieCast,
- audioTracks: Array.isArray(movieForm.audioTracks)
- ? movieForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
- : [],
- type: "movie",
- visibility: movieForm.visibility === "private" ? "private" : "public",
- telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
- ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
- : null,
- updatedAt: Date.now(),
- };
+  const data = {
+  ...movieForm,
+  cast: movieCast,
+  audioTracks: Array.isArray(movieForm.audioTracks)
+  ? movieForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
+  : [],
+  // Movie Parts: drop empty entries, keep only parts that have at least one URL
+  parts: (mvPartsData || [])
+    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k))
+    .map((p, i) => ({ partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "" })),
+  type: "movie",
+  visibility: movieForm.visibility === "private" ? "private" : "public",
+  telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
+  ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
+  : null,
+  updatedAt: Date.now(),
+  };
   let saveRef;
   let newMovieId = movieEditId || "";
   if (movieEditId) {
