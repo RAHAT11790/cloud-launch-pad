@@ -4727,6 +4727,109 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  updateSeriesEpisodeLanguageLink(sIdx, eIdx, quality, link);
  };
 
+ // ============ MOVIE PARTS HELPERS ============
+ // Mirrors Web Series episode helpers, but simpler (one flat list, no season wrapping).
+ const addMoviePart = () => {
+   setMvPartsData(prev => {
+     const nextNum = (prev.reduce((m, p) => Math.max(m, Number(p.partNumber || 0)), 0) || prev.length) + 1;
+     return [...prev, { partNumber: nextNum, title: `Part ${nextNum}`, link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+   });
+ };
+ const removeMoviePart = (idx: number) => {
+   if (!confirm("Remove this part?")) return;
+   setMvPartsData(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, partNumber: i + 1 })));
+ };
+ const updateMoviePartField = (idx: number, field: keyof MoviePartEditor, value: string | number) => {
+   setMvPartsData(prev => {
+     const copy = [...prev];
+     copy[idx] = { ...copy[idx], [field]: value } as MoviePartEditor;
+     return copy;
+   });
+ };
+
+ // Smart merge — same philosophy as smartMergeEpisodesInto but scoped to movie parts.
+ // Only non-empty fields in the incoming JSON overwrite existing values, so pasting a
+ // 480p-only JSON never wipes the 720p/1080p/4K links you already have.
+ const smartMergePartsInto = (existing: MoviePartEditor[], incoming: any[]) => {
+   const list = [...(existing || [])];
+   let updated = 0, added = 0;
+   incoming.forEach((raw: any, idx: number) => {
+     const num = Number(raw?.partNumber || raw?.number || idx + 1) || idx + 1;
+     const matchIdx = list.findIndex(p => Number(p.partNumber) === num);
+     const clean: any = {};
+     ["title", "link", "link480", "link720", "link1080", "link4k"].forEach(k => {
+       const v = raw?.[k] ?? raw?.[k.replace("link", "movieLink")];
+       if (v !== undefined && v !== null && String(v).trim() !== "") clean[k] = String(v).trim();
+     });
+     if (matchIdx >= 0) {
+       list[matchIdx] = { ...list[matchIdx], ...clean, partNumber: num };
+       updated++;
+     } else {
+       list.push({ partNumber: num, title: clean.title || `Part ${num}`, link: clean.link || "", link480: clean.link480, link720: clean.link720, link1080: clean.link1080, link4k: clean.link4k });
+       added++;
+     }
+   });
+   list.sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   return { list, updated, added };
+ };
+
+ const mvParseJsonParts = (jsonData: any) => {
+   let parts: any[] = [];
+   if (Array.isArray(jsonData)) parts = jsonData;
+   else if (Array.isArray(jsonData?.parts)) parts = jsonData.parts;
+   else if (Array.isArray(jsonData?.episodes)) parts = jsonData.episodes;
+   else { toast.error("Invalid JSON. A parts array is required."); return; }
+   if (parts.length === 0) { toast.error("No parts found in the JSON"); return; }
+   let updated = 0, added = 0;
+   setMvPartsData(prev => {
+     const merged = smartMergePartsInto(prev, parts);
+     updated = merged.updated; added = merged.added;
+     return merged.list;
+   });
+   toast.success(`Parts: ${updated} updated, ${added} added — existing quality links preserved ✓`);
+   setMvPartsJsonImportMode(false);
+   setMvJsonPasteText("");
+ };
+
+ const mvHandleJsonPaste = () => {
+   if (!mvJsonPasteText.trim()) { toast.error("Paste JSON text"); return; }
+   try { mvParseJsonParts(JSON.parse(mvJsonPasteText.trim())); }
+   catch { toast.error("Invalid JSON. Please provide valid JSON format."); }
+ };
+
+ const mvHandleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const files = e.target.files;
+   if (!files || files.length === 0) return;
+   let processed = 0, failed = 0;
+   const total = files.length;
+   const collected: any[] = [];
+   Array.from(files).forEach(file => {
+     const reader = new FileReader();
+     reader.onload = ev => {
+       try {
+         const parsed = JSON.parse(ev.target?.result as string);
+         let arr: any[] = [];
+         if (Array.isArray(parsed)) arr = parsed;
+         else if (Array.isArray(parsed?.parts)) arr = parsed.parts;
+         else if (Array.isArray(parsed?.episodes)) arr = parsed.episodes;
+         arr.forEach((p, i) => collected.push({ ...p, partNumber: p?.partNumber || p?.number || i + 1 }));
+         processed++;
+       } catch { failed++; }
+       if (processed + failed === total) {
+         if (collected.length > 0) {
+           let updated = 0, added = 0;
+           setMvPartsData(prev => { const merged = smartMergePartsInto(prev, collected); updated = merged.updated; added = merged.added; return merged.list; });
+           toast.success(`${updated} updated, ${added} added (from ${processed} files) — existing links preserved ✓`);
+         }
+         if (failed > 0) toast.error(`${failed} files failed to parse`);
+       }
+     };
+     reader.readAsText(file);
+   });
+   if (mvJsonFileRef.current) mvJsonFileRef.current.value = "";
+ };
+
+
  // ==================== AUTH HANDLERS ====================
     const handlePinLogin = async () => {
     if (!loginPinInput) { toast.error("Enter PIN"); return; }
