@@ -198,20 +198,26 @@ async function handleSend(req, env) {
     while (idx < resolvedTokens.length) {
       const i = idx++;
       const token = resolvedTokens[i];
+      // Data-only message: SW's onBackgroundMessage always fires and
+      // controls display fully. Prevents Chrome's silent auto-display
+      // path where FCM returns success but nothing appears on screen.
+      const dataPayload = {
+        ...normalized,
+        title: String(title || "RS ANIME"),
+        body: String(msgBody || ""),
+        icon: iconUrl,
+        badge: badgeUrl,
+      };
+      if (imageUrl) dataPayload.image = imageUrl;
+      if (clickLink) dataPayload.url = clickLink;
       const message = {
         message: {
           token,
-          notification: { title, body: msgBody },
           webpush: {
             headers: { Urgency: "high", TTL: "2419200" },
-            notification: {
-              title, body: msgBody,
-              icon: iconUrl, badge: badgeUrl, image: imageUrl,
-              vibrate: [200, 100, 200], requireInteraction: false,
-            },
             fcm_options: clickLink ? { link: clickLink } : undefined,
           },
-          data: normalized,
+          data: dataPayload,
         },
       };
       const r = await sendOne(sa.project_id, accessToken, message);
