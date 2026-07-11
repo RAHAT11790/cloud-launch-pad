@@ -84,13 +84,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return () => clearInterval(t);
   }, []);
 
-  // Filter active releases within 36h - only RS Anime content (no AnimeSalt)
-  const allAnimeIds = useMemo(() => new Set(allAnime.map(a => a.id)), [allAnime]);
+  const contentById = useMemo(() => {
+    const map = new Map<string, AnimeItem>();
+    allAnime.forEach((item) => { if (item?.id) map.set(item.id, item); });
+    return map;
+  }, [allAnime]);
+
+  // Filter active releases within 36h - only RS Anime content (no AnimeSalt).
+  // Fresh releases can arrive before the home index refreshes, so don't hide or
+  // block a card just because allAnime does not contain it yet.
   const activeReleases = useMemo(() => releases.filter(
     (r) => r.active !== false && Date.now() - r.timestamp < NEW_RELEASE_TTL_MS
       && (r as any).contentType !== "animesalt"
-      && allAnimeIds.has(r.contentId)
-  ), [releases, allAnimeIds, tick]);
+  ), [releases, tick]);
 
   // Helpers — releases may store episode info either at the top level
   // (r.episode / r.season) or nested under r.episodeInfo with optional
@@ -137,7 +143,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
   if (groupedReleases.length === 0) return null;
 
-  const getContent = (contentId: string) => allAnime.find((a) => a.id === contentId);
+  const getContent = (contentId: string) => contentById.get(contentId);
+
+  const warmRelease = (release: EpisodeRelease) => {
+    const content = getContent(release.contentId);
+    const target = content || ({ id: release.contentId, type: (release as any).contentType === "movie" ? "movie" : "webseries" } as any);
+    try { (window as any).__rsPrefetchAnime?.(target, { forceFresh: true }); } catch {}
+  };
 
   const timeAgo = (ts: number) => {
     const diff = Date.now() - ts;
@@ -154,14 +166,14 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   const handleClick = (release: EpisodeRelease, startEpisode?: number) => {
     if (openingRef.current === release.id) return;
     openingRef.current = release.id;
-    window.setTimeout(() => { if (openingRef.current === release.id) openingRef.current = null; }, 1000);
+    window.setTimeout(() => { if (openingRef.current === release.id) openingRef.current = null; }, 180);
     const content = getContent(release.contentId);
     const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
     const eIdx = typeof startEpisode === "number"
       ? Math.max(0, startEpisode - 1)
       : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
     if (content) {
-      onCardClick(content, sIdx, eIdx);
+      onCardClick({ ...(content as any), __rsForceFreshPlayback: true } as AnimeItem, sIdx, eIdx);
       return;
     }
     // Fallback: content wasn't in the local index (rare — Firebase snapshot
@@ -179,6 +191,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       category: "",
       storyline: "",
       language: "",
+      __rsForceFreshPlayback: true,
     };
     onCardClick(synth, sIdx, eIdx);
   };
