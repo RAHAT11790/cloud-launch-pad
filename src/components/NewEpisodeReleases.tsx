@@ -261,6 +261,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                     <button
                       type="button"
                       key={release.id}
+                      onPointerDown={() => warmRelease(release)}
                       onClick={() => { handleClick(release, minEp); setShowModal(false); }}
                       className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/45 cursor-pointer text-left transition-transform hover:bg-secondary active:scale-[0.985] overflow-hidden"
                       style={{ background: "hsl(var(--card))" }}
@@ -347,6 +348,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 key={release.id}
                 data-anime-card="true"
                 className="relative flex-shrink-0 w-[124px] cursor-pointer group"
+                onPointerDown={() => warmRelease(release)}
                 onClick={() => handleClick(release, minEp)}
               >
                   <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
