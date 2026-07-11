@@ -7142,9 +7142,153 @@ ${tgBulkFooter}
  </div>
  </div>
 
- <button onClick={saveMovie} className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2`}>
- <Save size={18} /> Save Movie
+ <div className="flex gap-2">
+ <button onClick={saveMovie} className={`${btnPrimary} flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2`}>
+ <Save size={18} /> Normal Save
  </button>
+ <button
+ onClick={async () => {
+ // Capture form BEFORE saveMovie resets it
+ const capturedForm = movieForm ? { ...movieForm } : null;
+ mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm };
+ const savedId = await saveMovie();
+ if (!savedId) return;
+ if (mvNotifyContextRef.current && (mvNotifyContextRef.current.movieId === "__pending__" || !mvNotifyContextRef.current.movieId)) {
+ mvNotifyContextRef.current.movieId = savedId;
+ }
+ setMvSaveNotifyModal(true);
+ }}
+ className="flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-xl transition-colors cursor-pointer border-none"
+ >
+ <Bell size={16} /> Save + Notify
+ </button>
+ </div>
+
+ {/* Movie Save + Notify Modal */}
+ {mvSaveNotifyModal && (() => {
+ const ctx = mvNotifyContextRef.current;
+ const ctxForm = ctx?.form;
+ const ctxMovieId = ctx?.movieId || "";
+ return (
+ <div className="admin-isolated-overlay fixed inset-0 z-[500] bg-black/80 flex items-center justify-center p-4" onClick={() => setMvSaveNotifyModal(false)}>
+ <div className="admin-optimized-panel admin-scroll-smooth bg-[#16162A] border border-white/10 rounded-2xl w-full max-w-[440px] max-h-[80vh] overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
+ <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> New Movie Release</h3>
+ <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — Movie will be posted as a new release` : "Movie release"}</p>
+
+ {(ctxForm?.backdrop || ctxForm?.poster) && (
+ <div className="mb-3 rounded-lg overflow-hidden border border-white/10">
+ <CachedImg src={ctxForm.backdrop || ctxForm.poster} className="w-full aspect-video object-cover" loading="eager" decoding="async" />
+ </div>
+ )}
+
+ <div className="mb-3 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+ <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1">This will do</p>
+ <ul className="text-[11px] text-emerald-100 space-y-0.5 list-disc pl-4">
+ <li>Add a "New Release" entry (Movie)</li>
+ <li>Send browser push (FCM) to all users</li>
+ <li>Redirect to Telegram Post with this movie preselected</li>
+ </ul>
+ </div>
+
+ <div className="flex gap-2">
+ <button
+ onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; }}
+ className="flex-1 py-3 rounded-lg text-sm font-bold bg-zinc-700 text-white flex items-center justify-center gap-2"
+ >
+ <X size={14} /> Cancel
+ </button>
+ <button
+ onClick={async () => {
+ if (!ctxMovieId || !ctxForm?.title) { toast.error("Movie context missing"); return; }
+ try {
+ setAdminBusyTask("Adding new release…");
+ await yieldAdminFrame();
+ const newRelease: any = {
+ contentId: ctxMovieId,
+ contentType: "movie",
+ title: ctxForm.title,
+ poster: ctxForm.poster || "",
+ year: ctxForm.year || "N/A",
+ rating: ctxForm.rating || "N/A",
+ visibility: ctxForm.visibility || "public",
+ episodeInfo: { type: "movie", seasonName: "Movie" },
+ timestamp: Date.now(),
+ active: true,
+ };
+ await set(push(ref(db, "newEpisodeReleases")), newRelease);
+ setAdminBusyTask(null);
+ toast.success("✅ New Release added!");
+
+ // FCM push
+ try {
+ const pushMod = await import("@/lib/pushNotifications");
+ const pushTitle = buildBrowserPushTitle(ctxForm.title);
+ const pushBody = `${ctxForm.title} • Movie release`;
+ const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
+ const deepLink = buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
+ const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
+ setAdminBusyTask("Sending push to users…");
+ const pushResult = await pushMod.sendPushNotification({
+ title: pushTitle,
+ body: pushBody,
+ image,
+ deepLink,
+ contentId: String(ctxMovieId),
+ contentType: "movie",
+ });
+ toast.dismiss(pushToastId);
+ setAdminBusyTask(null);
+ if (pushResult.ok) {
+ toast.success(`🔔 Push sent → ${pushResult.sent}/${pushResult.total} users${pushResult.invalidRemoved ? ` (cleaned ${pushResult.invalidRemoved} dead tokens)` : ""}`, { duration: 5000 });
+ } else {
+ toast.warning(`Push skipped: ${pushResult.error || "send-fcm not configured"}`);
+ }
+ } catch (pushErr: any) {
+ toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
+ }
+
+ // Close modal + redirect to telegram-post with this movie preselected
+ const movieIdForRedirect = ctxMovieId;
+ setMvSaveNotifyModal(false);
+ mvNotifyContextRef.current = null;
+ setActiveSection("telegram-post");
+ setTimeout(async () => {
+ const matching = releasesData.find(r => r.contentId === movieIdForRedirect);
+ if (matching) {
+ await fillTelegramFromRelease(matching.id);
+ } else {
+ // Fallback: fill directly from moviesData
+ const mv = moviesData.find(m => m.id === movieIdForRedirect);
+ if (mv) {
+ setTgSelectedRelease(movieIdForRedirect);
+ setTgSelectedAnimeId(String(movieIdForRedirect));
+ setTgTitle(mv.title || "");
+ const backdrop = mv.backdrop || mv.poster || "";
+ setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+ if (mv.rating) setTgRating(String(mv.rating));
+ setTgButtonLink(buildEpisodeShareUrl(movieIdForRedirect));
+ try {
+ const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId || ""), mv.title || "", mv.category || "");
+ if (genres.length > 0) setTgGenres(genres.join(", "));
+ if (rating) setTgRating(rating);
+ } catch {}
+ }
+ }
+ }, 250);
+ } catch (err: any) {
+ setAdminBusyTask(null);
+ toast.error("Error: " + err.message);
+ }
+ }}
+ className="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-pink-600 to-purple-600 text-white flex items-center justify-center gap-2"
+ >
+ <Zap size={14} /> Release + Notify
+ </button>
+ </div>
+ </div>
+ </div>
+ );
+ })()}
  </>
  )}
  </div>
