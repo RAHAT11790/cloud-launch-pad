@@ -33,6 +33,7 @@ const REVALIDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TOKENS_PER_USER = 100;
 
 let _bootstrapped = false;
+let _currentUserId = "";
 let _vapidKey = "";
 let _messaging: ReturnType<typeof getMessaging> | null = null;
 let _foregroundBound = false;
