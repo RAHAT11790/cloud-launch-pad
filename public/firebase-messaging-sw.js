@@ -1,4 +1,4 @@
-// Firebase Messaging Service Worker — background push (data-only pattern)
+// Firebase Messaging Service Worker — background/closed-app push
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
 
@@ -28,9 +28,9 @@ async function showFromData(d) {
     badge: d.badge || BRAND_BADGE,
     image: d.image || undefined,
     vibrate: [200, 100, 200],
-    tag: d.contentId ? `rsanime-${d.contentId}` : `rsanime-${Date.now()}`,
+    tag: d.notificationId ? `rsanime-${d.notificationId}` : (d.contentId ? `rsanime-${d.contentId}-${Date.now()}` : `rsanime-${Date.now()}`),
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,
     silent: false,
     data: { url: d.url || d.deepLink || "/", ...d },
   };
@@ -60,7 +60,11 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const raw = (event.notification.data && (event.notification.data.url || event.notification.data.deepLink)) || "/";
+  const data = event.notification.data || {};
+  const fcm = data.FCM_MSG || data.fcmMessage || {};
+  const fcmData = fcm.data || fcm.webpush?.data || {};
+  const fcmLink = fcm.fcmOptions?.link || fcm.webpush?.fcm_options?.link || fcm.webpush?.fcmOptions?.link;
+  const raw = data.url || data.deepLink || fcmData.url || fcmData.deepLink || fcmLink || "/";
   const url = raw.startsWith("http") ? raw : `${self.location.origin}${raw.startsWith("/") ? raw : `/${raw}`}`;
   event.waitUntil((async () => {
     const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
