@@ -2331,6 +2331,14 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
+      } else if (hasMovieParts(anime)) {
+        // Movie split into parts — pick the requested part (fallback to first)
+        const partIdx = Math.max(0, resolvedEpIdx ?? 0);
+        const part = (anime.parts as any[])[partIdx] || (anime.parts as any[])[0];
+        src = getMoviePartSrc(part);
+        subtitle = part?.title || `Part ${part?.partNumber || partIdx + 1}`;
+        qualityOptions = getMoviePartQualityOptions(part);
+        if (anime.audioTracks?.length) audioTracks = anime.audioTracks;
       } else if (getMovieSrc(anime)) {
         src = getMovieSrc(anime);
       subtitle = "Movie";
