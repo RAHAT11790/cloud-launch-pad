@@ -7319,21 +7319,123 @@ ${tgBulkFooter}
  </div>
  </div>
 
+ {/* ==================== MOVIE PARTS (mirrors Web Series episodes) ==================== */}
+ <div className={`${glassCard} p-4 mb-4`}>
+   <div className="flex items-center justify-between mb-3">
+     <h3 className="text-sm font-semibold flex items-center gap-2">
+       <List size={14} className="text-purple-400" /> Movie Parts <span className="text-[10px] text-zinc-500 font-normal">(optional — for multi-part movies)</span>
+     </h3>
+     <div className="flex gap-2">
+       <button onClick={() => setMvPartsJsonImportMode(v => !v)} className={`${btnSecondary} px-3 py-2 text-[11px] flex items-center gap-1`}>
+         <FolderOpen size={12} /> JSON
+       </button>
+       <button onClick={addMoviePart} className={`${btnSecondary} px-3 py-2 text-[11px] flex items-center gap-1`}>
+         <Plus size={12} /> Add New Part
+       </button>
+     </div>
+   </div>
+   <p className="text-[10px] text-zinc-500 mb-3">
+     Empty parts list → single-movie mode (top-level Movie Link is used). Add parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes.
+   </p>
+
+   {mvPartsJsonImportMode && (
+     <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
+       <div className="flex items-center gap-2 mb-1">
+         <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center"><FolderOpen size={14} className="text-blue-400" /></div>
+         <div>
+           <p className="text-[12px] font-semibold text-blue-200">JSON Import — Parts</p>
+           <p className="text-[9px] text-blue-400/70">Upload .json file or paste JSON text</p>
+         </div>
+       </div>
+       <div className="grid grid-cols-2 gap-3">
+         <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col items-center justify-center gap-2 min-h-[120px] cursor-pointer hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
+           onClick={() => mvJsonFileRef.current?.click()}>
+           <input type="file" ref={mvJsonFileRef} accept=".json,application/json" multiple onChange={mvHandleJsonFileUpload} className="hidden" />
+           <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center"><Download size={18} className="text-blue-400" /></div>
+           <p className="text-[11px] font-semibold text-blue-300 text-center">Upload .json</p>
+           <p className="text-[9px] text-blue-400/50 text-center">Click to browse</p>
+         </div>
+         <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col gap-2">
+           <textarea value={mvJsonPasteText} onChange={e => setMvJsonPasteText(e.target.value)}
+             placeholder='{ "parts": [{ "partNumber": 1, "link": "..." }] }'
+             className="w-full flex-1 bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-blue-400/30 focus:border-blue-500/50 focus:outline-none min-h-[70px] resize-none font-mono" />
+           <button onClick={mvHandleJsonPaste} disabled={!mvJsonPasteText.trim()}
+             className="w-full py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5 hover:from-blue-500 hover:to-indigo-500 transition-all">
+             <Download size={11} /> Import
+           </button>
+         </div>
+       </div>
+       <p className="text-[9px] text-blue-400/50 text-center">
+         Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">parts: [{'{ partNumber, link, link480... }'}]</code> — existing quality links are preserved (smart merge)
+       </p>
+     </div>
+   )}
+
+   {mvPartsData.length === 0 && (
+     <div className="text-center py-6 rounded-xl bg-black/20 border border-dashed border-white/10">
+       <p className="text-[11px] text-zinc-500 mb-3">No parts yet — click <span className="text-purple-300 font-semibold">Add New Part</span> to add Part 1, Part 2, etc.</p>
+       <button onClick={addMoviePart} className={`${btnPrimary} px-4 py-2 text-[11px] inline-flex items-center gap-1.5`}>
+         <Plus size={12} /> Add New Part
+       </button>
+     </div>
+   )}
+
+   {mvPartsData.map((p, pIdx) => (
+     <div key={pIdx} className="bg-black/30 rounded-xl p-3 mb-3 border border-white/5">
+       <div className="flex items-center justify-between mb-3">
+         <span className="text-xs font-semibold text-purple-400">Part {p.partNumber}</span>
+         <button onClick={() => removeMoviePart(pIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={12} /></button>
+       </div>
+       <div className="grid grid-cols-1 gap-2 mb-2">
+         <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
+           className={`${inputClass} !py-2 !text-xs`} placeholder={`Part ${p.partNumber} title (optional)`} />
+       </div>
+       <div className="space-y-2">
+         <div>
+           <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default link <span className="text-purple-500">*</span></span>
+           <textarea value={p.link || ""} onChange={e => updateMoviePartField(pIdx, "link", e.target.value)}
+             className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default streaming/embed link" rows={2} />
+         </div>
+         {(["link480", "link720", "link1080", "link4k"] as const).map(q => (
+           <div key={q}>
+             <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
+               {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
+             </span>
+             <textarea value={(p as any)[q] || ""} onChange={e => updateMoviePartField(pIdx, q, e.target.value)}
+               className={`${inputClass} w-full !py-2 !text-[10px] min-h-[40px] resize-none break-all`}
+               placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
+           </div>
+         ))}
+       </div>
+     </div>
+   ))}
+ </div>
+
  <div className="flex gap-2">
  <button onClick={saveMovie} className={`${btnPrimary} flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2`}>
  <Save size={18} /> Normal Save
  </button>
  <button
  onClick={async () => {
- // Capture form BEFORE saveMovie resets it
- const capturedForm = movieForm ? { ...movieForm } : null;
- mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm };
- const savedId = await saveMovie();
- if (!savedId) return;
- if (mvNotifyContextRef.current && (mvNotifyContextRef.current.movieId === "__pending__" || !mvNotifyContextRef.current.movieId)) {
- mvNotifyContextRef.current.movieId = savedId;
- }
- setMvSaveNotifyModal(true);
+   // Capture form + parts BEFORE saveMovie resets them
+   const capturedForm = movieForm ? { ...movieForm } : null;
+   const capturedParts = (mvPartsData || []).map(p => ({ ...p }));
+
+   // Detect newly-added parts (partNumbers not present in baseline)
+   const baseline = mvPartsBaselineRef.current || new Set<number>();
+   const currentNums = capturedParts.map(p => Number(p.partNumber || 0)).filter(n => n > 0).sort((a, b) => a - b);
+   const addedNums = currentNums.filter(n => !baseline.has(n));
+   let autoRange: { start: number; end: number } | null = null;
+   if (addedNums.length > 0) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
+   setMvPartsAutoRange(autoRange);
+
+   mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm, parts: capturedParts, addedParts: addedNums };
+   const savedId = await saveMovie();
+   if (!savedId) return;
+   if (mvNotifyContextRef.current && (mvNotifyContextRef.current.movieId === "__pending__" || !mvNotifyContextRef.current.movieId)) {
+     mvNotifyContextRef.current.movieId = savedId;
+   }
+   setMvSaveNotifyModal(true);
  }}
  className="flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-xl transition-colors cursor-pointer border-none"
  >
