@@ -2598,7 +2598,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
  const [mvSaveNotifyModal, setMvSaveNotifyModal] = useState(false);
- const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts: any[]; addedParts: number[] } | null>(null);
+ const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts?: any[]; addedParts?: number[] } | null>(null);
 
  // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
  type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string };
