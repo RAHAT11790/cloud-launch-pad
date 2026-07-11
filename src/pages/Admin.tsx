@@ -7443,6 +7443,9 @@ ${tgBulkFooter}
  </button>
  </div>
 
+ </>
+ )}
+
  {/* Movie Save + Notify Modal */}
  {mvSaveNotifyModal && (() => {
  const ctx = mvNotifyContextRef.current;
@@ -7593,8 +7596,6 @@ ${tgBulkFooter}
  </div>
  );
  })()}
- </>
- )}
  </div>
  )}
  </div>
