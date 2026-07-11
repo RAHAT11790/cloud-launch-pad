@@ -3774,7 +3774,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
  audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
  });
- setMovieCast(data.cast || []);
+  setMovieCast(data.cast || []);
+ // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing
+ {
+   const rawParts = Array.isArray(data.parts) ? data.parts : (data.parts && typeof data.parts === "object" ? Object.values(data.parts) : []);
+   const hydrated: MoviePartEditor[] = (rawParts as any[])
+     .map((p: any, i: number) => ({
+       partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
+       title: p?.title || `Part ${i + 1}`,
+       link: p?.link || "",
+       link480: p?.link480 || "",
+       link720: p?.link720 || "",
+       link1080: p?.link1080 || "",
+       link4k: p?.link4k || "",
+     }))
+     .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   setMvPartsData(hydrated);
+   mvPartsBaselineRef.current = new Set(hydrated.map(p => Number(p.partNumber || 0)).filter(n => n > 0));
+ }
  setMovieEditId(id);
  setActiveSection("movies");
  setMoviesTab("mv-add");
