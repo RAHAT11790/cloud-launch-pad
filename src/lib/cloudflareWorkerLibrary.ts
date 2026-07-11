@@ -58,7 +58,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
-  entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Includes 🪄 Remove BG per-image (character-only cutout). Auto-registers its webhook on first visit — just deploy with your TELEGRAM_BOT_TOKEN and open the Worker URL once. Optional REMOVE_BG_API_KEY (remove.bg) for premium cutouts.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN"], { isNew: true, badgeText: "BOT", badgeTone: "amber" }),
+  entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"], { isNew: true, badgeText: "BOT", badgeTone: "amber" }),
 
 
   entry("send-fcm",        "Send FCM (Push)", "🔔 Ultra push-notification worker — Firebase Admin (service-account JWT) → FCM v1 API. Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + built-in 24h TTL cleanup (bind a Cron Trigger to /cleanup). Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v1", badgeTone: "amber" }),
