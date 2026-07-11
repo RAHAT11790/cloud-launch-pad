@@ -318,11 +318,11 @@ const loadAnimeSaltPremiumMeta = async (anime: AnimeItem): Promise<Partial<Anime
   }
 };
 
-const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400): Promise<AnimeItem | null> => {
+const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400, opts: { forceFresh?: boolean } = {}): Promise<AnimeItem | null> => {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
-      loadFullFirebaseAnimeItem(anime),
+      loadFullFirebaseAnimeItem(anime, opts),
       new Promise<null>((resolve) => {
         timer = setTimeout(() => resolve(null), timeoutMs);
       }),
