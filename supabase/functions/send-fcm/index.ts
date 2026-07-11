@@ -169,6 +169,7 @@ serve(async (req) => {
     const badgeUrl = absUrl(badge, base) || BRAND_ICON_URL;
     const imageUrl = absUrl(image, base);
     const clickLink = absUrl(normalized.url || "/", base);
+    const notificationId = String(normalized.notificationId || `${Date.now()}-${crypto.randomUUID()}`);
 
     let resolvedTokens = [...new Set(inTokens)];
     let pathsByToken: Record<string, string[]> = {};
@@ -219,6 +220,7 @@ serve(async (req) => {
         // open, for click routing/analytics).
         const dataPayload: Record<string, string> = {
           ...normalized,
+          notificationId,
           title: String(title || "RS ANIME"),
           body: String(msgBody || ""),
           icon: iconUrl,
@@ -232,16 +234,22 @@ serve(async (req) => {
           body: String(msgBody || ""),
           icon: iconUrl,
           badge: badgeUrl,
-          requireInteraction: false,
+          requireInteraction: true,
           renotify: true,
-          tag: normalized.contentId ? `rsanime-${normalized.contentId}` : `rsanime-${Date.now()}-${i}`,
+          tag: `rsanime-${notificationId}`,
           vibrate: [200, 100, 200],
+          data: { url: clickLink || "/", deepLink: clickLink || "/", ...dataPayload },
         };
         if (imageUrl) webpushNotification.image = imageUrl;
 
         const message = {
           message: {
             token,
+            notification: {
+              title: String(title || "RS ANIME"),
+              body: String(msgBody || ""),
+              ...(imageUrl ? { image: imageUrl } : {}),
+            },
             webpush: {
               // TTL=2419200s (28d) → FCM/browser push service holds for offline
               // users and auto-delivers when their device reconnects.

@@ -162,6 +162,7 @@ async function handleSend(req, env) {
   const badgeUrl = absUrl(badge, base) || BRAND_ICON_URL;
   const imageUrl = absUrl(image, base);
   const clickLink = absUrl(normalized.url || "/", base);
+  const notificationId = String(normalized.notificationId || `${Date.now()}-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`);
 
   let resolvedTokens = [...new Set(inTokens)];
   let pathsByToken = {};
@@ -198,11 +199,15 @@ async function handleSend(req, env) {
     while (idx < resolvedTokens.length) {
       const i = idx++;
       const token = resolvedTokens[i];
-      // Data-only message: SW's onBackgroundMessage always fires and
-      // controls display fully. Prevents Chrome's silent auto-display
-      // path where FCM returns success but nothing appears on screen.
+      // RELIABLE CLOSED-APP DELIVERY
+      // ----------------------------
+      // Web push must be user-visible. Data-only pushes can be accepted by FCM
+      // but later throttled/dropped by Chrome when the site is closed. Send a
+      // real notification payload as well, so the browser/OS can display it
+      // from the Firebase messaging service worker even when no tab exists.
       const dataPayload = {
         ...normalized,
+        notificationId,
         title: String(title || "RS ANIME"),
         body: String(msgBody || ""),
         icon: iconUrl,
@@ -210,12 +215,31 @@ async function handleSend(req, env) {
       };
       if (imageUrl) dataPayload.image = imageUrl;
       if (clickLink) dataPayload.url = clickLink;
+      const webpushNotification = {
+        title: String(title || "RS ANIME"),
+        body: String(msgBody || ""),
+        icon: iconUrl,
+        badge: badgeUrl,
+        requireInteraction: true,
+        renotify: true,
+        tag: `rsanime-${notificationId}`,
+        vibrate: [200, 100, 200],
+        data: { url: clickLink || "/", deepLink: clickLink || "/", ...dataPayload },
+      };
+      if (imageUrl) webpushNotification.image = imageUrl;
       const message = {
         message: {
           token,
+          notification: {
+            title: String(title || "RS ANIME"),
+            body: String(msgBody || ""),
+            ...(imageUrl ? { image: imageUrl } : {}),
+          },
           webpush: {
             headers: { Urgency: "high", TTL: "2419200" },
+            notification: webpushNotification,
             fcm_options: clickLink ? { link: clickLink } : undefined,
+            data: dataPayload,
           },
           data: dataPayload,
         },
