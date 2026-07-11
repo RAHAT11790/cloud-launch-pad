@@ -7327,7 +7327,7 @@ ${tgBulkFooter}
      </div>
    </div>
    <p className="text-[10px] text-zinc-500 mb-3">
-     Empty parts list → single-movie mode (top-level Movie Link is used). Add parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes.
+     Single part → shown as "Main" (plays like a normal movie). Add more parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes. Download uses each part's quality links automatically — no separate download field needed.
    </p>
 
    {mvPartsJsonImportMode && (
