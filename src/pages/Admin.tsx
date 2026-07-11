@@ -3752,7 +3752,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
-  startTransition(() => { setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list"); });
+  startTransition(() => { setMovieForm(null); setMovieCast([]); setMvPartsData([]); mvPartsBaselineRef.current = new Set(); setMovieEditId(""); setMoviesTab("mv-list"); });
   return newMovieId;
   } catch (err: any) {
   toast.error("Error: " + err.message);
