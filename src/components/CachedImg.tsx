@@ -63,8 +63,11 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
       ref={ref}
       {...rest}
       src={url || undefined}
-      loading={loading ?? "lazy"}
-      decoding={decoding ?? "async"}
+      // Warm (already-seen) URLs render eagerly + sync-decoded so scrolling
+      // fast does NOT briefly blank them to the placeholder background —
+      // exactly the "black flash while scrolling" the user complained about.
+      loading={warm ? "eager" : (loading ?? "lazy")}
+      decoding={warm ? "sync" : (decoding ?? "async")}
       style={{
         ...(style || {}),
         opacity: 1,
