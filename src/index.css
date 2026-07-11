@@ -611,109 +611,72 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 0;
     right: 0;
-    top: 46%;
+    top: 34%;
     transform: translateY(-50%);
     z-index: 9;
     display: flex;
     justify-content: center;
     align-items: center;
     pointer-events: none;
-    padding: 0 20px;
+    padding: 0 18px;
     background: transparent;
   }
   .hero-title-text {
     display: block;
-    max-width: 88%;
+    max-width: 92%;
     white-space: normal;
     overflow-wrap: break-word;
     word-break: normal;
     font-family: "Bebas Neue", "Oswald", system-ui, sans-serif;
-    font-weight: 700;
-    font-size: clamp(26px, 7vw, 42px);
-    line-height: 1.05;
+    font-weight: 900;
+    font-size: clamp(34px, 9.2vw, 58px);
+    line-height: 1.02;
     letter-spacing: 0.04em;
     text-align: center;
+    text-transform: uppercase;
     background: transparent;
   }
+  /* Match the "watch" info-card title: same RGB gradient sweep, no background box, no heavy shadow */
   .hero-title-handwrite {
     position: relative;
     color: transparent;
-    -webkit-text-fill-color: transparent;
-    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.26);
-    text-shadow: none;
-    opacity: 0.98;
-    contain: paint;
-    isolation: isolate;
-  }
-  .hero-title-handwrite::before,
-  .hero-title-handwrite::after {
-    content: attr(data-title);
-    position: absolute;
-    inset: 0;
-    display: block;
-    max-width: 100%;
-    white-space: inherit;
-    overflow-wrap: inherit;
-    word-break: inherit;
-    text-align: inherit;
-    font: inherit;
-    letter-spacing: inherit;
-    line-height: inherit;
-    background: linear-gradient(
-      96deg,
-      hsl(344 100% 66%) 0%,
-      hsl(35 100% 62%) 18%,
-      hsl(178 95% 62%) 47%,
-      hsl(216 100% 69%) 72%,
-      hsl(330 100% 70%) 100%
+    background-image: linear-gradient(
+      90deg,
+      #ff2d55 0%,
+      #ff9500 16%,
+      #ffd60a 32%,
+      #34c759 50%,
+      #00c7ff 66%,
+      #7c5cff 82%,
+      #ff2d95 100%
     );
-    background-size: 180% 100%;
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
     -webkit-background-clip: text;
             background-clip: text;
     -webkit-text-fill-color: transparent;
-    color: transparent;
-    clip-path: inset(0 100% 0 0);
-    transform: translate3d(0, 0, 0);
-  }
-  .hero-title-handwrite::before {
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.78));
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+    filter: none;
     animation:
-      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
-      heroTitleColorDrift 7600ms ease-in-out 1150ms infinite;
-    will-change: clip-path, background-position;
+      heroTitlePop var(--hero-title-write, 900ms) cubic-bezier(0.22, 0.9, 0.2, 1) both,
+      heroTitleRgb 6s linear infinite;
+    will-change: background-position, transform, opacity;
   }
-  .hero-title-handwrite::after {
-    opacity: 0.68;
-    filter: blur(7px);
-    animation:
-      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
-      heroTitleSoftGlow 6200ms ease-in-out 1300ms infinite;
-    will-change: opacity, clip-path;
-  }
-  @keyframes heroTitleWrite {
-    0%   { clip-path: inset(0 100% 0 0); opacity: 0.2; transform: translate3d(-5px, 7px, 0) skewX(-7deg); }
-    18%  { opacity: 1; transform: translate3d(-3px, 3px, 0) skewX(-4deg); }
-    58%  { clip-path: inset(0 34% 0 0); transform: translate3d(1px, -1px, 0) skewX(2deg); }
-    100% { clip-path: inset(0 0 0 0); opacity: 1; transform: translate3d(0, 0, 0) skewX(0deg); }
-  }
-  @keyframes heroTitleColorDrift {
-    0%, 100% { background-position: 0% 50%; }
-    50%      { background-position: 100% 50%; }
-  }
-  @keyframes heroTitleSoftGlow {
-    0%, 100% { opacity: 0.36; }
-    45%      { opacity: 0.68; }
-    70%      { opacity: 0.42; }
+  @keyframes heroTitlePop {
+    0%   { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.96); }
+    60%  { opacity: 1; }
+    100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .hero-title-handwrite { color: hsl(var(--foreground)); -webkit-text-fill-color: hsl(var(--foreground)); -webkit-text-stroke: 0; }
-    .hero-title-handwrite::before,
-    .hero-title-handwrite::after { display: none; }
+    .hero-title-handwrite { animation: none; }
   }
   @media (min-width: 640px) {
-    .hero-title-text { font-size: clamp(44px, 5.5vw, 64px); letter-spacing: 0.06em; }
-    .hero-title-logo-wrap { top: 48%; }
+    .hero-title-text { font-size: clamp(48px, 6.2vw, 76px); letter-spacing: 0.05em; }
+    .hero-title-logo-wrap { top: 36%; }
   }
+
+
 
 
 
