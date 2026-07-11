@@ -97,37 +97,78 @@ async function fetchAssets(mediaType, id) {
   };
 }
 
-// ---------- background removal ---------------------------------------------
+// ---------- background removal (ULTRA-PROFESSIONAL) -------------------------
+// Strategy: remove.bg with maxed-out quality flags for anime character cutouts.
+//   • size=full           → max resolution (uses 1 credit — worth it)
+//   • format=png          → true alpha channel, no JPEG compression halos
+//   • channels=rgba       → keep transparency
+//   • semitransparency=true → soft anti-aliased hair/edge pixels (critical
+//                             for anime — otherwise you get "chopped" edges)
+//   • crop=true           → auto-tight crop around character, no dead space
+//   • crop_margin=10px    → tiny breathing room so hair spikes aren't clipped
+//   • roi=... (optional)  → let AI pick, best for full illustrations
+// On any failure we retry once with size=auto before falling back.
 async function removeBg(imageUrl, apiKey) {
   if (apiKey) {
-    // remove.bg — best quality, character-only cutout
-    const form = new FormData();
-    form.append("image_url", imageUrl);
-    form.append("size", "auto");
-    form.append("format", "png");
-    const r = await fetch("https://api.remove.bg/v1.0/removebg", {
-      method: "POST",
-      headers: { "X-Api-Key": apiKey },
-      body: form,
-    });
-    if (!r.ok) throw new Error(`remove.bg ${r.status}: ${await r.text()}`);
+    const build = (size) => {
+      const f = new FormData();
+      f.append("image_url", imageUrl);
+      f.append("size", size);                // "full" → HD, "auto" → cheaper retry
+      f.append("format", "png");
+      f.append("channels", "rgba");
+      f.append("semitransparency", "true");  // smooth hair / feather edges
+      f.append("crop", "true");
+      f.append("crop_margin", "10px");
+      f.append("type", "auto");              // let AI detect subject
+      f.append("bg_color", "");              // ensure transparent, not white
+      return f;
+    };
+    const call = async (size) =>
+      fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": apiKey, "Accept": "image/png" },
+        body: build(size),
+      });
+
+    let r = await call("full");
+    if (!r.ok && r.status !== 402) {         // 402 = out of credits, don't waste retry
+      r = await call("auto");
+    }
+    if (!r.ok) {
+      const errTxt = await r.text().catch(() => "");
+      throw new Error(`remove.bg ${r.status}: ${errTxt.slice(0, 220)}`);
+    }
     const buf = await r.arrayBuffer();
     return new Uint8Array(buf);
   }
-  // Free fallback — bgrem.pics (no key, best-effort)
+  // Free fallback — best-effort only, no API key present.
   const r = await fetch(`https://api.bgrem.ai/api/v1/remove?url=${encodeURIComponent(imageUrl)}`);
   if (!r.ok) throw new Error(`fallback bg-remove ${r.status}`);
   return new Uint8Array(await r.arrayBuffer());
 }
 
-async function sendPhotoBytes(token, chatId, bytes, caption) {
+// Telegram's sendPhoto converts to JPEG → destroys transparency.
+// For cutouts we MUST use sendDocument to preserve the alpha channel.
+async function sendCutoutDocument(token, chatId, bytes, filename, caption) {
   const form = new FormData();
   form.append("chat_id", String(chatId));
-  form.append("photo", new Blob([bytes], { type: "image/png" }), "cutout.png");
+  form.append("document", new Blob([bytes], { type: "image/png" }), filename);
+  if (caption) { form.append("caption", caption); form.append("parse_mode", "HTML"); }
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: "POST", body: form });
+  return r.json().catch(() => ({}));
+}
+
+// Also send a preview photo so user sees it inline (photo strips alpha to
+// a checkerboard-free flat — Telegram renders PNG-in-photo on dark bg fine).
+async function sendCutoutPreview(token, chatId, bytes, caption) {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("photo", new Blob([bytes], { type: "image/png" }), "preview.png");
   if (caption) { form.append("caption", caption); form.append("parse_mode", "HTML"); }
   const r = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: "POST", body: form });
   return r.json().catch(() => ({}));
 }
+
 
 // ---------- UX pieces -------------------------------------------------------
 const WELCOME = `<b>✨ Welcome to ${SITE_NAME} Asset Bot ✨</b>
