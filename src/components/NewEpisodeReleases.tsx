@@ -102,11 +102,11 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   // (r.episode / r.season) or nested under r.episodeInfo with optional
   // episodeNumberEnd for ranges added via the admin's multi-range publisher.
   const getEpStart = (r: any): number | undefined => {
-    const v = r?.episode ?? r?.episodeInfo?.episodeNumber;
+    const v = r?.episode ?? r?.episodeInfo?.episodeNumber ?? r?.episodeInfo?.partStart;
     return typeof v === "number" && v > 0 ? v : undefined;
   };
   const getEpEnd = (r: any): number | undefined => {
-    const v = r?.episodeInfo?.episodeNumberEnd ?? r?.episode ?? r?.episodeInfo?.episodeNumber;
+    const v = r?.episodeInfo?.episodeNumberEnd ?? r?.episodeInfo?.partEnd ?? r?.episode ?? r?.episodeInfo?.episodeNumber ?? r?.episodeInfo?.partStart;
     return typeof v === "number" && v > 0 ? v : undefined;
   };
   const getSeason = (r: any): number | undefined => {
@@ -186,7 +186,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       backdrop: release.poster || "",
       year: release.year || "",
       rating: release.rating || "",
-      type: "webseries",
+      type: (release as any).contentType === "movie" ? "movie" : "webseries",
       seasons: [],
       category: "",
       storyline: "",
