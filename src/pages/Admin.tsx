@@ -7308,6 +7308,8 @@ ${tgBulkFooter}
  </div>
  )}
  {/* Legacy top-level Movie Link / Quality / Download Link removed — parts-only flow. */}
+ </div>
+
 
  {/* ==================== MOVIE PARTS (mirrors Web Series episodes) ==================== */}
  <div className={`${glassCard} p-4 mb-4`}>
