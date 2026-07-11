@@ -257,13 +257,14 @@ const buildAnMoviePlayback = (anime: AnimeItem) => {
 
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   if (getMovieSrc(anime)) return true;
+  if (hasMovieParts(anime) && anime.parts?.some((part) => !!getMoviePartSrc(part))) return true;
   const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
   return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
 const fullFirebaseItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
 
-const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | null> => {
+const loadFullFirebaseAnimeItem = async (anime: AnimeItem, opts: { forceFresh?: boolean } = {}): Promise<AnimeItem | null> => {
   const collection = anime.type === "movie" ? "movies" : "webseries";
   const candidates = Array.from(new Set([
     anime.id,
@@ -273,10 +274,10 @@ const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | 
     anime.type === "webseries" && anime.animeSaltSlug ? `an_${sanitizeFirebaseKey(anime.animeSaltSlug)}` : "",
   ].filter(Boolean)));
   const cacheId = candidates[0] || anime.id;
-  const cached = readFullFirebaseItemCache(anime.type, cacheId);
+  const cached = opts.forceFresh ? null : readFullFirebaseItemCache(anime.type, cacheId);
   if (cached) return { ...anime, ...cached, id: cached.id || anime.id };
 
-  const loadKey = `${collection}:${candidates.join("|")}`;
+  const loadKey = `${opts.forceFresh ? "fresh" : "cached"}:${collection}:${candidates.join("|")}`;
   const pending = fullFirebaseItemLoadCache.get(loadKey);
   if (pending) return pending;
 
