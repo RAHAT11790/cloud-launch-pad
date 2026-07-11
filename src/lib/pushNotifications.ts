@@ -129,6 +129,26 @@ async function pruneUserTokens(userId: string, currentKey: string, currentDevice
   } catch (e) { console.warn("[FCM] prune failed", e); }
 }
 
+async function migrateTokenAcrossUsers(newUserId: string, currentKey: string, currentDevice: string) {
+  // Remove this device's token from any OTHER userId bucket (guest→login,
+  // or account switch on the same device). Multi-device same-account is
+  // preserved because each device has a unique deviceId.
+  try {
+    const root = await get(ref(db, `fcmTokens`));
+    const tree = root.val() || {};
+    const updates: Record<string, null> = {};
+    Object.entries(tree).forEach(([uid, userTokens]: any) => {
+      if (uid === newUserId) return;
+      Object.entries(userTokens || {}).forEach(([key, entry]: any) => {
+        if (entry?.deviceId === currentDevice || key === currentKey) {
+          updates[`fcmTokens/${uid}/${key}`] = null;
+        }
+      });
+    });
+    if (Object.keys(updates).length) await update(ref(db), updates);
+  } catch (e) { console.warn("[FCM] cross-user migration failed", e); }
+}
+
 async function acquireAndRegister(userId: string): Promise<string | null> {
   const msg = await ensureMessaging();
   if (!msg) return null;
@@ -147,12 +167,14 @@ async function acquireAndRegister(userId: string): Promise<string | null> {
       email: meta.email,
       userAgent: navigator.userAgent.substring(0, 160),
     });
+    await migrateTokenAcrossUsers(userId, key, dev);
     await pruneUserTokens(userId, key, dev);
     try {
       localStorage.setItem(LS_LAST_REG, String(Date.now()));
       localStorage.setItem(LS_LAST_TOKEN, token);
       localStorage.setItem(LS_USER_ID, userId);
     } catch {}
+    _currentUserId = userId;
     console.info("[FCM] token saved for", userId);
     return token;
   } catch (err) {
