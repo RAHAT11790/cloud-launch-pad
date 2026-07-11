@@ -110,36 +110,46 @@ async function fetchAssets(mediaType, id) {
 // On any failure we retry once with size=auto before falling back.
 async function removeBg(imageUrl, apiKey) {
   if (apiKey) {
-    const build = (size) => {
+    // `type` is intentionally OMITTED by default — forcing type=auto/person
+    // makes remove.bg reject stylized anime art with "unknown_foreground".
+    // Letting the model decide freely dramatically improves anime hit-rate.
+    const build = (size, opts = {}) => {
       const f = new FormData();
       f.append("image_url", imageUrl);
-      f.append("size", size);                // "full" → HD, "auto" → cheaper retry
+      f.append("size", size);
       f.append("format", "png");
       f.append("channels", "rgba");
-      f.append("semitransparency", "true");  // smooth hair / feather edges
-      f.append("crop", "true");
+      f.append("semitransparency", "true");
+      f.append("crop", opts.crop === false ? "false" : "true");
       f.append("crop_margin", "10px");
-      f.append("type", "auto");              // let AI detect subject
-      f.append("bg_color", "");              // ensure transparent, not white
+      f.append("bg_color", "");
+      if (opts.type) f.append("type", opts.type);
       return f;
     };
-    const call = async (size) =>
+    const call = async (size, opts) =>
       fetch("https://api.remove.bg/v1.0/removebg", {
         method: "POST",
         headers: { "X-Api-Key": apiKey, "Accept": "image/png" },
-        body: build(size),
+        body: build(size, opts),
       });
 
-    let r = await call("full");
-    if (!r.ok && r.status !== 402) {         // 402 = out of credits, don't waste retry
-      r = await call("auto");
+    // Attempt ladder — each targets a different failure mode on anime art.
+    const attempts = [
+      { size: "full", opts: {} },                 // best quality, free detection
+      { size: "full", opts: { type: "person" } }, // force person model
+      { size: "auto", opts: { crop: false } },    // no crop — helps wide scenes
+      { size: "auto", opts: {} },                 // last-ditch cheap retry
+    ];
+
+    let lastErr = "";
+    for (const a of attempts) {
+      const r = await call(a.size, a.opts);
+      if (r.ok) return new Uint8Array(await r.arrayBuffer());
+      const txt = await r.text().catch(() => "");
+      lastErr = `${r.status}: ${txt.slice(0, 240)}`;
+      if (r.status === 402 || r.status === 401 || r.status === 403) break;
     }
-    if (!r.ok) {
-      const errTxt = await r.text().catch(() => "");
-      throw new Error(`remove.bg ${r.status}: ${errTxt.slice(0, 220)}`);
-    }
-    const buf = await r.arrayBuffer();
-    return new Uint8Array(buf);
+    throw new Error(`remove.bg ${lastErr}`);
   }
   // Free fallback — best-effort only, no API key present.
   const r = await fetch(`https://api.bgrem.ai/api/v1/remove?url=${encodeURIComponent(imageUrl)}`);
