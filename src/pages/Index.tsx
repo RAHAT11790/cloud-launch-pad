@@ -2395,7 +2395,9 @@ const Index = () => {
         nextEpisodeSrc:
           anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
             ? getEpisodeSrc(resolvedSeasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
-            : undefined,
+            : hasMovieParts(anime) && resolvedEpIdx !== undefined
+              ? getMoviePartSrc((anime.parts as any[])[resolvedEpIdx + 1])
+              : undefined,
       });
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
