@@ -365,8 +365,7 @@ div[style*="z-index: 2147483647"],
   }
   .admin-surface img,
   [data-admin-overlay] img {
-    content-visibility: auto;
-    contain-intrinsic-size: 120px 170px;
+    /* content-visibility removed — same reason as .admin-content-card. */
   }
 
   /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */
