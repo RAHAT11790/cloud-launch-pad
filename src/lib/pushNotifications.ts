@@ -164,16 +164,21 @@ function bindForeground() {
     if (!m) return;
     onMessage(m, async (payload) => {
       if (Notification.permission !== "granted") return;
-      const n = payload.notification || {};
-      const d = (payload.data || {}) as Record<string, string>;
-      const title = n.title || d.title || "🎬 RS Anime";
+      const d = { ...((payload.data as Record<string, string>) || {}) };
+      if (payload.notification) {
+        d.title = d.title || (payload.notification as any).title || "";
+        d.body = d.body || (payload.notification as any).body || "";
+        d.image = d.image || (payload.notification as any).image || "";
+        d.icon = d.icon || (payload.notification as any).icon || "";
+      }
+      const title = d.title || "🎬 RS Anime";
       const link = d.url || d.deepLink || (d.contentId ? `/?anime=${d.contentId}` : "/");
       const swReg = await ensureServiceWorker();
       swReg?.showNotification(title, {
-        body: n.body || d.body || "",
-        icon: (n as any).icon || d.icon || BRAND_ICON,
-        badge: BRAND_ICON,
-        image: (n as any).image || d.image || undefined,
+        body: d.body || "",
+        icon: d.icon || BRAND_ICON,
+        badge: "/notification-badge.svg",
+        image: d.image || undefined,
         tag: d.contentId ? `rsanime-${d.contentId}` : `rsanime-${Date.now()}`,
         vibrate: [200, 100, 200],
         renotify: true,
@@ -182,6 +187,7 @@ function bindForeground() {
     });
   });
 }
+
 
 export async function initPushNotifications(userIdInput?: string) {
   if (_bootstrapped) return;
