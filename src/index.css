@@ -622,96 +622,101 @@ div[style*="z-index: 2147483647"],
     background: transparent;
   }
   .hero-title-text {
-    display: block;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
     max-width: 88%;
-    white-space: normal;
-    overflow-wrap: break-word;
-    word-break: normal;
     font-family: "Bebas Neue", "Oswald", system-ui, sans-serif;
     font-weight: 700;
     font-size: clamp(26px, 7vw, 42px);
     line-height: 1.05;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.035em;
     text-align: center;
     background: transparent;
+    gap: 0.018em;
   }
-  .hero-title-handwrite {
+  .hero-title-write {
     position: relative;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.26);
-    text-shadow: none;
-    opacity: 0.98;
     contain: paint;
     isolation: isolate;
   }
-  .hero-title-handwrite::before,
-  .hero-title-handwrite::after {
-    content: attr(data-title);
-    position: absolute;
-    inset: 0;
-    display: block;
-    max-width: 100%;
-    white-space: inherit;
-    overflow-wrap: inherit;
-    word-break: inherit;
-    text-align: inherit;
-    font: inherit;
-    letter-spacing: inherit;
-    line-height: inherit;
+  .hero-title-letter,
+  .hero-title-gap {
+    display: inline-block;
+    flex: 0 0 auto;
+  }
+  .hero-title-gap {
+    width: 0.34em;
+  }
+  .hero-title-letter {
+    position: relative;
     background: linear-gradient(
       96deg,
-      hsl(344 100% 66%) 0%,
-      hsl(35 100% 62%) 18%,
-      hsl(178 95% 62%) 47%,
-      hsl(216 100% 69%) 72%,
-      hsl(330 100% 70%) 100%
+      hsl(348 100% 68%) 0%,
+      hsl(42 100% 62%) 21%,
+      hsl(182 100% 66%) 52%,
+      hsl(218 100% 70%) 78%,
+      hsl(330 100% 72%) 100%
     );
-    background-size: 180% 100%;
+    background-size: 135% 100%;
     -webkit-background-clip: text;
             background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
+    -webkit-text-stroke: 0.55px rgba(255, 255, 255, 0.68);
+    opacity: 0;
     clip-path: inset(0 100% 0 0);
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(-0.12em, 0.2em, 0) rotate(-2deg) scale(0.96);
+    text-shadow:
+      0 0 4px rgba(255, 255, 255, 0.96),
+      0 0 10px rgba(255, 56, 120, 0.9),
+      0 0 18px rgba(0, 213, 255, 0.84),
+      0 0 34px rgba(255, 177, 35, 0.72),
+      0 2px 4px rgba(0, 0, 0, 0.9);
+    filter: drop-shadow(0 0 12px rgba(0, 214, 255, 0.5)) drop-shadow(0 0 18px rgba(255, 54, 128, 0.48));
+    animation: heroLetterWrite 620ms cubic-bezier(0.16, 0.84, 0.2, 1) var(--hero-letter-delay, 0ms) both;
+    will-change: transform, opacity, clip-path;
   }
-  .hero-title-handwrite::before {
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.78));
-    animation:
-      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
-      heroTitleColorDrift 7600ms ease-in-out 1150ms infinite;
-    will-change: clip-path, background-position;
+  .hero-title-letter::after {
+    content: "";
+    position: absolute;
+    left: -0.08em;
+    right: -0.08em;
+    bottom: 0.04em;
+    height: 0.12em;
+    border-radius: 999px;
+    background: hsl(182 100% 70% / 0.9);
+    box-shadow:
+      0 0 8px hsl(182 100% 70% / 0.9),
+      0 0 18px hsl(330 100% 70% / 0.76),
+      0 0 30px hsl(42 100% 62% / 0.52);
+    opacity: 0;
+    transform: scaleX(0.18) translateX(-0.24em);
+    transform-origin: left center;
+    animation: heroPenSpark 620ms cubic-bezier(0.16, 0.84, 0.2, 1) var(--hero-letter-delay, 0ms) both;
   }
-  .hero-title-handwrite::after {
-    opacity: 0.68;
-    filter: blur(7px);
-    animation:
-      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
-      heroTitleSoftGlow 6200ms ease-in-out 1300ms infinite;
-    will-change: opacity, clip-path;
+  @keyframes heroLetterWrite {
+    0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-0.12em, 0.2em, 0) rotate(-2deg) scale(0.96); }
+    45%  { opacity: 1; clip-path: inset(0 46% 0 0); transform: translate3d(0.03em, -0.04em, 0) rotate(1deg) scale(1.03); }
+    100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
   }
-  @keyframes heroTitleWrite {
-    0%   { clip-path: inset(0 100% 0 0); opacity: 0.2; transform: translate3d(-5px, 7px, 0) skewX(-7deg); }
-    18%  { opacity: 1; transform: translate3d(-3px, 3px, 0) skewX(-4deg); }
-    58%  { clip-path: inset(0 34% 0 0); transform: translate3d(1px, -1px, 0) skewX(2deg); }
-    100% { clip-path: inset(0 0 0 0); opacity: 1; transform: translate3d(0, 0, 0) skewX(0deg); }
-  }
-  @keyframes heroTitleColorDrift {
-    0%, 100% { background-position: 0% 50%; }
-    50%      { background-position: 100% 50%; }
-  }
-  @keyframes heroTitleSoftGlow {
-    0%, 100% { opacity: 0.36; }
-    45%      { opacity: 0.68; }
-    70%      { opacity: 0.42; }
+  @keyframes heroPenSpark {
+    0%   { opacity: 0; transform: scaleX(0.18) translateX(-0.24em); }
+    38%  { opacity: 1; transform: scaleX(1) translateX(0.06em); }
+    100% { opacity: 0; transform: scaleX(0.2) translateX(0.32em); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .hero-title-handwrite { color: hsl(var(--foreground)); -webkit-text-fill-color: hsl(var(--foreground)); -webkit-text-stroke: 0; }
-    .hero-title-handwrite::before,
-    .hero-title-handwrite::after { display: none; }
+    .hero-title-letter {
+      opacity: 1;
+      clip-path: none;
+      transform: none;
+      animation: none;
+    }
+    .hero-title-letter::after { display: none; }
   }
   @media (min-width: 640px) {
-    .hero-title-text { font-size: clamp(44px, 5.5vw, 64px); letter-spacing: 0.06em; }
+    .hero-title-text { font-size: clamp(44px, 5.5vw, 64px); letter-spacing: 0.05em; }
     .hero-title-logo-wrap { top: 48%; }
   }
 
