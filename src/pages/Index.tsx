@@ -2001,6 +2001,7 @@ const Index = () => {
         description: p.description || "",
         titleColor: p.titleColor || "",
         titleFont: p.titleFont || "",
+        titleLogo: (p as any).logo || "",
       }));
 
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
