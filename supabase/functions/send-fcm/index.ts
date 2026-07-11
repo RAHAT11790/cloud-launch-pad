@@ -205,20 +205,26 @@ serve(async (req) => {
       while (idx < resolvedTokens.length) {
         const i = idx++;
         const token = resolvedTokens[i];
+        // Data-only message: SW's onBackgroundMessage is guaranteed to fire
+        // and controls display fully. Avoids Chrome's silent auto-display
+        // path that many users report as "notification never arrived".
+        const dataPayload: Record<string, string> = {
+          ...normalized,
+          title: String(title || "RS ANIME"),
+          body: String(msgBody || ""),
+          icon: iconUrl,
+          badge: badgeUrl,
+        };
+        if (imageUrl) dataPayload.image = imageUrl;
+        if (clickLink) dataPayload.url = clickLink;
         const message = {
           message: {
             token,
-            notification: { title, body: msgBody },
             webpush: {
               headers: { Urgency: "high", TTL: "2419200" },
-              notification: {
-                title, body: msgBody,
-                icon: iconUrl, badge: badgeUrl, image: imageUrl,
-                vibrate: [200, 100, 200], requireInteraction: false,
-              },
               fcm_options: clickLink ? { link: clickLink } : undefined,
             },
-            data: normalized,
+            data: dataPayload,
           },
         };
         const r = await sendOne(sa.project_id, accessToken, message);
