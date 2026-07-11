@@ -1,58 +1,96 @@
-## কী কী ঠিক করা হবে
 
-### ১) Video Player — State reset (series change এ সব default এ ফেরা)
-`src/components/VideoPlayer.tsx` এ series/anime ID track করার একটা `prevSeriesIdRef` যোগ করা হবে।
-- Series ID change হলে: quality, language, server, resume-time — সব default এ reset।
-- একই series-এর ভিতরে episode change হলে: quality/language/server preserve, কিন্তু time reset।
+# Movies-এ Parts System (Web Series-এর copy version)
 
-### ২) Control-panel Next button fix
-Player-এর "Next" button-এর handler এখন internal state (currentTime, quality) carry করে ফেলছে। নিচের episode-bar এর মতো একই `handleEpisodeChange(nextIndex, { reset: true })` route দিয়ে চালানো হবে যাতে time/quality reset হয়।
+আপনি চান Movies section-টা যেন Web Series-এর মতো একই feel পায় — কিন্তু "Season/Episode"-এর জায়গায় "Movie/Part"। নিচে সম্পূর্ণ কাজের plan দিলাম। Approve করলে A-to-Z implement করব।
 
-### ৩) "Link expired" false-positive (AN)
-`VideoPlayer.tsx` এর expire-detection এখন সব ধরনের HLS error কে expire ধরে নিচ্ছে। শুধু নিচের ক্ষেত্রে expire দেখানো হবে:
-- HTTP 403/410 response, বা
-- Manifest এ `EXT-X-ENDLIST` না থাকা + `fatal networkError` + URL এ expiry-token query param থাকা।
-বাকিসব error এ silent retry + fallback server।
+---
 
-### ৪) EasyRouter path গুলো ঠিক করা
-`src/components/admin/CloudflareManager.tsx` এ EasyRouter save করার সময় path key mismatch হচ্ছে:
-- AN Fetch → `an-fetch` এর বদলে কোথাও `anFetch` লেখা।
-- AN Playback → একই সমস্যা।
-সব path কে একটা `ROUTE_KEYS` constant এ centralize করা হবে (`an-fetch`, `an-playback`, `video-proxy`, `rs-server-1`, `rs-server-2`)। User-saved URL থাকলে ওইটা, না হলে default fallback — এই priority strict রাখা হবে। Runtime resolver-ও একই key ব্যবহার করবে।
+## 1) Data model (Firebase-এ movie row)
 
-### ৫) RS Free Server 2 বন্ধ
-মূল কারণ #৪ এর path mismatch। Fix হলেই চলা শুরু হবে। সাথে health-check ping যোগ করে dead server auto-mark হবে।
-
-### ৬) Server Ultra-Optimization (download-like playback)
-`SaltPlayer.tsx` / `VideoPlayer.tsx` এর hls.js config aggressive tune:
+Movie item-এ একটা নতুন field:
 ```
-maxBufferLength: 60
-maxMaxBufferLength: 600
-maxBufferSize: 200 * 1000 * 1000   // 200MB
-backBufferLength: 90
-lowLatencyMode: false
-enableWorker: true
-startLevel: -1                      // auto based on bandwidth
-abrEwmaDefaultEstimate: 5_000_000
-fragLoadingMaxRetry: 6
-manifestLoadingMaxRetry: 4
-liveSyncDurationCount: 3
+parts?: Array<{
+  partNumber: number;
+  title?: string;         // optional, default "Part N"
+  link: string;           // default streaming link (required)
+  link480?, link720?, link1080?, link4k?: string;
+}>
 ```
-Edge functions (`video-proxy`, `rs-server-*`) এ:
-- `Cache-Control: public, max-age=3600, immutable` fragment এর জন্য।
-- `Accept-Ranges: bytes` + proper 206 partial response।
-- Upstream fetch এ `keepalive: true` + connection pooling।
-- Response body direct pipe (no full buffering) — memory pressure কমাবে multi-user এ।
+- `parts` না থাকলে বা empty হলে — পুরানো single-link movie (backwards compatible)।
+- `parts` থাকলে player ওটা দেখাবে; top-level `movieLink` fallback হিসেবে থাকবে।
 
-### Technical details
-Files to edit:
-- `src/components/VideoPlayer.tsx` — series-change reset, next-button fix, expire logic, hls config
-- `src/components/SaltPlayer.tsx` — hls config
-- `src/components/admin/CloudflareManager.tsx` — ROUTE_KEYS centralization
-- Router resolver hook (find via grep) — key alignment
-- `supabase/functions/video-proxy/index.ts` + RS server functions — streaming/range/cache headers
+`src/data/animeData.ts` এবং `firebaseAnimeMapper.ts` (movie mapper)-এ `parts` add হবে।
 
-### কোন কিছু নষ্ট হবে না — safety
-- Legacy saved URL গুলো backward-compatible key map দিয়ে read হবে।
-- Existing episode bar behavior অপরিবর্তিত।
-- Premium/free server default logic টাচ হবে না, শুধু cross-series reset যোগ।
+---
+
+## 2) Admin → Movies form redesign
+
+`src/pages/Admin.tsx` movie form (mv-add / mv-manual)-এ Web Series-এর episode UI-এর একটা **simplified copy**:
+
+- Section header: **"Movie Parts"** (Season list-এর জায়গায় শুধু একটাই "Movie" container)
+- বাটন: **"➕ Add New Part"** (Add New Episode-এর মতো)
+- প্রতি Part card-এ ইনপুট:
+  - Part title (optional)
+  - Default link (required)
+  - 480p / 720p / 1080p / 4K (optional)
+  - Delete part, reorder up/down
+- Parts না দিলে — উপরের পুরানো "Movie Link (Default) + Quality Links" section-ই কাজ করবে (একদম untouched)।
+- **JSON paste + JSON file upload** — Web Series-এর মতো একটা textarea + file upload বাটন, কিন্তু শুধু parts array parse করবে। Format:
+  ```json
+  { "parts": [
+      { "partNumber": 1, "link": "...", "link1080": "..." },
+      { "partNumber": 2, "link": "..." }
+  ]}
+  ```
+  বা flat array-ও accept করবে। **smartMergeEpisodesInto-এর মতো smart merge** — শুধু non-empty quality field overwrite করবে, বাকিগুলো preserve করবে (আপনার আগের feedback অনুযায়ী)।
+- Save Movie → parts কে clean করে persist করবে (empty parts drop)।
+
+---
+
+## 3) Save + Notify (Movies) — auto-tracking with parts
+
+বর্তমান crash-এর কারণ: server auto-tracker season/episode expect করে, movie payload-এ ওগুলা নেই।
+
+নতুন behavior:
+- **Parts আছে** (এবং edit-এ নতুন part add হয়েছে): last-added part range track করে release-এ পাঠাবে:
+  - `episodeInfo: { type: "movie-parts", partsAdded: "Part 2-3" }`
+  - Push body: `"Movie Name • Part 2-3 Added"`
+- **Parts নেই** (single movie): `episodeInfo: { type: "movie", label: "Full Movie Added" }`
+  - Push body: `"Movie Name • Full Movie Released"`
+- এরপর existing flow: **New Release entry → FCM push → Telegram Post redirect** (Web Series-এর copy)।
+- Old-vs-new part diff detect করার জন্য save-এর আগে বর্তমান Firebase snapshot থেকে previous `parts` fetch করে compare করব।
+
+---
+
+## 4) Video player UI (AnimeDetails / SaltPlayer)
+
+`src/components/AnimeDetails.tsx`-এ movie type-এর জন্য:
+- `parts` empty/missing হলে — এখনকার মতো একটাই play button।
+- `parts` থাকলে — Web Series episode list-এর মতো নিচে horizontal list:
+  - Label: **"Parts"** (Episodes-এর জায়গায়)
+  - Cards: **"Part 1", "Part 2"…** selectable, tap করলে সেই part-এর quality-aware link play হবে।
+- Quality selector আগের মতোই কাজ করবে — active part-এর quality URLs use করবে।
+
+---
+
+## 5) Files touched
+
+- `src/data/animeData.ts` — MoviePart type + `parts` on AnimeItem
+- `src/lib/firebaseAnimeMapper.ts` — map parts in `mapFirebaseMovieItem`
+- `src/pages/Admin.tsx` — movie form UI + save logic + Save+Notify diff/push/telegram + JSON paste/upload/smart-merge
+- `src/components/AnimeDetails.tsx` — movie parts list UI + selection
+- (Player component if needed for quality-per-part switching)
+
+---
+
+## 6) Testing (আপনি করবেন)
+
+Implement শেষে আমি dev server-এ typecheck run করে confirm করব। এরপর আপনি:
+1. একটা movie edit করে 2-3টা part add → Normal Save → refresh → parts persist কিনা
+2. Video player-এ Parts tab দেখা যাচ্ছে কিনা, switch করে play হচ্ছে কিনা
+3. Save + Notify → New Release, Push, Telegram Post redirect সব হচ্ছে কিনা
+4. Parts ছাড়া পুরানো movie backwards-compatible কিনা
+
+---
+
+**Approve করলে সাথে সাথে A-to-Z implement শুরু করে দিব।**
