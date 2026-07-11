@@ -2596,9 +2596,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Auto-detected ranges shown in modal (read-only hint). Filled when Save+Notify is clicked.
  const [wsAutoRanges, setWsAutoRanges] = useState<Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }>>([]);
 
- // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
+  // Movie Save + Notify modal state (mirrors series flow, but no season/episode)
  const [mvSaveNotifyModal, setMvSaveNotifyModal] = useState(false);
- const mvNotifyContextRef = useRef<{ movieId: string; form: any } | null>(null);
+ const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts?: any[]; addedParts?: number[] } | null>(null);
+
+ // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
+ type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string };
+ const [mvPartsData, setMvPartsData] = useState<MoviePartEditor[]>([]);
+ const [mvPartsJsonImportMode, setMvPartsJsonImportMode] = useState(false);
+ const [mvJsonPasteText, setMvJsonPasteText] = useState("");
+ const mvJsonFileRef = useRef<HTMLInputElement | null>(null);
+ // Baseline: Set of partNumbers present when edit started (to detect newly-added parts on Save+Notify)
+ const mvPartsBaselineRef = useRef<Set<number>>(new Set());
+ const [mvPartsAutoRange, setMvPartsAutoRange] = useState<{ start: number; end: number } | null>(null);
 
  const formatEpisodeRangeLabel = useCallback((seasonValue?: string | number, start?: string | number, end?: string | number) => {
  const seasonText = String(seasonValue ?? "").trim() || "01";
@@ -3681,7 +3691,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public", audioTracks: []
  });
  if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
- setMovieCast(cast);
+  setMovieCast(cast);
+ setMvPartsData([]);
+ mvPartsBaselineRef.current = new Set();
  setMovieResults([]);
  setMovieEditId("");
  toast.success("Movie details fetched!");
@@ -3693,23 +3705,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!movieForm) return;
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
- if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
+  {
+    const hasParts = (mvPartsData || []).some(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
+    if (!movieForm.movieLink && !hasParts) { toast.error("Please enter movie link or add at least one part"); return; }
+  }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
 
- const data = {
- ...movieForm,
- cast: movieCast,
- audioTracks: Array.isArray(movieForm.audioTracks)
- ? movieForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
- : [],
- type: "movie",
- visibility: movieForm.visibility === "private" ? "private" : "public",
- telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
- ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
- : null,
- updatedAt: Date.now(),
- };
+  const data = {
+  ...movieForm,
+  cast: movieCast,
+  audioTracks: Array.isArray(movieForm.audioTracks)
+  ? movieForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
+  : [],
+  // Movie Parts: drop empty entries, keep only parts that have at least one URL
+  parts: (mvPartsData || [])
+    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k))
+    .map((p, i) => ({ partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "" })),
+  type: "movie",
+  visibility: movieForm.visibility === "private" ? "private" : "public",
+  telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
+  ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
+  : null,
+  updatedAt: Date.now(),
+  };
   let saveRef;
   let newMovieId = movieEditId || "";
   if (movieEditId) {
@@ -3733,7 +3752,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
-  startTransition(() => { setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list"); });
+  startTransition(() => { setMovieForm(null); setMovieCast([]); setMvPartsData([]); mvPartsBaselineRef.current = new Set(); setMovieEditId(""); setMoviesTab("mv-list"); });
   return newMovieId;
   } catch (err: any) {
   toast.error("Error: " + err.message);
@@ -3758,7 +3777,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
  audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
  });
- setMovieCast(data.cast || []);
+  setMovieCast(data.cast || []);
+ // Hydrate movie parts (if any) + snapshot baseline for Save+Notify diffing
+ {
+   const rawParts = Array.isArray(data.parts) ? data.parts : (data.parts && typeof data.parts === "object" ? Object.values(data.parts) : []);
+   const hydrated: MoviePartEditor[] = (rawParts as any[])
+     .map((p: any, i: number) => ({
+       partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
+       title: p?.title || `Part ${i + 1}`,
+       link: p?.link || "",
+       link480: p?.link480 || "",
+       link720: p?.link720 || "",
+       link1080: p?.link1080 || "",
+       link4k: p?.link4k || "",
+     }))
+     .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   setMvPartsData(hydrated);
+   mvPartsBaselineRef.current = new Set(hydrated.map(p => Number(p.partNumber || 0)).filter(n => n > 0));
+ }
  setMovieEditId(id);
  setActiveSection("movies");
  setMoviesTab("mv-add");
@@ -4716,6 +4752,109 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const updateEpisodeQualityLink = (sIdx: number, eIdx: number, quality: string, link: string) => {
  updateSeriesEpisodeLanguageLink(sIdx, eIdx, quality, link);
  };
+
+ // ============ MOVIE PARTS HELPERS ============
+ // Mirrors Web Series episode helpers, but simpler (one flat list, no season wrapping).
+ const addMoviePart = () => {
+   setMvPartsData(prev => {
+     const nextNum = (prev.reduce((m, p) => Math.max(m, Number(p.partNumber || 0)), 0) || prev.length) + 1;
+     return [...prev, { partNumber: nextNum, title: `Part ${nextNum}`, link: "", link480: "", link720: "", link1080: "", link4k: "" }];
+   });
+ };
+ const removeMoviePart = (idx: number) => {
+   if (!confirm("Remove this part?")) return;
+   setMvPartsData(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, partNumber: i + 1 })));
+ };
+ const updateMoviePartField = (idx: number, field: keyof MoviePartEditor, value: string | number) => {
+   setMvPartsData(prev => {
+     const copy = [...prev];
+     copy[idx] = { ...copy[idx], [field]: value } as MoviePartEditor;
+     return copy;
+   });
+ };
+
+ // Smart merge — same philosophy as smartMergeEpisodesInto but scoped to movie parts.
+ // Only non-empty fields in the incoming JSON overwrite existing values, so pasting a
+ // 480p-only JSON never wipes the 720p/1080p/4K links you already have.
+ const smartMergePartsInto = (existing: MoviePartEditor[], incoming: any[]) => {
+   const list = [...(existing || [])];
+   let updated = 0, added = 0;
+   incoming.forEach((raw: any, idx: number) => {
+     const num = Number(raw?.partNumber || raw?.number || idx + 1) || idx + 1;
+     const matchIdx = list.findIndex(p => Number(p.partNumber) === num);
+     const clean: any = {};
+     ["title", "link", "link480", "link720", "link1080", "link4k"].forEach(k => {
+       const v = raw?.[k] ?? raw?.[k.replace("link", "movieLink")];
+       if (v !== undefined && v !== null && String(v).trim() !== "") clean[k] = String(v).trim();
+     });
+     if (matchIdx >= 0) {
+       list[matchIdx] = { ...list[matchIdx], ...clean, partNumber: num };
+       updated++;
+     } else {
+       list.push({ partNumber: num, title: clean.title || `Part ${num}`, link: clean.link || "", link480: clean.link480, link720: clean.link720, link1080: clean.link1080, link4k: clean.link4k });
+       added++;
+     }
+   });
+   list.sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+   return { list, updated, added };
+ };
+
+ const mvParseJsonParts = (jsonData: any) => {
+   let parts: any[] = [];
+   if (Array.isArray(jsonData)) parts = jsonData;
+   else if (Array.isArray(jsonData?.parts)) parts = jsonData.parts;
+   else if (Array.isArray(jsonData?.episodes)) parts = jsonData.episodes;
+   else { toast.error("Invalid JSON. A parts array is required."); return; }
+   if (parts.length === 0) { toast.error("No parts found in the JSON"); return; }
+   let updated = 0, added = 0;
+   setMvPartsData(prev => {
+     const merged = smartMergePartsInto(prev, parts);
+     updated = merged.updated; added = merged.added;
+     return merged.list;
+   });
+   toast.success(`Parts: ${updated} updated, ${added} added — existing quality links preserved ✓`);
+   setMvPartsJsonImportMode(false);
+   setMvJsonPasteText("");
+ };
+
+ const mvHandleJsonPaste = () => {
+   if (!mvJsonPasteText.trim()) { toast.error("Paste JSON text"); return; }
+   try { mvParseJsonParts(JSON.parse(mvJsonPasteText.trim())); }
+   catch { toast.error("Invalid JSON. Please provide valid JSON format."); }
+ };
+
+ const mvHandleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const files = e.target.files;
+   if (!files || files.length === 0) return;
+   let processed = 0, failed = 0;
+   const total = files.length;
+   const collected: any[] = [];
+   Array.from(files).forEach(file => {
+     const reader = new FileReader();
+     reader.onload = ev => {
+       try {
+         const parsed = JSON.parse(ev.target?.result as string);
+         let arr: any[] = [];
+         if (Array.isArray(parsed)) arr = parsed;
+         else if (Array.isArray(parsed?.parts)) arr = parsed.parts;
+         else if (Array.isArray(parsed?.episodes)) arr = parsed.episodes;
+         arr.forEach((p, i) => collected.push({ ...p, partNumber: p?.partNumber || p?.number || i + 1 }));
+         processed++;
+       } catch { failed++; }
+       if (processed + failed === total) {
+         if (collected.length > 0) {
+           let updated = 0, added = 0;
+           setMvPartsData(prev => { const merged = smartMergePartsInto(prev, collected); updated = merged.updated; added = merged.added; return merged.list; });
+           toast.success(`${updated} updated, ${added} added (from ${processed} files) — existing links preserved ✓`);
+         }
+         if (failed > 0) toast.error(`${failed} files failed to parse`);
+       }
+     };
+     reader.readAsText(file);
+   });
+   if (mvJsonFileRef.current) mvJsonFileRef.current.value = "";
+ };
+
 
  // ==================== AUTH HANDLERS ====================
     const handlePinLogin = async () => {
@@ -6891,7 +7030,7 @@ ${tgBulkFooter}
  <button onClick={() => setMoviesTab("mv-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Add New
  </button>
- <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", movieLink: "" }); setMovieCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+ <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", movieLink: "" }); setMovieCast([]); setMvPartsData([]); mvPartsBaselineRef.current = new Set(); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Manual
  </button>
   {/* AN Movies tab removed — AN is API-only */}
@@ -7180,21 +7319,123 @@ ${tgBulkFooter}
  </div>
  </div>
 
+ {/* ==================== MOVIE PARTS (mirrors Web Series episodes) ==================== */}
+ <div className={`${glassCard} p-4 mb-4`}>
+   <div className="flex items-center justify-between mb-3">
+     <h3 className="text-sm font-semibold flex items-center gap-2">
+       <List size={14} className="text-purple-400" /> Movie Parts <span className="text-[10px] text-zinc-500 font-normal">(optional — for multi-part movies)</span>
+     </h3>
+     <div className="flex gap-2">
+       <button onClick={() => setMvPartsJsonImportMode(v => !v)} className={`${btnSecondary} px-3 py-2 text-[11px] flex items-center gap-1`}>
+         <FolderOpen size={12} /> JSON
+       </button>
+       <button onClick={addMoviePart} className={`${btnSecondary} px-3 py-2 text-[11px] flex items-center gap-1`}>
+         <Plus size={12} /> Add New Part
+       </button>
+     </div>
+   </div>
+   <p className="text-[10px] text-zinc-500 mb-3">
+     Empty parts list → single-movie mode (top-level Movie Link is used). Add parts → player shows a Parts list (Part 1, Part 2…) just like Web Series episodes.
+   </p>
+
+   {mvPartsJsonImportMode && (
+     <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
+       <div className="flex items-center gap-2 mb-1">
+         <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center"><FolderOpen size={14} className="text-blue-400" /></div>
+         <div>
+           <p className="text-[12px] font-semibold text-blue-200">JSON Import — Parts</p>
+           <p className="text-[9px] text-blue-400/70">Upload .json file or paste JSON text</p>
+         </div>
+       </div>
+       <div className="grid grid-cols-2 gap-3">
+         <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col items-center justify-center gap-2 min-h-[120px] cursor-pointer hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
+           onClick={() => mvJsonFileRef.current?.click()}>
+           <input type="file" ref={mvJsonFileRef} accept=".json,application/json" multiple onChange={mvHandleJsonFileUpload} className="hidden" />
+           <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center"><Download size={18} className="text-blue-400" /></div>
+           <p className="text-[11px] font-semibold text-blue-300 text-center">Upload .json</p>
+           <p className="text-[9px] text-blue-400/50 text-center">Click to browse</p>
+         </div>
+         <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col gap-2">
+           <textarea value={mvJsonPasteText} onChange={e => setMvJsonPasteText(e.target.value)}
+             placeholder='{ "parts": [{ "partNumber": 1, "link": "..." }] }'
+             className="w-full flex-1 bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-blue-400/30 focus:border-blue-500/50 focus:outline-none min-h-[70px] resize-none font-mono" />
+           <button onClick={mvHandleJsonPaste} disabled={!mvJsonPasteText.trim()}
+             className="w-full py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5 hover:from-blue-500 hover:to-indigo-500 transition-all">
+             <Download size={11} /> Import
+           </button>
+         </div>
+       </div>
+       <p className="text-[9px] text-blue-400/50 text-center">
+         Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">parts: [{'{ partNumber, link, link480... }'}]</code> — existing quality links are preserved (smart merge)
+       </p>
+     </div>
+   )}
+
+   {mvPartsData.length === 0 && (
+     <div className="text-center py-6 rounded-xl bg-black/20 border border-dashed border-white/10">
+       <p className="text-[11px] text-zinc-500 mb-3">No parts yet — click <span className="text-purple-300 font-semibold">Add New Part</span> to add Part 1, Part 2, etc.</p>
+       <button onClick={addMoviePart} className={`${btnPrimary} px-4 py-2 text-[11px] inline-flex items-center gap-1.5`}>
+         <Plus size={12} /> Add New Part
+       </button>
+     </div>
+   )}
+
+   {mvPartsData.map((p, pIdx) => (
+     <div key={pIdx} className="bg-black/30 rounded-xl p-3 mb-3 border border-white/5">
+       <div className="flex items-center justify-between mb-3">
+         <span className="text-xs font-semibold text-purple-400">Part {p.partNumber}</span>
+         <button onClick={() => removeMoviePart(pIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={12} /></button>
+       </div>
+       <div className="grid grid-cols-1 gap-2 mb-2">
+         <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
+           className={`${inputClass} !py-2 !text-xs`} placeholder={`Part ${p.partNumber} title (optional)`} />
+       </div>
+       <div className="space-y-2">
+         <div>
+           <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default link <span className="text-purple-500">*</span></span>
+           <textarea value={p.link || ""} onChange={e => updateMoviePartField(pIdx, "link", e.target.value)}
+             className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default streaming/embed link" rows={2} />
+         </div>
+         {(["link480", "link720", "link1080", "link4k"] as const).map(q => (
+           <div key={q}>
+             <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
+               {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
+             </span>
+             <textarea value={(p as any)[q] || ""} onChange={e => updateMoviePartField(pIdx, q, e.target.value)}
+               className={`${inputClass} w-full !py-2 !text-[10px] min-h-[40px] resize-none break-all`}
+               placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
+           </div>
+         ))}
+       </div>
+     </div>
+   ))}
+ </div>
+
  <div className="flex gap-2">
  <button onClick={saveMovie} className={`${btnPrimary} flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2`}>
  <Save size={18} /> Normal Save
  </button>
  <button
  onClick={async () => {
- // Capture form BEFORE saveMovie resets it
- const capturedForm = movieForm ? { ...movieForm } : null;
- mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm };
- const savedId = await saveMovie();
- if (!savedId) return;
- if (mvNotifyContextRef.current && (mvNotifyContextRef.current.movieId === "__pending__" || !mvNotifyContextRef.current.movieId)) {
- mvNotifyContextRef.current.movieId = savedId;
- }
- setMvSaveNotifyModal(true);
+   // Capture form + parts BEFORE saveMovie resets them
+   const capturedForm = movieForm ? { ...movieForm } : null;
+   const capturedParts = (mvPartsData || []).map(p => ({ ...p }));
+
+   // Detect newly-added parts (partNumbers not present in baseline)
+   const baseline = mvPartsBaselineRef.current || new Set<number>();
+   const currentNums = capturedParts.map(p => Number(p.partNumber || 0)).filter(n => n > 0).sort((a, b) => a - b);
+   const addedNums = currentNums.filter(n => !baseline.has(n));
+   let autoRange: { start: number; end: number } | null = null;
+   if (addedNums.length > 0) autoRange = { start: addedNums[0], end: addedNums[addedNums.length - 1] };
+   setMvPartsAutoRange(autoRange);
+
+   mvNotifyContextRef.current = { movieId: movieEditId || "__pending__", form: capturedForm, parts: capturedParts, addedParts: addedNums };
+   const savedId = await saveMovie();
+   if (!savedId) return;
+   if (mvNotifyContextRef.current && (mvNotifyContextRef.current.movieId === "__pending__" || !mvNotifyContextRef.current.movieId)) {
+     mvNotifyContextRef.current.movieId = savedId;
+   }
+   setMvSaveNotifyModal(true);
  }}
  className="flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-xl transition-colors cursor-pointer border-none"
  >
@@ -7219,6 +7460,21 @@ ${tgBulkFooter}
  </div>
  )}
 
+ {/* Auto-detected tracking info: parts vs. full movie */}
+ <div className="mb-3 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/30">
+   <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider mb-1">Auto-tracked</p>
+   {mvPartsAutoRange ? (
+     <p className="text-[12px] font-semibold text-purple-100">
+       Part {mvPartsAutoRange.start}{mvPartsAutoRange.end !== mvPartsAutoRange.start ? `-${mvPartsAutoRange.end}` : ""} Added
+     </p>
+   ) : (
+     <p className="text-[12px] font-semibold text-purple-100">Full Movie Added</p>
+   )}
+   <p className="text-[9px] text-purple-200/70 mt-0.5">
+     {mvPartsAutoRange ? "New parts detected since edit start — users will see this in the notification." : "No new parts detected — sending as a full-movie release."}
+   </p>
+ </div>
+
  <div className="mb-3 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1">This will do</p>
  <ul className="text-[11px] text-emerald-100 space-y-0.5 list-disc pl-4">
@@ -7230,7 +7486,7 @@ ${tgBulkFooter}
 
  <div className="flex gap-2">
  <button
- onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; }}
+ onClick={() => { setMvSaveNotifyModal(false); mvNotifyContextRef.current = null; setMvPartsAutoRange(null); }}
  className="flex-1 py-3 rounded-lg text-sm font-bold bg-zinc-700 text-white flex items-center justify-center gap-2"
  >
  <X size={14} /> Cancel
@@ -7241,6 +7497,10 @@ ${tgBulkFooter}
  try {
  setAdminBusyTask("Adding new release…");
  await yieldAdminFrame();
+ const partsRange = mvPartsAutoRange;
+ const releaseLabel = partsRange
+   ? `Part ${partsRange.start}${partsRange.end !== partsRange.start ? `-${partsRange.end}` : ""} Added`
+   : "Full Movie Added";
  const newRelease: any = {
  contentId: ctxMovieId,
  contentType: "movie",
@@ -7249,7 +7509,9 @@ ${tgBulkFooter}
  year: ctxForm.year || "N/A",
  rating: ctxForm.rating || "N/A",
  visibility: ctxForm.visibility || "public",
- episodeInfo: { type: "movie", seasonName: "Movie" },
+ episodeInfo: partsRange
+   ? { type: "movie-parts", seasonName: "Movie", partStart: partsRange.start, partEnd: partsRange.end, label: releaseLabel }
+   : { type: "movie", seasonName: "Movie", label: releaseLabel },
  timestamp: Date.now(),
  active: true,
  };
@@ -7261,9 +7523,12 @@ ${tgBulkFooter}
  try {
  const pushMod = await import("@/lib/pushNotifications");
  const pushTitle = buildBrowserPushTitle(ctxForm.title);
- const pushBody = `${ctxForm.title} • Movie release`;
+ const pushBody = `${ctxForm.title} • ${releaseLabel}`;
  const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
- const deepLink = buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
+ // Deep-link: if parts, point to the first newly-added part (epIdx = partStart-1)
+ const deepLink = partsRange
+   ? buildEpisodeShareUrl(ctxMovieId, 0, Math.max(0, partsRange.start - 1)).replace(/^https?:\/\/[^/]+/, "")
+   : buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
  const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
  setAdminBusyTask("Sending push to users…");
  const pushResult = await pushMod.sendPushNotification({
@@ -7285,10 +7550,11 @@ ${tgBulkFooter}
  toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
  }
 
- // Close modal + redirect to telegram-post with this movie preselected
+  // Close modal + redirect to telegram-post with this movie preselected
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
  mvNotifyContextRef.current = null;
+ setMvPartsAutoRange(null);
  setActiveSection("telegram-post");
  setTimeout(async () => {
  const matching = releasesData.find(r => r.contentId === movieIdForRedirect);

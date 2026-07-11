@@ -1,4 +1,4 @@
-import type { AnimeItem, AudioTrack, Episode, Season, SubtitleTrack } from "@/data/animeData";
+import type { AnimeItem, AudioTrack, Episode, MoviePart, Season, SubtitleTrack } from "@/data/animeData";
 import {
   normalizeCastFrom,
   normalizeCategoryFrom,
@@ -87,6 +87,22 @@ const countBestEpisodes = (item: any): number | undefined => {
     return best > 0 ? best : undefined;
   }
   return undefined;
+};
+
+const mapMovieParts = (parts: any): MoviePart[] | undefined => {
+  const list = values(parts)
+    .map((p: any, idx: number): MoviePart => ({
+      partNumber: Number(p?.partNumber || p?.number || idx + 1) || (idx + 1),
+      title: p?.title || undefined,
+      link: p?.link || p?.movieLink || "",
+      link480: p?.link480 || p?.movieLink480 || undefined,
+      link720: p?.link720 || p?.movieLink720 || undefined,
+      link1080: p?.link1080 || p?.movieLink1080 || undefined,
+      link4k: p?.link4k || p?.movieLink4k || undefined,
+    }))
+    .filter((p) => p.link || p.link480 || p.link720 || p.link1080 || p.link4k)
+    .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+  return list.length ? list : undefined;
 };
 
 const isAnimeSaltRow = (item: any) => Boolean(item?.anSlug || item?.animeSaltSlug || item?.sourceName === "AnimeSalt" || item?.source === "animesalt");
@@ -181,6 +197,7 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
     movieLink720: item?.movieLink720 || undefined,
     movieLink1080: item?.movieLink1080 || undefined,
     movieLink4k: item?.movieLink4k || undefined,
+    parts: mapMovieParts(item?.parts),
     trailer: item?.trailer || undefined,
     seasons: undefined,
     createdAt: item?.createdAt || 0,

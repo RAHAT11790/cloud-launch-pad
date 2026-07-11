@@ -27,6 +27,16 @@ export interface SubtitleTrack {
   url: string;
 }
 
+export interface MoviePart {
+  partNumber: number;
+  title?: string;
+  link: string;
+  link480?: string;
+  link720?: string;
+  link1080?: string;
+  link4k?: string;
+}
+
 export interface Episode {
   episodeNumber: number;
   title: string;
@@ -63,6 +73,8 @@ export interface AnimeItem {
   movieLink720?: string;
   movieLink1080?: string;
   movieLink4k?: string;
+  /** For movies split into multiple parts. When present, playback uses parts[] instead of movieLink*. */
+  parts?: MoviePart[];
   trailer?: string;
   createdAt?: number;
   updatedAt?: number;

@@ -264,10 +264,11 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         <div className="flex gap-2.5 mb-5">
           <button
             onClick={() => {
-              if (anime.type === "webseries" && anime.seasons) { onPlay(anime, 0, 0); } else { onPlay(anime); }
+              const hasParts = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0;
+              if ((anime.type === "webseries" && anime.seasons) || hasParts) { onPlay(anime, 0, 0); } else { onPlay(anime); }
             }}
             className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
-            {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>}
+            {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : (Array.isArray(anime.parts) && anime.parts.length > 0 ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>)}
           </button>
           <button onClick={toggleWatchlist}
             className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
@@ -402,6 +403,38 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             })}
           </div>
         )}
+
+        {/* Parts List for movies with multiple parts */}
+        {anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0 && (
+          <div className="mb-5">
+            <div className="glass-card p-3.5 rounded-xl">
+              <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">Parts</h3>
+              <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+                {anime.parts.map((part, pIdx) => (
+                  <button
+                    key={pIdx}
+                    onClick={() => onPlay(anime, 0, pIdx)}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-secondary/60 border border-border/30 hover:border-primary hover:bg-primary/10 transition-all group relative"
+                  >
+                    <div className="w-[72px] h-[42px] min-w-[72px] flex-shrink-0 rounded-lg overflow-hidden bg-card relative">
+                      <img src={anime.poster} alt={`Part ${part.partNumber}`} className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play className="w-4 h-4 text-white" fill="white" />
+                      </div>
+                      <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold bg-black/70 text-white px-1 rounded">P {part.partNumber}</span>
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-[13px] font-semibold truncate">Part {part.partNumber}</p>
+                      {part.title && <p className="text-[11px] text-muted-foreground truncate">{part.title}</p>}
+                    </div>
+                    <Play className="w-4 h-4 flex-shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* Comments with Reply System */}
         <div className="glass-card p-4 mb-5">

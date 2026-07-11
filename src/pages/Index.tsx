@@ -192,6 +192,21 @@ const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink1080, anime.movieLink720, anime.movieLink480, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
+const hasMovieParts = (anime: AnimeItem): boolean =>
+  anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0;
+
+const getMoviePartSrc = (part: any): string =>
+  [part?.link, part?.link1080, part?.link720, part?.link480, part?.link4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+
+const getMoviePartQualityOptions = (part: any): { label: string; src: string }[] => {
+  const q: { label: string; src: string }[] = [];
+  if (!isInvalidPlaybackUrl(part?.link480)) q.push({ label: "480p", src: part.link480 });
+  if (!isInvalidPlaybackUrl(part?.link720)) q.push({ label: "720p", src: part.link720 });
+  if (!isInvalidPlaybackUrl(part?.link1080)) q.push({ label: "1080p", src: part.link1080 });
+  if (!isInvalidPlaybackUrl(part?.link4k)) q.push({ label: "4K", src: part.link4k });
+  return q;
+};
+
 const routeItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
 
 const loadFirebaseAnimeItemByRouteId = async (routeId: string): Promise<AnimeItem | null> => {
@@ -1179,6 +1194,9 @@ const Index = () => {
     const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     if (anime.type === "webseries" && resolvedSeasons?.length) {
+      return { seasonIdx: 0, epIdx: 0 };
+    }
+    if (hasMovieParts(anime)) {
       return { seasonIdx: 0, epIdx: 0 };
     }
     return { seasonIdx: undefined, epIdx: undefined };
@@ -2313,6 +2331,14 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
+      } else if (hasMovieParts(anime)) {
+        // Movie split into parts — pick the requested part (fallback to first)
+        const partIdx = Math.max(0, resolvedEpIdx ?? 0);
+        const part = (anime.parts as any[])[partIdx] || (anime.parts as any[])[0];
+        src = getMoviePartSrc(part);
+        subtitle = part?.title || `Part ${part?.partNumber || partIdx + 1}`;
+        qualityOptions = getMoviePartQualityOptions(part);
+        if (anime.audioTracks?.length) audioTracks = anime.audioTracks;
       } else if (getMovieSrc(anime)) {
         src = getMovieSrc(anime);
       subtitle = "Movie";
@@ -2369,7 +2395,9 @@ const Index = () => {
         nextEpisodeSrc:
           anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
             ? getEpisodeSrc(resolvedSeasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
-            : undefined,
+            : hasMovieParts(anime) && resolvedEpIdx !== undefined
+              ? getMoviePartSrc((anime.parts as any[])[resolvedEpIdx + 1])
+              : undefined,
       });
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
