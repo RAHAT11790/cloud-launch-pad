@@ -611,7 +611,7 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 0;
     right: 0;
-    top: 42%;
+    top: 46%;
     transform: translateY(-50%);
     z-index: 9;
     display: flex;
@@ -622,7 +622,7 @@ div[style*="z-index: 2147483647"],
     background: transparent;
   }
   .hero-title-text {
-    display: inline-block;
+    display: block;
     max-width: 88%;
     white-space: normal;
     overflow-wrap: break-word;
@@ -631,56 +631,88 @@ div[style*="z-index: 2147483647"],
     font-weight: 700;
     font-size: clamp(26px, 7vw, 42px);
     line-height: 1.05;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-align: center;
     background: transparent;
   }
-  .hero-title-char {
-    display: inline-block;
+  .hero-title-handwrite {
     position: relative;
-    color: rgba(255, 255, 255, 0.06);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
-    opacity: 0;
-    transform: translateY(6px) scale(0.94);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.26);
+    text-shadow: none;
+    opacity: 0.98;
+    contain: paint;
+    isolation: isolate;
+  }
+  .hero-title-handwrite::before,
+  .hero-title-handwrite::after {
+    content: attr(data-title);
+    position: absolute;
+    inset: 0;
+    display: block;
+    max-width: 100%;
+    white-space: inherit;
+    overflow-wrap: inherit;
+    word-break: inherit;
+    text-align: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    background: linear-gradient(
+      96deg,
+      hsl(344 100% 66%) 0%,
+      hsl(35 100% 62%) 18%,
+      hsl(178 95% 62%) 47%,
+      hsl(216 100% 69%) 72%,
+      hsl(330 100% 70%) 100%
+    );
+    background-size: 180% 100%;
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    clip-path: inset(0 100% 0 0);
+    transform: translate3d(0, 0, 0);
+  }
+  .hero-title-handwrite::before {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.78));
     animation:
-      heroCharReveal 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both,
-      heroCharGlow 2600ms ease-in-out 620ms infinite;
-    will-change: transform, opacity, color, text-shadow;
+      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
+      heroTitleColorDrift 7600ms ease-in-out 1150ms infinite;
+    will-change: clip-path, background-position;
   }
-  @keyframes heroCharReveal {
-    0%   { opacity: 0; transform: translateY(8px) scale(0.9); filter: blur(4px); color: rgba(255,255,255,0.02); }
-    60%  { opacity: 1; transform: translateY(0) scale(1.05); filter: blur(0); }
-    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  .hero-title-handwrite::after {
+    opacity: 0.68;
+    filter: blur(7px);
+    animation:
+      heroTitleWrite var(--hero-title-write, 1650ms) cubic-bezier(0.2, 0.82, 0.18, 1) 160ms both,
+      heroTitleSoftGlow 6200ms ease-in-out 1300ms infinite;
+    will-change: opacity, clip-path;
   }
-  @keyframes heroCharGlow {
-    0%, 100% {
-      color: rgba(255, 90, 120, 0.95);
-      text-shadow:
-        0 0 6px rgba(255, 60, 120, 0.85),
-        0 0 18px rgba(255, 40, 90, 0.55),
-        0 1px 2px rgba(0, 0, 0, 0.7);
-    }
-    33% {
-      color: rgba(120, 220, 255, 0.95);
-      text-shadow:
-        0 0 6px rgba(60, 180, 255, 0.9),
-        0 0 18px rgba(30, 140, 255, 0.55),
-        0 1px 2px rgba(0, 0, 0, 0.7);
-    }
-    66% {
-      color: rgba(140, 255, 170, 0.95);
-      text-shadow:
-        0 0 6px rgba(60, 255, 160, 0.9),
-        0 0 18px rgba(30, 220, 130, 0.55),
-        0 1px 2px rgba(0, 0, 0, 0.7);
-    }
+  @keyframes heroTitleWrite {
+    0%   { clip-path: inset(0 100% 0 0); opacity: 0.2; transform: translate3d(-5px, 7px, 0) skewX(-7deg); }
+    18%  { opacity: 1; transform: translate3d(-3px, 3px, 0) skewX(-4deg); }
+    58%  { clip-path: inset(0 34% 0 0); transform: translate3d(1px, -1px, 0) skewX(2deg); }
+    100% { clip-path: inset(0 0 0 0); opacity: 1; transform: translate3d(0, 0, 0) skewX(0deg); }
+  }
+  @keyframes heroTitleColorDrift {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+  @keyframes heroTitleSoftGlow {
+    0%, 100% { opacity: 0.36; }
+    45%      { opacity: 0.68; }
+    70%      { opacity: 0.42; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .hero-title-char { animation: none; opacity: 1; transform: none; color: #fff; }
+    .hero-title-handwrite { color: hsl(var(--foreground)); -webkit-text-fill-color: hsl(var(--foreground)); -webkit-text-stroke: 0; }
+    .hero-title-handwrite::before,
+    .hero-title-handwrite::after { display: none; }
   }
   @media (min-width: 640px) {
-    .hero-title-text { font-size: clamp(44px, 5.5vw, 64px); letter-spacing: 0.08em; }
-    .hero-title-logo-wrap { top: 44%; }
+    .hero-title-text { font-size: clamp(44px, 5.5vw, 64px); letter-spacing: 0.06em; }
+    .hero-title-logo-wrap { top: 48%; }
   }
 
 
