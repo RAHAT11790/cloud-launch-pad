@@ -145,9 +145,7 @@ async function handleSend(req, env) {
   const { tokens, userIds, title, body: msgBody, image, icon, badge, data } = body || {};
   const inTokens = Array.isArray(tokens) ? tokens.filter(Boolean) : [];
   const inUsers = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
-  if (!inTokens.length && !inUsers.length) {
-    return jsonResponse({ error: "No tokens or userIds provided" }, 400);
-  }
+  const sendToAllSavedTokens = !inTokens.length && !inUsers.length;
   const saJson = env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!saJson) return jsonResponse({ error: "FIREBASE_SERVICE_ACCOUNT_KEY missing" }, 500);
   const sa = JSON.parse(saJson);
@@ -167,9 +165,9 @@ async function handleSend(req, env) {
   let resolvedTokens = [...new Set(inTokens)];
   let pathsByToken = {};
   let usersByToken = {};
-  if (!resolvedTokens.length && inUsers.length) {
+  if (!resolvedTokens.length && (inUsers.length || sendToAllSavedTokens)) {
     try {
-      const l = await fetchTokens(sa, accessToken, inUsers);
+      const l = await fetchTokens(sa, accessToken, inUsers.length ? inUsers : undefined);
       resolvedTokens = l.tokens;
       pathsByToken = l.tokenPathsByToken;
       usersByToken = l.tokenUserIdsByToken;
@@ -193,7 +191,7 @@ async function handleSend(req, env) {
   const invalid = [];
   const deliveredUserIds = new Set();
   const failReasons = { invalid: 0, transient: 0, other: 0 };
-  const concurrency = Math.min(30, resolvedTokens.length);
+  const concurrency = Math.min(75, resolvedTokens.length);
   let idx = 0;
   const worker = async () => {
     while (idx < resolvedTokens.length) {
@@ -244,7 +242,7 @@ async function handleSend(req, env) {
           data: dataPayload,
         },
       };
-      const r = await sendOne(sa.project_id, accessToken, message);
+      const r = await sendOne(sa.project_id, accessToken, message, 4);
       if (r.ok) {
         success++;
         (usersByToken[token] || []).forEach((uid) => deliveredUserIds.add(uid));
