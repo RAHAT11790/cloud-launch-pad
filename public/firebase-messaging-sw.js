@@ -54,21 +54,10 @@ messaging.onBackgroundMessage((payload) => {
   return showFromData(d);
 });
 
-// Fallback: catch raw push events (some Chrome versions bypass FCM SDK path).
-self.addEventListener("push", (event) => {
-  if (!event.data) return;
-  let payload = {};
-  try { payload = event.data.json(); } catch { payload = { data: { body: event.data.text() } }; }
-  const d = { ...(payload.data || {}) };
-  if (payload.notification) {
-    d.title = d.title || payload.notification.title;
-    d.body = d.body || payload.notification.body;
-    d.image = d.image || payload.notification.image;
-    d.icon = d.icon || payload.notification.icon;
-  }
-  // Only render if the FCM SDK path didn't already handle it (SDK sets a tag).
-  event.waitUntil(showFromData(d));
-});
+// Note: we do NOT add a raw `push` listener — the Firebase Messaging SDK
+// already registers one and dispatches to onBackgroundMessage. Adding
+// another would cause duplicate notifications.
+
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
