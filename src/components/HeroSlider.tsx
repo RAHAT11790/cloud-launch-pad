@@ -18,6 +18,7 @@ export interface HeroSlide {
   titleFont?: string;
   episodeInfo?: string;
   languageInfo?: string;
+  titleLogo?: string;
 }
 
 interface HeroSliderProps {
@@ -325,6 +326,18 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       <div className="hero-vignette" aria-hidden />
 
       <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
+        {slide.titleLogo && (
+          <div className="hero-title-logo-wrap" aria-hidden>
+            <img
+              src={slide.titleLogo}
+              alt={slide.title}
+              className="hero-title-logo"
+              draggable={false}
+              loading="eager"
+              decoding="async"
+            />
+          </div>
+        )}
         <button
           type="button"
           onClick={handlePrimary}

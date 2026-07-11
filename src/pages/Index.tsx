@@ -1983,6 +1983,7 @@ const Index = () => {
       description: "",
       episodeInfo: buildEpInfo(item),
       languageInfo: buildLangInfo(item),
+      titleLogo: (item as any).logo || "",
     }));
 
     // Prepend pinned posts (always first, no duplicates)
@@ -2000,6 +2001,7 @@ const Index = () => {
         description: p.description || "",
         titleColor: p.titleColor || "",
         titleFont: p.titleFont || "",
+        titleLogo: (p as any).logo || "",
       }));
 
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
