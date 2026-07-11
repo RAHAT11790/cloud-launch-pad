@@ -362,14 +362,6 @@ export type SendPushPayload = {
   data?: Record<string, any>;
 };
 
-async function loadAllUserIds(): Promise<string[]> {
-  try {
-    const snap = await get(ref(db, "fcmTokens"));
-    const tree = snap.val() || {};
-    return Object.keys(tree);
-  } catch { return []; }
-}
-
 /** Compose a compact notification body: "Title • Season • Episode X" */
 function composeBody(p: SendPushPayload): string {
   if (p.body && p.body.trim()) return p.body.trim();
