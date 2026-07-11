@@ -1196,6 +1196,9 @@ const Index = () => {
     if (anime.type === "webseries" && resolvedSeasons?.length) {
       return { seasonIdx: 0, epIdx: 0 };
     }
+    if (hasMovieParts(anime)) {
+      return { seasonIdx: 0, epIdx: 0 };
+    }
     return { seasonIdx: undefined, epIdx: undefined };
   }, []);
   const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
