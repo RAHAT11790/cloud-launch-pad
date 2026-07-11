@@ -611,7 +611,7 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 0;
     right: 0;
-    top: 50%;
+    top: 40%;
     transform: translateY(-50%);
     z-index: 9;
     display: flex;
@@ -673,7 +673,7 @@ div[style*="z-index: 2147483647"],
   }
   @media (min-width: 640px) {
     .hero-title-text { font-size: clamp(28px, 3.4vw, 40px); letter-spacing: 0.045em; }
-    .hero-title-logo-wrap { top: 50%; }
+    .hero-title-logo-wrap { top: 40%; }
   }
 
 
