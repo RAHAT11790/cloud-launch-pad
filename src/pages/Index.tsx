@@ -1907,6 +1907,31 @@ const Index = () => {
     return () => unsub();
   }, []);
 
+  // Hero title-logo backfill: adminContentIndex may lack `logo`. Fetch it on-demand
+  // for hero candidates so the title logo overlay always shows when available.
+  const [heroLogos, setHeroLogos] = useState<Record<string, string>>({});
+  const heroLogosFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const candidates = allSeries
+      .filter((a) => a.backdrop && !a.logo && !heroLogosFetchedRef.current.has(a.id) && a.id && !a.id.startsWith("an_"))
+      .slice(0, 20);
+    if (candidates.length === 0) return;
+    candidates.forEach((c) => heroLogosFetchedRef.current.add(c.id));
+    (async () => {
+      const updates: Record<string, string> = {};
+      await Promise.all(candidates.map(async (item) => {
+        try {
+          const res = await fetch(`https://rs-anime-default-rtdb.firebaseio.com/webseries/${item.id}/logo.json`);
+          const url = await res.json();
+          if (typeof url === "string" && url) updates[item.id] = url;
+        } catch {}
+      }));
+      if (Object.keys(updates).length) {
+        setHeroLogos((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+  }, [allSeries]);
+
   // Custom background image listener
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/customBgImage"), (snap) => {
@@ -1983,6 +2008,7 @@ const Index = () => {
       description: "",
       episodeInfo: buildEpInfo(item),
       languageInfo: buildLangInfo(item),
+      titleLogo: (item as any).logo || heroLogos[item.id] || "",
     }));
 
     // Prepend pinned posts (always first, no duplicates)
@@ -2000,6 +2026,7 @@ const Index = () => {
         description: p.description || "",
         titleColor: p.titleColor || "",
         titleFont: p.titleFont || "",
+        titleLogo: (p as any).logo || "",
       }));
 
       const pinnedIds = new Set(pinnedSlides.map(s => s.id));
@@ -2008,7 +2035,7 @@ const Index = () => {
     }
 
     return randomSlides;
-  }, [allSeries, pinnedHeroPosts]);
+  }, [allSeries, pinnedHeroPosts, heroLogos]);
 
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
