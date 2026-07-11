@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Play } from "lucide-react";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { getAnimeFont } from "@/lib/animeFonts";
 
 export interface HeroSlide {
   id: string;
@@ -289,7 +290,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   const posterSrc = slide.poster || slide.backdrop;
   const titleLength = Math.max(8, Math.min(34, slide.title.length));
-  const titleWriteDuration = 1050 + titleLength * 26;
+  const titleWriteDuration = 700 + titleLength * 14;
+  const titleFontFamily = slide.titleFont || getAnimeFont(slide.title);
 
   return (
     <section
@@ -331,13 +333,14 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
           className="hero-title-text hero-title-handwrite"
           data-title={slide.title}
           style={{
-            ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
+            fontFamily: titleFontFamily,
             ["--hero-title-write" as any]: `${titleWriteDuration}ms`,
           }}
         >
           {slide.title}
         </span>
       </div>
+
 
       <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
         <button

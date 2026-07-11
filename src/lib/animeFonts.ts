@@ -1,4 +1,4 @@
-// Stylish font families for anime titles - each anime gets a unique font based on its name
+// Stylish Google font families for anime titles — a unique font per title (stable hash)
 const ANIME_FONTS = [
   "'Righteous', cursive",
   "'Russo One', sans-serif",
@@ -10,9 +10,20 @@ const ANIME_FONTS = [
   "'Bungee', cursive",
   "'Bebas Neue', sans-serif",
   "'Permanent Marker', cursive",
+  "'Monoton', cursive",
+  "'Faster One', cursive",
+  "'Bowlby One', sans-serif",
+  "'Staatliches', cursive",
+  "'Anton', sans-serif",
+  "'Passion One', cursive",
+  "'Alfa Slab One', cursive",
+  "'Fjalla One', sans-serif",
+  "'Bungee Shade', cursive",
+  "'Bangers', cursive",
+  "'Rubik Mono One', sans-serif",
+  "'Kanit', sans-serif",
 ];
 
-// Simple hash to pick a consistent font per title
 function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -23,6 +34,7 @@ function hashCode(str: string): number {
 }
 
 export function getAnimeFont(title: string): string {
+  if (!title) return ANIME_FONTS[0];
   return ANIME_FONTS[hashCode(title) % ANIME_FONTS.length];
 }
 
