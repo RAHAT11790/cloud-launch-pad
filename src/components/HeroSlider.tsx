@@ -288,8 +288,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   };
 
   const posterSrc = slide.poster || slide.backdrop;
-  const titleLength = Math.max(8, Math.min(34, slide.title.length));
-  const titleWriteDuration = 1050 + titleLength * 26;
+  const titleChars = Array.from(slide.title);
+  const titleCharDelay = titleChars.length > 42 ? 38 : titleChars.length > 26 ? 48 : 64;
 
   return (
     <section
@@ -328,14 +328,21 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div key={`title-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
         <span
-          className="hero-title-text hero-title-handwrite"
-          data-title={slide.title}
+          className="hero-title-text hero-title-write"
           style={{
             ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-            ["--hero-title-write" as any]: `${titleWriteDuration}ms`,
+            ["--hero-title-count" as any]: String(titleChars.length),
           }}
         >
-          {slide.title}
+          {titleChars.map((ch, index) => (
+            <span
+              key={`${slide.id}-${current}-${index}-${ch}`}
+              className={ch === " " ? "hero-title-gap" : "hero-title-letter"}
+              style={{ ["--hero-letter-delay" as any]: `${index * titleCharDelay}ms` }}
+            >
+              {ch === " " ? "\u00A0" : ch}
+            </span>
+          ))}
         </span>
       </div>
 
