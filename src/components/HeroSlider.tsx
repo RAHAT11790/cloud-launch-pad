@@ -325,27 +325,24 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div className="hero-vignette" aria-hidden />
 
-      <div key={`logo-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
-        {slide.titleLogo ? (
-          <img
-            src={slide.titleLogo}
-            alt={slide.title}
-            className="hero-title-logo"
-            draggable={false}
-            loading="eager"
-            decoding="async"
-          />
-        ) : (
-          <span
-            className="hero-title-text"
-            style={{
-              ...(slide.titleColor ? { color: slide.titleColor } : {}),
-              ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-            }}
-          >
-            {slide.title}
-          </span>
-        )}
+      <div key={`title-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
+        <span
+          className="hero-title-text"
+          style={{
+            ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
+            ["--hero-title-chars" as any]: String(slide.title.length),
+          }}
+        >
+          {Array.from(slide.title).map((ch, i) => (
+            <span
+              key={`${i}-${ch}`}
+              className="hero-title-char"
+              style={{ animationDelay: `${i * 55}ms` }}
+            >
+              {ch === " " ? "\u00A0" : ch}
+            </span>
+          ))}
+        </span>
       </div>
 
       <div key={`copy-${slide.id}-${current}`} className="absolute inset-x-0 bottom-0 z-10 px-4 pb-10 pointer-events-none hero-copy-enter">
