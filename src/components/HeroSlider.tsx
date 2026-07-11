@@ -18,7 +18,6 @@ export interface HeroSlide {
   titleFont?: string;
   episodeInfo?: string;
   languageInfo?: string;
-  titleLogo?: string;
 }
 
 interface HeroSliderProps {
@@ -67,7 +66,7 @@ const normalizeSlides = (items: HeroSlide[]) => {
 };
 
 const getSlidesSignature = (items: HeroSlide[]) =>
-  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}:${item.titleLogo || ""}`).join("|");
+  normalizeSlides(items).map((item) => `${item.id}:${item.backdrop}:${item.title}`).join("|");
 
 const mergeDeckWithoutChangingVisibleSlide = (
   currentDeck: HeroSlide[],
@@ -289,6 +288,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   };
 
   const posterSrc = slide.poster || slide.backdrop;
+  const titleLength = Math.max(8, Math.min(34, slide.title.length));
+  const titleWriteDuration = 1050 + titleLength * 26;
 
   return (
     <section
@@ -327,21 +328,14 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
       <div key={`title-${slide.id}-${current}`} className="hero-title-logo-wrap" aria-hidden>
         <span
-          className="hero-title-text"
+          className="hero-title-text hero-title-handwrite"
+          data-title={slide.title}
           style={{
             ...(slide.titleFont ? { fontFamily: slide.titleFont } : {}),
-            ["--hero-title-chars" as any]: String(slide.title.length),
+            ["--hero-title-write" as any]: `${titleWriteDuration}ms`,
           }}
         >
-          {Array.from(slide.title).map((ch, i) => (
-            <span
-              key={`${i}-${ch}`}
-              className="hero-title-char"
-              style={{ animationDelay: `${i * 55}ms` }}
-            >
-              {ch === " " ? "\u00A0" : ch}
-            </span>
-          ))}
+          {slide.title}
         </span>
       </div>
 
