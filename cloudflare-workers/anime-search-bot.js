@@ -331,12 +331,18 @@ async function handleUpdate(update, env, workerUrl) {
       await tg(token, "sendChatAction", { chat_id: chatId, action: "upload_photo" });
       try {
         const bytes = await removeBg(target, env.REMOVE_BG_API_KEY || "");
-        // Send cutout first
-        await sendPhotoBytes(token, chatId, bytes,
-          `🪄 <b>Cutout — ${kind === "rp" ? "Poster" : "Backdrop"}</b>\n${escapeHtml(a.title)}`);
-        // Then remaining assets
+        const label = kind === "rp" ? "Poster" : "Backdrop";
+        const safeTitle = a.title.replace(/[^\w\-]+/g, "_").slice(0, 40) || "cutout";
+        const caption = `🪄 <b>Character Cutout — ${label}</b>\n🎬 ${escapeHtml(a.title)}\n<i>Transparent PNG · HD · anti-aliased edges</i>`;
+        // 1) inline preview so user sees it immediately
+        await sendCutoutPreview(token, chatId, bytes, caption);
+        // 2) true transparent PNG as document (Telegram keeps alpha channel)
+        await sendCutoutDocument(token, chatId, bytes, `${safeTitle}_${label.toLowerCase()}_cutout.png`,
+          `📎 <b>Transparent PNG file</b> — download for editing`);
+        // 3) remaining assets
         const rest = { ...a, [kind === "rp" ? "poster" : "backdrop"]: null };
         await sendAllAssets(token, chatId, rest, { skipCutout: kind === "rp" ? "poster" : "backdrop" });
+
       } catch (e) {
         await tg(token, "sendMessage", {
           chat_id: chatId,
