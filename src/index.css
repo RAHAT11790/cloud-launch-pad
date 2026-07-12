@@ -272,7 +272,7 @@ div[style*="z-index: 2147483647"],
 
   .admin-content-list-img {
     background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
-    transform: translateZ(0);
+    transform: none;
   }
 
   .category-bar::before {

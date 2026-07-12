@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import CachedImg from "@/components/CachedImg";
+import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
@@ -24,7 +24,6 @@ import {
  fetchAdminContentIndex,
  fetchRecentAdminContentList,
  mergeAdminContentLists,
- primeAdminContentIndexFromList,
   readCachedAdminContentList,
   isAdminContentCacheFresh,
   invalidateAdminContentCache,
@@ -34,8 +33,6 @@ import {
  writeCachedAdminContentList,
  type AdminContentKind,
 } from "@/lib/adminContentIndex";
-import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
-import { isLegacyAnEntry } from "@/lib/legacyAn";
 const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
@@ -198,8 +195,10 @@ const applyAdminEnglish = (root: ParentNode) => {
  }
 };
 
-const ADMIN_VISIBLE_CARD_LIMIT = Number.MAX_SAFE_INTEGER;
+const ADMIN_VISIBLE_CARD_LIMIT = 180;
 const ADMIN_DROPDOWN_LIMIT = 60;
+const ADMIN_CONTENT_RELOAD_TTL_MS = 10 * 60 * 1000;
+const ADMIN_POSTER_WARM_LIMIT = 220;
 
 const adminIdle = (callback: () => void, timeout = 1200) => {
  const idle = (window as any).requestIdleCallback;
@@ -213,6 +212,16 @@ const adminIdle = (callback: () => void, timeout = 1200) => {
 
 const getAdminContentTime = (item: any) => Number(item?.updatedAt || item?.createdAt || 0);
 const sortAdminLatestFirst = (items: any[]) => [...items].sort((a: any, b: any) => getAdminContentTime(b) - getAdminContentTime(a));
+const areAdminContentListsSame = (a: any[] = [], b: any[] = []) => {
+ if (a === b) return true;
+ if (a.length !== b.length) return false;
+ for (let i = 0; i < a.length; i++) {
+  if (String(a[i]?.id || "") !== String(b[i]?.id || "")) return false;
+  if (String(a[i]?.poster || "") !== String(b[i]?.poster || "")) return false;
+  if (getAdminContentTime(a[i]) !== getAdminContentTime(b[i])) return false;
+ }
+ return true;
+};
 const buildSearchBigrams = (s: string) => {
  const out = new Set<string>();
  for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
@@ -2191,15 +2200,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    const [adminContentLoading, setAdminContentLoading] = useState({ webseries: true, movies: true });
   const [adminBusyTask, setAdminBusyTask] = useState<string | null>(null);
   const adminLoadContentListRef = useRef<((kind: AdminContentKind, opts?: { force?: boolean }) => Promise<void>) | null>(null);
+  const adminContentLoadedAtRef = useRef<Record<AdminContentKind, number>>({ webseries: 0, movies: 0 });
+  const adminContentInFlightRef = useRef<Partial<Record<AdminContentKind, Promise<void>>>>({});
+  const warmAdminPosters = useCallback((items: any[]) => {
+   const posters = (items || []).map((item: any) => item?.poster || item?.backdrop).filter(Boolean);
+   if (!posters.length) return;
+   adminIdle(() => { void preloadCachedImages(posters, ADMIN_POSTER_WARM_LIMIT); }, 900);
+  }, []);
  const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
   const listItem = buildAdminContentIndexItem(id, item, kind);
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
   startTransition(() => setter(prev => {
    const next = mergeAdminContentLists(prev, [listItem]);
    writeCachedAdminContentList(kind, next);
+    warmAdminPosters(next);
    return next;
   }));
- }, []);
+  }, [warmAdminPosters]);
  const removeAdminContentListItem = useCallback((kind: AdminContentKind, id: string) => {
   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
   startTransition(() => setter(prev => {
@@ -2214,7 +2231,51 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   if (!data) return null;
   upsertAdminContentListItem(kind, id, data);
   return { id, ...data };
- }, [upsertAdminContentListItem]);
+  }, [upsertAdminContentListItem]);
+  const loadAdminContentList = useCallback(async (kind: AdminContentKind, opts?: { force?: boolean }) => {
+   const force = !!opts?.force;
+   const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+   const now = Date.now();
+   const cached = !force ? readCachedAdminContentList(kind) : [];
+   if (cached.length) {
+    const sorted = sortAdminContentList(cached);
+    startTransition(() => {
+     setter(prev => areAdminContentListsSame(prev, sorted) ? prev : sorted);
+     setAdminContentLoading(prev => prev[kind] ? ({ ...prev, [kind]: false }) : prev);
+    });
+    warmAdminPosters(sorted);
+    if (!force && isAdminContentCacheFresh(kind)) {
+     adminContentLoadedAtRef.current[kind] = now;
+     return;
+    }
+   }
+   if (!force && cached.length && now - adminContentLoadedAtRef.current[kind] < ADMIN_CONTENT_RELOAD_TTL_MS && isAdminContentCacheFresh(kind)) return;
+   const running = adminContentInFlightRef.current[kind];
+   if (running) return running;
+   if (!cached.length) setAdminContentLoading(prev => prev[kind] ? prev : ({ ...prev, [kind]: true }));
+   const task = (async () => {
+    try {
+     const indexed = await fetchAdminContentIndex(kind).catch(() => []);
+     const fallback = indexed.length ? [] : await fetchRecentAdminContentList(kind).catch(() => []);
+     const next = mergeAdminContentLists(indexed, fallback, cached);
+     if (next.length) {
+      writeCachedAdminContentList(kind, next);
+      warmAdminPosters(next);
+      startTransition(() => {
+       setter(prev => areAdminContentListsSame(prev, next) ? prev : next);
+       setAdminContentLoading(prev => prev[kind] ? ({ ...prev, [kind]: false }) : prev);
+      });
+     } else {
+      startTransition(() => setAdminContentLoading(prev => prev[kind] ? ({ ...prev, [kind]: false }) : prev));
+     }
+     adminContentLoadedAtRef.current[kind] = Date.now();
+    } finally {
+     delete adminContentInFlightRef.current[kind];
+    }
+   })();
+   adminContentInFlightRef.current[kind] = task;
+   return task;
+  }, [warmAdminPosters]);
  const [usersData, setUsersData] = useState<any[]>([]);
  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
  const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -2272,7 +2333,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [notifContent, setNotifContent] = useState("");
  const [notifType, setNotifType] = useState("info");
  const [notifTarget, setNotifTarget] = useState("all");
- const [contentOptions, setContentOptions] = useState<{ value: string; label: string; poster: string; backdrop?: string }[]>([]);
+  const contentOptions = useMemo<{ value: string; label: string; poster: string; backdrop?: string }[]>(() => {
+   const options: { value: string; label: string; poster: string; backdrop?: string; createdAt: number }[] = [];
+   webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", backdrop: s.backdrop || "", createdAt: s.updatedAt || s.createdAt || 0 }));
+   moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", backdrop: m.backdrop || "", createdAt: m.updatedAt || m.createdAt || 0 }));
+   options.sort((a, b) => b.createdAt - a.createdAt);
+   return options;
+  }, [webseriesData, moviesData]);
  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
  const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
  const notifDropdownRef = useRef<HTMLDivElement>(null);
@@ -2718,6 +2785,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  return () => unsub();
  }, []);
 
+ useEffect(() => {
+  adminLoadContentListRef.current = loadAdminContentList;
+ }, [loadAdminContentList]);
+
  // Load CORE data. Heavy content collections are loaded from a tiny admin index
  // + a small recent window, never full onValue subscriptions. This stops Admin
  // from downloading every season/episode/audio URL on every open.
@@ -2731,10 +2802,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Heavy content list + counts are gated to sections that actually need them.
   // See the `content-list` effect below. Keeping this shell empty here means
   // sections like settings/analytics/egd-manager pay zero content-load cost.
-
-  // Kept for the "Refresh Data" button + save flows that still call this ref.
-  adminLoadContentListRef.current = async () => {};
-
 
  unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
   const val = snap.val();
@@ -2802,7 +2869,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    const needsCounts = activeSection === "dashboard";
    if (!needsContent && !needsCounts) return;
 
-   const unsubs: (() => void)[] = [];
    let cancelled = false;
 
    if (needsCounts) {
@@ -2816,102 +2882,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    }
 
    if (needsContent) {
-     const subscribeContentList = (kind: AdminContentKind) => {
-       const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-       const cached = readCachedAdminContentList(kind);
-       if (cached.length) {
-         startTransition(() => {
-           setter(sortAdminContentList(cached));
-           setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-         });
-       }
-       const indexRef = ref(db, `adminContentIndex/${kind}`);
-       let reconcileRun = 0;
-       const unsub = onValue(indexRef, (snap) => {
-         const data = snap.val() || {};
-         let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
-         const merged = mergeAdminContentLists(items);
-         if (merged.length || cached.length) {
-           startTransition(() => {
-             setter(merged.length ? merged : sortAdminContentList(cached));
-             setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-           });
-           writeCachedAdminContentList(kind, merged.length ? merged : cached);
-         }
-         const runId = ++reconcileRun;
-         const cancelReconcile = adminIdle(() => {
-           void (async () => {
-             try {
-               const allKeys = await firebaseRestShallowKeys(kind);
-               if (runId !== reconcileRun) return;
-               const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
-               const indexedIds = new Set(items.map((it: any) => String(it.id)));
-               const missing = cleanKeys.filter((k) => !indexedIds.has(k));
-               const hydrated: any[] = [];
-               if (missing.length) {
-                 const chunkSize = 8;
-                 for (let i = 0; i < missing.length; i += chunkSize) {
-                   const chunk = missing.slice(i, i + chunkSize);
-                   const rows = await Promise.all(chunk.map(async (id) => {
-                     try {
-                       const item = await firebaseRestGet<any>(`${kind}/${id}`);
-                       return item ? buildAdminContentIndexItem(id, item, kind) : null;
-                     } catch { return null; }
-                   }));
-                   rows.forEach((r) => { if (r) hydrated.push(r); });
-                   if (runId !== reconcileRun) return;
-                 }
-                 if (hydrated.length) {
-                   items = [...items, ...hydrated];
-                   primeAdminContentIndexFromList(kind, hydrated).catch(() => {});
-                 }
-               }
-               if (kind === "webseries") {
-                 const stale = items.filter((it: any) => !Number(it?.seasonCount) && !isLegacyAnEntry(it.id, it));
-                 if (stale.length) {
-                   const chunkSize = 8;
-                   const repaired: any[] = [];
-                   for (let i = 0; i < stale.length; i += chunkSize) {
-                     const chunk = stale.slice(i, i + chunkSize);
-                     const rows = await Promise.all(chunk.map(async (it: any) => {
-                       try {
-                         const item = await firebaseRestGet<any>(`${kind}/${it.id}`);
-                         if (!item) return null;
-                         const rebuilt = buildAdminContentIndexItem(it.id, item, kind);
-                         return Number(rebuilt.seasonCount) > 0 ? rebuilt : null;
-                       } catch { return null; }
-                     }));
-                     rows.forEach((r) => { if (r) repaired.push(r); });
-                     if (runId !== reconcileRun) return;
-                   }
-                   if (repaired.length) {
-                     const byId = new Map(items.map((it: any) => [String(it.id), it]));
-                     repaired.forEach((r) => byId.set(String(r.id), r));
-                     items = Array.from(byId.values());
-                     primeAdminContentIndexFromList(kind, repaired).catch(() => {});
-                   }
-                 }
-               }
-             } catch {}
-             const reconciled = mergeAdminContentLists(items);
-             startTransition(() => {
-               setter(reconciled);
-               setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-             });
-             writeCachedAdminContentList(kind, reconciled);
-           })();
-         }, 250);
-         unsubs.push(cancelReconcile);
-       });
-       unsubs.push(unsub);
-     };
-     subscribeContentList("webseries");
-     subscribeContentList("movies");
+      void loadAdminContentList("webseries");
+      void loadAdminContentList("movies");
    }
 
-   return () => { cancelled = true; unsubs.forEach(u => u()); };
+    return () => { cancelled = true; };
    // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [activeSection]);
+  }, [activeSection, loadAdminContentList]);
 
  // Lazy-load USERS data (dashboard needs it for live Total/Online/Offline)
  useEffect(() => {
@@ -3254,16 +3231,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
  }, [activeSection]);
 
-
- // Build content options for notifications/releases (newest first by updatedAt/createdAt)
- useEffect(() => {
-  const options: { value: string; label: string; poster: string; backdrop?: string; createdAt: number }[] = [];
-  webseriesData.forEach(s => options.push({ value: `${s.id}|webseries`, label: `Series: ${s.title}`, poster: s.poster || "", backdrop: s.backdrop || "", createdAt: s.updatedAt || s.createdAt || 0 }));
-  moviesData.forEach(m => options.push({ value: `${m.id}|movie`, label: `Movie: ${m.title}`, poster: m.poster || "", backdrop: m.backdrop || "", createdAt: m.updatedAt || m.createdAt || 0 }));
- // Sort by updatedAt/createdAt descending so newest edited/added items appear first
- options.sort((a, b) => b.createdAt - a.createdAt);
-  startTransition(() => setContentOptions(options));
- }, [webseriesData, moviesData]);
 
  // Close dropdowns on outside click
  useEffect(() => {
@@ -4219,9 +4186,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Weekly schedule (for dashboard preview)
  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
  useEffect(() => {
+  if (activeSection !== "dashboard") return;
  const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
  return () => unsub();
- }, []);
+  }, [activeSection]);
  const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
  const todayScheduled = useMemo(
  () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName || s?.day === "AllDay"),
@@ -6072,7 +6040,7 @@ ${tgBulkFooter}
  </div>
   ))}
   {filtered.length > visible.length && (
-  <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Use search to narrow instantly.</div>
+   <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Search to narrow instantly and keep scrolling smooth.</div>
   )}
   </>;
  })()}
@@ -7165,7 +7133,7 @@ ${tgBulkFooter}
  </div>
   ))}
   {filtered.length > visible.length && (
-  <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Use search to narrow instantly.</div>
+   <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Search to narrow instantly and keep scrolling smooth.</div>
   )}
   </>;
  })()}

@@ -5,6 +5,7 @@ import {
   Calendar, Search, Save, Trash2, Edit, X, Check, AlertTriangle,
   CalendarDays, Film, ChevronRight, Sparkles, Power,
 } from "lucide-react";
+import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 
 const DAYS = [
   "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "AllDay",
@@ -145,6 +146,11 @@ export default function WeeklyEpisodeManager({
       .slice(0, 120);
   }, [schedules, activeDay]);
 
+  useEffect(() => {
+    const posters = visibleList.map((item) => item.poster || seriesById[item.seriesId]?.poster).filter(Boolean);
+    if (posters.length) void preloadCachedImages(posters, 80);
+  }, [visibleList, seriesById]);
+
   async function saveSchedule(seriesId: string, day: Day, opts?: { silent?: boolean }) {
     const s = seriesById[seriesId];
     if (!s) { toast.error("Series not found"); return; }
@@ -246,7 +252,7 @@ export default function WeeklyEpisodeManager({
                         onClick={() => { setSelectedSeriesId(s.id); setPickerSearch(s.title); }}
                         className="w-full flex items-center gap-2.5 p-2 hover:bg-white/5 transition-colors text-left"
                       >
-                        <img src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]" loading="lazy" decoding="async"
+                        <CachedImg src={s.poster || ""} className="w-8 h-11 rounded object-cover bg-[#1E1E32]" loading="lazy" decoding="async"
                           onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                         <span className="text-[12px] text-white truncate flex-1">{s.title}</span>
                       </button>
@@ -255,7 +261,7 @@ export default function WeeklyEpisodeManager({
                 )}
                 {selectedSeriesId && (
                   <div className="mt-2 flex items-center gap-2 bg-indigo-600/15 border border-indigo-500/30 rounded-lg p-2">
-                    <img src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover" loading="lazy" decoding="async"
+                    <CachedImg src={seriesById[selectedSeriesId]?.poster || ""} className="w-8 h-11 rounded object-cover" loading="lazy" decoding="async"
                       onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-semibold truncate">{seriesById[selectedSeriesId]?.title}</p>
@@ -368,7 +374,7 @@ export default function WeeklyEpisodeManager({
                   className="bg-[#141422] border border-white/8 rounded-xl p-3 hover:border-indigo-500/40 transition-all">
                   <div className="flex gap-3">
                     <div className="relative flex-shrink-0">
-                      <img src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover" loading="lazy" decoding="async"
+                      <CachedImg src={item.poster || live.poster || ""} className="w-16 h-[88px] rounded-lg object-cover" loading="lazy" decoding="async"
                         onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/64x88/141422/6366f1?text=N"; }} />
                       {isComplete && (
                         <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">

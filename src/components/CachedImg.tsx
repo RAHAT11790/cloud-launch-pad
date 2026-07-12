@@ -1,4 +1,4 @@
-import { forwardRef, ImgHTMLAttributes, useState } from "react";
+import { forwardRef, ImgHTMLAttributes, useEffect, useState } from "react";
 
 /**
  * CachedImg — drop-in <img> with zero-duplicate-fetch caching.
@@ -21,6 +21,7 @@ const SEEN_KEY = "rs_img_seen_v1";
 const SEEN_CAP = 4000;
 
 const decodedCache = new Map<string, HTMLImageElement>();
+const preloadInflight = new Map<string, Promise<void>>();
 let seenSet: Set<string>;
 try {
   seenSet = new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]"));
@@ -48,6 +49,42 @@ const markSeen = (url: string, el?: HTMLImageElement) => {
   }
 };
 
+export const isImageCacheWarm = (url: unknown) => {
+  const key = typeof url === "string" ? url : "";
+  return !!key && (decodedCache.has(key) || seenSet.has(key));
+};
+
+export const preloadCachedImages = (urls: unknown[], limit = 160) => {
+  if (typeof window === "undefined") return Promise.resolve();
+  const unique = Array.from(new Set(
+    (urls || [])
+      .map((url) => String(url || "").trim())
+      .filter(Boolean),
+  )).slice(0, Math.max(0, limit));
+
+  const tasks = unique.map((url) => {
+    if (decodedCache.has(url) || seenSet.has(url)) return Promise.resolve();
+    const running = preloadInflight.get(url);
+    if (running) return running;
+    const task = new Promise<void>((resolve) => {
+      const img = new window.Image();
+      img.decoding = "async";
+      img.loading = "eager";
+      img.onload = async () => {
+        try { await img.decode?.(); } catch {}
+        markSeen(url, img);
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = url;
+    }).finally(() => preloadInflight.delete(url));
+    preloadInflight.set(url, task);
+    return task;
+  });
+
+  return Promise.allSettled(tasks).then(() => undefined);
+};
+
 type Props = ImgHTMLAttributes<HTMLImageElement>;
 
 const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
@@ -57,6 +94,19 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
   const url = typeof src === "string" ? src : "";
   const warm = !!url && (decodedCache.has(url) || seenSet.has(url));
   const [loaded, setLoaded] = useState(warm);
+
+  useEffect(() => {
+    if (!url) return;
+    if (decodedCache.has(url) || seenSet.has(url)) {
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    preloadCachedImages([url], 1).then(() => {
+      if (!cancelled && decodedCache.has(url)) setLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [url]);
 
   return (
     <img
