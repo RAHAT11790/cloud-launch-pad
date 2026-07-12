@@ -1,96 +1,97 @@
+# User Panel Ultra-Optimization Plan
 
-# Movies-এ Parts System (Web Series-এর copy version)
-
-আপনি চান Movies section-টা যেন Web Series-এর মতো একই feel পায় — কিন্তু "Season/Episode"-এর জায়গায় "Movie/Part"। নিচে সম্পূর্ণ কাজের plan দিলাম। Approve করলে A-to-Z implement করব।
+## লক্ষ্য
+১. Home ↔ Series ↔ Movies ↔ Live TV navigation lag/latency দূর করা।
+২. Profile, Search, Cards, Video Player, Episode/Quality switching — সব জায়গায় UI jank কমানো।
+৩. Video player-এ **smooth sequential fallback** — quality → quality → server → server, তারপরই "Link expired"।
 
 ---
 
-## 1) Data model (Firebase-এ movie row)
+## Part 1 — Navigation & Route-level optimization
 
-Movie item-এ একটা নতুন field:
+- Home/Series/Movies/Live TV tab switch এ full re-mount বন্ধ করা।
+  - Tab state কে top-level এ preserve করা, mounted tabs `display:none` দিয়ে hide (unmount না)।
+  - প্রথমবার visit করলে lazy-mount, তারপর alive রাখা।
+- Heavy list (NewEpisodeReleases, WebSeries grid, Movies grid) কে `React.memo` + stable keys + `useMemo` দিয়ে wrap।
+- Route change এ scroll restore + transition duration 220ms → 160ms (tween, no spring)।
+- Bottom nav button-এ tap → immediate route swap, data fetch background-এ।
+
+## Part 2 — List / Card optimization
+
+- AnimeCard, NewEpisodeReleases card, Movies card, Live TV card:
+  - `React.memo` with shallow prop check।
+  - Image: `loading="lazy"` + `decoding="async"` + fixed width/height (CLS 0)।
+  - Backdrop blur/heavy shadow শুধু visible card-এ, off-screen এ simplified।
+  - Framer-motion `layout` animation যেখানে দরকার নেই — remove।
+- Long lists এ `content-visibility: auto` + `contain-intrinsic-size` — off-screen paint skip।
+- Search bar: debounce 250ms, results virtualized-lite (slice top 40)।
+
+## Part 3 — Profile & Static pages
+
+- Profile page: heavy gradients কে static CSS token-এ move, per-render inline style কমানো।
+- About/Privacy/Premium page-এ animation reduce।
+
+## Part 4 — Video Player smooth fallback (মূল fix)
+
+বর্তমান আচরণ: link fail → দ্রুত সব quality একসাথে switch, কোনটাই properly test হয় না, user-এর কাছে "Link expired" ভুলভাবে দেখায়।
+
+### নতুন sequential probe logic (SaltPlayer)
+
+```text
+Play requested
+   │
+   ▼
+[Current quality] ──play attempt (probe 4s)──▶ works? ── YES → play
+   │ NO
+   ▼
+[Next quality]  ──probe 4s──▶ works? ── YES → switch + play
+   │ NO
+   ▼ (সব quality শেষ)
+[Next server]   ──take server's default quality → probe 4s──▶ works?
+   │ NO
+   ▼ (সব server × সব quality শেষ)
+Show "Link Expired — try later"
 ```
-parts?: Array<{
-  partNumber: number;
-  title?: string;         // optional, default "Part N"
-  link: string;           // default streaming link (required)
-  link480?, link720?, link1080?, link4k?: string;
-}>
-```
-- `parts` না থাকলে বা empty হলে — পুরানো single-link movie (backwards compatible)।
-- `parts` থাকলে player ওটা দেখাবে; top-level `movieLink` fallback হিসেবে থাকবে।
 
-`src/data/animeData.ts` এবং `firebaseAnimeMapper.ts` (movie mapper)-এ `parts` add হবে।
+মূল নিয়ম:
+- একসাথে অনেকগুলো probe **না** — একটার পর একটা, 4s timeout করে।
+- প্রতি probe এ actual playable check: `loadeddata` + `canplay` + first frame render OR HLS manifest 200 + first segment 200।
+- Manual quality/server switch → immediate, fallback skip।
+- User pause/back করলে probe chain cancel।
+- একই session-এ একবার fail হওয়া (quality, server) pair কে temp-blacklist (5 min) — বারবার probe না।
 
----
+### Quality/Server switching latency fix
+- Preload next quality manifest cache in background (idle time)।
+- HLS.js instance destroy না করে `loadSource` reuse যেখানে সম্ভব।
+- Switch এ black flash কমাতে previous frame hold (poster=currentFrame snapshot)।
 
-## 2) Admin → Movies form redesign
+## Part 5 — Global perf hardening
 
-`src/pages/Admin.tsx` movie form (mv-add / mv-manual)-এ Web Series-এর episode UI-এর একটা **simplified copy**:
-
-- Section header: **"Movie Parts"** (Season list-এর জায়গায় শুধু একটাই "Movie" container)
-- বাটন: **"➕ Add New Part"** (Add New Episode-এর মতো)
-- প্রতি Part card-এ ইনপুট:
-  - Part title (optional)
-  - Default link (required)
-  - 480p / 720p / 1080p / 4K (optional)
-  - Delete part, reorder up/down
-- Parts না দিলে — উপরের পুরানো "Movie Link (Default) + Quality Links" section-ই কাজ করবে (একদম untouched)।
-- **JSON paste + JSON file upload** — Web Series-এর মতো একটা textarea + file upload বাটন, কিন্তু শুধু parts array parse করবে। Format:
-  ```json
-  { "parts": [
-      { "partNumber": 1, "link": "...", "link1080": "..." },
-      { "partNumber": 2, "link": "..." }
-  ]}
-  ```
-  বা flat array-ও accept করবে। **smartMergeEpisodesInto-এর মতো smart merge** — শুধু non-empty quality field overwrite করবে, বাকিগুলো preserve করবে (আপনার আগের feedback অনুযায়ী)।
-- Save Movie → parts কে clean করে persist করবে (empty parts drop)।
+- `will-change` overuse audit — শুধু active animation-এ রাখা।
+- Framer-motion heavy variants → CSS transition যেখানে সম্ভব।
+- Global CSS: reduce backdrop-filter stacking (mobile GPU cost)।
+- Fonts: `font-display: swap` + subset preload only used weights।
 
 ---
 
-## 3) Save + Notify (Movies) — auto-tracking with parts
+## Technical Details (dev-only)
 
-বর্তমান crash-এর কারণ: server auto-tracker season/episode expect করে, movie payload-এ ওগুলা নেই।
+**Files to touch:**
+- `src/pages/Index.tsx` — tab preservation, memoization।
+- `src/components/BottomNav.tsx` — instant route swap।
+- `src/components/AnimeCard.tsx`, `NewEpisodeReleases.tsx`, `HeroSlider.tsx` — memo + content-visibility।
+- `src/components/SearchPage.tsx` — debounce + slicing।
+- `src/components/SaltPlayer.tsx` — new `sequentialProbe()` helper + blacklist map।
+- `src/index.css` — animation/blur cost reduction।
+- `src/components/ProfilePage.tsx`, `AboutPage.tsx` — static-ize gradients।
 
-নতুন behavior:
-- **Parts আছে** (এবং edit-এ নতুন part add হয়েছে): last-added part range track করে release-এ পাঠাবে:
-  - `episodeInfo: { type: "movie-parts", partsAdded: "Part 2-3" }`
-  - Push body: `"Movie Name • Part 2-3 Added"`
-- **Parts নেই** (single movie): `episodeInfo: { type: "movie", label: "Full Movie Added" }`
-  - Push body: `"Movie Name • Full Movie Released"`
-- এরপর existing flow: **New Release entry → FCM push → Telegram Post redirect** (Web Series-এর copy)।
-- Old-vs-new part diff detect করার জন্য save-এর আগে বর্তমান Firebase snapshot থেকে previous `parts` fetch করে compare করব।
-
----
-
-## 4) Video player UI (AnimeDetails / SaltPlayer)
-
-`src/components/AnimeDetails.tsx`-এ movie type-এর জন্য:
-- `parts` empty/missing হলে — এখনকার মতো একটাই play button।
-- `parts` থাকলে — Web Series episode list-এর মতো নিচে horizontal list:
-  - Label: **"Parts"** (Episodes-এর জায়গায়)
-  - Cards: **"Part 1", "Part 2"…** selectable, tap করলে সেই part-এর quality-aware link play হবে।
-- Quality selector আগের মতোই কাজ করবে — active part-এর quality URLs use করবে।
+**No backend / data model change.** পুরাটাই frontend presentation + player logic।
 
 ---
 
-## 5) Files touched
+## যা করব না
+- Business logic, coin/premium, admin panel — untouched।
+- Firebase/Supabase schema — untouched।
+- Existing design/theme colors — untouched, শুধু performance layer।
 
-- `src/data/animeData.ts` — MoviePart type + `parts` on AnimeItem
-- `src/lib/firebaseAnimeMapper.ts` — map parts in `mapFirebaseMovieItem`
-- `src/pages/Admin.tsx` — movie form UI + save logic + Save+Notify diff/push/telegram + JSON paste/upload/smart-merge
-- `src/components/AnimeDetails.tsx` — movie parts list UI + selection
-- (Player component if needed for quality-per-part switching)
-
----
-
-## 6) Testing (আপনি করবেন)
-
-Implement শেষে আমি dev server-এ typecheck run করে confirm করব। এরপর আপনি:
-1. একটা movie edit করে 2-3টা part add → Normal Save → refresh → parts persist কিনা
-2. Video player-এ Parts tab দেখা যাচ্ছে কিনা, switch করে play হচ্ছে কিনা
-3. Save + Notify → New Release, Push, Telegram Post redirect সব হচ্ছে কিনা
-4. Parts ছাড়া পুরানো movie backwards-compatible কিনা
-
----
-
-**Approve করলে সাথে সাথে A-to-Z implement শুরু করে দিব।**
+Approve করলে পুরাটা এক পাসে ship করে দেব।
