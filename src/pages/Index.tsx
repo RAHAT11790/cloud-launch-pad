@@ -3070,15 +3070,22 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [showProfile]);
 
-  // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
+  // ===== SWIPE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
   const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeRafRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
 
-  // Sync visualPage when activePage changes
-  useEffect(() => { setVisualPage(activePage); }, [activePage]);
+  // Keep-alive set: once a tab is visited it stays mounted so revisits are instant.
+  const [mountedPages, setMountedPages] = useState<Set<MainPage>>(() => new Set([activePage]));
+
+  // Sync visualPage when activePage changes + record mount
+  useEffect(() => {
+    setVisualPage(activePage);
+    setMountedPages((prev) => (prev.has(activePage) ? prev : new Set(prev).add(activePage)));
+  }, [activePage]);
+
 
   const applyStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
     const track = swipeTrackRef.current;
