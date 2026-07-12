@@ -258,13 +258,26 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
       try { hls.audioTrack = wanted; } catch {}
     };
 
+    // Arm a probe timer — if this quality hasn't reached canplay within 6s,
+    // treat it as failed and move on. Cleared on first playable frame below.
+    probeStartRef.current = Date.now();
+    if (probeTimerRef.current) clearTimeout(probeTimerRef.current);
+    probeTimerRef.current = setTimeout(() => {
+      // Only fire if we're still stuck buffering — never interrupt playing video.
+      const vid = videoRef.current;
+      if (!vid) return;
+      const playable = vid.readyState >= 3 || (vid.currentTime > 0 && !vid.paused);
+      if (playable) return;
+      advanceToNextQuality("probe-timeout");
+    }, 6000);
+
+    const clearProbe = () => {
+      if (probeTimerRef.current) { clearTimeout(probeTimerRef.current); probeTimerRef.current = null; }
+    };
+
     hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(master));
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      // Force Hindi before the first play() call. This prevents the visible
-      // 4-5s post-open language switch the user reported.
       applyPreferredAudio();
-      // startPosition handles the seek for hls.js automatically; only
-      // touch currentTime as a safety net if it didn't land near target.
       if (initialStart > 0 && Math.abs(video.currentTime - initialStart) > 2) {
         try { video.currentTime = initialStart; } catch {}
       }
@@ -276,25 +289,41 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       applyPreferredAudio();
     });
+    // Once we actually get playable video, cancel the probe — this quality works.
+    const onCanPlayOnce = () => { clearProbe(); video.removeEventListener("canplay", onCanPlayOnce); video.removeEventListener("playing", onCanPlayOnce); };
+    video.addEventListener("canplay", onCanPlayOnce);
+    video.addEventListener("playing", onCanPlayOnce);
+
+    let recoveryAttempted = false;
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return;
-      // Try non-destructive recovery before giving up — many "fatal" media
-      // errors on slow networks are actually recoverable buffer stalls.
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      // Try ONE non-destructive recovery per session — network stalls sometimes
+      // clear themselves. If that too fails, walk to the next quality one by
+      // one; we never spam-jump servers here.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !recoveryAttempted) {
+        recoveryAttempted = true;
         try { hls.startLoad(); return; } catch {}
       }
-      if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveryAttempted) {
+        recoveryAttempted = true;
         try { hls.recoverMediaError(); return; } catch {}
       }
-      if (failedRef.current) return;
-      failedRef.current = true;
-      onFail?.(`hls-${data.type}-${data.details}`);
+      // Non-recoverable → give this quality's slot to the next candidate.
+      clearProbe();
+      advanceToNextQuality(`hls-${data.type}-${data.details}`);
     });
-    return () => { hls.destroy(); hlsRef.current = null; };
+    return () => {
+      clearProbe();
+      video.removeEventListener("canplay", onCanPlayOnce);
+      video.removeEventListener("playing", onCanPlayOnce);
+      hls.destroy();
+      hlsRef.current = null;
+    };
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, onFail]);
+  }, [streams, qIdx, audios, aIdx, onFail, advanceToNextQuality]);
+
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
