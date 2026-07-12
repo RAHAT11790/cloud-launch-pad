@@ -3573,10 +3573,11 @@ const Index = () => {
           backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page, idx) => {
-            // Idle: only current tab is mounted. During a tab slide, mount only
-            // the pages crossed by the animation so there is no black gap.
+            // Keep-alive: mount visited pages + any page currently crossed by the slide.
             const visualIdx = MAIN_PAGE_ORDER.indexOf(visualPage);
-            const shouldRender = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
+            const inSlide = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
+            const shouldRender = inSlide || mountedPages.has(page);
+            const isActive = page === activePage;
             return (
             <div
               key={page}
@@ -3589,8 +3590,11 @@ const Index = () => {
                 overflowX: "hidden",
                 backfaceVisibility: "hidden",
                 WebkitOverflowScrolling: "touch",
-                contain: page === activePage ? "none" : "layout paint style",
-              }}
+                contain: isActive ? "none" : "layout paint style",
+                // Skip paint work for off-screen mounted tabs — huge scroll/nav win on mobile.
+                contentVisibility: isActive || inSlide ? "visible" : "auto",
+                containIntrinsicSize: isActive || inSlide ? undefined : "100vh",
+              } as React.CSSProperties}
             >
               {shouldRender && page === "home" && getPageContent_home()}
               {shouldRender && page === "series" && getPageContent_series()}
@@ -3601,6 +3605,7 @@ const Index = () => {
           })}
         </div>
       </main>
+
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
 
       <AnimatePresence>
