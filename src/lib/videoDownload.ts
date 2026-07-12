@@ -300,17 +300,22 @@ export function buildDirectDownloadUrl(rawUrl: string): string | null {
 
 function openDownloadLink(finalUrl: string, fileName: string) {
   if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
-  const link = document.createElement("a");
-  link.href = finalUrl;
-  link.rel = "noopener noreferrer";
-  // A visible browser navigation/download is more reliable for cross-origin
-  // file hosts than a hidden async fetch. Keep the target blank so pop-up/file
-  // download handling stays tied to the user's gesture.
-  link.target = "_blank";
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // Use a same-document iframe navigation so attachment responses go straight
+  // to the browser/PWA download manager instead of opening a JSON/error tab.
+  const frame = document.createElement("iframe");
+  frame.src = finalUrl;
+  frame.title = `Download ${fileName}`;
+  frame.style.position = "fixed";
+  frame.style.left = "-9999px";
+  frame.style.top = "-9999px";
+  frame.style.width = "1px";
+  frame.style.height = "1px";
+  frame.style.opacity = "0";
+  frame.setAttribute("aria-hidden", "true");
+  document.body.appendChild(frame);
+  window.setTimeout(() => {
+    try { frame.remove(); } catch {}
+  }, 60_000);
 }
 
 
