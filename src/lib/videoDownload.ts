@@ -31,14 +31,18 @@ const buildSafeFileName = (rawName: string) => {
 
 let overrideBaseUrl = "";
 let overrideEnabled = false;
+let overrideIsAdmin = false; // true only when a Cloudflare/self-hosted admin override is active
 let playbackProxyBaseUrl = "";
 let playbackProxyEnabled = false;
+let playbackProxyIsAdmin = false;
 let routerBaseUrl = "";
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
 
 const DL_ROUTE_CACHE_KEY = "rs_video_download_route_v2";
+const DL_ROUTE_ADMIN_FLAG = "rs_video_download_route_admin_v2";
 const PROXY_ROUTE_CACHE_KEY = "rs_video_proxy_route_v2";
+const PROXY_ROUTE_ADMIN_FLAG = "rs_video_proxy_route_admin_v2";
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 
 const backendFunctionUrl = (fnName: string) => {
@@ -53,10 +57,12 @@ try {
     if (/^https?:\/\//i.test(cachedDownload)) {
       overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", cachedDownload);
       overrideEnabled = true;
+      overrideIsAdmin = localStorage.getItem(DL_ROUTE_ADMIN_FLAG) === "1";
     }
     if (/^https?:\/\//i.test(cachedProxy)) {
       playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", cachedProxy);
       playbackProxyEnabled = true;
+      playbackProxyIsAdmin = localStorage.getItem(PROXY_ROUTE_ADMIN_FLAG) === "1";
     }
   }
 } catch {}
@@ -64,21 +70,26 @@ try {
 if (!overrideBaseUrl) {
   overrideBaseUrl = backendFunctionUrl("video-download");
   overrideEnabled = Boolean(overrideBaseUrl);
+  overrideIsAdmin = false;
 }
 if (!playbackProxyBaseUrl) {
   playbackProxyBaseUrl = backendFunctionUrl("video-proxy");
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
+  playbackProxyIsAdmin = false;
 }
 
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
   const backendHosted = backendFunctionUrl("video-download");
-  const enabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
-  overrideBaseUrl = enabled ? overrideUrl : (selfHosted || backendHosted);
+  const adminEnabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
+  const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
+  overrideBaseUrl = adminUrl || backendHosted;
   overrideEnabled = Boolean(overrideBaseUrl);
+  overrideIsAdmin = Boolean(adminUrl);
   try {
     if (overrideBaseUrl) localStorage.setItem(DL_ROUTE_CACHE_KEY, overrideBaseUrl);
+    localStorage.setItem(DL_ROUTE_ADMIN_FLAG, overrideIsAdmin ? "1" : "0");
   } catch {}
 };
 
@@ -86,11 +97,14 @@ const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
   const backendHosted = backendFunctionUrl("video-proxy");
-  const enabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
-  playbackProxyBaseUrl = enabled ? overrideUrl : (selfHosted || backendHosted);
+  const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
+  const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
+  playbackProxyBaseUrl = adminUrl || backendHosted;
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
+  playbackProxyIsAdmin = Boolean(adminUrl);
   try {
     if (playbackProxyBaseUrl) localStorage.setItem(PROXY_ROUTE_CACHE_KEY, playbackProxyBaseUrl);
+    localStorage.setItem(PROXY_ROUTE_ADMIN_FLAG, playbackProxyIsAdmin ? "1" : "0");
   } catch {}
 };
 try {
@@ -233,9 +247,11 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  const bases = overrideEnabled
-    ? unique([backendFunctionUrl("video-download"), overrideBaseUrl])
-    : unique([backendFunctionUrl("video-download")]);
+  // Admin-configured Cloudflare/self-hosted proxy is ALWAYS the primary route.
+  // Supabase backend is only used when no admin override is configured.
+  const bases = overrideIsAdmin
+    ? unique([overrideBaseUrl])
+    : unique([overrideBaseUrl || backendFunctionUrl("video-download")]);
   const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
   // Every Firebase/admin-stored media link should go through the download
