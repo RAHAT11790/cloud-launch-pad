@@ -2722,124 +2722,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   startTransition(() => setCategoriesData(snap.val() || {}));
   }));
 
-  // Firebase-first: subscribe live to the tiny `adminContentIndex/{kind}` node.
-  // No polling, no repeated REST fetches — Firebase pushes updates, cards stay
-  // in sync automatically, and we render every item that exists in Firebase.
-  // The local cache is only used to paint instantly on first mount.
-  const subscribeContentList = (kind: AdminContentKind) => {
-    const setter = kind === "movies" ? setMoviesData : setWebseriesData;
-    const cached = readCachedAdminContentList(kind);
-    if (cached.length) {
-      startTransition(() => {
-        setter(sortAdminContentList(cached));
-        setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-      });
-    }
-
-    const indexRef = ref(db, `adminContentIndex/${kind}`);
-    let reconcileRun = 0;
-    const unsub = onValue(indexRef, (snap) => {
-      const data = snap.val() || {};
-      let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
-      const merged = mergeAdminContentLists(items);
-      if (merged.length || cached.length) {
-        startTransition(() => {
-          setter(merged.length ? merged : sortAdminContentList(cached));
-          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-        });
-        writeCachedAdminContentList(kind, merged.length ? merged : cached);
-      }
-
-      const runId = ++reconcileRun;
-      const cancelReconcile = adminIdle(() => {
-        void (async () => {
-      // Reconcile against the real collection: `adminContentIndex` may be
-      // partially populated (legacy rows never got indexed). Whenever the
-      // actual Firebase collection has more items than the index, hydrate
-      // the missing ones and prime the index so it stays complete.
-      try {
-        const allKeys = await firebaseRestShallowKeys(kind);
-        if (runId !== reconcileRun) return;
-        const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
-        const indexedIds = new Set(items.map((it: any) => String(it.id)));
-        const missing = cleanKeys.filter((k) => !indexedIds.has(k));
-        const hydrated: any[] = [];
-        if (missing.length) {
-          const chunkSize = 8;
-          for (let i = 0; i < missing.length; i += chunkSize) {
-            const chunk = missing.slice(i, i + chunkSize);
-            const rows = await Promise.all(chunk.map(async (id) => {
-              try {
-                const item = await firebaseRestGet<any>(`${kind}/${id}`);
-                return item ? buildAdminContentIndexItem(id, item, kind) : null;
-              } catch { return null; }
-            }));
-            rows.forEach((r) => { if (r) hydrated.push(r); });
-            if (runId !== reconcileRun) return;
-          }
-          if (hydrated.length) {
-            items = [...items, ...hydrated];
-            primeAdminContentIndexFromList(kind, hydrated).catch(() => {});
-          }
-        }
-
-        // Repair: older index rows were written with seasonCount=0 for
-        // webseries even when the source had real seasons. Re-hydrate those
-        // stale rows from source and re-prime the index so counts are right.
-        if (kind === "webseries") {
-          const stale = items.filter((it: any) => !Number(it?.seasonCount) && !isLegacyAnEntry(it.id, it));
-          if (stale.length) {
-            const chunkSize = 8;
-            const repaired: any[] = [];
-            for (let i = 0; i < stale.length; i += chunkSize) {
-              const chunk = stale.slice(i, i + chunkSize);
-              const rows = await Promise.all(chunk.map(async (it: any) => {
-                try {
-                  const item = await firebaseRestGet<any>(`${kind}/${it.id}`);
-                  if (!item) return null;
-                  const rebuilt = buildAdminContentIndexItem(it.id, item, kind);
-                  return Number(rebuilt.seasonCount) > 0 ? rebuilt : null;
-                } catch { return null; }
-              }));
-              rows.forEach((r) => { if (r) repaired.push(r); });
-              if (runId !== reconcileRun) return;
-            }
-            if (repaired.length) {
-              const byId = new Map(items.map((it: any) => [String(it.id), it]));
-              repaired.forEach((r) => byId.set(String(r.id), r));
-              items = Array.from(byId.values());
-              primeAdminContentIndexFromList(kind, repaired).catch(() => {});
-            }
-          }
-        }
-      } catch {}
-        const reconciled = mergeAdminContentLists(items);
-        startTransition(() => {
-          setter(reconciled);
-          setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
-        });
-        writeCachedAdminContentList(kind, reconciled);
-        })();
-      }, 250);
-      unsubs.push(cancelReconcile);
-    });
-    unsubs.push(unsub);
-  };
+  // Heavy content list + counts are gated to sections that actually need them.
+  // See the `content-list` effect below. Keeping this shell empty here means
+  // sections like settings/analytics/egd-manager pay zero content-load cost.
 
   // Kept for the "Refresh Data" button + save flows that still call this ref.
   adminLoadContentListRef.current = async () => {};
 
-  subscribeContentList("webseries");
-  subscribeContentList("movies");
-
-  let countsCancelled = false;
-  Promise.all([
-   fetchAdminCount("webseries").catch(() => webseriesData.length),
-   fetchAdminCount("movies").catch(() => moviesData.length),
-   fetchAdminCount("users").catch(() => usersData.length),
-   ]).then(([webseries, movies, users]) => {
-    if (!countsCancelled) startTransition(() => setAdminFastCounts({ webseries, movies, users }));
-  });
 
  unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
   const val = snap.val();
@@ -2887,8 +2776,136 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   });
  }));
 
-  return () => { countsCancelled = true; unsubs.forEach(u => u()); };
+   return () => { unsubs.forEach(u => u()); };
  }, []);
+
+ // ==================== GATED CONTENT LIST + COUNTS ====================
+ // Only the sections listed below actually need the full webseries/movies
+ // content index. Every other section (settings, analytics, egd-manager,
+ // cf-manager, security-center, task-manager, adsterra, backdrop-ai,
+ // apk-dw, live-tv, etc.) skips the Firebase index subscription entirely,
+ // eliminating the biggest source of admin-panel lag.
+ useEffect(() => {
+   const CONTENT_SECTIONS: Section[] = [
+     "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
+     "animesalt-manager", "new-releases", "manual-push", "notifications",
+     "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
+     "tg-url-changer",
+   ];
+   const needsContent = CONTENT_SECTIONS.includes(activeSection);
+   const needsCounts = activeSection === "dashboard";
+   if (!needsContent && !needsCounts) return;
+
+   const unsubs: (() => void)[] = [];
+   let cancelled = false;
+
+   if (needsCounts) {
+     Promise.all([
+       fetchAdminCount("webseries").catch(() => webseriesData.length),
+       fetchAdminCount("movies").catch(() => moviesData.length),
+       fetchAdminCount("users").catch(() => usersData.length),
+     ]).then(([webseries, movies, users]) => {
+       if (!cancelled) startTransition(() => setAdminFastCounts({ webseries, movies, users }));
+     });
+   }
+
+   if (needsContent) {
+     const subscribeContentList = (kind: AdminContentKind) => {
+       const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+       const cached = readCachedAdminContentList(kind);
+       if (cached.length) {
+         startTransition(() => {
+           setter(sortAdminContentList(cached));
+           setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+         });
+       }
+       const indexRef = ref(db, `adminContentIndex/${kind}`);
+       let reconcileRun = 0;
+       const unsub = onValue(indexRef, (snap) => {
+         const data = snap.val() || {};
+         let items = Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item }));
+         const merged = mergeAdminContentLists(items);
+         if (merged.length || cached.length) {
+           startTransition(() => {
+             setter(merged.length ? merged : sortAdminContentList(cached));
+             setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+           });
+           writeCachedAdminContentList(kind, merged.length ? merged : cached);
+         }
+         const runId = ++reconcileRun;
+         const cancelReconcile = adminIdle(() => {
+           void (async () => {
+             try {
+               const allKeys = await firebaseRestShallowKeys(kind);
+               if (runId !== reconcileRun) return;
+               const cleanKeys = allKeys.filter((k) => !isLegacyAnEntry(k));
+               const indexedIds = new Set(items.map((it: any) => String(it.id)));
+               const missing = cleanKeys.filter((k) => !indexedIds.has(k));
+               const hydrated: any[] = [];
+               if (missing.length) {
+                 const chunkSize = 8;
+                 for (let i = 0; i < missing.length; i += chunkSize) {
+                   const chunk = missing.slice(i, i + chunkSize);
+                   const rows = await Promise.all(chunk.map(async (id) => {
+                     try {
+                       const item = await firebaseRestGet<any>(`${kind}/${id}`);
+                       return item ? buildAdminContentIndexItem(id, item, kind) : null;
+                     } catch { return null; }
+                   }));
+                   rows.forEach((r) => { if (r) hydrated.push(r); });
+                   if (runId !== reconcileRun) return;
+                 }
+                 if (hydrated.length) {
+                   items = [...items, ...hydrated];
+                   primeAdminContentIndexFromList(kind, hydrated).catch(() => {});
+                 }
+               }
+               if (kind === "webseries") {
+                 const stale = items.filter((it: any) => !Number(it?.seasonCount) && !isLegacyAnEntry(it.id, it));
+                 if (stale.length) {
+                   const chunkSize = 8;
+                   const repaired: any[] = [];
+                   for (let i = 0; i < stale.length; i += chunkSize) {
+                     const chunk = stale.slice(i, i + chunkSize);
+                     const rows = await Promise.all(chunk.map(async (it: any) => {
+                       try {
+                         const item = await firebaseRestGet<any>(`${kind}/${it.id}`);
+                         if (!item) return null;
+                         const rebuilt = buildAdminContentIndexItem(it.id, item, kind);
+                         return Number(rebuilt.seasonCount) > 0 ? rebuilt : null;
+                       } catch { return null; }
+                     }));
+                     rows.forEach((r) => { if (r) repaired.push(r); });
+                     if (runId !== reconcileRun) return;
+                   }
+                   if (repaired.length) {
+                     const byId = new Map(items.map((it: any) => [String(it.id), it]));
+                     repaired.forEach((r) => byId.set(String(r.id), r));
+                     items = Array.from(byId.values());
+                     primeAdminContentIndexFromList(kind, repaired).catch(() => {});
+                   }
+                 }
+               }
+             } catch {}
+             const reconciled = mergeAdminContentLists(items);
+             startTransition(() => {
+               setter(reconciled);
+               setAdminContentLoading(prev => ({ ...prev, [kind]: false }));
+             });
+             writeCachedAdminContentList(kind, reconciled);
+           })();
+         }, 250);
+         unsubs.push(cancelReconcile);
+       });
+       unsubs.push(unsub);
+     };
+     subscribeContentList("webseries");
+     subscribeContentList("movies");
+   }
+
+   return () => { cancelled = true; unsubs.forEach(u => u()); };
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [activeSection]);
 
  // Lazy-load USERS data (dashboard needs it for live Total/Online/Offline)
  useEffect(() => {
