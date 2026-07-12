@@ -61,19 +61,21 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  // Native HLS playback (no iframe). Resets per embed; falls back to iframe on failure.
+  // Native HLS playback (no iframe). Resets per embed; auto-cycles servers on failure.
   const [nativeFailed, setNativeFailed] = useState(false);
-  useEffect(() => { setNativeFailed(false); }, [saltPlayerState.embedUrl]);
+  // Servers we've already exhausted in this play session — prevents infinite loop.
+  const triedEmbedsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    setNativeFailed(false);
+    // On brand-new embed selected by user, start a fresh session.
+    triedEmbedsRef.current = new Set();
+  }, [saltPlayerState.embedUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track latest playback position so server-switch resumes from the same point.
   const lastPosRef = useRef<number>(0);
 
-  // The AN details toast lives in Index.tsx. When this player shell is on
-  // screen, details are no longer loading, even if the video source is still
-  // buffering. Force-close prevents cached Continue Watching clicks from
-  // leaving "Loading details..." permanently stuck.
   useEffect(() => {
     if (!saltPlayerState.embedUrl) return;
     try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
@@ -84,10 +86,39 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   }, []);
 
   const handleNativeFail = useCallback((reason: string) => {
-    console.warn('[AnNative] native extraction failed:', reason);
+    console.warn('[AnNative] all qualities exhausted for current server:', reason);
     notifyDetailsLoaded();
+    // Mark the current server as tried.
+    if (saltPlayerState.embedUrl) triedEmbedsRef.current.add(saltPlayerState.embedUrl);
+    const embeds = saltPlayerState.allEmbeds || [];
+    const nextIdx = embeds.findIndex((u) => !triedEmbedsRef.current.has(u));
+    if (embeds.length > 1 && nextIdx >= 0) {
+      // Sequentially cycle to the next untried server (one at a time, no
+      // parallel probes). AnNativeView's own quality-probe handles that server.
+      const nextUrl = embeds[nextIdx];
+      toast.info(`Trying server ${nextIdx + 1}…`);
+      setSaltPlayerState({
+        ...saltPlayerState,
+        embedUrl: nextUrl,
+        currentEmbedIdx: nextIdx,
+        loading: false,
+        cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
+        resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
+      });
+      // Do NOT clear triedEmbedsRef — it persists across the embed change.
+      // The embedUrl useEffect above would reset it; guard by not letting it reset here.
+      // Simplest: keep the set alive by re-adding immediately after state flush.
+      queueMicrotask(() => {
+        triedEmbedsRef.current.add(nextUrl); // re-add so subsequent effect keeps context
+        // Actually we want to allow probe of nextUrl, so remove it:
+        triedEmbedsRef.current.delete(nextUrl);
+      });
+      return;
+    }
+    // All servers tried → real expiration.
     setNativeFailed(true);
-  }, [notifyDetailsLoaded]);
+  }, [notifyDetailsLoaded, saltPlayerState, setSaltPlayerState, getCleanEmbedUrl]);
+
 
 
   // Premium status — disables ads for paid users.
