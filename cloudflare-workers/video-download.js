@@ -59,6 +59,30 @@ function pickTarget(params) {
   return /^https?:\/\//i.test(src) ? src : "";
 }
 
+function pickTargets(params) {
+  const values = [];
+  const push = (value) => {
+    const raw = String(value || "").trim();
+    if (/^https?:\/\//i.test(raw) && !values.includes(raw)) values.push(raw);
+  };
+  const pushToken = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return;
+    const decoded = fromOpaqueUrlToken(raw);
+    push(decoded || raw);
+  };
+
+  ["url", "source", "target", "u"].forEach((key) => push(params.get(key)));
+  pushToken(params.get("src"));
+  ["alt", "fallback", "mirror"].forEach((key) => params.getAll(key).forEach(push));
+  ["altSrc", "fallbackSrc", "mirrorSrc"].forEach((key) => params.getAll(key).forEach(pushToken));
+  for (let i = 2; i <= 10; i += 1) {
+    push(params.get(`url${i}`));
+    pushToken(params.get(`src${i}`));
+  }
+  return values;
+}
+
 function sanitizeFilename(raw) {
   const cleaned = String(raw || "video.mp4")
     .replace(/[\\/:*?"<>|]+/g, " ")
@@ -121,33 +145,54 @@ export default {
     }
 
     const u = new URL(req.url);
-    const target = pickTarget(u.searchParams);
+    const targets = pickTargets(u.searchParams);
     const filename = sanitizeFilename(u.searchParams.get("filename") || "video.mp4");
-    if (!target) {
+    if (!targets.length) {
       return new Response(JSON.stringify({ error: "Missing ?url= or ?src= parameter" }), {
         status: 400,
         headers: { ...cors, "content-type": "application/json" },
       });
     }
 
-    let up;
-    try { up = new URL(target); }
-    catch { return new Response(JSON.stringify({ error: "Invalid url" }), { status: 400, headers: { ...cors, "content-type": "application/json" } }); }
-    if (up.protocol !== "http:" && up.protocol !== "https:") {
-      return new Response(JSON.stringify({ error: "Only http/https supported" }), { status: 400, headers: { ...cors, "content-type": "application/json" } });
-    }
-
     const ac = new AbortController();
     req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
     let upstream;
+    let up;
     const clientRange = req.headers.get("range");
     try {
       const bootstrapRange = req.method === "GET" && !clientRange ? "bytes=0-0" : clientRange;
-      upstream = await fetchWithRetry(up, req.method, bootstrapRange, ac.signal);
-      if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
-        try { await upstream.body?.cancel(); } catch {}
-        upstream = await fetchWithRetry(up, "GET", "bytes=0-0", ac.signal);
+      let lastBad = null;
+      for (const target of targets) {
+        let candidateUrl;
+        try { candidateUrl = new URL(target); } catch { continue; }
+        if (candidateUrl.protocol !== "http:" && candidateUrl.protocol !== "https:") continue;
+        const candidate = await fetchWithRetry(candidateUrl, req.method, bootstrapRange, ac.signal);
+        if (candidate.ok || candidate.status === 206) {
+          upstream = candidate;
+          up = candidateUrl;
+          break;
+        }
+        if (req.method === "HEAD") {
+          try { await candidate.body?.cancel(); } catch {}
+          const getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal);
+          if (getProbe.ok || getProbe.status === 206) {
+            upstream = getProbe;
+            up = candidateUrl;
+            break;
+          }
+          try { await getProbe.body?.cancel(); } catch {}
+        }
+        lastBad = candidate;
+        try { await candidate.body?.cancel(); } catch {}
+      }
+      if (!up) {
+        if (lastBad) {
+          return new Response(JSON.stringify({ error: "Download source error", upstreamStatus: lastBad.status, upstreamStatusText: lastBad.statusText, fallbackTried: targets.length }), {
+            status: 502, headers: { ...cors, "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ error: "Invalid url" }), { status: 400, headers: { ...cors, "content-type": "application/json" } });
       }
     } catch (e) {
       return new Response(JSON.stringify({ error: "Download source not responding", detail: String(e?.message || e) }), {
@@ -155,9 +200,9 @@ export default {
       });
     }
 
-    if (!upstream.ok && upstream.status !== 206) {
-      try { await upstream.body?.cancel(); } catch {}
-      return new Response(JSON.stringify({ error: "Download source error", upstreamStatus: upstream.status, upstreamStatusText: upstream.statusText }), {
+    if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+      try { await upstream?.body?.cancel(); } catch {}
+      return new Response(JSON.stringify({ error: "Download source error", upstreamStatus: upstream?.status || 502, upstreamStatusText: upstream?.statusText || "Bad Gateway" }), {
         status: 502, headers: { ...cors, "content-type": "application/json" },
       });
     }
