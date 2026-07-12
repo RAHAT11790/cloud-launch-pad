@@ -353,9 +353,14 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   }, []);
 
   const changeQuality = useCallback((i: number) => {
+    // User picked a quality manually — clear the auto-blacklist so they can
+    // freely try any of them without our fallback logic hijacking.
+    badQualitiesRef.current = new Set();
+    failedRef.current = false;
     setQIdx(i);
     setShowQ(false);
   }, []);
+
 
   const openControlsBriefly = useCallback(() => {
     setControlsOpen(true);
