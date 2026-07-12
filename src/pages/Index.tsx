@@ -3070,15 +3070,22 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [showProfile]);
 
-  // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
+  // ===== SWIPE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
   const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeRafRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
 
-  // Sync visualPage when activePage changes
-  useEffect(() => { setVisualPage(activePage); }, [activePage]);
+  // Keep-alive set: once a tab is visited it stays mounted so revisits are instant.
+  const [mountedPages, setMountedPages] = useState<Set<MainPage>>(() => new Set([activePage]));
+
+  // Sync visualPage when activePage changes + record mount
+  useEffect(() => {
+    setVisualPage(activePage);
+    setMountedPages((prev) => (prev.has(activePage) ? prev : new Set(prev).add(activePage)));
+  }, [activePage]);
+
 
   const applyStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
     const track = swipeTrackRef.current;
@@ -3566,10 +3573,11 @@ const Index = () => {
           backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page, idx) => {
-            // Idle: only current tab is mounted. During a tab slide, mount only
-            // the pages crossed by the animation so there is no black gap.
+            // Keep-alive: mount visited pages + any page currently crossed by the slide.
             const visualIdx = MAIN_PAGE_ORDER.indexOf(visualPage);
-            const shouldRender = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
+            const inSlide = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
+            const shouldRender = inSlide || mountedPages.has(page);
+            const isActive = page === activePage;
             return (
             <div
               key={page}
@@ -3582,8 +3590,11 @@ const Index = () => {
                 overflowX: "hidden",
                 backfaceVisibility: "hidden",
                 WebkitOverflowScrolling: "touch",
-                contain: page === activePage ? "none" : "layout paint style",
-              }}
+                contain: isActive ? "none" : "layout paint style",
+                // Skip paint work for off-screen mounted tabs — huge scroll/nav win on mobile.
+                contentVisibility: isActive || inSlide ? "visible" : "auto",
+                containIntrinsicSize: isActive || inSlide ? undefined : "100vh",
+              } as React.CSSProperties}
             >
               {shouldRender && page === "home" && getPageContent_home()}
               {shouldRender && page === "series" && getPageContent_series()}
@@ -3594,6 +3605,7 @@ const Index = () => {
           })}
         </div>
       </main>
+
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
 
       <AnimatePresence>

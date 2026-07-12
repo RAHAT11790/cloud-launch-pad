@@ -61,19 +61,27 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  // Native HLS playback (no iframe). Resets per embed; falls back to iframe on failure.
+  // Native HLS playback (no iframe). Auto-cycles servers on failure.
   const [nativeFailed, setNativeFailed] = useState(false);
-  useEffect(() => { setNativeFailed(false); }, [saltPlayerState.embedUrl]);
+  // Servers we've already exhausted in this play SESSION (per anime/episode).
+  const triedEmbedsRef = useRef<Set<string>>(new Set());
+  const sessionKey = `${saltPlayerState.anime?.id || ""}:${saltPlayerState.seasonIdx ?? -1}:${saltPlayerState.epIdx ?? -1}`;
+  const lastSessionKeyRef = useRef<string>(sessionKey);
+  useEffect(() => {
+    // Only wipe the tried-set when the user switches to a different episode/movie,
+    // NOT on every internal server-swap.
+    if (lastSessionKeyRef.current !== sessionKey) {
+      triedEmbedsRef.current = new Set();
+      lastSessionKeyRef.current = sessionKey;
+    }
+    setNativeFailed(false);
+  }, [sessionKey, saltPlayerState.embedUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track latest playback position so server-switch resumes from the same point.
   const lastPosRef = useRef<number>(0);
 
-  // The AN details toast lives in Index.tsx. When this player shell is on
-  // screen, details are no longer loading, even if the video source is still
-  // buffering. Force-close prevents cached Continue Watching clicks from
-  // leaving "Loading details..." permanently stuck.
   useEffect(() => {
     if (!saltPlayerState.embedUrl) return;
     try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
@@ -84,10 +92,29 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   }, []);
 
   const handleNativeFail = useCallback((reason: string) => {
-    console.warn('[AnNative] native extraction failed:', reason);
+    console.warn('[AnNative] all qualities exhausted for current server:', reason);
     notifyDetailsLoaded();
+    if (saltPlayerState.embedUrl) triedEmbedsRef.current.add(saltPlayerState.embedUrl);
+    const embeds = saltPlayerState.allEmbeds || [];
+    const nextIdx = embeds.findIndex((u) => !triedEmbedsRef.current.has(u));
+    if (embeds.length > 1 && nextIdx >= 0) {
+      const nextUrl = embeds[nextIdx];
+      toast.info(`Trying server ${nextIdx + 1}…`);
+      setSaltPlayerState({
+        ...saltPlayerState,
+        embedUrl: nextUrl,
+        currentEmbedIdx: nextIdx,
+        loading: false,
+        cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
+        resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
+      });
+      return;
+    }
+    // All servers × all qualities exhausted → real expiration.
     setNativeFailed(true);
-  }, [notifyDetailsLoaded]);
+  }, [notifyDetailsLoaded, saltPlayerState, setSaltPlayerState, getCleanEmbedUrl]);
+
+
 
 
   // Premium status — disables ads for paid users.
@@ -517,16 +544,31 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           )}
           {nativeFailed && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black text-center px-6">
-              <p className="text-white text-sm font-semibold mb-1">Server unavailable</p>
-              <p className="text-white/60 text-[11px] mb-3">This episode source could not be extracted. Try another episode.</p>
+              <p className="text-white text-sm font-semibold mb-1">⚠ Link Expired</p>
+              <p className="text-white/60 text-[11px] mb-3">All qualities and servers were tried. This source has expired — please try later or pick another episode.</p>
               <button
-                onClick={() => setNativeFailed(false)}
+                onClick={() => {
+                  // Full retry — wipe blacklist and restart from first server.
+                  triedEmbedsRef.current = new Set();
+                  const embeds = saltPlayerState.allEmbeds || [];
+                  const firstUrl = embeds[0] || saltPlayerState.embedUrl;
+                  setSaltPlayerState({
+                    ...saltPlayerState,
+                    embedUrl: firstUrl,
+                    currentEmbedIdx: 0,
+                    loading: false,
+                    cleanEmbedUrl: getCleanEmbedUrl(firstUrl),
+                    resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
+                  });
+                  setNativeFailed(false);
+                }}
                 className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
               >
-                Retry
+                Retry from Server 1
               </button>
             </div>
           )}
+
 
 
           {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
