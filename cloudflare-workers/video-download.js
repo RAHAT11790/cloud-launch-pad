@@ -167,7 +167,9 @@ export default {
         let candidateUrl;
         try { candidateUrl = new URL(target); } catch { continue; }
         if (candidateUrl.protocol !== "http:" && candidateUrl.protocol !== "https:") continue;
-        const candidate = await fetchWithRetry(candidateUrl, req.method, bootstrapRange, ac.signal);
+        let candidate;
+        try { candidate = await fetchWithRetry(candidateUrl, req.method, bootstrapRange, ac.signal); }
+        catch { continue; }
         if (candidate.ok || candidate.status === 206) {
           upstream = candidate;
           up = candidateUrl;
@@ -175,7 +177,9 @@ export default {
         }
         if (req.method === "HEAD") {
           try { await candidate.body?.cancel(); } catch {}
-          const getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal);
+          let getProbe;
+          try { getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal); }
+          catch { continue; }
           if (getProbe.ok || getProbe.status === 206) {
             upstream = getProbe;
             up = candidateUrl;
