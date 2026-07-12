@@ -544,16 +544,31 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           )}
           {nativeFailed && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black text-center px-6">
-              <p className="text-white text-sm font-semibold mb-1">Server unavailable</p>
-              <p className="text-white/60 text-[11px] mb-3">This episode source could not be extracted. Try another episode.</p>
+              <p className="text-white text-sm font-semibold mb-1">⚠ Link Expired</p>
+              <p className="text-white/60 text-[11px] mb-3">All qualities and servers were tried. This source has expired — please try later or pick another episode.</p>
               <button
-                onClick={() => setNativeFailed(false)}
+                onClick={() => {
+                  // Full retry — wipe blacklist and restart from first server.
+                  triedEmbedsRef.current = new Set();
+                  const embeds = saltPlayerState.allEmbeds || [];
+                  const firstUrl = embeds[0] || saltPlayerState.embedUrl;
+                  setSaltPlayerState({
+                    ...saltPlayerState,
+                    embedUrl: firstUrl,
+                    currentEmbedIdx: 0,
+                    loading: false,
+                    cleanEmbedUrl: getCleanEmbedUrl(firstUrl),
+                    resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
+                  });
+                  setNativeFailed(false);
+                }}
                 className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
               >
-                Retry
+                Retry from Server 1
               </button>
             </div>
           )}
+
 
 
           {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
