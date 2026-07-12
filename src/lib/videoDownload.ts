@@ -247,9 +247,11 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  const bases = overrideEnabled
-    ? unique([backendFunctionUrl("video-download"), overrideBaseUrl])
-    : unique([backendFunctionUrl("video-download")]);
+  // Admin-configured Cloudflare/self-hosted proxy is ALWAYS the primary route.
+  // Supabase backend is only used when no admin override is configured.
+  const bases = overrideIsAdmin
+    ? unique([overrideBaseUrl])
+    : unique([overrideBaseUrl || backendFunctionUrl("video-download")]);
   const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
   // Every Firebase/admin-stored media link should go through the download
