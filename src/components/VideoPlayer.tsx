@@ -41,7 +41,7 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";

@@ -50,6 +50,15 @@ try {
   }
 } catch {}
 
+if (!overrideBaseUrl) {
+  overrideBaseUrl = backendFunctionUrl("video-download");
+  overrideEnabled = Boolean(overrideBaseUrl);
+}
+if (!playbackProxyBaseUrl) {
+  playbackProxyBaseUrl = backendFunctionUrl("video-proxy");
+  playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
+}
+
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
