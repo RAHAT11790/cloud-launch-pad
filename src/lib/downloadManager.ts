@@ -1,4 +1,4 @@
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload } from "./videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload } from "./videoDownload";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
@@ -12,18 +12,6 @@ const isHlsUrl = (url: string): boolean => {
 };
 
 const AN_DOWNLOAD_BLOCK_MESSAGE = "AN downloads are not supported. Please use our Telegram channel to get this episode.";
-
-const saveHttpBlob = (blob: Blob, fileName: string) => {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-};
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -190,64 +178,8 @@ class DownloadManager {
     if (!/^https?:\/\//i.test(raw)) return raw ? [raw] : [];
     return Array.from(new Set([
       ...buildVideoDownloadUrlCandidates(raw, fileName),
-      ...buildVideoProxyUrlCandidates(raw),
       buildVideoDownloadUrl(raw, fileName) || "",
     ].filter(Boolean)));
-  }
-
-  private async downloadHttpBlob(
-    url: string,
-    fileName: string,
-    signal: AbortSignal,
-    onProgress: (loadedBytes: number, totalBytes: number) => void,
-  ): Promise<Blob> {
-    const candidates = this.resolveHttpDownloadCandidates(url, fileName).filter((candidate) => /^https?:\/\//i.test(candidate));
-    if (!candidates.length) throw new Error("Download link is invalid");
-
-    let response: Response | null = null;
-    let lastError: unknown = null;
-    for (const finalUrl of candidates) {
-      try {
-        const r = await fetch(finalUrl, { signal, mode: "cors" });
-        if (!r.ok) {
-          lastError = new Error(`Download failed (${r.status})`);
-          try { await r.body?.cancel(); } catch {}
-          continue;
-        }
-        response = r;
-        break;
-      } catch (e) {
-        lastError = e;
-      }
-    }
-    if (!response) throw lastError instanceof Error ? lastError : new Error("Download failed");
-
-    const contentRange = response.headers.get("content-range") || "";
-    const rangeMatch = /\/(\d+)\s*$/.exec(contentRange);
-    const totalBytes = rangeMatch ? Number(rangeMatch[1]) : Number(response.headers.get("content-length") || 0);
-
-    if (!response.body) {
-      const blob = await response.blob();
-      onProgress(blob.size, totalBytes || blob.size);
-      return blob;
-    }
-
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let loadedBytes = 0;
-    while (true) {
-      if (signal.aborted) {
-        try { await reader.cancel(); } catch {}
-        throw new DOMException("Download cancelled", "AbortError");
-      }
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      chunks.push(value);
-      loadedBytes += value.byteLength;
-      onProgress(loadedBytes, totalBytes || 0);
-    }
-    return new Blob(chunks as unknown as BlobPart[], { type: response.headers.get("content-type") || "application/octet-stream" });
   }
 
   private getSnapshot(): DownloadQueueSnapshot {

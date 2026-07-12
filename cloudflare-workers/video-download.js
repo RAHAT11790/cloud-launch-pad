@@ -141,8 +141,8 @@ export default {
     req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
     let upstream;
+    const clientRange = req.headers.get("range");
     try {
-      const clientRange = req.headers.get("range");
       const bootstrapRange = req.method === "GET" && !clientRange ? "bytes=0-0" : clientRange;
       upstream = await fetchWithRetry(up, req.method, bootstrapRange, ac.signal);
       if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
@@ -191,7 +191,13 @@ export default {
       }
     }
 
-    const status = req.headers.get("range") ? upstream.status : 200;
+    if (!clientRange && Number.isFinite(totalSize) && totalSize > 0) {
+      startOffset = 0;
+      endOffset = totalSize - 1;
+      out.delete("Content-Range");
+    }
+
+    const status = clientRange ? upstream.status : 200;
     const statusText = upstream.statusText || "OK";
 
     if (req.method === "HEAD") {
