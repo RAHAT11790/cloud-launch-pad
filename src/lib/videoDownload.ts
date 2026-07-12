@@ -233,7 +233,9 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
+  const bases = overrideEnabled
+    ? unique([backendFunctionUrl("video-download"), overrideBaseUrl])
+    : unique([backendFunctionUrl("video-download")]);
   const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
   // Every Firebase/admin-stored media link should go through the download
