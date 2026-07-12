@@ -4,8 +4,9 @@ import { isLegacyAnEntry } from "@/lib/legacyAn";
 
 export type AdminContentKind = "webseries" | "movies";
 
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour — admin cards should NOT re-fetch on every panel open
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // Admin cards are mostly static; do NOT re-fetch on every router open.
 const DEFAULT_RECENT_LIMIT = 500;
+const memoryListCache = new Map<AdminContentKind, { ts: number; items: any[] }>();
 
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v2`;
 const countCacheKeyFor = (path: string) => `rs_admin_count_${path}_v1`;
@@ -73,11 +74,15 @@ export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminCon
 
 export const readCachedAdminContentList = (kind: AdminContentKind) => {
   try {
+    const memory = memoryListCache.get(kind);
+    if (memory?.ts && Date.now() - Number(memory.ts) <= CACHE_TTL_MS && memory.items.length) return stripLegacyAnFromAdminList(memory.items);
     const raw = localStorage.getItem(cacheKeyFor(kind));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!parsed?.ts || Date.now() - Number(parsed.ts) > CACHE_TTL_MS) return [];
-    return Array.isArray(parsed.items) ? stripLegacyAnFromAdminList(parsed.items) : [];
+    const items = Array.isArray(parsed.items) ? stripLegacyAnFromAdminList(parsed.items) : [];
+    if (items.length) memoryListCache.set(kind, { ts: Number(parsed.ts), items });
+    return items;
   } catch {
     return [];
   }
@@ -85,6 +90,8 @@ export const readCachedAdminContentList = (kind: AdminContentKind) => {
 
 export const isAdminContentCacheFresh = (kind: AdminContentKind) => {
   try {
+    const memory = memoryListCache.get(kind);
+    if (memory?.ts && Date.now() - Number(memory.ts) <= CACHE_TTL_MS && memory.items.length) return true;
     const raw = localStorage.getItem(cacheKeyFor(kind));
     if (!raw) return false;
     const parsed = JSON.parse(raw);
@@ -98,17 +105,20 @@ export const isAdminContentCacheFresh = (kind: AdminContentKind) => {
 
 export const invalidateAdminContentCache = (kind?: AdminContentKind) => {
   try {
-    if (kind) localStorage.removeItem(cacheKeyFor(kind));
+    if (kind) { localStorage.removeItem(cacheKeyFor(kind)); memoryListCache.delete(kind); }
     else {
       localStorage.removeItem(cacheKeyFor("webseries"));
       localStorage.removeItem(cacheKeyFor("movies"));
+      memoryListCache.clear();
     }
   } catch {}
 };
 
 export const writeCachedAdminContentList = (kind: AdminContentKind, items: any[]) => {
   try {
-    localStorage.setItem(cacheKeyFor(kind), JSON.stringify({ ts: Date.now(), items: stripLegacyAnFromAdminList(items) }));
+    const clean = stripLegacyAnFromAdminList(items);
+    memoryListCache.set(kind, { ts: Date.now(), items: clean });
+    localStorage.setItem(cacheKeyFor(kind), JSON.stringify({ ts: Date.now(), items: clean }));
   } catch {}
 };
 

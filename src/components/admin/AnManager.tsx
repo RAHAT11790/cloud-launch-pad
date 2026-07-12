@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { animeSaltApi, isAnimeSaltAllowedAnime } from "@/lib/animeSaltApi";
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE } from "@/lib/siteConfig";
-import CachedImg from "@/components/CachedImg";
+import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 
 /**
  * AN Manager — pure API-driven curation.
@@ -42,6 +42,12 @@ type SavedItem = ApiItem & {
   cast?: { name: string; character?: string; photo?: string }[];
   savedAt?: number;
 };
+
+const AN_MANAGER_CACHE_KEY = "rs_an_manager_cards_v1";
+const AN_MANAGER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+let anManagerCardsCache: ApiItem[] = [];
+let anManagerCardsLoadedAt = 0;
+let anManagerLoadPromise: Promise<ApiItem[]> | null = null;
 
 const TMDB_KEY_STORAGE = "rs_admin_tmdb_api_key";
 let runtimeTmdbApiKey = "";
@@ -315,7 +321,7 @@ export default function AnManager({
   btnSecondary: string;
   selectClass: string;
 }) {
-  const [apiItems, setApiItems] = useState<ApiItem[]>([]);
+  const [apiItems, setApiItems] = useState<ApiItem[]>(() => anManagerCardsCache);
   const [saved, setSaved] = useState<Record<string, SavedItem>>({});
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -337,12 +343,16 @@ export default function AnManager({
 
   const hasTmdbKey = useMemo(() => !!getTmdbApiKey(), [tmdbKeyVersion]);
 
-  // Load API list (cached 30m inside browseAll/animeSaltApi)
-  const loadFromApi = async (forceRefresh = false) => {
+  // Load API list only when cache is missing/stale or admin presses Refresh.
+  const loadFromApi = async (forceRefresh = false): Promise<ApiItem[]> => {
     try {
       if (forceRefresh) {
         try { localStorage.removeItem("rs_cache_animesalt_api_cards_v2"); localStorage.removeItem("rs_cache_animesalt_api_cards_v3"); localStorage.removeItem("animesalt_all_v3"); } catch {}
+        anManagerCardsLoadedAt = 0;
       }
+      if (!forceRefresh && anManagerCardsCache.length && Date.now() - anManagerCardsLoadedAt < AN_MANAGER_CACHE_TTL_MS) return anManagerCardsCache;
+      if (!forceRefresh && anManagerLoadPromise) return anManagerLoadPromise;
+      const promise = (async () => {
       const r = await animeSaltApi.browseAll(forceRefresh);
       const mapped = (r?.items || []).map(normalizeItem).filter((x) => x.slug && x.title && isAnimeSaltAllowedAnime(x));
       // de-dup by slug, prefer series flavour
@@ -357,9 +367,17 @@ export default function AnManager({
           startTransition(() => setVerifyProgress({ done, total }));
         }
       });
-      startTransition(() => setApiItems(playable));
+      anManagerCardsCache = playable;
+      anManagerCardsLoadedAt = Date.now();
+      try { localStorage.setItem(AN_MANAGER_CACHE_KEY, JSON.stringify({ ts: anManagerCardsLoadedAt, items: playable })); } catch {}
+      void preloadCachedImages(playable.map((item) => item.poster), 120);
+      return playable;
+      })();
+      anManagerLoadPromise = promise.finally(() => { anManagerLoadPromise = null; });
+      return anManagerLoadPromise;
     } catch (e: any) {
       toast.error("AN API load failed: " + (e?.message || "unknown"));
+      return anManagerCardsCache;
     } finally {
       setVerifyProgress({ done: 0, total: 0 });
     }
@@ -368,24 +386,25 @@ export default function AnManager({
   // Instant paint from localStorage snapshot, then background refresh.
   useEffect(() => {
     try {
-      const cached = localStorage.getItem("rs_an_manager_cards_v1");
+      const cached = localStorage.getItem(AN_MANAGER_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length) {
-          setApiItems(parsed);
+        const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.items) ? parsed.items : []);
+        const ts = Number(parsed?.ts || 0) || Date.now();
+        if (Array.isArray(items) && items.length) {
+          anManagerCardsCache = items;
+          anManagerCardsLoadedAt = ts;
+          setApiItems(items);
+          void preloadCachedImages(items.map((item: ApiItem) => item.poster), 120);
           setLoading(false);
         }
       }
     } catch {}
     (async () => {
-      const hadCachedCards = (() => {
-        try {
-          const parsed = JSON.parse(localStorage.getItem("rs_an_manager_cards_v1") || "[]");
-          return Array.isArray(parsed) && parsed.length > 0;
-        } catch { return false; }
-      })();
+      const hadCachedCards = anManagerCardsCache.length > 0;
       if (!hadCachedCards) setLoading(true);
-      await loadFromApi(false);
+      const items = await loadFromApi(false);
+      if (items.length) startTransition(() => setApiItems((prev) => prev === items || (prev.length === items.length && prev[0]?.slug === items[0]?.slug) ? prev : items));
       setLoading(false);
     })();
   }, []);
@@ -393,7 +412,9 @@ export default function AnManager({
   // Persist snapshot for next visit — zero-latency reopen.
   useEffect(() => {
     if (!apiItems.length) return;
-    try { localStorage.setItem("rs_an_manager_cards_v1", JSON.stringify(apiItems)); } catch {}
+    anManagerCardsCache = apiItems;
+    anManagerCardsLoadedAt = Date.now();
+    try { localStorage.setItem(AN_MANAGER_CACHE_KEY, JSON.stringify({ ts: anManagerCardsLoadedAt, items: apiItems })); } catch {}
   }, [apiItems]);
 
   // Saved listener
@@ -562,11 +583,14 @@ export default function AnManager({
 
   const onClearLoadedCards = () => {
     setApiItems([]);
+    anManagerCardsCache = [];
+    anManagerCardsLoadedAt = 0;
     setSelectedSlugs(new Set());
     try {
       localStorage.removeItem("rs_cache_animesalt_api_cards_v2");
       localStorage.removeItem("rs_cache_animesalt_api_cards_v3");
       localStorage.removeItem("animesalt_all_v3");
+      localStorage.removeItem(AN_MANAGER_CACHE_KEY);
       Object.keys(localStorage).filter((k) => k.startsWith("rs_an_playable_")).forEach((k) => localStorage.removeItem(k));
     } catch {}
     toast.success("Loaded AN cards cleared");
@@ -939,7 +963,7 @@ export default function AnManager({
                   <div className="aspect-[2/3] bg-black/40">
                     {display.poster ? (
                       <CachedImg
-                        key={`${it.slug}-${imgVersion}`}
+                        key={it.slug}
                         src={display.poster}
                         alt={display.title}
                         className="w-full h-full object-cover"
