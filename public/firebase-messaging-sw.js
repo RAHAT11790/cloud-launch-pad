@@ -18,9 +18,17 @@ const messaging = firebase.messaging();
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+const shownIds = new Set();
+
 // Unified renderer used by both onBackgroundMessage and raw push events.
 async function showFromData(d) {
   d = d || {};
+  const id = d.notificationId || d.messageId || d.contentId || "";
+  if (id) {
+    if (shownIds.has(id)) return;
+    shownIds.add(id);
+    setTimeout(() => shownIds.delete(id), 120000);
+  }
   const title = d.title || "RS ANIME";
   const options = {
     body: d.body || "",
@@ -53,9 +61,20 @@ messaging.onBackgroundMessage((payload) => {
   return showFromData(d);
 });
 
-// Note: we do NOT add a raw `push` listener — the Firebase Messaging SDK
-// already registers one and dispatches to onBackgroundMessage. Adding
-// another would cause duplicate notifications.
+self.addEventListener("push", (event) => {
+  event.waitUntil((async () => {
+    let payload = {};
+    try { payload = event.data ? event.data.json() : {}; } catch {}
+    const msg = payload.notification || payload.data || payload.webpush?.notification || payload.webpush?.data || payload;
+    const fcmData = payload.data || payload.webpush?.data || {};
+    const hasVisibleNotification = !!(payload.notification || payload.webpush?.notification);
+    // Firebase/Chrome display visible notification payloads natively. This raw
+    // path is only for older/data-only sends so installed PWAs still receive a
+    // user-visible notification when the tab is closed.
+    if (hasVisibleNotification) return;
+    await showFromData({ ...fcmData, ...msg });
+  })());
+});
 
 
 self.addEventListener("notificationclick", (event) => {

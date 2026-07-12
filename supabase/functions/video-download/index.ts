@@ -192,7 +192,9 @@ Deno.serve(async (req) => {
 
   let upstream: Response;
   try {
-    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", req.headers.get("range"), ac.signal);
+    const clientRange = req.headers.get("range");
+    const bootstrapRange = req.method === "GET" && !clientRange ? "bytes=0-0" : clientRange;
+    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
     if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
       try { await upstream.body?.cancel(); } catch {}
       upstream = await fetchWithRetry(targetUrl, "GET", "bytes=0-0", ac.signal);
@@ -250,7 +252,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  const status = upstream.status;
+  const status = req.headers.get("range") ? upstream.status : 200;
   const statusText = upstream.statusText || "OK";
 
   // HEAD: return headers only.

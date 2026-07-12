@@ -102,6 +102,11 @@ interface ItemTimers {
 
 const SIZE_CACHE_KEY = "rs_dl_size_cache_v1";
 const bytesToMb = (bytes: number) => bytes > 0 ? bytes / (1024 * 1024) : 0;
+const timeoutSignal = (ms: number) => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), ms);
+  return { signal: controller.signal, cancel: () => window.clearTimeout(timer) };
+};
 const isAbortError = (error: unknown) => {
   const name = (error as { name?: string })?.name || "";
   return name === "AbortError" || /aborted/i.test(String((error as { message?: string })?.message || error || ""));
@@ -122,8 +127,9 @@ class DownloadManager {
   }
 
   private async fetchContentLength(url: string, init?: RequestInit): Promise<number> {
+    const timeout = timeoutSignal(2400);
     try {
-      const response = await fetch(url, init);
+      const response = await fetch(url, { ...init, signal: init?.signal || timeout.signal });
       if (!response.ok && response.status !== 206) {
         try { await response.body?.cancel(); } catch {}
         return 0;
@@ -148,6 +154,7 @@ class DownloadManager {
       }
       try { await response.body?.cancel(); } catch {}
     } catch {}
+    finally { timeout.cancel(); }
     return 0;
   }
 
@@ -358,63 +365,26 @@ class DownloadManager {
 
     this.update(id, { fileName, percent: 3, loadedMB: 0 });
 
-    // First use the managed fetch downloader. It fixes the old "0 MB" problem:
-    // even when upstream hides Content-Length, loaded bytes are counted while
-    // streaming and the final Blob size is saved/displayed.
+    // Permanent browser-native flow: do NOT buffer large MP4 files into the web
+    // app/installed PWA. The proxy returns attachment + renamed filename, and
+    // the browser's own download manager handles pause/resume safely.
     try {
-      const blob = await this.downloadHttpBlob(rawUrl, fileName, controller.signal, (loadedBytes, totalBytes) => {
-        const loadedMB = bytesToMb(loadedBytes);
-        const knownTotalMB = bytesToMb(totalBytes || 0);
-        const displayTotalMB = knownTotalMB > 0 ? knownTotalMB : loadedMB;
-        const percent = knownTotalMB > 0
-          ? Math.min(99, Math.max(1, Math.round((loadedBytes / Math.max(1, totalBytes)) * 100)))
-          : Math.min(98, Math.max(4, Math.floor(loadedMB * 2)));
-        this.update(id, { loadedMB, totalMB: displayTotalMB, percent });
-      });
+      const triggered = triggerBackgroundVideoDownload(rawUrl, fileName);
+      if (!triggered) {
+        this.settleItem(id, "error", { error: "Download service is unavailable" });
+        return;
+      }
+      this.update(id, { percent: 35 });
+      const bytes = await Promise.race([
+        this.fetchTotalSize(rawUrl),
+        new Promise<number>((resolve) => window.setTimeout(() => resolve(0), 2200)),
+      ]);
       if (controller.signal.aborted) return;
-
-      const finalBytes = blob.size || 0;
-      if (finalBytes > 0) this.writeCachedSize(rawUrl, finalBytes);
-
-      try {
-        const { saveVideo } = await import("@/lib/downloadStore");
-        await saveVideo({
-          id,
-          title: item.title,
-          subtitle: item.subtitle,
-          poster: item.poster,
-          quality: item.quality,
-          fileName,
-          sourceUrl: rawUrl,
-          size: finalBytes,
-          downloadedAt: Date.now(),
-          blob,
-        });
-      } catch {}
-
-      saveHttpBlob(blob, fileName);
-      const totalMB = bytesToMb(finalBytes) || Math.max(this.downloads.get(id)?.totalMB || 0, this.downloads.get(id)?.loadedMB || 0);
+      const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(this.downloads.get(id)?.totalMB || 0, this.downloads.get(id)?.loadedMB || 0);
       this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
     } catch (error) {
       if (isAbortError(error)) return;
-      // Last-resort fallback: if a host refuses CORS/proxy streaming, still open
-      // the browser/native download instead of failing the user's click.
-      const triggered = triggerBackgroundVideoDownload(rawUrl, fileName);
-      if (!triggered) {
-        this.settleItem(id, "error", { error: error instanceof Error ? error.message : "Download failed" });
-        return;
-      }
-      try {
-        const bytes = await Promise.race([
-          this.fetchTotalSize(rawUrl),
-          new Promise<number>((resolve) => window.setTimeout(() => resolve(0), 1600)),
-        ]);
-        const totalMB = bytes > 0 ? bytesToMb(bytes) : Math.max(this.downloads.get(id)?.totalMB || 0, this.downloads.get(id)?.loadedMB || 0);
-        this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
-      } catch {
-        const totalMB = Math.max(this.downloads.get(id)?.totalMB || 0, this.downloads.get(id)?.loadedMB || 0);
-        this.settleItem(id, "complete", { percent: 100, loadedMB: totalMB, totalMB });
-      }
+      this.settleItem(id, "error", { error: error instanceof Error ? error.message : "Download failed" });
     } finally {
       if (this.controllers.get(id) === controller) this.controllers.delete(id);
     }

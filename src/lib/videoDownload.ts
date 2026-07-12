@@ -3,6 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { SUPABASE_URL } from "@/lib/siteConfig";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -26,20 +27,51 @@ let routerBaseUrl = "";
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
 
+const DL_ROUTE_CACHE_KEY = "rs_video_download_route_v2";
+const PROXY_ROUTE_CACHE_KEY = "rs_video_proxy_route_v2";
+
+const backendFunctionUrl = (fnName: string) => {
+  const base = String(SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  return base ? `${base}/functions/v1/${fnName}` : "";
+};
+
+try {
+  if (typeof window !== "undefined") {
+    const cachedDownload = localStorage.getItem(DL_ROUTE_CACHE_KEY) || "";
+    const cachedProxy = localStorage.getItem(PROXY_ROUTE_CACHE_KEY) || "";
+    if (/^https?:\/\//i.test(cachedDownload)) {
+      overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", cachedDownload);
+      overrideEnabled = true;
+    }
+    if (/^https?:\/\//i.test(cachedProxy)) {
+      playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", cachedProxy);
+      playbackProxyEnabled = true;
+    }
+  }
+} catch {}
+
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
+  const backendHosted = backendFunctionUrl("video-download");
   const enabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
-  overrideBaseUrl = enabled ? overrideUrl : selfHosted;
+  overrideBaseUrl = enabled ? overrideUrl : (selfHosted || backendHosted);
   overrideEnabled = Boolean(overrideBaseUrl);
+  try {
+    if (overrideBaseUrl) localStorage.setItem(DL_ROUTE_CACHE_KEY, overrideBaseUrl);
+  } catch {}
 };
 
 const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
+  const backendHosted = backendFunctionUrl("video-proxy");
   const enabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
-  playbackProxyBaseUrl = enabled ? overrideUrl : selfHosted;
+  playbackProxyBaseUrl = enabled ? overrideUrl : (selfHosted || backendHosted);
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
+  try {
+    if (playbackProxyBaseUrl) localStorage.setItem(PROXY_ROUTE_CACHE_KEY, playbackProxyBaseUrl);
+  } catch {}
 };
 try {
   if (typeof window !== "undefined") {
@@ -119,12 +151,15 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  if (/^https:\/\//i.test(trimmedUrl)) return [trimmedUrl];
-
   const bases = overrideEnabled && overrideBaseUrl ? [overrideBaseUrl] : [];
+  const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName));
+  // Every Firebase/admin-stored media link should go through the download
+  // proxy first so HTTP sources work inside the HTTPS/PWA app and filename
+  // renaming is controlled by Content-Disposition. Raw HTTPS is only a final
+  // fallback; raw HTTP is never handed back to the browser from the web app.
   return unique([
-    ...bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)),
-    trimmedUrl,
+    ...proxied,
+    /^https:\/\//i.test(trimmedUrl) ? trimmedUrl : "",
   ]);
 }
 
