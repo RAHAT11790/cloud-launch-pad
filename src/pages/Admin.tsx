@@ -6045,7 +6045,7 @@ ${tgBulkFooter}
  <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
   <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-[#141422]"
- loading="eager" decoding="async" fetchpriority="high"
+ loading="eager" decoding="async" fetchPriority="high"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
@@ -7138,7 +7138,7 @@ ${tgBulkFooter}
  <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
  <div className="flex gap-3.5">
   <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-[#141422]"
- loading="eager" decoding="async" fetchpriority="high"
+ loading="eager" decoding="async" fetchPriority="high"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
