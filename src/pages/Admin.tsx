@@ -2122,10 +2122,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [currentPin, setCurrentPin] = useState("");
 
   // ==================== URL-BASED SECTION ROUTING ====================
-  // Sections with their own /admin/<slug> route (heavy sections split out to reduce lag).
-  // Refresh persists via URL; other sections still stay in overlay mode at /admin.
+  // Every admin section gets its own /admin/<slug> route so refresh persists
+  // and the browser treats each as a real page (less overlay lag).
   const ROUTED_SECTIONS = useMemo(() => new Set<Section>([
-    "webseries", "movies", "weekly-episode", "telegram-post", "animesalt-manager", "egd-manager"
+    "categories", "webseries", "weekly-episode", "movies", "users",
+    "notifications", "new-releases", "manual-push", "tmdb-fetch", "add-content",
+    "redeem-codes", "bkash-payments", "device-limits", "maintenance", "free-access",
+    "settings", "comments", "analytics", "auto-import", "animesalt-manager",
+    "telegram-post", "tg-url-changer", "live-support", "ui-themes", "hero-pinned",
+    "edge-router", "branding", "ai-config", "live-tv", "url-changer",
+    "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
+    "egd-manager", "cf-manager", "fb-analytics", "adsterra", "backdrop-ai",
+    "security-center", "task-manager"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
   const routeNavigate = useNavigate();
