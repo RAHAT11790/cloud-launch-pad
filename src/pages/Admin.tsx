@@ -2166,12 +2166,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }, [activeSection, ROUTED_SECTIONS, routeLocation.pathname, routeNavigate]);
 
   // React to external URL changes (e.g. user types /admin/movies directly, or browser back/forward).
+  // IMPORTANT: do NOT depend on `activeSection` here. When the user clicks a menu item,
+  // `activeSection` updates one render before `routeParams.section` catches up (the URL is
+  // synced via the effect above). If this effect re-ran on the intermediate render, it
+  // would see the stale URL param and immediately revert `activeSection` — producing an
+  // infinite ping-pong between the previous and new section (the "flash flash flash").
+  // Using a functional setState keeps this in sync only when the URL genuinely changes.
   useEffect(() => {
     const s = routeParams.section as Section | undefined;
-    if (s && ROUTED_SECTIONS.has(s) && s !== activeSection) {
-      setActiveSection(s);
+    if (s && ROUTED_SECTIONS.has(s)) {
+      setActiveSection(prev => (prev === s ? prev : s));
     }
-  }, [routeParams.section, ROUTED_SECTIONS, activeSection]);
+  }, [routeParams.section, ROUTED_SECTIONS]);
  const [sidebarOpen, setSidebarOpen] = useState(false);
  const [dropdownOpen, setDropdownOpen] = useState(false);
  const [firebaseConnected, setFirebaseConnected] = useState(false);
