@@ -119,9 +119,15 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressActiveRef = useRef(false);
   const prevRateRef = useRef(1);
+  // Sequential quality probe state — when a quality fails, we try the next one
+  // (one at a time, ~5s probe each) before ever telling the parent to switch server.
+  const badQualitiesRef = useRef<Set<number>>(new Set());
+  const probeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const probeStartRef = useRef(0);
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
+
 
   // 1. Load streams + audio strictly from initialData (live AnimeSalt API).
   useEffect(() => {
