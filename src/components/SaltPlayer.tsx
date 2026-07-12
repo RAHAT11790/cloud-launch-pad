@@ -61,15 +61,21 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  // Native HLS playback (no iframe). Resets per embed; auto-cycles servers on failure.
+  // Native HLS playback (no iframe). Auto-cycles servers on failure.
   const [nativeFailed, setNativeFailed] = useState(false);
-  // Servers we've already exhausted in this play session — prevents infinite loop.
+  // Servers we've already exhausted in this play SESSION (per anime/episode).
   const triedEmbedsRef = useRef<Set<string>>(new Set());
+  const sessionKey = `${saltPlayerState.anime?.id || ""}:${saltPlayerState.seasonIdx ?? -1}:${saltPlayerState.epIdx ?? -1}`;
+  const lastSessionKeyRef = useRef<string>(sessionKey);
   useEffect(() => {
+    // Only wipe the tried-set when the user switches to a different episode/movie,
+    // NOT on every internal server-swap.
+    if (lastSessionKeyRef.current !== sessionKey) {
+      triedEmbedsRef.current = new Set();
+      lastSessionKeyRef.current = sessionKey;
+    }
     setNativeFailed(false);
-    // On brand-new embed selected by user, start a fresh session.
-    triedEmbedsRef.current = new Set();
-  }, [saltPlayerState.embedUrl]);
+  }, [sessionKey, saltPlayerState.embedUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,13 +94,10 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const handleNativeFail = useCallback((reason: string) => {
     console.warn('[AnNative] all qualities exhausted for current server:', reason);
     notifyDetailsLoaded();
-    // Mark the current server as tried.
     if (saltPlayerState.embedUrl) triedEmbedsRef.current.add(saltPlayerState.embedUrl);
     const embeds = saltPlayerState.allEmbeds || [];
     const nextIdx = embeds.findIndex((u) => !triedEmbedsRef.current.has(u));
     if (embeds.length > 1 && nextIdx >= 0) {
-      // Sequentially cycle to the next untried server (one at a time, no
-      // parallel probes). AnNativeView's own quality-probe handles that server.
       const nextUrl = embeds[nextIdx];
       toast.info(`Trying server ${nextIdx + 1}…`);
       setSaltPlayerState({
@@ -105,19 +108,12 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
         cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
         resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
       });
-      // Do NOT clear triedEmbedsRef — it persists across the embed change.
-      // The embedUrl useEffect above would reset it; guard by not letting it reset here.
-      // Simplest: keep the set alive by re-adding immediately after state flush.
-      queueMicrotask(() => {
-        triedEmbedsRef.current.add(nextUrl); // re-add so subsequent effect keeps context
-        // Actually we want to allow probe of nextUrl, so remove it:
-        triedEmbedsRef.current.delete(nextUrl);
-      });
       return;
     }
-    // All servers tried → real expiration.
+    // All servers × all qualities exhausted → real expiration.
     setNativeFailed(true);
   }, [notifyDetailsLoaded, saltPlayerState, setSaltPlayerState, getCleanEmbedUrl]);
+
 
 
 
