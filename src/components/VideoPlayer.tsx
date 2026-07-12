@@ -5689,12 +5689,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               }
             }
 
-            const directCandidate = [u, ...candidates]
+            const directCandidates = [u, ...candidates]
               .map((candidate) => String(candidate).includes("/functions/v1/video-") ? unwrapManagedVideoUrl(candidate) : candidate)
-              .find((candidate) => isDirectDownloadCandidate(candidate));
+              .filter((candidate) => isDirectDownloadCandidate(candidate));
+            const directCandidate = directCandidates[0] || "";
             if (!directCandidate) return "";
 
-            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
+            return buildVideoDownloadUrl(
+              directCandidate,
+              buildDownloadFileName(String(sub || title), quality),
+              directCandidates.slice(1),
+            ) || "";
           };
 
           const pickEpUrlForQuality = (ep: DownloadEpisodeOption, quality: string): string => {
