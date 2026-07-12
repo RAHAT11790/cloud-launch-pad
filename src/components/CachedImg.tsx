@@ -63,7 +63,7 @@ export const preloadCachedImages = (urls: unknown[], limit = 160) => {
   )).slice(0, Math.max(0, limit));
 
   const tasks = unique.map((url) => {
-    if (decodedCache.has(url)) return Promise.resolve();
+    if (decodedCache.has(url) || seenSet.has(url)) return Promise.resolve();
     const running = preloadInflight.get(url);
     if (running) return running;
     const task = new Promise<void>((resolve) => {
@@ -97,7 +97,7 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
 
   useEffect(() => {
     if (!url) return;
-    if (decodedCache.has(url)) {
+    if (decodedCache.has(url) || seenSet.has(url)) {
       setLoaded(true);
       return;
     }
