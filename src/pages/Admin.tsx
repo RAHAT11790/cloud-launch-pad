@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, startTransition, forwardRef, memo, lazy, Suspense } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import CachedImg from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
