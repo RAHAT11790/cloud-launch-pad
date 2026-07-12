@@ -2247,6 +2247,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
      setAdminContentLoading(prev => prev[kind] ? ({ ...prev, [kind]: false }) : prev);
     });
     warmAdminPosters(sorted);
+    if (!force && isAdminContentCacheFresh(kind)) {
+     adminContentLoadedAtRef.current[kind] = now;
+     return;
+    }
    }
    if (!force && cached.length && now - adminContentLoadedAtRef.current[kind] < ADMIN_CONTENT_RELOAD_TTL_MS && isAdminContentCacheFresh(kind)) return;
    const running = adminContentInFlightRef.current[kind];
