@@ -31,6 +31,10 @@ const LS_USER_ID = "rs_fcm_user_id";
 const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const REVALIDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TOKENS_PER_USER = 100;
+const isStandaloneApp = () => {
+  if (typeof window === "undefined") return false;
+  return !!(window.matchMedia?.("(display-mode: standalone)").matches || (window.navigator as any).standalone === true);
+};
 
 let _bootstrapped = false;
 let _currentUserId = "";
@@ -75,8 +79,8 @@ async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> 
       return existing;
     }
     const reg = await navigator.serviceWorker.register(swPath, { scope: "/", updateViaCache: "none" });
-    await navigator.serviceWorker.ready.catch(() => reg);
-    return reg;
+    await reg.update().catch(() => {});
+    return (await navigator.serviceWorker.ready.catch(() => reg)) || reg;
   } catch (err) {
     console.warn("[FCM] SW registration failed", err);
     return null;
@@ -249,8 +253,9 @@ export async function initPushNotifications(userIdInput?: string) {
     const stopped = localStorage.getItem(LS_STOP) === "1";
     const att = Number(localStorage.getItem(LS_ATT) || 0);
     const last = Number(localStorage.getItem(LS_LAST) || 0);
-    if (!stopped && att < MAX && (!last || Date.now() - last >= COOLDOWN)) {
-      await new Promise((r) => setTimeout(r, 1500));
+    const standalone = isStandaloneApp();
+    if ((standalone || !stopped) && (standalone || att < MAX) && (standalone || !last || Date.now() - last >= COOLDOWN)) {
+      await new Promise((r) => setTimeout(r, standalone ? 350 : 1500));
       try { permission = await Notification.requestPermission(); } catch { permission = Notification.permission; }
       try {
         localStorage.setItem(LS_LAST, String(Date.now()));
@@ -276,6 +281,8 @@ export async function initPushNotifications(userIdInput?: string) {
     } catch {}
   };
   window.addEventListener("focus", revalidate);
+  window.addEventListener("online", revalidate);
+  window.addEventListener("pageshow", revalidate);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) revalidate(); });
 }
 

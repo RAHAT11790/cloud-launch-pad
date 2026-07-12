@@ -191,8 +191,10 @@ Deno.serve(async (req) => {
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
   let upstream: Response;
+  const clientRange = req.headers.get("range");
   try {
-    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", req.headers.get("range"), ac.signal);
+    const bootstrapRange = req.method === "GET" && !clientRange ? "bytes=0-0" : clientRange;
+    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
     if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
       try { await upstream.body?.cancel(); } catch {}
       upstream = await fetchWithRetry(targetUrl, "GET", "bytes=0-0", ac.signal);
@@ -250,7 +252,13 @@ Deno.serve(async (req) => {
     }
   }
 
-  const status = upstream.status;
+  if (!clientRange && Number.isFinite(totalSize) && totalSize > 0) {
+    startOffset = 0;
+    endOffset = totalSize - 1;
+    out.delete("Content-Range");
+  }
+
+  const status = clientRange ? upstream.status : 200;
   const statusText = upstream.statusText || "OK";
 
   // HEAD: return headers only.

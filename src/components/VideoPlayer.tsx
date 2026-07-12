@@ -41,7 +41,7 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, buildVideoProxyUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
@@ -989,7 +989,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentDownloadLanguageLabel, normalizedLanguageTracks]);
 
   const movieQualityLinks = useMemo(() => {
-    const fallbackTrack = normalizedLanguageTracks[0] || null;
+    const fallbackTrack = activeDownloadLanguageTrack || normalizedLanguageTracks[0] || null;
     return collectDownloadQualityLinks(
       fallbackTrack,
       {
@@ -1000,7 +1000,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         link4k: anime?.movieLink4k,
       },
     );
-  }, [anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, normalizedLanguageTracks, src]);
+  }, [activeDownloadLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, normalizedLanguageTracks, src]);
 
   const infoCast = useMemo(() => normalizeCastFrom(anime, 24), [anime]);
 
@@ -1280,7 +1280,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, [availableDownloadQualities, isPremium, preferredDownloadQuality, selectedDownloadQuality, selectedSeasonHas480p]);
 
-  // Probe file sizes for download picker — parallel HEAD with localStorage persistence
+    // Probe file sizes for download picker — fast bounded HEAD/Range via the
+    // download proxy. Unknown size must never block the actual download button.
   useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const quality = selectedDownloadQuality;
@@ -1294,6 +1295,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
       if (isHlsLikeUrl(u)) return null;
+      const withTimeout = async (input: string, init: RequestInit) => {
+        const ac = new AbortController();
+        const t = window.setTimeout(() => ac.abort(), 2200);
+        try { return await fetch(input, { ...init, signal: ac.signal }); }
+        finally { window.clearTimeout(t); }
+      };
       const isValidSizeResponse = (r: Response) => {
         if (!r.ok && r.status !== 206) return false;
         const ct = String(r.headers.get("content-type") || "").toLowerCase();
@@ -1302,19 +1309,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const acceptBytes = (n: number) => Number.isFinite(n) && n > 512 * 1024;
       const proxiedCandidates = [
         ...buildVideoDownloadUrlCandidates(u, "probe.mp4"),
-        ...buildVideoProxyUrlCandidates(u),
       ];
       for (const proxied of proxiedCandidates) {
         try {
-      if (/video-download/i.test(proxied)) continue;
-      const r = await fetch(proxied, { method: "HEAD" });
+          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
           if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
           const len = Number(r.headers.get("content-length") || 0);
           try { await r.body?.cancel(); } catch {}
           if (acceptBytes(len)) return [u, len];
         } catch {}
         try {
-          const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
+          const r2 = await withTimeout(proxied, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
           if (!isValidSizeResponse(r2)) { try { await r2.body?.cancel(); } catch {}; continue; }
           const cr = r2.headers.get("content-range");
           if (cr) {
@@ -1333,8 +1338,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return null;
     };
     (async () => {
-      // Parallel probes (max 6 at a time) for fast size reveal
-      const chunk = 6;
+      // Small batches avoid hammering the proxy and causing 504s.
+      const chunk = 3;
       for (let i = 0; i < urls.length; i += chunk) {
         if (cancelled) return;
         const results = await Promise.all(urls.slice(i, i + chunk).map(probe));
@@ -1350,7 +1355,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, getCachedDownloadSize, buildReliableHlsSource]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, getCachedDownloadSize]);
 
 
   useEffect(() => {
@@ -5732,7 +5737,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const movieLabel = String(title || subtitle || "video").trim();
-            const browserUrl = getDownloadUrl(src, quality, movieLabel, [src]);
+            const rawMovieUrl = movieQualityLinks[quality] || src;
+            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, Object.values(movieQualityLinks));
             if (!browserUrl) { toast.error("Download not available"); return; }
             const started = triggerBackgroundVideoDownload(browserUrl, buildDownloadFileName(movieLabel, quality));
             if (started) toast.success("Download sent to browser");
@@ -5896,7 +5902,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel || <span className="text-white/35 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel || <span className="text-white/45 font-normal">Ready</span>) : <span className="text-white/30 font-normal">—</span>}
                                   </span>
                                 </button>
                               );
