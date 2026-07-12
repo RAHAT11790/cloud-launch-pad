@@ -7,7 +7,17 @@ import { SUPABASE_URL } from "@/lib/siteConfig";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
-const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download(?:[/?#]|$)/i.test(String(value || ""));
+const isManagedVideoDownloadUrl = (value: string) => {
+  const raw = String(value || "").trim();
+  if (/\/functions\/v1\/video-download(?:[/?#]|$)/i.test(raw)) return true;
+  try {
+    const parsed = new URL(raw);
+    return /(^|[.-])video-download([.-]|$)/i.test(parsed.hostname)
+      && (parsed.searchParams.has("url") || parsed.searchParams.has("src"));
+  } catch {
+    return false;
+  }
+};
 const isManagedVideoProxyUrl = (value: string) => /\/functions\/v1\/video-proxy(?:[/?#]|$)/i.test(String(value || ""));
 
 const buildSafeFileName = (rawName: string) => {
