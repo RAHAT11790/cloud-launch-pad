@@ -481,7 +481,9 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   useEffect(() => () => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
     if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
+    if (probeTimerRef.current) clearTimeout(probeTimerRef.current);
   }, []);
+
 
   return (
     <>
