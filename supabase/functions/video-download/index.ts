@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  let upstream: Response;
+  let upstream: Response | null = null;
   let targetUrl: URL | null = null;
   const clientRange = req.headers.get("range");
   try {
@@ -255,13 +255,13 @@ Deno.serve(async (req) => {
   }
 
   // Any non-OK final upstream → return JSON, never broken bytes.
-  if (!upstream.ok && upstream.status !== 206) {
-    try { await upstream.body?.cancel(); } catch {}
+  if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+    try { await upstream?.body?.cancel(); } catch {}
     return new Response(
       JSON.stringify({
         error: "Download source error",
-        upstreamStatus: upstream.status,
-        upstreamStatusText: upstream.statusText,
+        upstreamStatus: upstream?.status || 502,
+        upstreamStatusText: upstream?.statusText || "Bad Gateway",
       }),
       { status: 502, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
