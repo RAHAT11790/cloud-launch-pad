@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, startTransition, forwardRef, memo, lazy, Suspense } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import CachedImg from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
@@ -2120,13 +2121,49 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [newPinInput, setNewPinInput] = useState("");
  const [currentPin, setCurrentPin] = useState("");
 
- const [activeSection, setActiveSection] = useState<Section>("dashboard");
+  // ==================== URL-BASED SECTION ROUTING ====================
+  // Sections with their own /admin/<slug> route (heavy sections split out to reduce lag).
+  // Refresh persists via URL; other sections still stay in overlay mode at /admin.
+  const ROUTED_SECTIONS = useMemo(() => new Set<Section>([
+    "webseries", "movies", "weekly-episode", "telegram-post", "animesalt-manager", "egd-manager"
+  ]), []);
+  const routeParams = useParams<{ section?: string }>();
+  const routeNavigate = useNavigate();
+  const routeLocation = useLocation();
+
+  const initialSectionFromUrl = ((): Section => {
+    const s = routeParams.section as Section | undefined;
+    if (s && ROUTED_SECTIONS.has(s)) return s;
+    try {
+      const saved = sessionStorage.getItem("rs_adminSection") as Section | null;
+      if (saved) return saved;
+    } catch {}
+    return "dashboard";
+  })();
+
+  const [activeSection, setActiveSection] = useState<Section>(initialSectionFromUrl);
 
 
- // Persist admin section
- useEffect(() => {
- try { sessionStorage.setItem("rs_adminSection", activeSection); } catch {}
- }, [activeSection]);
+  // Persist admin section (session + URL sync for routed sections)
+  useEffect(() => {
+    try { sessionStorage.setItem("rs_adminSection", activeSection); } catch {}
+    // Keep URL in sync for the routed sections. Use replace so we don't pollute history
+    // (the existing popstate handler expects a single admin history entry).
+    try {
+      const targetPath = ROUTED_SECTIONS.has(activeSection) ? `/admin/${activeSection}` : "/admin";
+      if (routeLocation.pathname !== targetPath) {
+        routeNavigate(targetPath, { replace: true });
+      }
+    } catch {}
+  }, [activeSection, ROUTED_SECTIONS, routeLocation.pathname, routeNavigate]);
+
+  // React to external URL changes (e.g. user types /admin/movies directly, or browser back/forward).
+  useEffect(() => {
+    const s = routeParams.section as Section | undefined;
+    if (s && ROUTED_SECTIONS.has(s) && s !== activeSection) {
+      setActiveSection(s);
+    }
+  }, [routeParams.section, ROUTED_SECTIONS, activeSection]);
  const [sidebarOpen, setSidebarOpen] = useState(false);
  const [dropdownOpen, setDropdownOpen] = useState(false);
  const [firebaseConnected, setFirebaseConnected] = useState(false);
