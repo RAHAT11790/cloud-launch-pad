@@ -69,6 +69,30 @@ const pickTargetFromParams = (params: URLSearchParams) => {
   return /^https?:\/\//i.test(src) ? src : "";
 };
 
+const pickTargetsFromParams = (params: URLSearchParams) => {
+  const values: string[] = [];
+  const push = (value: string | null) => {
+    const raw = String(value || "").trim();
+    if (/^https?:\/\//i.test(raw) && !values.includes(raw)) values.push(raw);
+  };
+  const pushToken = (value: string | null) => {
+    const raw = String(value || "").trim();
+    if (!raw) return;
+    const decoded = fromOpaqueUrlToken(raw);
+    push(decoded || raw);
+  };
+
+  ["url", "source", "target", "u"].forEach((key) => push(params.get(key)));
+  pushToken(params.get("src"));
+  ["alt", "fallback", "mirror"].forEach((key) => params.getAll(key).forEach(push));
+  ["altSrc", "fallbackSrc", "mirrorSrc"].forEach((key) => params.getAll(key).forEach(pushToken));
+  for (let i = 2; i <= 10; i += 1) {
+    push(params.get(`url${i}`));
+    pushToken(params.get(`src${i}`));
+  }
+  return values;
+};
+
 const sanitizeFilename = (raw: string) => {
   const cleaned = String(raw || "video.mp4")
     .replace(/[\\/:*?"<>|]+/g, " ")
@@ -164,40 +188,73 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const target = pickTargetFromParams(url.searchParams);
+  const targets = pickTargetsFromParams(url.searchParams);
   const filename = sanitizeFilename(url.searchParams.get("filename") || "video.mp4");
-  if (!target) {
+  if (!targets.length) {
     return new Response(
       JSON.stringify({ error: "Missing ?url= or ?src= parameter" }),
       { status: 400, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
   }
 
-  let targetUrl: URL;
-  try { targetUrl = new URL(target); } catch {
-    return new Response(JSON.stringify({ error: "Invalid url" }), {
-      status: 400,
-      headers: { ...downloadCorsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-    return new Response(JSON.stringify({ error: "Only http/https supported" }), {
-      status: 400,
-      headers: { ...downloadCorsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  let upstream: Response;
+  let upstream: Response | null = null;
+  let targetUrl: URL | null = null;
   const clientRange = req.headers.get("range");
   try {
     const bootstrapRange = req.method === "GET" && !clientRange ? "bytes=0-0" : clientRange;
-    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
-    if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
-      try { await upstream.body?.cancel(); } catch {}
-      upstream = await fetchWithRetry(targetUrl, "GET", "bytes=0-0", ac.signal);
+    let lastBad: Response | null = null;
+    for (const target of targets) {
+      let candidateUrl: URL;
+      try { candidateUrl = new URL(target); } catch { continue; }
+      if (candidateUrl.protocol !== "http:" && candidateUrl.protocol !== "https:") continue;
+      let candidate: Response;
+      try {
+        candidate = await fetchWithRetry(candidateUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
+      } catch {
+        continue;
+      }
+      if (candidate.ok || candidate.status === 206) {
+        upstream = candidate;
+        targetUrl = candidateUrl;
+        break;
+      }
+      if (req.method === "HEAD") {
+        try { await candidate.body?.cancel(); } catch {}
+        let getProbe: Response;
+        try {
+          getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal);
+        } catch {
+          continue;
+        }
+        if (getProbe.ok || getProbe.status === 206) {
+          upstream = getProbe;
+          targetUrl = candidateUrl;
+          break;
+        }
+        try { await getProbe.body?.cancel(); } catch {}
+      }
+      lastBad = candidate;
+      try { await candidate.body?.cancel(); } catch {}
+    }
+    if (!targetUrl) {
+      if (lastBad) {
+        return new Response(
+          JSON.stringify({
+            error: "Download source error",
+            upstreamStatus: lastBad.status,
+            upstreamStatusText: lastBad.statusText,
+            fallbackTried: targets.length,
+          }),
+          { status: 502, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ error: "Invalid url" }), {
+        status: 400,
+        headers: { ...downloadCorsHeaders, "Content-Type": "application/json" },
+      });
     }
   } catch (e) {
     const msg = (e as Error)?.message || "Upstream unreachable";
@@ -208,13 +265,13 @@ Deno.serve(async (req) => {
   }
 
   // Any non-OK final upstream → return JSON, never broken bytes.
-  if (!upstream.ok && upstream.status !== 206) {
-    try { await upstream.body?.cancel(); } catch {}
+  if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+    try { await upstream?.body?.cancel(); } catch {}
     return new Response(
       JSON.stringify({
         error: "Download source error",
-        upstreamStatus: upstream.status,
-        upstreamStatusText: upstream.statusText,
+        upstreamStatus: upstream?.status || 502,
+        upstreamStatusText: upstream?.statusText || "Bad Gateway",
       }),
       { status: 502, headers: { ...downloadCorsHeaders, "Content-Type": "application/json" } },
     );
@@ -321,7 +378,7 @@ Deno.serve(async (req) => {
           for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
               const res = await fetchWithRetry(
-                targetUrl,
+                targetUrl!,
                 "GET",
                 `bytes=${cursor}-${chunkEnd}`,
                 ac.signal,
