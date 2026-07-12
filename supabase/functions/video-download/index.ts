@@ -210,7 +210,12 @@ Deno.serve(async (req) => {
       let candidateUrl: URL;
       try { candidateUrl = new URL(target); } catch { continue; }
       if (candidateUrl.protocol !== "http:" && candidateUrl.protocol !== "https:") continue;
-      const candidate = await fetchWithRetry(candidateUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
+      let candidate: Response;
+      try {
+        candidate = await fetchWithRetry(candidateUrl, req.method as "GET" | "HEAD", bootstrapRange, ac.signal);
+      } catch {
+        continue;
+      }
       if (candidate.ok || candidate.status === 206) {
         upstream = candidate;
         targetUrl = candidateUrl;
@@ -218,7 +223,12 @@ Deno.serve(async (req) => {
       }
       if (req.method === "HEAD") {
         try { await candidate.body?.cancel(); } catch {}
-        const getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal);
+        let getProbe: Response;
+        try {
+          getProbe = await fetchWithRetry(candidateUrl, "GET", "bytes=0-0", ac.signal);
+        } catch {
+          continue;
+        }
         if (getProbe.ok || getProbe.status === 206) {
           upstream = getProbe;
           targetUrl = candidateUrl;
