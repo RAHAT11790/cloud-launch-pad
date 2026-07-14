@@ -115,10 +115,11 @@ function getClientFingerprint(req) {
 function isLikelyMediaRequest(req) {
   if (req.method === "HEAD") return true;
   const dest = (req.headers.get("sec-fetch-dest") || "").toLowerCase();
+  if (dest === "document" || dest === "iframe") return false;
   if (dest === "video" || dest === "audio" || dest === "media") return true;
   if (req.headers.has("range")) return true;
   const accept = (req.headers.get("accept") || "").toLowerCase();
-  return accept.includes("video/") || accept.includes("audio/") || accept.includes("*/*");
+  return accept.includes("video/") || accept.includes("audio/");
 }
 
 async function readClaim(jti, env) {
