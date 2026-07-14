@@ -68,6 +68,11 @@ export default function WeeklyEpisodeManager({
 }: Props) {
   const [schedules, setSchedules] = useState<Record<string, Schedule>>(() => weeklySchedulesCache);
   const [activeDay, setActiveDay] = useState<Day>(todayName());
+  const WEEKLY_LIST_PAGE = 15;
+  const [visibleLimit, setVisibleLimit] = useState(WEEKLY_LIST_PAGE);
+  // Reset pagination whenever the day tab changes so users always see the
+  // freshest 15 without scrolling through stale extra rows.
+  useEffect(() => { setVisibleLimit(WEEKLY_LIST_PAGE); }, [activeDay]);
 
   // Picker state
   const [pickerOpen, setPickerOpen] = useState(false);
