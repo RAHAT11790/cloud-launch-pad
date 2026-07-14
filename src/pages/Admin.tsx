@@ -10806,6 +10806,12 @@ const AnalyticsSection = memo(({
  allTimeTotals: Record<string, { count?: number; title?: string; poster?: string; lastSeen?: number }>;
 }) => {
  const [tab, setTab] = useState<"today" | "week" | "all">("today");
+ const [isPending, startTabTransition] = (React as any).useTransition ? (React as any).useTransition() : [false, (fn: any) => fn()];
+
+ // Defer heavy inputs so tab clicks stay instant even when analytics blob is large.
+ const deferredViews = useDeferredValue(analyticsViews);
+ const deferredTotals = useDeferredValue(allTimeTotals);
+ const deferredDaily = useDeferredValue(dailyActiveUsers);
 
  const days = useMemo(() => {
  const arr: { key: string; label: string; short: string }[] = [];
@@ -10827,24 +10833,87 @@ const AnalyticsSection = memo(({
  const m = new Map<string, { title: string; poster: string }>();
  for (const w of webseriesData) m.set(w.id, { title: w.title || w.id, poster: w.poster || "" });
  for (const v of moviesData) if (!m.has(v.id)) m.set(v.id, { title: v.title || v.id, poster: v.poster || "" });
- for (const [id, t] of Object.entries(allTimeTotals || {})) {
- if (!m.has(id) && (t?.title || t?.poster)) m.set(id, { title: t.title || id, poster: t.poster || "" });
+ for (const [id, t] of Object.entries(deferredTotals || {})) {
+ if (!m.has(id) && ((t as any)?.title || (t as any)?.poster)) m.set(id, { title: (t as any).title || id, poster: (t as any).poster || "" });
  }
  return m;
- }, [webseriesData, moviesData, allTimeTotals]);
+ }, [webseriesData, moviesData, deferredTotals]);
 
- // Per-day stats across the last 7 days.
+ // Single-pass computation: iterate analyticsViews ONCE and derive
+ // per-day rollups + per-tab per-anime tallies together. This replaces the
+ // previous 4 separate useMemos that each re-scanned the same blob whenever
+ // the user toggled Today / 7 Days / All Time.
+ const computed = useMemo(() => {
+ const keepDates = new Set(days.map(d => d.key));
+ const dayViews: Record<string, number> = {};
+ days.forEach(d => { dayViews[d.key] = 0; });
+ const todayMap = new Map<string, number>();
+ const weekMap = new Map<string, number>();
+
+ const views = deferredViews || {};
+ for (const aId in views) {
+ const byDate = views[aId];
+ if (!byDate) continue;
+ let weekN = 0;
+ for (const dk in byDate) {
+ if (!keepDates.has(dk)) continue;
+ const cnt = Object.keys(byDate[dk] || {}).length;
+ dayViews[dk] += cnt;
+ weekN += cnt;
+ if (dk === today && cnt) todayMap.set(aId, cnt);
+ }
+ if (weekN) weekMap.set(aId, weekN);
+ }
+
+ const allMap = new Map<string, number>();
+ for (const aId in (deferredTotals || {})) {
+ const c = Number((deferredTotals as any)[aId]?.count || 0);
+ if (c) allMap.set(aId, c);
+ }
+
+ const buildList = (m: Map<string, number>) => {
+ const arr: { animeId: string; title: string; poster: string; viewCount: number }[] = [];
+ m.forEach((count, aId) => {
+ const meta = titleIndex.get(aId);
+ arr.push({
+ animeId: aId,
+ title: meta?.title || (deferredTotals as any)?.[aId]?.title || aId,
+ poster: meta?.poster || (deferredTotals as any)?.[aId]?.poster || "",
+ viewCount: count,
+ });
+ });
+ arr.sort((a, b) => b.viewCount - a.viewCount);
+ return arr;
+ };
+
+ return {
+ dayViews,
+ tabs: {
+ today: buildList(todayMap),
+ week: buildList(weekMap),
+ all: buildList(allMap),
+ },
+ };
+ }, [deferredViews, deferredTotals, days, today, titleIndex]);
+
+ // Per-day chart data. Users prefer dailyActive counts, but fall back to
+ // distinct viewer uids from analytics/views when dailyActive is missing —
+ // this fixes days that show "0 users" even though views existed.
  const daily = useMemo(() => {
  return days.map(d => {
- const users = Object.keys(dailyActiveUsers[d.key] || {}).length;
- let views = 0;
- for (const aId in analyticsViews) {
- const day = analyticsViews[aId]?.[d.key];
- if (day) views += Object.keys(day).length;
+ let users = Object.keys((deferredDaily as any)?.[d.key] || {}).length;
+ if (!users) {
+ const uidSet = new Set<string>();
+ const v = deferredViews || {};
+ for (const aId in v) {
+ const day = v[aId]?.[d.key];
+ if (day) for (const uid in day) uidSet.add(uid);
  }
- return { ...d, users, views };
+ users = uidSet.size;
+ }
+ return { ...d, users, views: computed.dayViews[d.key] || 0 };
  });
- }, [days, dailyActiveUsers, analyticsViews]);
+ }, [days, deferredDaily, deferredViews, computed]);
 
  const weekUsersTotal = useMemo(() => daily.reduce((a, b) => a + b.users, 0), [daily]);
  const weekViewsTotal = useMemo(() => daily.reduce((a, b) => a + b.views, 0), [daily]);
@@ -10852,7 +10921,7 @@ const AnalyticsSection = memo(({
  const maxDailyViews = Math.max(1, ...daily.map(d => d.views));
 
  const todayUsers = useMemo(() => {
- const map = dailyActiveUsers[today] || {};
+ const map = (deferredDaily as any)?.[today] || {};
  const arr: { uid: string; userName: string; lastSeen: number; photo: string; email: string }[] = [];
  for (const uid in map) {
  const d = map[uid] || {};
@@ -10867,7 +10936,7 @@ const AnalyticsSection = memo(({
  }
  arr.sort((a, b) => b.lastSeen - a.lastSeen);
  return arr;
- }, [dailyActiveUsers, today, appUsers]);
+ }, [deferredDaily, today, appUsers]);
 
  const totalCurrentViewers = useMemo(() => {
  let n = 0;
@@ -10875,40 +10944,15 @@ const AnalyticsSection = memo(({
  return n;
  }, [activeViewers]);
 
- const contentStats = useMemo(() => {
- // For each mode compute per-anime view counts.
- const map = new Map<string, number>();
- if (tab === "today") {
- for (const aId in analyticsViews) {
- const day = analyticsViews[aId]?.[today];
- if (day) map.set(aId, Object.keys(day).length);
- }
- } else if (tab === "week") {
- const keep = new Set(days.map(d => d.key));
- for (const aId in analyticsViews) {
- let n = 0;
- const byDate = analyticsViews[aId] || {};
- for (const dk in byDate) if (keep.has(dk)) n += Object.keys(byDate[dk] || {}).length;
- if (n) map.set(aId, n);
- }
- } else {
- for (const [aId, t] of Object.entries(allTimeTotals || {})) {
- const c = Number(t?.count || 0);
- if (c) map.set(aId, c);
- }
- }
- const arr: { animeId: string; title: string; poster: string; viewCount: number }[] = [];
- map.forEach((count, aId) => {
- const meta = titleIndex.get(aId);
- arr.push({ animeId: aId, title: meta?.title || allTimeTotals?.[aId]?.title || aId, poster: meta?.poster || allTimeTotals?.[aId]?.poster || "", viewCount: count });
- });
- arr.sort((a, b) => b.viewCount - a.viewCount);
- return arr;
- }, [tab, analyticsViews, allTimeTotals, days, today, titleIndex]);
+ const contentStats = computed.tabs[tab];
 
  const totalTodayViews = daily[daily.length - 1]?.views || 0;
- const allTimeViewsTotal = useMemo(() => Object.values(allTimeTotals || {}).reduce((a, b: any) => a + Number(b?.count || 0), 0), [allTimeTotals]);
+ const allTimeViewsTotal = useMemo(() => Object.values(deferredTotals || {}).reduce((a, b: any) => a + Number(b?.count || 0), 0), [deferredTotals]);
  const maxStatCount = contentStats[0]?.viewCount || 1;
+
+ const switchTab = useCallback((t: "today" | "week" | "all") => {
+ startTabTransition(() => setTab(t));
+ }, [startTabTransition]);
 
  const [nowTick, setNowTick] = useState(0);
  useEffect(() => { const id = setInterval(() => setNowTick(t => t + 1), 60_000); return () => clearInterval(id); }, []);
