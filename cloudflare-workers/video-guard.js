@@ -122,7 +122,6 @@ function isLikelyMediaRequest(req) {
 }
 
 async function readClaim(jti, env) {
-  const ttl = Math.max(30, expUnix - Math.floor(Date.now() / 1000));
   if (env?.GUARD_KV) {
     const existing = await env.GUARD_KV.get(`u:${jti}`);
     return existing ? JSON.parse(existing) : null;
