@@ -17,7 +17,6 @@ import VideoEngagement from "@/components/VideoEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
-import { guardVideoUrl } from "@/lib/videoGuard";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -1985,77 +1984,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return applyServerDomain(rawUrl, serverIndex);
   }, [activeServerIndex, applyServerDomain, effectiveVideoServers]);
 
-  // ============================================================
-  // RS single-use URL protection
-  // Only guards permanent RS server links (admin-configured video servers,
-  // e.g. bond.host.net). HLS/API links are NEVER guarded — they auto-expire
-  // in 6h on the API side, so no protection needed there.
-  // ============================================================
-  const rsServerHosts = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of effectiveVideoServers) {
-      const raw = String(s?.domain || "").trim();
-      if (!raw) continue;
-      try {
-        const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-        set.add(u.host.toLowerCase());
-      } catch {
-        set.add(raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase());
-      }
-    }
-    return set;
-  }, [effectiveVideoServers]);
-
-  const isRsServerUrl = useCallback((raw: string) => {
-    const s = String(raw || "").trim();
-    if (!s || !/^https?:\/\//i.test(s)) return false;
-    if (isHlsLikeUrl(s)) return false;
-    if (isBypassSource(s)) return false;
-    try {
-      const host = new URL(s).host.toLowerCase();
-      return rsServerHosts.has(host);
-    } catch { return false; }
-  }, [rsServerHosts]);
-
-  const [rsGuardMap, setRsGuardMap] = useState<Record<string, string>>({});
-  const rsGuardRawSource = useMemo(() => {
-    const activeRaw = String(activeSourceBaseRef.current || "").trim();
-    if (isRsServerUrl(activeRaw)) return activeRaw;
-    const rawCurrent = String(currentSrc || "").trim();
-    if (isRsServerUrl(rawCurrent)) return rawCurrent;
-    const nested = unwrapProxyPlaybackTarget(rawCurrent);
-    if (isRsServerUrl(nested)) return nested;
-    return "";
-  }, [activeServerIndex, currentSrc, isRsServerUrl, videoServerFingerprint]);
-
-  useEffect(() => {
-    const raw = String(rsGuardRawSource || "").trim();
-    if (!raw || rsGuardMap[raw]) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const guarded = await guardVideoUrl(raw);
-        if (!cancelled && guarded && guarded !== raw) {
-          setRsGuardMap((prev) => (prev[raw] ? prev : { ...prev, [raw]: guarded }));
-        }
-      } catch { /* fall back to raw */ }
-    })();
-    return () => { cancelled = true; };
-  }, [rsGuardRawSource, rsGuardMap]);
-
-  const playbackSrc = useMemo(() => {
-    const raw = String(currentSrc || "").trim();
-    if (!raw) return currentSrc;
-    if (rsGuardRawSource) return rsGuardMap[rsGuardRawSource] || "";
-    if (rsGuardMap[raw]) return rsGuardMap[raw];
-    // For RS server URLs/proxy-wrapped RS URLs, hold back the raw URL until a
-    // guarded stream URL is minted so the real link never appears in network.
-    if (isRsServerUrl(raw)) return "";
-    return currentSrc;
-  }, [currentSrc, rsGuardMap, isRsServerUrl, rsGuardRawSource]);
-
-
-
   const markPlaybackSourceHealthy = useCallback((extraSource?: string) => {
     const now = Date.now();
     rsSoftRetriesRef.current = 0;
@@ -3379,7 +3307,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
-    if (rsGuardRawSource) return;
     if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
     const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
@@ -3406,7 +3333,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, rsGuardRawSource, tryNextPlaybackRoute]);
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
 
   // If the active admin server resolves to http:// but no EGD Router video-proxy
   // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
@@ -3889,7 +3816,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (v) {
           const savedTime = preserveResumePoint(savedTimeForRetry || v.currentTime || lastKnownTime);
           // For MKV files, try removing the src attribute and re-setting it
-          v.src = playbackSrc || currentSrc;
+          v.src = currentSrc;
           v.load();
           v.addEventListener('loadedmetadata', () => {
             if (savedTime > 0) v.currentTime = savedTime;
@@ -4058,7 +3985,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, playbackSrc, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
@@ -4651,7 +4578,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              src={playbackSrc}
+              src={currentSrc}
               className="absolute inset-0 w-full h-full bg-black border-0 block"
               style={{ transform: embedTransform, transformOrigin: "center center", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
@@ -4662,7 +4589,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ) : (
             <video
               ref={videoRef}
-              src={(isHlsSrc && Hls.isSupported()) ? undefined : playbackSrc}
+              src={(isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
               crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}

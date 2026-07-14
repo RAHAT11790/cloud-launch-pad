@@ -5,7 +5,7 @@ import {
   loadAdsterraSlots,
   setAdsterraPremium,
 } from "@/lib/adsterraAds";
-import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
+import { stopAdGuard } from "@/lib/adGuard";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
 
@@ -20,7 +20,6 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     setAdsterraPremium(!!isPremium);
     stopAdGuard();
     if (isPremium) return;
-    startAdGuard(videoEl || null);
     // No player-ad cooldown: every user click while the player is open can ask
     // Adsterra for the configured Popunder + Social/Push placements.
     const onClick = () => { loadAdsterraSlots().catch(() => {}); };
@@ -29,7 +28,6 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     return () => {
       document.removeEventListener("click", onClick, { capture: true } as EventListenerOptions);
       window.clearTimeout(t);
-      stopAdGuard();
     };
   }, [isPremium, videoEl]);
 

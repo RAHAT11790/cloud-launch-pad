@@ -11,7 +11,6 @@
 // ============================================================
 
 import videoProxySource from "../../supabase/functions/video-proxy/index.ts?raw";
-import videoGuardSource from "../../supabase/functions/video-guard/index.ts?raw";
 
 import liveTvProxySource from "../../supabase/functions/live-tv-proxy/index.ts?raw";
 import videoDownloadSource from "../../supabase/functions/video-download/index.ts?raw";
@@ -90,7 +89,6 @@ const entry = (
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("send-fcm",       "Send FCM (Push)", "🔔 Firebase Admin push notification sender (FCM v1 API). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL. Requires FIREBASE_SERVICE_ACCOUNT_KEY (full JSON) + FIREBASE_DB_URL secrets.", sendFcmSource, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v1", badgeTone: "amber" }),
   
-  entry("video-guard",    "Video Guard (1-Use)", "🛡️ RS video URL protection layer. Signs a real MP4/server URL into /play?t= and streams bytes through the guard, so the browser network log does not redirect to the original URL. Same browser Range playback is allowed; copied token from another browser/device returns 'link expired'. Requires SIGNING_SECRET.", videoGuardSource, ["SIGNING_SECRET"], { isNew: true, badgeText: "1-USE", badgeTone: "amber" }),
   entry("video-proxy",    "Video Proxy",    "RS HTTP/HTTPS video proxy with exact browser Range pass-through, playlist rewriting, and multi-attempt referrer/origin fallback.", videoProxySource, [], { isNew: true }),
   entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",    "AN Playback API", "Playback-only AnimeSalt HLS proxy: playlist/segment CORS, range streaming, and CDN-safe headers. Use for user-panel video playback after links are cached.", anPlaybackSource, [], { badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
