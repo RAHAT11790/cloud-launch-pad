@@ -5155,9 +5155,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
               <div className="flex items-center gap-1.5 flex-nowrap mt-1.5 text-[12px] text-muted-foreground overflow-hidden">
                 <Tv className="w-3.5 h-3.5 text-foreground/60 flex-shrink-0" />
-                <span className="text-foreground/25 flex-shrink-0">|</span>
                 {(anime?.rating || animeMeta?.rating) ? (
-                  <span className="flex items-center gap-0.5 flex-shrink-0"><Star className="w-3 h-3 text-primary fill-primary flex-shrink-0" />{anime?.rating || animeMeta?.rating}</span>
+                  <>
+                    <span className="text-foreground/25 flex-shrink-0">|</span>
+                    <span className="flex items-center gap-0.5 flex-shrink-0"><Star className="w-3 h-3 text-primary fill-primary flex-shrink-0" />{anime?.rating || animeMeta?.rating}</span>
+                  </>
                 ) : null}
                 {currentLangLabel ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{currentLangLabel}</span></> : null}
                 <span className="text-foreground/25 flex-shrink-0">|</span>
