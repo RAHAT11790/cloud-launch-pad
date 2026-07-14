@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
   const secret = String(Deno.env.get("SIGNING_SECRET") || "").trim();
 
   if (path === "/" || path === "/health") {
-    return json({ ok: true, name: "video-guard", purpose: "single-use protection", hasSecret: !!secret });
+    return json({ ok: true, name: "video-guard", purpose: "single-use streaming protection", mode: "stream-proxy", hasSecret: !!secret });
   }
   if (!secret) return json({ error: "SIGNING_SECRET not configured" }, 500);
 
