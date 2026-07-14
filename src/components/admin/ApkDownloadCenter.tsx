@@ -165,7 +165,7 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
           <input
             type="url"
             value={userUrl}
-            onChange={(e) => setUserUrl(e.target.value)}
+            onChange={(e) => { markTyping(); setUserUrl(e.target.value); }}
             placeholder="https://example.com/user-app.apk"
             className={`${inputClass} flex-1 min-w-0`}
           />
@@ -201,7 +201,7 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
           <input
             type="url"
             value={adminUrl}
-            onChange={(e) => setAdminUrl(e.target.value)}
+            onChange={(e) => { markTyping(); setAdminUrl(e.target.value); }}
             placeholder="https://example.com/admin-app.apk"
             className={`${inputClass} flex-1 min-w-0`}
           />
@@ -237,7 +237,7 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
         </p>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => { markTyping(); setNotes(e.target.value); }}
           placeholder="e.g. Build 2026-04-26 — fixed login crash on Android 9"
           className={`${inputClass} min-h-[80px] resize-y`}
           rows={4}
