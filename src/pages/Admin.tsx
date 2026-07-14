@@ -3206,16 +3206,23 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ]);
  const v = vSnap.val() || {};
  const d = daSnap.val() || {};
- // Chunk deletes so we never block the main thread.
+ // Keep last 7 days of daily analytics — anything older is pruned.
+ // Per-anime totals live at analytics/totals/views (never pruned).
+ const keep = new Set<string>();
+ for (let i = 0; i < 7; i++) {
+ const dt = new Date();
+ dt.setDate(dt.getDate() - i);
+ keep.add(dt.toISOString().split("T")[0]);
+ }
  const ops: Array<() => Promise<any>> = [];
  Object.entries(v).forEach(([animeId, byDate]: any) => {
  if (!byDate || typeof byDate !== "object") return;
  Object.keys(byDate).forEach((dk) => {
- if (dk !== today) ops.push(() => remove(ref(db, `analytics/views/${animeId}/${dk}`)));
+ if (!keep.has(dk)) ops.push(() => remove(ref(db, `analytics/views/${animeId}/${dk}`)));
  });
  });
  Object.keys(d).forEach((dk) => {
- if (dk !== today) ops.push(() => remove(ref(db, `analytics/dailyActive/${dk}`)));
+ if (!keep.has(dk)) ops.push(() => remove(ref(db, `analytics/dailyActive/${dk}`)));
  });
  // Fire in small batches so the UI stays smooth.
  for (let i = 0; i < ops.length; i += 20) {
