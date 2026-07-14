@@ -6024,7 +6024,7 @@ ${tgBulkFooter}
  {(() => {
   const q = deferredWsListSearch.trim().toLowerCase();
  const filtered = filteredWebseriesAdminList;
-  const visible = filtered.slice(0, ADMIN_VISIBLE_CARD_LIMIT);
+  const visible = filtered.slice(0, wsListLimit);
   return filtered.length === 0 ? (
  adminContentLoading.webseries && !q ? (
  <div className="space-y-3 py-2">
@@ -6057,7 +6057,15 @@ ${tgBulkFooter}
  </div>
   ))}
   {filtered.length > visible.length && (
-   <div className="py-4 text-center text-[11px] text-[#957DAD]">Showing {visible.length}/{filtered.length}. Search to narrow instantly and keep scrolling smooth.</div>
+   <div className="py-3 flex flex-col items-center gap-1.5">
+    <button
+     onClick={() => setWsListLimit(v => v + ADMIN_LIST_PAGE)}
+     className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+    >
+     Load More ({filtered.length - visible.length} left)
+    </button>
+    <span className="text-[10px] text-[#957DAD]">Showing {visible.length} of {filtered.length}</span>
+   </div>
   )}
   </>;
  })()}
