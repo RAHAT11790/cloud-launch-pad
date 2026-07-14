@@ -2893,7 +2893,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Lazy-load USERS data (dashboard needs it for live Total/Online/Offline)
  useEffect(() => {
-  const needsUsers = ["dashboard", "users", "free-access", "device-limits"].includes(activeSection);
+  const needsUsers = ["dashboard", "users", "free-access", "device-limits", "analytics"].includes(activeSection);
  if (!needsUsers) return;
 
  const unsubs: (() => void)[] = [];
