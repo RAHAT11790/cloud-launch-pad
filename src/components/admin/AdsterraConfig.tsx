@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
@@ -29,11 +29,24 @@ const FREE_PREMIUM_SLOTS: SlotDef[] = [
   { id: "adsterra_smartlink",    name: "Smartlink (Preview)",  kind: "smartlink", accent: "from-pink-500/20 to-rose-500/5",      icon: <Link2 className="w-3.5 h-3.5 text-pink-300" />,    help: "Direct smartlink URL — first tap 'not counted' preview." },
 ];
 
+// Warm-start cache — paints Adsterra config instantly on re-open.
+const CACHE_KEY = "rs_admin_adsterra_cache_v1";
+type CacheShape = {
+  vpEnabled: boolean; popunder: string; socialLink: string; cooldownSec: number;
+};
+let adsterraCache: CacheShape | null = (() => {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
+})();
+const writeCache = (c: CacheShape) => {
+  adsterraCache = c;
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {}
+};
+
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
-  const [vpEnabled, setVpEnabled] = useState(true);
-  const [popunder, setPopunder] = useState("");
-  const [socialLink, setSocialLink] = useState("");
-  const [cooldownSec, setCooldownSec] = useState<number>(50);
+  const [vpEnabled, setVpEnabled] = useState<boolean>(adsterraCache?.vpEnabled ?? true);
+  const [popunder, setPopunder] = useState<string>(adsterraCache?.popunder ?? "");
+  const [socialLink, setSocialLink] = useState<string>(adsterraCache?.socialLink ?? "");
+  const [cooldownSec, setCooldownSec] = useState<number>(adsterraCache?.cooldownSec ?? 50);
   const [savingVp, setSavingVp] = useState(false);
 
   const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
@@ -41,14 +54,41 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [dailyAdCap, setDailyAdCap] = useState<number>(5);
   const [savingFp, setSavingFp] = useState(false);
 
+  const typingRef = useRef(false);
+  const pendingRef = useRef<CacheShape | null>(null);
+  const markTyping = () => {
+    typingRef.current = true;
+    window.clearTimeout((markTyping as any)._t);
+    (markTyping as any)._t = window.setTimeout(() => {
+      typingRef.current = false;
+      const p = pendingRef.current;
+      if (p) {
+        pendingRef.current = null;
+        setVpEnabled(p.vpEnabled); setPopunder(p.popunder);
+        setSocialLink(p.socialLink); setCooldownSec(p.cooldownSec);
+      }
+    }, 4000);
+  };
+
   useEffect(() => {
     const u1 = onValue(ref(db, "settings/adsterra"), (snap) => {
       const v = snap.val() || {};
-      setVpEnabled(v.enabled !== false);
-      setPopunder(v.popunder || "");
-      setSocialLink(v.streamLink || v.socialLink || v.pushNotification || "");
       const cd = Number(v.refreshIntervalSec);
-      setCooldownSec(Number.isFinite(cd) && cd >= 0 ? cd : 50);
+      const snapshot: CacheShape = {
+        vpEnabled: v.enabled !== false,
+        popunder: v.popunder || "",
+        socialLink: v.streamLink || v.socialLink || v.pushNotification || "",
+        cooldownSec: Number.isFinite(cd) && cd >= 0 ? cd : 50,
+      };
+      writeCache(snapshot);
+      if (typingRef.current) {
+        pendingRef.current = snapshot;
+      } else {
+        setVpEnabled(snapshot.vpEnabled);
+        setPopunder(snapshot.popunder);
+        setSocialLink(snapshot.socialLink);
+        setCooldownSec(snapshot.cooldownSec);
+      }
     });
     const u2 = subscribeCoinAds((list) => {
       const map: Record<string, CoinAd> = {};
