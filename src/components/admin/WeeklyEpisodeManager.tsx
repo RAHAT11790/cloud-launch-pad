@@ -68,6 +68,11 @@ export default function WeeklyEpisodeManager({
 }: Props) {
   const [schedules, setSchedules] = useState<Record<string, Schedule>>(() => weeklySchedulesCache);
   const [activeDay, setActiveDay] = useState<Day>(todayName());
+  const WEEKLY_LIST_PAGE = 15;
+  const [visibleLimit, setVisibleLimit] = useState(WEEKLY_LIST_PAGE);
+  // Reset pagination whenever the day tab changes so users always see the
+  // freshest 15 without scrolling through stale extra rows.
+  useEffect(() => { setVisibleLimit(WEEKLY_LIST_PAGE); }, [activeDay]);
 
   // Picker state
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -354,7 +359,7 @@ export default function WeeklyEpisodeManager({
           </div>
         ) : (
           <div className="space-y-2.5">
-            {visibleList.map(item => {
+            {visibleList.slice(0, visibleLimit).map(item => {
               const live = seriesById[item.seriesId];
               const totalAvailable = live ? countEpisodes(live) : 0;
               const expected = item.expectedEpisodes || live?.totalEpisodes || live?.numberOfEpisodes;
@@ -438,6 +443,17 @@ export default function WeeklyEpisodeManager({
                 </div>
               );
             })}
+            {visibleList.length > visibleLimit && (
+              <div className="pt-2 flex flex-col items-center gap-1.5">
+                <button
+                  onClick={() => setVisibleLimit(v => v + WEEKLY_LIST_PAGE)}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+                >
+                  Load More ({visibleList.length - visibleLimit} left)
+                </button>
+                <span className="text-[10px] text-zinc-500">Showing {visibleLimit} of {visibleList.length}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
