@@ -176,6 +176,7 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
   };
 
   const updateLocal = (idx: number, patch: Partial<TgWelcomeButton>) => {
+    markTyping();
     setButtons((prev) => prev.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
   };
 
