@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, Eye, EyeOff, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { db, ref, onValue, set, update, remove, push } from "@/lib/firebase";
@@ -17,19 +17,43 @@ type Props = {
 const COLOR_OPTIONS: TgWelcomeButton["color"][] = ["blue", "purple", "green", "pink", "orange"];
 const ICON_OPTIONS: NonNullable<TgWelcomeButton["icon"]>[] = ["send", "chat", "support", "link"];
 
+// Warm-start cache — keeps the panel painted instantly on re-open and
+// survives HMR + tab-switches so admins never stare at a blank screen.
+const CACHE_KEY = "rs_admin_tg_welcome_cache_v1";
+type CacheShape = {
+  enabled: boolean;
+  heading: string;
+  description: string;
+  buttons: (TgWelcomeButton & { _key?: string })[];
+};
+let tgWelcomeCache: CacheShape | null = (() => {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
+})();
+const writeCache = (c: CacheShape) => {
+  tgWelcomeCache = c;
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {}
+};
+
 const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }: Props) => {
-  const [enabled, setEnabled] = useState(true);
-  const [heading, setHeading] = useState("");
-  const [description, setDescription] = useState("");
-  const [buttons, setButtons] = useState<(TgWelcomeButton & { _key?: string })[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState<boolean>(tgWelcomeCache?.enabled ?? true);
+  const [heading, setHeading] = useState<string>(tgWelcomeCache?.heading ?? "");
+  const [description, setDescription] = useState<string>(tgWelcomeCache?.description ?? "");
+  const [buttons, setButtons] = useState<(TgWelcomeButton & { _key?: string })[]>(
+    tgWelcomeCache?.buttons ?? [],
+  );
+  const [loaded, setLoaded] = useState<boolean>(!!tgWelcomeCache);
+
+  // Pause snapshot re-apply while admin is actively typing/editing —
+  // otherwise Firebase pushes yank inputs out from under them.
+  const isTypingRef = useRef(false);
+  const pendingRef = useRef<CacheShape | null>(null);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/telegramWelcome"), (snap) => {
       const val = snap.val() || {};
-      setEnabled(val.enabled !== false);
-      setHeading(val.heading || "");
-      setDescription(val.description || "");
+      const nextEnabled = val.enabled !== false;
+      const nextHeading = val.heading || "";
+      const nextDescription = val.description || "";
       const raw = val.buttons;
       let list: (TgWelcomeButton & { _key?: string })[] = [];
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -39,11 +63,39 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
       }
       if (!list.length) list = DEFAULT_TG_WELCOME_BUTTONS.map((b) => ({ ...b }));
       list.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-      setButtons(list);
+      const snapshot: CacheShape = {
+        enabled: nextEnabled, heading: nextHeading, description: nextDescription, buttons: list,
+      };
+      writeCache(snapshot);
+      if (isTypingRef.current) {
+        pendingRef.current = snapshot;
+      } else {
+        setEnabled(nextEnabled);
+        setHeading(nextHeading);
+        setDescription(nextDescription);
+        setButtons(list);
+      }
       setLoaded(true);
     });
     return () => unsub();
   }, []);
+
+  const markTyping = () => {
+    isTypingRef.current = true;
+    // Auto-release after 4s of no typing so parked snapshots can flow in.
+    window.clearTimeout((markTyping as any)._t);
+    (markTyping as any)._t = window.setTimeout(() => {
+      isTypingRef.current = false;
+      const p = pendingRef.current;
+      if (p) {
+        pendingRef.current = null;
+        setEnabled(p.enabled);
+        setHeading(p.heading);
+        setDescription(p.description);
+        setButtons(p.buttons);
+      }
+    }, 4000);
+  };
 
   const toggleEnabled = async () => {
     const next = !enabled;
