@@ -443,6 +443,17 @@ export default function WeeklyEpisodeManager({
                 </div>
               );
             })}
+            {visibleList.length > visibleLimit && (
+              <div className="pt-2 flex flex-col items-center gap-1.5">
+                <button
+                  onClick={() => setVisibleLimit(v => v + WEEKLY_LIST_PAGE)}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+                >
+                  Load More ({visibleList.length - visibleLimit} left)
+                </button>
+                <span className="text-[10px] text-zinc-500">Showing {visibleLimit} of {visibleList.length}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
