@@ -61,14 +61,14 @@ const iconFor = (name?: string) => {
   }
 };
 
-// Subtle tint dot per button — main styling stays on-brand
-const dotColor = (color?: string) => {
+// Vivid gradient tint per button
+const iconGradient = (color?: string) => {
   switch (color) {
-    case "purple": return "bg-purple-400";
-    case "green":  return "bg-emerald-400";
-    case "pink":   return "bg-pink-400";
-    case "orange": return "bg-orange-400";
-    default:       return "bg-sky-400";
+    case "purple": return "linear-gradient(135deg,#8b5cf6,#6d28d9)";
+    case "green":  return "linear-gradient(135deg,#10b981,#047857)";
+    case "pink":   return "linear-gradient(135deg,#ec4899,#be185d)";
+    case "orange": return "linear-gradient(135deg,#fb923c,#c2410c)";
+    default:       return "linear-gradient(135deg,#38bdf8,#0369a1)";
   }
 };
 
