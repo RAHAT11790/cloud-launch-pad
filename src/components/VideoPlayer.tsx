@@ -2205,7 +2205,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       proxyUrl || undefined,
       proxyApiKey || undefined,
       preferProxy
-    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
+    ).find((candidateSrc) => {
+      if (isRsHostedMp4Source(activeSourceBaseRef.current) && !isVideoProxyPlaybackUrl(candidateSrc, proxyUrl)) return false;
+      return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey;
+    });
 
     if (sameQualityRouteFallback) {
       pendingSeek.current = activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0);
