@@ -2888,6 +2888,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // eliminating the biggest source of admin-panel lag.
  useEffect(() => {
     const CONTENT_SECTIONS: Section[] = [
+      // Dashboard is included so the "Recent Content" strip paints instantly
+      // from the cached admin content index instead of showing an empty state
+      // on the very first admin visit.
+      "dashboard",
       "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
       "animesalt-manager", "new-releases", "manual-push", "notifications",
       "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
