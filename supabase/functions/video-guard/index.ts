@@ -107,10 +107,11 @@ function clientFingerprint(req: Request): string {
 function isLikelyMediaRequest(req: Request): boolean {
   if (req.method === "HEAD") return true;
   const dest = (req.headers.get("sec-fetch-dest") || "").toLowerCase();
+  if (dest === "document" || dest === "iframe") return false;
   if (["video", "audio", "media"].includes(dest)) return true;
   if (req.headers.has("range")) return true;
   const accept = (req.headers.get("accept") || "").toLowerCase();
-  return accept.includes("video/") || accept.includes("audio/") || accept.includes("*/*");
+  return accept.includes("video/") || accept.includes("audio/");
 }
 
 async function claimPlaybackOrReject(req: Request, payload: any) {
