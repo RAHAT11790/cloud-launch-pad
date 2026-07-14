@@ -497,140 +497,141 @@ export default function EgdManager({
 
   const isConfigured = !!savedDeployerUrl;
 
-  return (
-    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
-      {/* Header */}
-      <div className={glassCard + " p-4 sm:p-6"}>
-        <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <Rocket className="text-amber-400 shrink-0" size={22} />
-              <span className="truncate">EGD MANAGER</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-              Deploy edge functions to your own Supabase project, directly from this admin panel.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => (showSetup ? setShowSetup(false) : openSetup())}
-              className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}
-            >
-              <Settings size={14} /> Setup
-            </button>
-            <button onClick={newDraft} className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}>
-              <Plus size={14} /> New
-            </button>
-          </div>
-        </div>
+  // ---- filter for deployed list ----
+  const [filter, setFilter] = useState("");
+  const filtered = useMemo(
+    () => sortedList.filter((f) => !filter || f.slug.toLowerCase().includes(filter.toLowerCase())),
+    [sortedList, filter],
+  );
 
-        {/* Status badge */}
-        <div className="mt-3 flex items-center gap-2 text-xs flex-wrap">
-          {isConfigured ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300">
-              <CheckCircle2 size={12} /> Deployer configured
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 text-amber-300">
-              <AlertCircle size={12} /> Not configured — open Setup
-            </span>
-          )}
+  const disconnect = async () => {
+    if (!confirm("Disconnect EGD deployer? URL will be cleared.")) return;
+    await set(ref(db, "egdManager/config/deployerUrl"), null);
+    setSavedDeployerUrl(""); setDeployerUrl("");
+    setList([]); setSelected(""); setProjectSecrets([]);
+    toast.success("Disconnected");
+    setShowSetup(true);
+  };
+
+  // ═══════════════════════════════════════════
+  // SETUP SCREEN — early return, like CF Manager
+  // ═══════════════════════════════════════════
+  if (showSetup) {
+    return (
+      <div data-egd-setup-anchor="true" className={`${glassCard} p-5 space-y-4`}>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-lg shadow-amber-500/25">
+            <Rocket size={22} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-white">Connect EGD Deployer</h3>
+            <p className="text-[11px] text-zinc-400">Deploy one Deployer function → paste its URL below.</p>
+          </div>
           {isConfigured && (
-            <code className="text-[10px] text-zinc-500 truncate max-w-full block">{savedDeployerUrl}</code>
+            <button
+              onClick={() => setShowSetup(false)}
+              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300"
+              title="Close"
+            >
+              <X size={14} />
+            </button>
           )}
         </div>
-      </div>
 
-
-      {/* Setup card — sits directly under header so the Setup button reveals it instantly */}
-      {showSetup && (
-        <div data-egd-setup-anchor="true" className={glassCard + " p-4 sm:p-6 space-y-4 border border-amber-500/30"}>
-          <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm sm:text-base">
-            <Settings size={16} /> One-time Deployer Setup
-          </h3>
-
-          <ol className="text-xs text-zinc-300 space-y-2 list-decimal list-inside break-words">
-            <li>Open your Supabase Dashboard → <b>Edge Functions</b> → <b>Create function</b>.</li>
-            <li>Name it <code className="bg-zinc-800 px-1 rounded break-all">egd-deployer</code> and paste the code below.</li>
-            <li>Go to function <b>Settings</b> → turn <b>Verify JWT = OFF</b>.</li>
-            <li>Add a project secret <code className="bg-zinc-800 px-1 rounded break-all">EGD_SUPABASE_PAT</code> = your Supabase Personal Access Token.</li>
-            <li>Deploy. Copy the function URL and paste it below, then Save.</li>
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div className="text-sm text-amber-300 font-semibold flex items-center gap-2">
+            <FileCode2 size={16} /> Step 1 — Deploy the deployer
+          </div>
+          <ol className="text-[12px] text-zinc-300 space-y-1 pl-5 list-decimal">
+            <li>Backend → <b>Edge Functions → Create function</b> named <code className="text-amber-300">egd-deployer</code>.</li>
+            <li>Paste the code below, then Deploy.</li>
+            <li>Function <b>Settings → Verify JWT = OFF</b>.</li>
+            <li>Add project secret <code>EGD_SUPABASE_PAT</code> = your Personal Access Token.</li>
           </ol>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => copyText(EGD_DEPLOYER_CODE, "Deployer code copied")} className={btnSecondary + " gap-2"}>
+              <Copy size={14} /> Copy code
+            </button>
+            <button onClick={downloadDeployerCode} className={btnSecondary + " gap-2"}>
+              <Download size={14} /> Download .ts
+            </button>
+          </div>
+          <textarea
+            readOnly
+            value={EGD_DEPLOYER_CODE}
+            className="w-full h-[200px] rounded-xl border border-white/10 bg-[#0a0a0f] text-emerald-100 font-mono text-[10.5px] leading-[1.55] p-3 resize-y"
+            spellCheck={false}
+          />
+        </div>
 
-          {/* Deployer code box */}
-          <div className="min-w-0">
-            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-              <label className="text-xs text-zinc-400">Deployer source (index.ts) — latest</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => copyText(EGD_DEPLOYER_CODE, "Deployer code copied")}
-                  className={btnPrimary + " inline-flex items-center gap-1.5 !px-3 !py-1.5 text-[11px]"}
-                >
-                  <Copy size={12} /> Copy code
-                </button>
-                <button
-                  onClick={downloadDeployerCode}
-                  className={btnSecondary + " inline-flex items-center gap-1.5 !px-3 !py-1.5 text-[11px]"}
-                >
-                  <Download size={12} /> Download
-                </button>
-              </div>
-            </div>
-            <textarea
-              readOnly
-              value={EGD_DEPLOYER_CODE}
-              className={inputClass + " font-mono text-[10px] sm:text-[11px] leading-relaxed w-full block"}
-              style={{ height: 220, resize: "none", overflow: "auto", whiteSpace: "pre" }}
-              spellCheck={false}
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div className="text-sm text-amber-300 font-semibold flex items-center gap-2">
+            <LinkIcon size={16} /> Step 2 — Connect
+          </div>
+          <div>
+            <label className="text-[11px] text-zinc-400">Deployer Function URL</label>
+            <input
+              value={deployerUrl}
+              onChange={(e) => setDeployerUrl(e.target.value)}
+              placeholder="https://xxxx.supabase.co/functions/v1/egd-deployer"
+              className={inputClass + " font-mono text-[12px]"}
             />
           </div>
-
-          {/* URL input */}
-          <div className="min-w-0">
-            <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
-              <LinkIcon size={12} /> Deployer Function URL
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                className={inputClass + " flex-1 min-w-0"}
-                placeholder="https://xxxx.supabase.co/functions/v1/egd-deployer"
-                value={deployerUrl}
-                onChange={(e) => setDeployerUrl(e.target.value)}
-              />
-              <button
-                onClick={saveDeployerUrl}
-                disabled={savingUrl}
-                className={btnPrimary + " inline-flex items-center justify-center gap-2 shrink-0"}
-              >
-                {savingUrl ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-                Save
-              </button>
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1 break-words">
-              URL is stored in Firebase. No API keys needed (deployer runs with Verify JWT off).
-            </p>
-          </div>
+          <button disabled={savingUrl} onClick={saveDeployerUrl} className={btnPrimary + " gap-2 w-full"}>
+            {savingUrl ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+            {savingUrl ? "Saving…" : "Save & Connect"}
+          </button>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* (Player Proxy URL lives in EGD Router → Video Proxy field.) */}
+  // ═══════════════════════════════════════════
+  // MAIN — vertical flow (mirrors Cloudflare Manager)
+  // ═══════════════════════════════════════════
+  const supaRef = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "";
+  const previewFnUrl = slug && supaRef ? `https://${supaRef}.supabase.co/functions/v1/${slugify(slug)}` : "";
 
+  return (
+    <div className="space-y-4">
+      {/* ── Top status strip ── */}
+      <div className={`${glassCard} px-4 py-3 flex items-center gap-3 flex-wrap`}>
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
+          <Rocket size={18} className="text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-white leading-tight">EGD Manager</div>
+          <div className="text-[10px] text-zinc-500 font-mono truncate">{savedDeployerUrl}</div>
+        </div>
+        <div className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border flex items-center gap-1 ${
+          isConfigured ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                       : "bg-rose-500/10 text-rose-300 border-rose-500/30"}`}>
+          {isConfigured ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
+          {isConfigured ? "Live" : "Down"}
+        </div>
+        <button onClick={loadList} disabled={loadingList} title="Refresh"
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+          <RefreshCw size={14} className={loadingList ? "animate-spin" : ""} />
+        </button>
+        <button onClick={openSetup} title="Setup"
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+          <Settings size={14} />
+        </button>
+        <button onClick={disconnect} title="Disconnect"
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-300">
+          <LogOut size={14} />
+        </button>
+      </div>
 
-
-      {/* ===== Code Library — one click loads source + secret slots ===== */}
-
-      <div className={glassCard + " p-4 sm:p-5"}>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
-            <Library size={16} className="text-amber-400" /> Code Library
-          </h3>
-          <span className="text-[10px] text-zinc-500">
-            Tap → loads source + required secret fields below.
-          </span>
+      {/* ─────────── 1. CODE LIBRARY ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <Library size={16} className="text-amber-300" />
+          <h4 className="text-sm font-bold text-white">Code Library</h4>
+          <span className="text-[10px] text-zinc-500">tap to load into editor</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {EDGE_FUNCTION_LIBRARY.map((entry) => {
-            return (
+          {EDGE_FUNCTION_LIBRARY.map((entry) => (
             <button
               key={entry.slug}
               type="button"
@@ -640,10 +641,7 @@ export default function EgdManager({
                 setCode(entry.source);
                 setSecrets(
                   entry.secrets.length > 0
-                    ? entry.secrets.map((name) => ({
-                        name,
-                        value: "",
-                      }))
+                    ? entry.secrets.map((name) => ({ name, value: "" }))
                     : [{ name: "", value: "" }],
                 );
                 setResultUrl("");
@@ -654,419 +652,421 @@ export default function EgdManager({
                     : `Loaded "${entry.label}" — fill ${entry.secrets.length} secret(s) below, then Deploy.`,
                 );
                 toast.success(`Loaded: ${entry.label}`);
-                if (typeof window !== "undefined") {
-                  setTimeout(() => {
-                    document
-                      .querySelector('[data-egd-editor-anchor="true"]')
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }, 50);
-                }
+                setTimeout(() => {
+                  document.getElementById("egd-name-input")?.focus();
+                }, 60);
               }}
-              className="relative text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:bg-amber-500/5 hover:border-amber-400/60 transition p-3 min-w-0 overflow-hidden"
+              className="group text-left rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] hover:border-amber-500/40 transition-all p-3 space-y-1.5 min-w-0"
             >
-              <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
-              {(entry.badgeText || entry.isNew) && (
-                <div className={`absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${
-                  entry.badgeTone === "cyan" ? "border border-cyan-400/50 bg-cyan-500/15 text-cyan-200" :
-                  entry.badgeTone === "amber" ? "border border-amber-400/50 bg-amber-500/15 text-amber-200" :
-                  "border border-emerald-400/50 bg-emerald-500/15 text-emerald-200"
-                }`}>
-                  {entry.badgeText || "NEW"}
-                </div>
-              )}
-              <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
-              <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
-              {entry.secrets.length > 0 && (
-                <div className="mt-1.5 inline-flex items-center gap-1 text-[9px] text-amber-300/90">
-                  <KeyRound size={9} /> {entry.secrets.length} secret{entry.secrets.length > 1 ? "s" : ""}
-                </div>
-              )}
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="text-[12px] font-bold text-white truncate flex-1 min-w-0">{entry.label}</div>
+                {(entry.badgeText || entry.isNew) && (
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    entry.badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300" :
+                    entry.badgeTone === "amber" ? "bg-amber-500/20 text-amber-300" :
+                    "bg-emerald-500/20 text-emerald-300"
+                  }`}>
+                    {entry.badgeText || "NEW"}
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-zinc-400 line-clamp-2 leading-tight">{entry.description}</div>
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="text-[9px] text-amber-300/80 font-mono truncate flex-1 min-w-0">{entry.slug}</div>
+                {entry.secrets.length > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-300/90 shrink-0">
+                    <KeyRound size={9} /> {entry.secrets.length}
+                  </span>
+                )}
+              </div>
             </button>
-            );
-          })}
+          ))}
+        </div>
+      </section>
+
+      {/* ─────────── 2. SCRIPT NAME ─────────── */}
+      <section className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2">
+          <FileCode2 size={16} className="text-amber-300" />
+          <h4 className="text-sm font-bold text-white">Function Name</h4>
+          {selected && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 font-mono">editing: {selected}</span>}
+          <button onClick={newDraft} className="ml-auto text-[10px] text-zinc-400 hover:text-white flex items-center gap-1">
+            <Plus size={11} /> new blank
+          </button>
+        </div>
+        <input
+          id="egd-name-input"
+          value={slug}
+          onChange={(e) => setSlug(slugify(e.target.value))}
+          disabled={!!selected}
+          placeholder="my-function-slug"
+          className={inputClass + " font-mono text-[13px]"}
+        />
+        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 flex items-start gap-2 min-w-0">
+          <LinkIcon size={12} className="text-amber-300 mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] uppercase tracking-wide text-zinc-500 font-semibold">Function URL preview</div>
+            <div className="font-mono text-[10.5px] leading-snug text-amber-300 break-all">
+              {previewFnUrl || "—"}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────── 3. CODE EDITOR + DEPLOY ─────────── */}
+      <section data-egd-editor-anchor="true" className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2">
+          <FileCode2 size={16} className="text-amber-300" />
+          <h4 className="text-sm font-bold text-white">Function Code</h4>
+          <span className="text-[10px] text-zinc-500 ml-auto">{code.length.toLocaleString()} chars</span>
+          <button onClick={() => copyText(code, "Code copied")} className="text-zinc-400 hover:text-white">
+            <Copy size={13} />
+          </button>
+        </div>
+        {sourceHint && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 break-words">
+            {sourceHint}
+          </div>
+        )}
+        <textarea
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          className="w-full h-[420px] rounded-xl border border-white/10 bg-[#0a0a0f] text-emerald-100
+                     font-mono text-[12px] leading-[1.55] p-3 resize-y
+                     focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30"
+          style={{ tabSize: 2 }}
+        />
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={deploy}
+            disabled={deploying || !isConfigured}
+            className={btnPrimary + " gap-2 flex-1 min-w-[160px]"}
+          >
+            {deploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+            {deploying ? "Deploying…" : selected ? "Redeploy" : "Deploy"}
+          </button>
+          {resultUrl && (
+            <>
+              <button onClick={() => copyText(resultUrl, "URL copied")} className={btnSecondary + " gap-2"}>
+                <Copy size={13} /> URL
+              </button>
+              <a href={resultUrl} target="_blank" rel="noopener noreferrer" className={btnSecondary + " gap-2"}>
+                <ExternalLink size={13} /> Open
+              </a>
+            </>
+          )}
+        </div>
+        {resultUrl && (
+          <div className="text-[11px] font-mono text-emerald-300 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2 truncate">
+            {resultUrl}
+          </div>
+        )}
+        {errorLog && (
+          <details className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2">
+            <summary className="text-[11px] text-rose-300 cursor-pointer font-semibold">Deploy errors ({errorLog.split("\n").filter(Boolean).length})</summary>
+            <pre className="mt-2 font-mono text-[10.5px] text-rose-200/90 whitespace-pre-wrap break-words max-h-[160px] overflow-auto">{errorLog}</pre>
+          </details>
+        )}
+      </section>
+
+      {/* ─────────── 4. ENV VALUES ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center gap-2">
+          <KeyRound size={16} className="text-amber-300" />
+          <h4 className="text-sm font-bold text-white">Env Values</h4>
+          <span className="text-[10px] text-zinc-500 ml-auto">project-wide secrets</span>
+          <button
+            onClick={() => setShowProjectSecretValues((v) => !v)}
+            className="text-zinc-400 hover:text-white"
+            title={showProjectSecretValues ? "Hide values" : "Show values"}
+          >
+            {showProjectSecretValues ? <EyeOff size={13} /> : <Eye size={13} />}
+          </button>
+          <button
+            onClick={loadProjectSecrets}
+            disabled={loadingSecrets}
+            className="text-zinc-400 hover:text-white"
+            title="Refresh"
+          >
+            {loadingSecrets ? <Loader2 className="animate-spin" size={13} /> : <RefreshCw size={13} />}
+          </button>
         </div>
 
-      </div>
-
-
-      {/* Editor + List */}
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
-        {/* Editor card */}
-        <div data-egd-editor-anchor="true" className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
-          {/* Name */}
-          <div className="min-w-0">
-            <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
-              <FileCode2 size={12} /> Function Name (slug)
-            </label>
-            <input
-              className={inputClass + " w-full"}
-              placeholder="my-bot"
-              value={slug}
-              onChange={(e) => setSlug(slugify(e.target.value))}
-              disabled={!!selected}
-            />
-            <p className="text-[11px] text-zinc-500 mt-1 break-words">
-              lowercase, numbers, _ and - only. Cannot rename after deploy.
-            </p>
-          </div>
-
-          {/* Code box */}
-          <div className="min-w-0">
-            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-              <label className="text-xs text-zinc-400">Edge Function Code (index.ts)</label>
+        {/* Bulk secret rows for deploy */}
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">Set on next deploy</div>
+          {secrets.map((s, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <input
+                value={s.name}
+                onChange={(e) => updateSecret(i, "name", e.target.value.toUpperCase())}
+                placeholder="KEY_NAME"
+                className={inputClass + " font-mono text-[12px]"}
+              />
+              <input
+                value={s.value}
+                onChange={(e) => updateSecret(i, "value", e.target.value)}
+                type={showProjectSecretValues ? "text" : "password"}
+                placeholder="value"
+                className={inputClass + " font-mono text-[12px]"}
+              />
               <button
-                onClick={() => copyText(code)}
-                className="text-[11px] text-zinc-400 hover:text-amber-300 inline-flex items-center gap-1"
+                onClick={() => removeSecretRow(i)}
+                className="px-3 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/25"
+                title="Remove"
               >
-                <Copy size={11} /> Copy
+                <X size={14} />
               </button>
             </div>
-            {sourceHint && (
-              <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 break-words">
-                {sourceHint}
-              </div>
-            )}
-            <textarea
-              className={inputClass + " font-mono text-[11px] sm:text-xs leading-relaxed w-full block"}
-              style={{ height: 320, resize: "none", overflow: "auto", whiteSpace: "pre" }}
-              spellCheck={false}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
+          ))}
+          <button onClick={addSecretRow} className="text-[11px] text-amber-300 hover:text-amber-200 inline-flex items-center gap-1">
+            <Plus size={12} /> Add row
+          </button>
+        </div>
 
-          {/* Secrets */}
-          <div className="min-w-0">
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <label className="text-xs text-zinc-400 flex items-center gap-1">
-                <KeyRound size={12} /> Secrets (env vars)
-              </label>
-              <button
-                onClick={addSecretRow}
-                className="text-xs text-amber-400 hover:text-amber-300 inline-flex items-center gap-1"
-              >
-                <Plus size={12} /> Add
-              </button>
-            </div>
-            <div className="space-y-2">
-              {secrets.map((s, i) => {
+        {/* Existing project secrets */}
+        <div className="pt-2 border-t border-white/5 space-y-2">
+          <div className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold">Existing ({projectSecrets.length})</div>
+          {projectSecrets.length === 0 ? (
+            <div className="text-[11px] text-zinc-500">No project secrets found.</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {projectSecrets.map((name) => {
+                const active = selectedProjectSecret === name;
                 return (
-                  <div key={i} className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1 min-w-0 relative">
-                      <input
-                        className={inputClass + " w-full"}
-                        placeholder="SECRET_NAME"
-                        value={s.name}
-                        onChange={(e) => updateSecret(i, "name", e.target.value)}
-                      />
+                  <button
+                    key={name}
+                    onClick={() => { setSelectedProjectSecret(active ? "" : name); setProjectSecretDraft(""); }}
+                    className={`text-left rounded-lg border px-2.5 py-2 transition min-w-0 ${
+                      active
+                        ? "border-amber-400/70 bg-amber-500/10"
+                        : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <KeyRound size={10} className="text-amber-300 shrink-0" />
+                      <code className="text-[10.5px] text-amber-200 font-semibold truncate flex-1">{name}</code>
                     </div>
-                    <div className="flex gap-2">
-                      <input
-                        className={inputClass + " flex-1 min-w-0"}
-                        placeholder="value"
-                        type="password"
-                        value={s.value}
-                        onChange={(e) => updateSecret(i, "value", e.target.value)}
-                      />
-                      <button
-                        onClick={() => removeSecretRow(i)}
-                        className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0 disabled:opacity-40"
-                        title="Remove"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1 break-words">
-              Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
-            </p>
+          )}
 
-
-            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-3 min-w-0">
+          {selectedProjectSecret && (
+            <div className="rounded-xl border border-amber-400/40 bg-amber-500/[0.06] p-3 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-xs text-zinc-300">Project secrets</div>
-                  <div className="text-[10px] text-zinc-500 break-words">
-                    Tap a secret → editor opens below. Paste a new value to update, or delete.
-                  </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase text-zinc-400 tracking-wide">Editing</div>
+                  <code className="text-[12px] text-amber-200 font-semibold break-all">{selectedProjectSecret}</code>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex gap-1.5">
                   <button
-                    onClick={() => setShowProjectSecretValues((v) => !v)}
-                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                    onClick={() => deleteProjectSecretValue(selectedProjectSecret)}
+                    disabled={deletingProjectSecret === selectedProjectSecret}
+                    className="rounded-md bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
                   >
-                    {showProjectSecretValues ? "Hide" : "Show"}
+                    {deletingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={11} /> : <Trash2 size={11} />}
+                    Delete
                   </button>
                   <button
-                    onClick={loadProjectSecrets}
-                    disabled={loadingSecrets}
-                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                    onClick={() => { setSelectedProjectSecret(""); setProjectSecretDraft(""); }}
+                    className="rounded-md bg-white/5 text-zinc-300 hover:bg-white/10 px-2 py-1.5 text-[11px]"
                   >
-                    {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
-                    Refresh
+                    <X size={11} />
                   </button>
                 </div>
               </div>
-
-              {projectSecrets.length === 0 ? (
-                <div className="text-[11px] text-zinc-500">No project secrets found.</div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {projectSecrets.map((name) => {
-                    const active = selectedProjectSecret === name;
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => {
-                          setSelectedProjectSecret(name);
-                          setProjectSecretDraft("");
-                        }}
-                        className={
-                          "text-left rounded-xl border p-2.5 transition min-w-0 overflow-hidden " +
-                          (active
-                            ? "border-amber-400/70 bg-amber-500/10"
-                            : "border-zinc-700/60 bg-zinc-900/50 hover:border-amber-400/40 hover:bg-amber-500/5")
-                        }
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <KeyRound size={11} className="text-amber-300 shrink-0" />
-                          <code className="text-[10px] text-amber-200 font-semibold break-all leading-tight">{name}</code>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Selected secret editor — Code-Library style */}
-              {selectedProjectSecret && (
-                <div className="rounded-lg border border-amber-400/50 bg-amber-500/5 p-3 space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-zinc-400 uppercase tracking-wide">Editing secret</div>
-                      <code className="text-[12px] text-amber-200 font-semibold break-all">{selectedProjectSecret}</code>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => deleteProjectSecretValue(selectedProjectSecret)}
-                        disabled={deletingProjectSecret === selectedProjectSecret || savingProjectSecret === selectedProjectSecret}
-                        className="rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
-                        title="Delete this secret"
-                      >
-                        {deletingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => { setSelectedProjectSecret(""); setProjectSecretDraft(""); }}
-                        className="rounded-md bg-zinc-700/40 text-zinc-300 hover:bg-zinc-700/70 px-2 py-1.5 text-[11px] inline-flex items-center"
-                        title="Close editor"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-zinc-500 break-words">
-                    Existing value is hidden by Supabase for security — it can't be read back. Paste a new value here to overwrite it.
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      className={inputClass + " flex-1 min-w-0 !text-[11px] font-mono"}
-                      placeholder={`new value for ${selectedProjectSecret}`}
-                      type={showProjectSecretValues ? "text" : "password"}
-                      value={projectSecretDraft}
-                      onChange={(e) => setProjectSecretDraft(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <button
-                      onClick={saveProjectSecretValue}
-                      disabled={savingProjectSecret === selectedProjectSecret || deletingProjectSecret === selectedProjectSecret || !projectSecretDraft.trim()}
-                      className={btnPrimary + " !px-4 !py-2 text-[11px] shrink-0 disabled:opacity-50 inline-flex items-center gap-1.5"}
-                    >
-                      {savingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}
-                      Save value
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Deploy button */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              onClick={deploy}
-              disabled={deploying || !isConfigured}
-              className={btnPrimary + " inline-flex items-center gap-2"}
-            >
-              {deploying ? <Loader2 className="animate-spin" size={16} /> : <Rocket size={16} />}
-              {deploying ? "Deploying..." : "Deploy"}
-            </button>
-            {selected && (
-              <span className="text-xs text-zinc-500 truncate max-w-full">
-                Editing: <span className="text-amber-300">{selected}</span>
-              </span>
-            )}
-          </div>
-
-          {/* Result URL */}
-          {resultUrl && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 min-w-0">
-              <div className="text-xs text-emerald-300 mb-1">✔ Live URL</div>
-              <div className="flex items-center gap-2 min-w-0">
-                <code className="flex-1 truncate text-xs sm:text-sm text-emerald-200 min-w-0">{resultUrl}</code>
-                <button onClick={() => copyText(resultUrl)} className="text-emerald-300 hover:text-white shrink-0" title="Copy">
-                  <Copy size={14} />
-                </button>
-                <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-white shrink-0">
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* Error log */}
-          <div className="min-w-0 space-y-3">
-            <label className="text-xs text-zinc-400 block mb-1">Error / Deploy log</label>
-            <textarea
-              readOnly
-              value={errorLog || "— no errors —"}
-              className={inputClass + " font-mono text-[11px] leading-relaxed w-full block"}
-              style={{ height: 120, resize: "none", overflow: "auto" }}
-            />
-
-            <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 sm:p-4 space-y-3 min-w-0">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-xs text-zinc-400">Live log timeline</div>
-                  <div className="text-[11px] text-zinc-500 break-words">
-                    {selected ? `${selected} · recent function and edge logs` : "Project-wide recent function and edge logs"}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {LOG_WINDOWS.map((item) => (
-                    <button
-                      key={item.minutes}
-                      onClick={() => {
-                        setLogsWindow(item.minutes);
-                        loadLogs(selected, item.minutes);
-                      }}
-                      className={
-                        "rounded-md px-2.5 py-1 text-[11px] border transition " +
-                        (logsWindow === item.minutes
-                          ? "border-amber-400/60 bg-amber-500/10 text-amber-200"
-                          : "border-zinc-700/70 text-zinc-400 hover:text-zinc-200")
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => loadLogs()}
-                    disabled={loadingLogs}
-                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
-                  >
-                    {loadingLogs ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-zinc-500 mb-1 block">Start</label>
-                  <input
-                    type="datetime-local"
-                    className={inputClass + " w-full text-[11px]"}
-                    value={logStartAt}
-                    onChange={(e) => setLogStartAt(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-zinc-500 mb-1 block">End</label>
-                  <input
-                    type="datetime-local"
-                    className={inputClass + " w-full text-[11px]"}
-                    value={logEndAt}
-                    onChange={(e) => setLogEndAt(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="max-h-[240px] overflow-auto space-y-2 pr-1">
-                {logs.length === 0 ? (
-                  <div className="text-xs text-zinc-500">No logs found in this time window.</div>
-                ) : (
-                  logs.map((row, idx) => (
-                    <div key={`${row.timestamp || 't'}-${idx}`} className="rounded-md border border-zinc-800 bg-zinc-950/50 p-2.5">
-                      <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500">
-                        <span className="uppercase tracking-wide">{row.source || "log"}</span>
-                        <span className="shrink-0">{row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}</span>
-                      </div>
-                      <div className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] text-zinc-200">
-                        {row.event_message || "(empty log)"}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* List card */}
-        <div className={glassCard + " p-4 min-w-0"}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold flex items-center gap-2">
-              <Bot size={16} className="text-amber-400" /> Deployed
-            </h3>
-            <button onClick={loadList} className="text-zinc-400 hover:text-white" title="Refresh">
-              {loadingList ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
-            </button>
-          </div>
-          {!isConfigured ? (
-            <p className="text-xs text-zinc-500">Configure deployer first.</p>
-          ) : sortedList.length === 0 ? (
-            <p className="text-xs text-zinc-500">No functions deployed yet.</p>
-          ) : (
-            <div className="space-y-2 max-h-[640px] overflow-auto pr-1 min-w-0">
-              {sortedList.map((f) => (
-                <div
-                  key={f.id || f.slug}
-                  className={
-                    "rounded-lg border p-3 cursor-pointer transition min-w-0 overflow-hidden " +
-                    (selected === f.slug
-                      ? "border-amber-400/60 bg-amber-500/10"
-                      : "border-zinc-700/50 bg-zinc-900/40 hover:border-zinc-600")
-                  }
-                  onClick={() => loadFn(f.slug)}
+              <div className="flex gap-2">
+                <input
+                  className={inputClass + " flex-1 font-mono text-[11px]"}
+                  placeholder={`new value for ${selectedProjectSecret}`}
+                  type={showProjectSecretValues ? "text" : "password"}
+                  value={projectSecretDraft}
+                  onChange={(e) => setProjectSecretDraft(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  onClick={saveProjectSecretValue}
+                  disabled={savingProjectSecret === selectedProjectSecret || !projectSecretDraft.trim()}
+                  className={btnPrimary + " gap-1.5 disabled:opacity-50"}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm break-words leading-tight">{f.slug}</div>
-                      <div className="text-[10px] text-zinc-500 break-words mt-1">
-                        v{f.version || "?"} · {(f.status || "—").toUpperCase()}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeFn(f.slug); }}
-                      className="text-red-400 hover:text-red-300"
-                      disabled={deleting === f.slug}
-                      title="Delete"
-                    >
-                      {deleting === f.slug ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  {savingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <Save size={12} />}
+                  Save
+                </button>
+              </div>
             </div>
           )}
         </div>
-      </div>
+      </section>
+
+      {/* ─────────── 5. LIVE LOGS ─────────── */}
+      <section className={`${glassCard} p-4 space-y-2`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Terminal size={16} className="text-amber-300" />
+          <h4 className="text-sm font-bold text-white">Live Logs</h4>
+          <span className="text-[10px] text-zinc-500">
+            {selected ? `for ${selected}` : "project-wide"}
+          </span>
+          <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+            {LOG_WINDOWS.map((item) => (
+              <button
+                key={item.minutes}
+                onClick={() => { setLogsWindow(item.minutes); loadLogs(selected, item.minutes); }}
+                className={`rounded-md px-2 py-1 text-[10px] font-semibold border transition ${
+                  logsWindow === item.minutes
+                    ? "border-amber-400/60 bg-amber-500/15 text-amber-200"
+                    : "border-white/10 bg-white/5 text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button
+              onClick={() => loadLogs()}
+              disabled={loadingLogs}
+              className={btnSecondary + " gap-1 text-[10.5px] py-1 px-2"}
+            >
+              {loadingLogs ? <Loader2 className="animate-spin" size={11} /> : <RefreshCw size={11} />}
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="datetime-local"
+            className={inputClass + " text-[11px]"}
+            value={logStartAt}
+            onChange={(e) => setLogStartAt(e.target.value)}
+            placeholder="Start"
+          />
+          <input
+            type="datetime-local"
+            className={inputClass + " text-[11px]"}
+            value={logEndAt}
+            onChange={(e) => setLogEndAt(e.target.value)}
+            placeholder="End"
+          />
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-[#050508] p-2.5 h-[240px] overflow-y-auto overflow-x-hidden
+                        font-mono text-[11px] leading-[1.55] text-emerald-200/90 whitespace-pre-wrap break-words">
+          {logs.length === 0 ? (
+            <div className="h-full grid place-items-center text-center text-zinc-600 px-4">
+              No logs in this window.
+            </div>
+          ) : (
+            logs.map((row, idx) => (
+              <div key={`${row.timestamp || 't'}-${idx}`} className="rounded-lg px-2 py-1.5 mb-1 bg-white/[0.025] border border-white/[0.04]">
+                <div className="flex items-center justify-between gap-2 text-[9.5px] text-zinc-500">
+                  <span className="uppercase tracking-wide">{row.source || "log"}</span>
+                  <span className="shrink-0">{row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}</span>
+                </div>
+                <div className="mt-0.5 whitespace-pre-wrap break-words text-emerald-100/90">
+                  {row.event_message || "(empty log)"}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* ─────────── 6. DEPLOYED FUNCTIONS ─────────── */}
+      <section className={`${glassCard} p-4 space-y-3 overflow-hidden`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Bot size={16} className="text-amber-300 shrink-0" />
+          <h4 className="text-sm font-bold text-white">Deployed Functions</h4>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-zinc-400 font-mono">{sortedList.length}</span>
+        </div>
+        <div className="relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="filter functions…"
+            className={inputClass + " pl-8 text-[12px]"}
+          />
+        </div>
+
+        {loadingList ? (
+          <div className="text-[11px] text-zinc-500 flex items-center gap-2 p-3">
+            <Loader2 size={12} className="animate-spin" /> Loading…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-[11px] text-zinc-500 py-6 text-center border border-dashed border-white/10 rounded-xl">
+            No functions yet. Load one from the library above and Deploy.
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {filtered.map((f) => {
+              const active = selected === f.slug;
+              const url = supaRef ? `https://${supaRef}.supabase.co/functions/v1/${f.slug}` : "";
+              const isDeleting = deleting === f.slug;
+              return (
+                <div key={f.id || f.slug}
+                  className={`rounded-xl border px-3 py-2.5 space-y-2 transition-all overflow-hidden ${
+                    active ? "border-amber-500/50 bg-amber-500/[0.06]"
+                           : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                  <button onClick={() => loadFn(f.slug)} className="w-full min-w-0 text-left flex items-start gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${active ? "bg-amber-400" : "bg-emerald-400/70"}`} />
+                    <span className="min-w-0 flex-1 block">
+                      <span className="block text-[12.5px] font-bold text-white truncate">{f.slug}</span>
+                      <span className="block text-[9.5px] text-zinc-500">
+                        v{f.version || "?"} · {(f.status || "—").toUpperCase()}
+                      </span>
+                      {url && <span className="block text-[9.5px] font-mono text-amber-300/70 truncate">{url}</span>}
+                    </span>
+                  </button>
+                  <div className="grid grid-cols-4 gap-1.5 min-w-0">
+                    <a
+                      href={url || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-disabled={!url}
+                      onClick={(e) => { if (!url) e.preventDefault(); }}
+                      title="Open URL"
+                      className={`h-8 rounded-lg border flex items-center justify-center gap-1 text-[10.5px] font-semibold min-w-0 ${
+                        url ? "bg-white/5 hover:bg-white/10 border-white/10 text-zinc-200" : "bg-white/[0.02] border-white/5 text-zinc-600 pointer-events-none"
+                      }`}
+                    >
+                      <ExternalLink size={11} className="shrink-0" /> <span className="truncate">Open</span>
+                    </a>
+                    <button
+                      onClick={() => loadFn(f.slug)}
+                      title="Edit"
+                      className="h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-zinc-200 min-w-0"
+                    >
+                      <FileCode2 size={11} className="shrink-0" /> <span className="truncate">Edit</span>
+                    </button>
+                    <button
+                      onClick={() => url && copyText(url, "URL copied")}
+                      disabled={!url}
+                      title="Copy URL"
+                      className="h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-zinc-200 disabled:opacity-40 min-w-0"
+                    >
+                      <Copy size={11} className="shrink-0" /> <span className="truncate">Copy</span>
+                    </button>
+                    <button
+                      onClick={() => removeFn(f.slug)}
+                      disabled={isDeleting}
+                      title="Delete"
+                      className="h-8 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 flex items-center justify-center gap-1 text-[10.5px] font-semibold text-rose-300 disabled:opacity-50 min-w-0"
+                    >
+                      {isDeleting ? <Loader2 size={11} className="animate-spin shrink-0" /> : <Trash2 size={11} className="shrink-0" />}
+                      <span className="truncate">Delete</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
