@@ -22,9 +22,14 @@ interface Props {
   btnPrimary: string;
 }
 
+// Module-level cache — the same "warm start" pattern used elsewhere in
+// the admin panel. Re-opening this section paints the list instantly
+// from cache while the fresh Firebase snapshot arrives in the background.
+let videoServersCache: Server[] = [];
+
 const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
-  const [servers, setServers] = useState<Server[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [servers, setServers] = useState<Server[]>(() => videoServersCache);
+  const [loading, setLoading] = useState(videoServersCache.length === 0);
   const [newName, setNewName] = useState("");
   const [newDomain, setNewDomain] = useState("");
 
@@ -50,6 +55,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       } else if (val && typeof val === "object") {
         next = Object.values(val).filter((s: any) => s && s.domain) as Server[];
       }
+      videoServersCache = next;
       // If the admin is currently editing or typing, park the snapshot
       // and apply it once they finish — never mid-typing.
       if (isBusyRef.current) {

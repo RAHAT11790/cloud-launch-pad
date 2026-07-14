@@ -201,6 +201,24 @@ const ADMIN_DROPDOWN_LIMIT = 60;
 const ADMIN_CONTENT_RELOAD_TTL_MS = 10 * 60 * 1000;
 const ADMIN_POSTER_WARM_LIMIT = 220;
 
+// Module-scope caches so tab-switches inside the admin panel feel instant:
+// the last snapshot survives unmount and is re-used as the initial state on
+// re-mount, exactly like the AnimeCard `watchlistCacheByUser` pattern.
+// LocalStorage-backed "warm start" for the dashboard's Weekly Episode +
+// Recent Content strip so first paint after refresh is instant instead of
+// waiting for Firebase.
+const WEEKLY_SCHEDULE_CACHE_KEY = "admin_dashboard_weeklySchedule_v1";
+let weeklyScheduleCache: Record<string, any> = (() => {
+ try {
+  const raw = typeof window !== "undefined" ? window.localStorage.getItem(WEEKLY_SCHEDULE_CACHE_KEY) : null;
+  return raw ? (JSON.parse(raw) || {}) : {};
+ } catch { return {}; }
+})();
+const writeWeeklyScheduleCache = (data: Record<string, any>) => {
+ weeklyScheduleCache = data || {};
+ try { window.localStorage.setItem(WEEKLY_SCHEDULE_CACHE_KEY, JSON.stringify(weeklyScheduleCache)); } catch {}
+};
+
 const adminIdle = (callback: () => void, timeout = 1200) => {
  const idle = (window as any).requestIdleCallback;
  if (typeof idle === "function") {
@@ -2870,6 +2888,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // eliminating the biggest source of admin-panel lag.
  useEffect(() => {
     const CONTENT_SECTIONS: Section[] = [
+      // Dashboard is included so the "Recent Content" strip paints instantly
+      // from the cached admin content index instead of showing an empty state
+      // on the very first admin visit.
+      "dashboard",
       "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
       "animesalt-manager", "new-releases", "manual-push", "notifications",
       "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
@@ -4199,19 +4221,38 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
  ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
  ].sort((a, b) => (Number(b.updatedAt) || Number(b.createdAt) || 0) - (Number(a.updatedAt) || Number(a.createdAt) || 0)).slice(0, 3), [webseriesData, moviesData]);
-
- // Weekly schedule (for dashboard preview)
- const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
+ // Warm Recent Content posters on idle so the dashboard strip paints
+ // instantly and never shows the "N" placeholder even on first visit.
  useEffect(() => {
-  if (activeSection !== "dashboard") return;
- const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
- return () => unsub();
-  }, [activeSection]);
+  if (!recentContent.length) return;
+  const posters = recentContent.map((item: any) => item?.poster).filter(Boolean);
+  if (posters.length) adminIdle(() => { void preloadCachedImages(posters, 8); }, 300);
+ }, [recentContent]);
+
+ // Weekly schedule — subscribe ALWAYS (not gated on activeSection), seed
+ // from module-level cache so opening the dashboard tab shows the strip
+ // instantly instead of waiting for a fresh Firebase snapshot.
+ const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>(() => weeklyScheduleCache);
+ useEffect(() => {
+  const unsub = onValue(ref(db, "weeklySchedule"), snap => {
+   const val = snap.val() || {};
+   writeWeeklyScheduleCache(val);
+   startTransition(() => setWeeklyScheduleData(val));
+  });
+  return () => unsub();
+ }, []);
  const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
  const todayScheduled = useMemo(
  () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName || s?.day === "AllDay"),
  [weeklyScheduleData, todayDayName]
  );
+ // Warm the today-strip posters on idle so the Weekly Episode row paints
+ // instantly the next time the admin returns to the dashboard.
+ useEffect(() => {
+  if (!todayScheduled.length) return;
+  const posters = todayScheduled.slice(0, 8).map((s: any) => s?.poster).filter(Boolean);
+  if (posters.length) adminIdle(() => { void preloadCachedImages(posters, 12); }, 400);
+ }, [todayScheduled]);
  const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
  const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
 
