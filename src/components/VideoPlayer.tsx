@@ -2036,8 +2036,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const playbackSrc = useMemo(() => {
     const raw = String(currentSrc || "").trim();
     if (!raw) return currentSrc;
-    return rsGuardMap[raw] || currentSrc;
-  }, [currentSrc, rsGuardMap]);
+    if (rsGuardMap[raw]) return rsGuardMap[raw];
+    // For RS server URLs, hold back the raw URL until guarded token is minted
+    // so the raw link never appears in the network tab.
+    if (isRsServerUrl(raw)) return "";
+    return currentSrc;
+  }, [currentSrc, rsGuardMap, isRsServerUrl]);
 
 
 
