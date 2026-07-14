@@ -10,7 +10,7 @@
 //   settings/apk/userEnabled    (boolean — show user-side button?)
 //   settings/apk/notes          (string — admin-only release notes)
 // =====================================================================
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Download, Save, Shield, Power, Smartphone, Link as LinkIcon } from "lucide-react";
@@ -23,23 +23,55 @@ interface Props {
   btnPrimary: string;
 }
 
+// Warm-start cache — paints APK Center instantly on re-open.
+const CACHE_KEY = "rs_admin_apk_center_cache_v1";
+type CacheShape = { userUrl: string; adminUrl: string; notes: string; userEnabled: boolean };
+let apkCache: CacheShape | null = (() => {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
+})();
+const writeCache = (patch: Partial<CacheShape>) => {
+  apkCache = { userUrl: "", adminUrl: "", notes: "", userEnabled: true, ...(apkCache || {}), ...patch };
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(apkCache)); } catch {}
+};
+
 export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }: Props) {
-  const [userUrl, setUserUrl] = useState("");
-  const [adminUrl, setAdminUrl] = useState("");
-  const [notes, setNotes] = useState("");
-  const [userEnabled, setUserEnabled] = useState(true);
+  const [userUrl, setUserUrl] = useState<string>(apkCache?.userUrl ?? "");
+  const [adminUrl, setAdminUrl] = useState<string>(apkCache?.adminUrl ?? "");
+  const [notes, setNotes] = useState<string>(apkCache?.notes ?? "");
+  const [userEnabled, setUserEnabled] = useState<boolean>(apkCache?.userEnabled ?? true);
   const [savingUser, setSavingUser] = useState(false);
   const [savingAdmin, setSavingAdmin] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
 
+  const typingRef = useRef(false);
+  const markTyping = () => {
+    typingRef.current = true;
+    window.clearTimeout((markTyping as any)._t);
+    (markTyping as any)._t = window.setTimeout(() => { typingRef.current = false; }, 4000);
+  };
+
   useEffect(() => {
     const unsubs = [
-      onValue(ref(db, "settings/apk/userUrl"), (s) => setUserUrl(String(s.val() || ""))),
-      onValue(ref(db, "settings/apk/adminUrl"), (s) => setAdminUrl(String(s.val() || ""))),
-      onValue(ref(db, "settings/apk/notes"), (s) => setNotes(String(s.val() || ""))),
+      onValue(ref(db, "settings/apk/userUrl"), (s) => {
+        const v = String(s.val() || "");
+        writeCache({ userUrl: v });
+        if (!typingRef.current) setUserUrl(v);
+      }),
+      onValue(ref(db, "settings/apk/adminUrl"), (s) => {
+        const v = String(s.val() || "");
+        writeCache({ adminUrl: v });
+        if (!typingRef.current) setAdminUrl(v);
+      }),
+      onValue(ref(db, "settings/apk/notes"), (s) => {
+        const v = String(s.val() || "");
+        writeCache({ notes: v });
+        if (!typingRef.current) setNotes(v);
+      }),
       onValue(ref(db, "settings/apk/userEnabled"), (s) => {
-        const v = s.val();
-        setUserEnabled(v === undefined || v === null ? true : !!v);
+        const raw = s.val();
+        const v = raw === undefined || raw === null ? true : !!raw;
+        writeCache({ userEnabled: v });
+        setUserEnabled(v);
       }),
     ];
     return () => { unsubs.forEach((u) => u()); };
