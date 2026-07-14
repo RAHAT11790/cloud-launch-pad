@@ -158,16 +158,44 @@ const TelegramWelcomeModal = () => {
               <X className="w-3.5 h-3.5" />
             </button>
 
-            {/* Header — compact brand accent */}
-            <div className="pt-5 pb-3 px-5 text-center">
+            {/* Header — real Telegram logo + cycling secondary badge */}
+            <div className="pt-6 pb-3 px-5 text-center relative">
+              {/* soft brand glow */}
               <div
-                className="mx-auto w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-24 pointer-events-none"
                 style={{
-                  background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%)",
-                  boxShadow: "0 8px 24px -8px hsl(var(--primary) / 0.6)",
+                  background:
+                    "radial-gradient(60% 100% at 50% 0%, rgba(55,187,254,0.18) 0%, transparent 70%)",
                 }}
-              >
-                <Send className="w-5 h-5 text-primary-foreground -mr-0.5" strokeWidth={2.4} />
+              />
+              <div className="relative mx-auto w-16 h-16 mb-3">
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{ boxShadow: "0 10px 30px -8px rgba(0,125,187,0.55)" }}
+                />
+                <TelegramLogo className="w-16 h-16 relative" />
+                {/* Cycling side badge */}
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-card border-2 border-card shadow-lg overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    {(() => {
+                      const { Icon, color } = CYCLE_ICONS[cycleIdx];
+                      return (
+                        <motion.div
+                          key={cycleIdx}
+                          initial={{ y: 12, opacity: 0, scale: 0.7 }}
+                          animate={{ y: 0, opacity: 1, scale: 1 }}
+                          exit={{ y: -12, opacity: 0, scale: 0.7 }}
+                          transition={{ duration: 0.28, ease: "easeOut" }}
+                          className="absolute inset-0 flex items-center justify-center rounded-full"
+                          style={{ background: `${color}22` }}
+                        >
+                          <Icon className="w-3.5 h-3.5" style={{ color }} strokeWidth={2.6} />
+                        </motion.div>
+                      );
+                    })()}
+                  </AnimatePresence>
+                </div>
               </div>
               <h2 className="text-foreground text-[15px] font-bold leading-tight">
                 {heading}
@@ -185,11 +213,13 @@ const TelegramWelcomeModal = () => {
                   href={b.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group flex items-center gap-2.5 w-full rounded-xl px-3 py-2.5 bg-secondary/60 hover:bg-secondary border border-border/50 hover:border-primary/40 transition-colors"
+                  className="group flex items-center gap-2.5 w-full rounded-xl px-3 py-2.5 bg-secondary/60 hover:bg-secondary border border-border/50 hover:border-primary/50 transition-colors"
                 >
-                  <span className="w-8 h-8 rounded-lg bg-background/70 border border-border/50 flex items-center justify-center text-foreground/80 flex-shrink-0 relative">
+                  <span
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0 shadow-md"
+                    style={{ background: iconGradient(b.color) }}
+                  >
                     {iconFor(b.icon)}
-                    <span className={`absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ${dotColor(b.color)}`} />
                   </span>
                   <span className="flex-1 text-left leading-tight min-w-0">
                     <span className="block text-[12.5px] font-semibold text-foreground truncate">{b.title}</span>
