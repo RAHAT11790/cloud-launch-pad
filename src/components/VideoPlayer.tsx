@@ -168,6 +168,17 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
+const isRsHostedMp4Source = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase();
+  if (!/\.(?:mp4|m4v|mov|mkv|webm)(?:[?#]|$)/i.test(normalized)) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return /bot-hosting|hf\.space|onrender\.com|jrnm\.app|render\.com/.test(host);
+  } catch {
+    return /bot-hosting|hf\.space|onrender\.com|jrnm\.app|render\.com/.test(normalized);
+  }
+};
+
   const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
   if (!url) return [];
 
@@ -207,9 +218,10 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  addCandidate(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
+  const proxyFirst = !!customProxyCandidate && (preferProxy || isRsHostedMp4Source(url));
+  if (proxyFirst) addCandidate(customProxyCandidate);
+  addCandidate(url);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
   return candidates;
 };
@@ -2193,7 +2205,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       proxyUrl || undefined,
       proxyApiKey || undefined,
       preferProxy
-    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
+    ).find((candidateSrc) => {
+      if (isRsHostedMp4Source(activeSourceBaseRef.current) && !isVideoProxyPlaybackUrl(candidateSrc, proxyUrl)) return false;
+      return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey;
+    });
 
     if (sameQualityRouteFallback) {
       pendingSeek.current = activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0);

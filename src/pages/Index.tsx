@@ -1205,6 +1205,7 @@ const Index = () => {
   const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
   }, []);
+  const playbackOpeningRouteRef = useRef("");
   const stopAllPlayback = useCallback(() => {
     // Skip teardown when the suggestion-switch flow wants to keep the player
     // alive so React can swap props in-place (no flash / no reopen).
@@ -2303,6 +2304,7 @@ const Index = () => {
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
+    playbackOpeningRouteRef.current = targetWatchRoute;
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
@@ -2419,10 +2421,14 @@ const Index = () => {
               ? getMoviePartSrc((anime.parts as any[])[resolvedEpIdx + 1])
               : undefined,
       });
+      window.setTimeout(() => {
+        if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
+      }, 250);
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
+      if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
       if (!isAnimeSaltContent && !alreadyRetriedFresh) {
         const fresh = await loadFullFirebaseAnimeItemWithTimeout(anime, 3600, { forceFresh: true });
         if (fresh && hasStoredFirebasePlayback(fresh)) {
@@ -2438,6 +2444,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!isWatchRoute) {
+      playbackOpeningRouteRef.current = "";
       if (keepPlayerAliveRef.current || inPlayerSwitchRef.current) return;
       stopAllPlayback();
       if (playerStateRef.current) setPlayerState(null);
@@ -2484,6 +2491,7 @@ const Index = () => {
     const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
     const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
     if (sameAnime && sameSeason && sameEpisode && current) return;
+    if (playbackOpeningRouteRef.current === `${location.pathname}${location.search}`) return;
 
     if (isAnimeSaltRouteItem(targetAnime)) {
       void handleCardClick(targetAnime, nextSeasonIdx, nextEpIdx);
