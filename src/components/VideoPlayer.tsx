@@ -4646,7 +4646,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ) : (
             <video
               ref={videoRef}
-              src={(isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
+              src={(isHlsSrc && Hls.isSupported()) ? undefined : playbackSrc}
               crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
