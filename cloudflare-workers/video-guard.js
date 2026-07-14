@@ -5,9 +5,8 @@
 // exactly ONCE. If a hacker copies the guarded URL from the
 // network tab and replays it, they get "link expired".
 //
-// This worker does NOT proxy video bytes. It ONLY signs + gates.
-// After the first valid hit, the underlying URL is revealed
-// (as a 302 redirect or JSON) and the token is burned.
+// This worker DOES NOT redirect to the real URL. It signs + gates + streams
+// the media bytes itself so the browser network log only sees /play?t=...
 //
 // ------------------------------------------------------------
 // Deploy as a Module Worker. Required secret:
@@ -28,7 +27,8 @@
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type, authorization",
+  "Access-Control-Allow-Headers": "content-type, authorization, range, if-range, if-none-match, if-modified-since, accept",
+  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -101,23 +101,91 @@ async function verifyToken(token, secret) {
   return { ok: true, payload };
 }
 
-// ---------- single-use store (KV preferred, Cache API fallback) ----------
-async function markUsedOrReject(jti, expUnix, env) {
-  const ttl = Math.max(30, expUnix - Math.floor(Date.now() / 1000));
+async function sha256Hex(input) {
+  const digest = await crypto.subtle.digest("SHA-256", strToBytes(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getClientFingerprint(req) {
+  const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "";
+  const ua = req.headers.get("user-agent") || "";
+  return `${ip}|${ua}`;
+}
+
+function isLikelyMediaRequest(req) {
+  if (req.method === "HEAD") return true;
+  const dest = (req.headers.get("sec-fetch-dest") || "").toLowerCase();
+  if (dest === "document" || dest === "iframe") return false;
+  if (dest === "video" || dest === "audio" || dest === "media") return true;
+  if (req.headers.has("range")) return true;
+  const accept = (req.headers.get("accept") || "").toLowerCase();
+  return accept.includes("video/") || accept.includes("audio/");
+}
+
+async function readClaim(jti, env) {
   if (env?.GUARD_KV) {
     const existing = await env.GUARD_KV.get(`u:${jti}`);
-    if (existing) return false;
-    await env.GUARD_KV.put(`u:${jti}`, "1", { expirationTtl: ttl });
-    return true;
+    return existing ? JSON.parse(existing) : null;
   }
-  // Cache API fallback — per-colo only, but blocks re-use within a colo.
   const cache = caches.default;
-  const key = new Request(`https://guard.local/used/${jti}`);
-  const hit = await cache.match(key);
-  if (hit) return false;
-  const marker = new Response("1", { headers: { "Cache-Control": `public, max-age=${ttl}` } });
+  const hit = await cache.match(new Request(`https://guard.local/claim/${jti}`));
+  return hit ? await hit.json().catch(() => null) : null;
+}
+
+async function writeClaim(jti, expUnix, env, claim) {
+  const ttl = Math.max(30, expUnix - Math.floor(Date.now() / 1000));
+  if (env?.GUARD_KV) {
+    await env.GUARD_KV.put(`u:${jti}`, JSON.stringify(claim), { expirationTtl: ttl });
+    return;
+  }
+  const cache = caches.default;
+  const key = new Request(`https://guard.local/claim/${jti}`);
+  const marker = new Response(JSON.stringify(claim), {
+    headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ttl}` },
+  });
   await cache.put(key, marker);
-  return true;
+}
+
+async function claimPlaybackOrReject(req, payload, env) {
+  if (!isLikelyMediaRequest(req)) return { ok: false, reason: "media-only" };
+  const fpHash = await sha256Hex(getClientFingerprint(req));
+  const now = Date.now();
+  const existing = await readClaim(payload.jti, env);
+  if (existing) {
+    if (existing.fpHash && existing.fpHash !== fpHash) return { ok: false, reason: "link expired" };
+    existing.lastAt = now;
+    existing.hits = Math.min(9999, Number(existing.hits || 0) + 1);
+    await writeClaim(payload.jti, payload.exp, env, existing);
+    return { ok: true };
+  }
+  await writeClaim(payload.jti, payload.exp, env, { fpHash, firstAt: now, lastAt: now, hits: 1 });
+  return { ok: true };
+}
+
+function buildUpstreamHeaders(req) {
+  const headers = new Headers();
+  ["range", "if-range", "if-none-match", "if-modified-since", "accept", "accept-language"].forEach((name) => {
+    const value = req.headers.get(name);
+    if (value) headers.set(name, value);
+  });
+  const ua = req.headers.get("user-agent");
+  if (ua) headers.set("user-agent", ua);
+  return headers;
+}
+
+function buildProxyResponse(upstream, method) {
+  const headers = new Headers(cors);
+  ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"].forEach((name) => {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  });
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(method === "HEAD" ? null : upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
 }
 
 // ---------- responses ----------
@@ -140,7 +208,8 @@ export default {
     if (path === "/" || path === "/health") {
       return json({
         ok: true, name: "video-guard",
-        purpose: "single-use protection for video URLs",
+        purpose: "single-use streaming protection for video URLs",
+        mode: "stream-proxy",
         hasSecret: !!secret,
         store: env?.GUARD_KV ? "kv" : "cache",
       });
@@ -174,21 +243,19 @@ export default {
       });
     }
 
-    // -------- PLAY (302 redirect, single-use) --------
+    // -------- PLAY (streaming guard proxy, no real URL redirect) --------
     if (path === "/play") {
       const token = url.searchParams.get("t") || "";
       const v = await verifyToken(token, secret);
       if (!v.ok) return text(`link ${v.reason}`, 410);
-      const fresh = await markUsedOrReject(v.payload.jti, v.payload.exp, env);
-      if (!fresh) return text("link expired", 410);
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...cors,
-          Location: v.payload.u,
-          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        },
+      const claim = await claimPlaybackOrReject(req, v.payload, env);
+      if (!claim.ok) return text(claim.reason || "link expired", 410);
+      const upstream = await fetch(v.payload.u, {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers: buildUpstreamHeaders(req),
+        redirect: "follow",
       });
+      return buildProxyResponse(upstream, req.method);
     }
 
     // -------- RESOLVE (JSON, single-use) --------

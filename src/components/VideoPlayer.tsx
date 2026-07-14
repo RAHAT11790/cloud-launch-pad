@@ -2018,9 +2018,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [rsServerHosts]);
 
   const [rsGuardMap, setRsGuardMap] = useState<Record<string, string>>({});
+  const rsGuardRawSource = useMemo(() => {
+    const activeRaw = String(activeSourceBaseRef.current || "").trim();
+    if (isRsServerUrl(activeRaw)) return activeRaw;
+    const rawCurrent = String(currentSrc || "").trim();
+    if (isRsServerUrl(rawCurrent)) return rawCurrent;
+    const nested = unwrapProxyPlaybackTarget(rawCurrent);
+    if (isRsServerUrl(nested)) return nested;
+    return "";
+  }, [activeServerIndex, currentSrc, isRsServerUrl, videoServerFingerprint]);
+
   useEffect(() => {
-    const raw = String(currentSrc || "").trim();
-    if (!raw || !isRsServerUrl(raw) || rsGuardMap[raw]) return;
+    const raw = String(rsGuardRawSource || "").trim();
+    if (!raw || rsGuardMap[raw]) return;
     let cancelled = false;
     (async () => {
       try {
@@ -2031,17 +2041,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch { /* fall back to raw */ }
     })();
     return () => { cancelled = true; };
-  }, [currentSrc, isRsServerUrl, rsGuardMap]);
+  }, [rsGuardRawSource, rsGuardMap]);
 
   const playbackSrc = useMemo(() => {
     const raw = String(currentSrc || "").trim();
     if (!raw) return currentSrc;
+    if (rsGuardRawSource) return rsGuardMap[rsGuardRawSource] || "";
     if (rsGuardMap[raw]) return rsGuardMap[raw];
-    // For RS server URLs, hold back the raw URL until guarded token is minted
-    // so the raw link never appears in the network tab.
+    // For RS server URLs/proxy-wrapped RS URLs, hold back the raw URL until a
+    // guarded stream URL is minted so the real link never appears in network.
     if (isRsServerUrl(raw)) return "";
     return currentSrc;
-  }, [currentSrc, rsGuardMap, isRsServerUrl]);
+  }, [currentSrc, rsGuardMap, isRsServerUrl, rsGuardRawSource]);
 
 
 
@@ -3368,6 +3379,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    if (rsGuardRawSource) return;
     if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
     const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
@@ -3394,7 +3406,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, rsGuardRawSource, tryNextPlaybackRoute]);
 
   // If the active admin server resolves to http:// but no EGD Router video-proxy
   // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
@@ -3877,7 +3889,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (v) {
           const savedTime = preserveResumePoint(savedTimeForRetry || v.currentTime || lastKnownTime);
           // For MKV files, try removing the src attribute and re-setting it
-          v.src = currentSrc;
+          v.src = playbackSrc || currentSrc;
           v.load();
           v.addEventListener('loadedmetadata', () => {
             if (savedTime > 0) v.currentTime = savedTime;
@@ -4046,7 +4058,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, playbackSrc, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
