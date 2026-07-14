@@ -2860,12 +2860,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // apk-dw, live-tv, etc.) skips the Firebase index subscription entirely,
  // eliminating the biggest source of admin-panel lag.
  useEffect(() => {
-   const CONTENT_SECTIONS: Section[] = [
-     "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
-     "animesalt-manager", "new-releases", "manual-push", "notifications",
-     "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
-     "tg-url-changer",
-   ];
+    const CONTENT_SECTIONS: Section[] = [
+      "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
+      "animesalt-manager", "new-releases", "manual-push", "notifications",
+      "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
+      "tg-url-changer", "analytics",
+    ];
    const needsContent = CONTENT_SECTIONS.includes(activeSection);
    const needsCounts = activeSection === "dashboard";
    if (!needsContent && !needsCounts) return;
