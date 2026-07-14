@@ -2018,9 +2018,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [rsServerHosts]);
 
   const [rsGuardMap, setRsGuardMap] = useState<Record<string, string>>({});
+  const rsGuardRawSource = useMemo(() => {
+    const activeRaw = String(activeSourceBaseRef.current || "").trim();
+    if (isRsServerUrl(activeRaw)) return activeRaw;
+    const rawCurrent = String(currentSrc || "").trim();
+    if (isRsServerUrl(rawCurrent)) return rawCurrent;
+    const nested = unwrapProxyPlaybackTarget(rawCurrent);
+    if (isRsServerUrl(nested)) return nested;
+    return "";
+  }, [activeServerIndex, currentSrc, isRsServerUrl, videoServerFingerprint]);
+
   useEffect(() => {
-    const raw = String(currentSrc || "").trim();
-    if (!raw || !isRsServerUrl(raw) || rsGuardMap[raw]) return;
+    const raw = String(rsGuardRawSource || "").trim();
+    if (!raw || rsGuardMap[raw]) return;
     let cancelled = false;
     (async () => {
       try {
@@ -2031,17 +2041,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch { /* fall back to raw */ }
     })();
     return () => { cancelled = true; };
-  }, [currentSrc, isRsServerUrl, rsGuardMap]);
+  }, [rsGuardRawSource, rsGuardMap]);
 
   const playbackSrc = useMemo(() => {
     const raw = String(currentSrc || "").trim();
     if (!raw) return currentSrc;
+    if (rsGuardRawSource) return rsGuardMap[rsGuardRawSource] || "";
     if (rsGuardMap[raw]) return rsGuardMap[raw];
-    // For RS server URLs, hold back the raw URL until guarded token is minted
-    // so the raw link never appears in the network tab.
+    // For RS server URLs/proxy-wrapped RS URLs, hold back the raw URL until a
+    // guarded stream URL is minted so the real link never appears in network.
     if (isRsServerUrl(raw)) return "";
     return currentSrc;
-  }, [currentSrc, rsGuardMap, isRsServerUrl]);
+  }, [currentSrc, rsGuardMap, isRsServerUrl, rsGuardRawSource]);
 
 
 
