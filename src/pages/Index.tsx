@@ -2304,6 +2304,7 @@ const Index = () => {
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
+    playbackOpeningRouteRef.current = targetWatchRoute;
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
@@ -2420,10 +2421,14 @@ const Index = () => {
               ? getMoviePartSrc((anime.parts as any[])[resolvedEpIdx + 1])
               : undefined,
       });
+      window.setTimeout(() => {
+        if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
+      }, 250);
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
+      if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
       if (!isAnimeSaltContent && !alreadyRetriedFresh) {
         const fresh = await loadFullFirebaseAnimeItemWithTimeout(anime, 3600, { forceFresh: true });
         if (fresh && hasStoredFirebasePlayback(fresh)) {
