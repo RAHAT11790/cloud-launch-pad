@@ -497,6 +497,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
+import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
