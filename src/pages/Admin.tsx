@@ -201,6 +201,24 @@ const ADMIN_DROPDOWN_LIMIT = 60;
 const ADMIN_CONTENT_RELOAD_TTL_MS = 10 * 60 * 1000;
 const ADMIN_POSTER_WARM_LIMIT = 220;
 
+// Module-scope caches so tab-switches inside the admin panel feel instant:
+// the last snapshot survives unmount and is re-used as the initial state on
+// re-mount, exactly like the AnimeCard `watchlistCacheByUser` pattern.
+// LocalStorage-backed "warm start" for the dashboard's Weekly Episode +
+// Recent Content strip so first paint after refresh is instant instead of
+// waiting for Firebase.
+const WEEKLY_SCHEDULE_CACHE_KEY = "admin_dashboard_weeklySchedule_v1";
+let weeklyScheduleCache: Record<string, any> = (() => {
+ try {
+  const raw = typeof window !== "undefined" ? window.localStorage.getItem(WEEKLY_SCHEDULE_CACHE_KEY) : null;
+  return raw ? (JSON.parse(raw) || {}) : {};
+ } catch { return {}; }
+})();
+const writeWeeklyScheduleCache = (data: Record<string, any>) => {
+ weeklyScheduleCache = data || {};
+ try { window.localStorage.setItem(WEEKLY_SCHEDULE_CACHE_KEY, JSON.stringify(weeklyScheduleCache)); } catch {}
+};
+
 const adminIdle = (callback: () => void, timeout = 1200) => {
  const idle = (window as any).requestIdleCallback;
  if (typeof idle === "function") {
