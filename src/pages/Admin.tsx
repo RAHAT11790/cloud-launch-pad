@@ -4221,6 +4221,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
  ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
  ].sort((a, b) => (Number(b.updatedAt) || Number(b.createdAt) || 0) - (Number(a.updatedAt) || Number(a.createdAt) || 0)).slice(0, 3), [webseriesData, moviesData]);
+ // Warm Recent Content posters on idle so the dashboard strip paints
+ // instantly and never shows the "N" placeholder even on first visit.
+ useEffect(() => {
+  if (!recentContent.length) return;
+  const posters = recentContent.map((item: any) => item?.poster).filter(Boolean);
+  if (posters.length) adminIdle(() => { void preloadCachedImages(posters, 8); }, 300);
+ }, [recentContent]);
 
  // Weekly schedule — subscribe ALWAYS (not gated on activeSection), seed
  // from module-level cache so opening the dashboard tab shows the strip
