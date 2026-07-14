@@ -288,7 +288,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             onClick={() => {
               const hasMultiParts = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 1;
               const hasSinglePart = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length === 1;
-              if ((anime.type === "webseries" && anime.seasons) || hasMultiParts) { onPlay(anime, 0, 0); }
+              if ((anime.type === "webseries" && hasSeasons) || hasMultiParts) { onPlay(anime, 0, 0); }
               else if (hasSinglePart) { onPlay(anime, 0, 0); }
               else { onPlay(anime); }
             }}
