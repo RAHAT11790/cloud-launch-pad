@@ -364,9 +364,9 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         )}
 
         {/* Episode List for webseries */}
-        {anime.type === "webseries" && anime.seasons && (
+        {anime.type === "webseries" && hasSeasons && (
           <div className="mb-5 space-y-4">
-            {anime.seasons.map((season, sIdx) => {
+            {displaySeasons!.map((season, sIdx) => {
               const NEW_WINDOW_MS = 36 * 60 * 60 * 1000;
               const now = Date.now();
               const animeUpdated = Number((anime as any).updatedAt || 0);
