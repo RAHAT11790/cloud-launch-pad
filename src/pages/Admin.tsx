@@ -11091,7 +11091,7 @@ const AnalyticsSection = memo(({
  </div>
  <div className="grid grid-cols-3 gap-1 mb-3 p-1 bg-[#0f0f1a] rounded-xl border border-white/5">
  {(["today", "week", "all"] as const).map(t => (
- <button key={t} onClick={() => setTab(t)}
+ <button key={t} onClick={() => switchTab(t)}
  className={`text-[11px] font-bold py-1.5 rounded-lg transition-all ${tab === t ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-900/30" : "text-[#957DAD] hover:text-white"}`}>
  {t === "today" ? "Today" : t === "week" ? "7 Days" : "All Time"}
  </button>
