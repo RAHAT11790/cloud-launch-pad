@@ -9852,6 +9852,9 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
  {/* Anime Name Exporter (RS vs AN) */}
  <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
+  {/* Telegram Welcome Popup (first-visit modal) */}
+  <TelegramWelcomeManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
   {/* AN Series manager moved to Series → AN Series tab */}
  </div>
  )}
