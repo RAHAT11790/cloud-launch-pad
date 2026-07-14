@@ -210,11 +210,11 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
       {/* Meta */}
       <div className="space-y-2 mb-4">
         <label className="text-[11px] text-white/60">Heading</label>
-        <input value={heading} onChange={(e) => setHeading(e.target.value)}
+        <input value={heading} onChange={(e) => { markTyping(); setHeading(e.target.value); }}
                placeholder="Join our Telegram community"
                className={inputClass} />
         <label className="text-[11px] text-white/60">Description</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+        <textarea value={description} onChange={(e) => { markTyping(); setDescription(e.target.value); }}
                   placeholder="Get instant notifications for every new episode..."
                   rows={3}
                   className={`${inputClass} resize-y`} />
