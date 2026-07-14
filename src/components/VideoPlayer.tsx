@@ -4635,7 +4635,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              src={currentSrc}
+              src={playbackSrc}
               className="absolute inset-0 w-full h-full bg-black border-0 block"
               style={{ transform: embedTransform, transformOrigin: "center center", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
