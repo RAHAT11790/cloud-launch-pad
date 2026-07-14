@@ -3877,7 +3877,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (v) {
           const savedTime = preserveResumePoint(savedTimeForRetry || v.currentTime || lastKnownTime);
           // For MKV files, try removing the src attribute and re-setting it
-          v.src = currentSrc;
+          v.src = playbackSrc || currentSrc;
           v.load();
           v.addEventListener('loadedmetadata', () => {
             if (savedTime > 0) v.currentTime = savedTime;
@@ -4046,7 +4046,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, clearSeekRescueTimer, currentSrc, finishSeekRecoveryIfReady, markPlaybackSourceHealthy, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, playbackSrc, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
