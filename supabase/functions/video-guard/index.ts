@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
     const basePath = url.pathname
       .replace(/\/(sign|play|resolve|health)\/?$/i, "")
       .replace(/\/+$/, "");
-    const base = `${url.protocol}//${url.host}${basePath}`;
+    const base = `${url.protocol === "http:" ? "https:" : url.protocol}//${url.host}${basePath}`;
     return json({
       guarded: `${base}/play?t=${token}`,
       resolveUrl: `${base}/resolve?t=${token}`,
