@@ -33,21 +33,42 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [editName, setEditName] = useState("");
   const [editDomain, setEditDomain] = useState("");
 
+  // Track whether user is mid-edit / mid-typing so Firebase snapshots
+  // don't yank the panel out from under them (this is what caused the
+  // "panel keeps refreshing every time I type" complaint).
+  const isBusy = editIdx !== null || newName.length > 0 || newDomain.length > 0;
+  const isBusyRef = useRef(isBusy);
+  isBusyRef.current = isBusy;
+  const pendingSnapRef = useRef<Server[] | null>(null);
+
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
+      let next: Server[] = [];
       if (val && Array.isArray(val)) {
-        setServers(val.filter((s: any) => s && s.domain));
+        next = val.filter((s: any) => s && s.domain);
       } else if (val && typeof val === "object") {
-        const arr = Object.values(val).filter((s: any) => s && s.domain) as Server[];
-        setServers(arr);
+        next = Object.values(val).filter((s: any) => s && s.domain) as Server[];
+      }
+      // If the admin is currently editing or typing, park the snapshot
+      // and apply it once they finish — never mid-typing.
+      if (isBusyRef.current) {
+        pendingSnapRef.current = next;
       } else {
-        setServers([]);
+        setServers(next);
       }
       setLoading(false);
     });
     return () => unsub();
   }, []);
+
+  // Flush any parked snapshot as soon as the admin stops editing / typing.
+  useEffect(() => {
+    if (!isBusy && pendingSnapRef.current) {
+      setServers(pendingSnapRef.current);
+      pendingSnapRef.current = null;
+    }
+  }, [isBusy]);
 
   const saveServers = async (updated: Server[]) => {
     await set(ref(db, "settings/videoServers"), updated);
