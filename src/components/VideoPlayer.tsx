@@ -17,6 +17,7 @@ import VideoEngagement from "@/components/VideoEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
+import { guardVideoUrl } from "@/lib/videoGuard";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -1983,6 +1984,66 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!effectiveVideoServers.length) return rawUrl;
     return applyServerDomain(rawUrl, serverIndex);
   }, [activeServerIndex, applyServerDomain, effectiveVideoServers]);
+
+  // ============================================================
+  // RS single-use URL protection
+  // Only guards permanent RS server links (admin-configured video servers,
+  // e.g. bond.host.net). HLS/API links are NEVER guarded — they auto-expire
+  // in 6h on the API side, so no protection needed there.
+  // ============================================================
+  const rsServerHosts = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of effectiveVideoServers) {
+      const raw = String(s?.domain || "").trim();
+      if (!raw) continue;
+      try {
+        const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+        set.add(u.host.toLowerCase());
+      } catch {
+        set.add(raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase());
+      }
+    }
+    return set;
+  }, [effectiveVideoServers]);
+
+  const isRsServerUrl = useCallback((raw: string) => {
+    const s = String(raw || "").trim();
+    if (!s || !/^https?:\/\//i.test(s)) return false;
+    if (isHlsLikeUrl(s)) return false;
+    if (isBypassSource(s)) return false;
+    try {
+      const host = new URL(s).host.toLowerCase();
+      return rsServerHosts.has(host);
+    } catch { return false; }
+  }, [rsServerHosts]);
+
+  const [rsGuardMap, setRsGuardMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const raw = String(currentSrc || "").trim();
+    if (!raw || !isRsServerUrl(raw) || rsGuardMap[raw]) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const guarded = await guardVideoUrl(raw);
+        if (!cancelled && guarded && guarded !== raw) {
+          setRsGuardMap((prev) => (prev[raw] ? prev : { ...prev, [raw]: guarded }));
+        }
+      } catch { /* fall back to raw */ }
+    })();
+    return () => { cancelled = true; };
+  }, [currentSrc, isRsServerUrl, rsGuardMap]);
+
+  const playbackSrc = useMemo(() => {
+    const raw = String(currentSrc || "").trim();
+    if (!raw) return currentSrc;
+    if (rsGuardMap[raw]) return rsGuardMap[raw];
+    // For RS server URLs, hold back the raw URL until guarded token is minted
+    // so the raw link never appears in the network tab.
+    if (isRsServerUrl(raw)) return "";
+    return currentSrc;
+  }, [currentSrc, rsGuardMap, isRsServerUrl]);
+
+
 
   const markPlaybackSourceHealthy = useCallback((extraSource?: string) => {
     const now = Date.now();
@@ -4578,7 +4639,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              src={currentSrc}
+              src={playbackSrc}
               className="absolute inset-0 w-full h-full bg-black border-0 block"
               style={{ transform: embedTransform, transformOrigin: "center center", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
@@ -4589,7 +4650,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ) : (
             <video
               ref={videoRef}
-              src={(isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
+              src={(isHlsSrc && Hls.isSupported()) ? undefined : playbackSrc}
               crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
