@@ -359,7 +359,7 @@ export default function WeeklyEpisodeManager({
           </div>
         ) : (
           <div className="space-y-2.5">
-            {visibleList.map(item => {
+            {visibleList.slice(0, visibleLimit).map(item => {
               const live = seriesById[item.seriesId];
               const totalAvailable = live ? countEpisodes(live) : 0;
               const expected = item.expectedEpisodes || live?.totalEpisodes || live?.numberOfEpisodes;
