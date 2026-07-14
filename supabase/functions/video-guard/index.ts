@@ -168,7 +168,9 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   // Strip Supabase's /functions/v1/video-guard prefix if present.
-  let path = url.pathname.replace(/^\/functions\/v1\/video-guard/, "") || "/";
+  let path = url.pathname
+    .replace(/^\/functions\/v1\/video-guard/, "")
+    .replace(/^\/video-guard/, "") || "/";
   path = path.replace(/\/+$/, "") || "/";
 
   const secret = String(Deno.env.get("SIGNING_SECRET") || "").trim();
@@ -195,7 +197,10 @@ Deno.serve(async (req) => {
     if (!/^https?:\/\//i.test(realUrl)) return json({ error: "url must be http(s)" }, 400);
 
     const { token, exp, jti } = await mintToken(realUrl, ttlSec, secret);
-    const base = `${url.protocol}//${url.host}${url.pathname.replace(/\/(sign|play|resolve|health)?$/, "")}`;
+    const basePath = url.pathname
+      .replace(/\/(sign|play|resolve|health)\/?$/i, "")
+      .replace(/\/+$/, "");
+    const base = `${url.protocol}//${url.host}${basePath}`;
     return json({
       guarded: `${base}/play?t=${token}`,
       resolveUrl: `${base}/resolve?t=${token}`,
