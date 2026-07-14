@@ -48,6 +48,8 @@ import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import TelegramWelcomeManager from "@/components/admin/TelegramWelcomeManager";
 import VideoServersManager from "@/components/admin/VideoServersManager";
 import LiveTvManager from "@/components/admin/LiveTvManager";
+import TgUrlChangerManager from "@/components/admin/TgUrlChangerManager";
+import UrlChangerManager from "@/components/admin/UrlChangerManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
