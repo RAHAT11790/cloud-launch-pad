@@ -497,6 +497,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
+import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
@@ -3740,6 +3741,9 @@ const Index = () => {
           episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
         }))}
       />
+
+      {/* First-visit Telegram community popup (admin-controlled) */}
+      <TelegramWelcomeModal />
 
     </div>
   );

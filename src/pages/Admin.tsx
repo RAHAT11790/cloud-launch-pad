@@ -45,6 +45,7 @@ import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
+import TelegramWelcomeManager from "@/components/admin/TelegramWelcomeManager";
 import VideoServersManager from "@/components/admin/VideoServersManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
@@ -9850,6 +9851,9 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
 
  {/* Anime Name Exporter (RS vs AN) */}
  <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
+  {/* Telegram Welcome Popup (first-visit modal) */}
+  <TelegramWelcomeManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
   {/* AN Series manager moved to Series → AN Series tab */}
  </div>
