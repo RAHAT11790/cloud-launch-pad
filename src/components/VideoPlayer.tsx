@@ -3379,6 +3379,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // immediately when the proxy endpoint itself reports failure.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    if (rsGuardRawSource) return;
     if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
     const nested = unwrapProxyPlaybackTarget(currentSrc);
     if (!/^http:\/\//i.test(nested)) return;
@@ -3405,7 +3406,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.clearTimeout(t);
       ac.abort();
     };
-  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, rsGuardRawSource, tryNextPlaybackRoute]);
 
   // If the active admin server resolves to http:// but no EGD Router video-proxy
   // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
