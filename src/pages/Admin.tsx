@@ -10000,16 +10000,17 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
  <BrandingSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
  )}
 
- {/* ==================== LIVE TV ==================== */}
- {activeSection === "live-tv" && (() => {
-          <LiveTvManager
-            glassCard={glassCard}
-            inputClass={inputClass}
-            btnPrimary={btnPrimary}
-            btnSecondary={btnSecondary}
-          />
-        </div>
-      )}
+  {/* ==================== LIVE TV ==================== */}
+  {activeSection === "live-tv" && (
+    <LiveTvManager
+      glassCard={glassCard}
+      inputClass={inputClass}
+      btnPrimary={btnPrimary}
+      btnSecondary={btnSecondary}
+    />
+  )}
+
+
 
 
  {/* ==================== URL CHANGER ==================== */}
