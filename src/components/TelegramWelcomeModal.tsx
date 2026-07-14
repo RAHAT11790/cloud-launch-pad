@@ -1,7 +1,24 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, MessageCircle, LifeBuoy, ExternalLink } from "lucide-react";
+import { X, Send, MessageCircle, LifeBuoy, ExternalLink, Users, Bell } from "lucide-react";
 import { db, ref, onValue } from "@/lib/firebase";
+
+// Official Telegram paper-plane logo (SVG, brand blue gradient)
+const TelegramLogo = ({ className = "w-7 h-7" }: { className?: string }) => (
+  <svg viewBox="0 0 240 240" className={className} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="tg-brand" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#37bbfe" />
+        <stop offset="1" stopColor="#007dbb" />
+      </linearGradient>
+    </defs>
+    <circle cx="120" cy="120" r="120" fill="url(#tg-brand)" />
+    <path
+      fill="#fff"
+      d="M81.2 128.9l-27.6-8.6c-6-1.9-6-6 1.3-8.9l107.6-41.5c5-2 9.8 1.2 7.9 8.9l-18.3 86.3c-1.3 6.2-5 7.7-10 4.8l-27.5-20.3-13.3 12.8c-1.5 1.5-2.7 2.7-5.5 2.7l1.9-27.9 50.8-45.9c2.2-2-.5-3-3.4-1.1l-62.8 39.6z"
+    />
+  </svg>
+);
 
 // ============================================================
 // TelegramWelcomeModal — compact, centered, on-brand (amber/gold)
