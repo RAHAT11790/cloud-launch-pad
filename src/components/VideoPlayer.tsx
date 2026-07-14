@@ -1985,6 +1985,62 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return applyServerDomain(rawUrl, serverIndex);
   }, [activeServerIndex, applyServerDomain, effectiveVideoServers]);
 
+  // ============================================================
+  // RS single-use URL protection
+  // Only guards permanent RS server links (admin-configured video servers,
+  // e.g. bond.host.net). HLS/API links are NEVER guarded — they auto-expire
+  // in 6h on the API side, so no protection needed there.
+  // ============================================================
+  const rsServerHosts = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of effectiveVideoServers) {
+      const raw = String(s?.domain || "").trim();
+      if (!raw) continue;
+      try {
+        const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+        set.add(u.host.toLowerCase());
+      } catch {
+        set.add(raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase());
+      }
+    }
+    return set;
+  }, [effectiveVideoServers]);
+
+  const isRsServerUrl = useCallback((raw: string) => {
+    const s = String(raw || "").trim();
+    if (!s || !/^https?:\/\//i.test(s)) return false;
+    if (isHlsLikeUrl(s)) return false;
+    if (isBypassSource(s)) return false;
+    try {
+      const host = new URL(s).host.toLowerCase();
+      return rsServerHosts.has(host);
+    } catch { return false; }
+  }, [rsServerHosts]);
+
+  const [rsGuardMap, setRsGuardMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const raw = String(currentSrc || "").trim();
+    if (!raw || !isRsServerUrl(raw) || rsGuardMap[raw]) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const guarded = await guardVideoUrl(raw);
+        if (!cancelled && guarded && guarded !== raw) {
+          setRsGuardMap((prev) => (prev[raw] ? prev : { ...prev, [raw]: guarded }));
+        }
+      } catch { /* fall back to raw */ }
+    })();
+    return () => { cancelled = true; };
+  }, [currentSrc, isRsServerUrl, rsGuardMap]);
+
+  const playbackSrc = useMemo(() => {
+    const raw = String(currentSrc || "").trim();
+    if (!raw) return currentSrc;
+    return rsGuardMap[raw] || currentSrc;
+  }, [currentSrc, rsGuardMap]);
+
+
+
   const markPlaybackSourceHealthy = useCallback((extraSource?: string) => {
     const now = Date.now();
     rsSoftRetriesRef.current = 0;
