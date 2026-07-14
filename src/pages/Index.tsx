@@ -3742,6 +3742,9 @@ const Index = () => {
         }))}
       />
 
+      {/* First-visit Telegram community popup (admin-controlled) */}
+      <TelegramWelcomeModal />
+
     </div>
   );
 };
