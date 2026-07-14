@@ -2326,6 +2326,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const deferredMvListSearch = useDeferredValue(mvListSearch);
  const filteredWebseriesAdminList = useMemo(() => filterAdminSeriesList(webseriesData, deferredWsListSearch), [webseriesData, deferredWsListSearch]);
  const filteredMoviesAdminList = useMemo(() => filterAdminMovieList(moviesData, deferredMvListSearch), [moviesData, deferredMvListSearch]);
+ // Load-more pagination — 15 cards per page keeps the DOM tiny and avoids
+ // the multi-second lag from rendering hundreds of poster cards at once.
+ const ADMIN_LIST_PAGE = 15;
+ const [wsListLimit, setWsListLimit] = useState(ADMIN_LIST_PAGE);
+ const [mvListLimit, setMvListLimit] = useState(ADMIN_LIST_PAGE);
+ // Reset the visible window whenever the search query changes so results
+ // are instant and never "hidden" behind an old pagination cursor.
+ useEffect(() => { setWsListLimit(ADMIN_LIST_PAGE); }, [deferredWsListSearch]);
+ useEffect(() => { setMvListLimit(ADMIN_LIST_PAGE); }, [deferredMvListSearch]);
  const [movieEditId, setMovieEditId] = useState("");
 
  // Notification form
