@@ -4218,18 +4218,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
  ].sort((a, b) => (Number(b.updatedAt) || Number(b.createdAt) || 0) - (Number(a.updatedAt) || Number(a.createdAt) || 0)).slice(0, 3), [webseriesData, moviesData]);
 
- // Weekly schedule (for dashboard preview)
- const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
+ // Weekly schedule — subscribe ALWAYS (not gated on activeSection), seed
+ // from module-level cache so opening the dashboard tab shows the strip
+ // instantly instead of waiting for a fresh Firebase snapshot.
+ const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>(() => weeklyScheduleCache);
  useEffect(() => {
-  if (activeSection !== "dashboard") return;
- const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
- return () => unsub();
-  }, [activeSection]);
+  const unsub = onValue(ref(db, "weeklySchedule"), snap => {
+   const val = snap.val() || {};
+   writeWeeklyScheduleCache(val);
+   startTransition(() => setWeeklyScheduleData(val));
+  });
+  return () => unsub();
+ }, []);
  const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
  const todayScheduled = useMemo(
  () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName || s?.day === "AllDay"),
  [weeklyScheduleData, todayDayName]
  );
+ // Warm the today-strip posters on idle so the Weekly Episode row paints
+ // instantly the next time the admin returns to the dashboard.
+ useEffect(() => {
+  if (!todayScheduled.length) return;
+  const posters = todayScheduled.slice(0, 8).map((s: any) => s?.poster).filter(Boolean);
+  if (posters.length) adminIdle(() => { void preloadCachedImages(posters, 12); }, 400);
+ }, [todayScheduled]);
  const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
  const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
 
