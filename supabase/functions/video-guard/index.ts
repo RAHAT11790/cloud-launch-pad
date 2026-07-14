@@ -1,8 +1,9 @@
 // ============================================================
 // Supabase Edge Function — video-guard (SINGLE-USE URL PROTECTION)
 // ============================================================
-// Mirror of cloudflare-workers/video-guard.js. Pure protection —
-// signs a real video URL into a token that plays exactly ONCE.
+// Mirror of cloudflare-workers/video-guard.js. Protection layer — signs a
+// real video URL into a token, then streams bytes through /play?t=... without
+// redirecting the browser to the real URL.
 //
 // Required secret:  SIGNING_SECRET  (any long random string)
 //
@@ -10,7 +11,7 @@
 //   GET  /health
 //   POST /sign            body: { url, ttl? }
 //   GET  /sign?url=…&ttl=
-//   GET  /play?t=<token>  → 302 to real URL (once), then 410
+//   GET  /play?t=<token>  → streamed media, no real URL redirect
 //   GET  /resolve?t=<t>   → { url } once, then 410
 // ============================================================
 
@@ -23,6 +24,8 @@ const MIN_TTL_SEC = 30;
 const cors = {
   ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, content-type, range, if-range, if-none-match, if-modified-since, accept",
+  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified",
 };
 
 const b64uEncode = (bytes: Uint8Array): string => {
@@ -85,18 +88,73 @@ async function verifyToken(token: string, secret: string) {
   return { ok: true as const, payload };
 }
 
-// In-memory single-use store (per-instance). Good enough for pure protection;
-// upgrade to Firebase/KV later if you need multi-instance strictness.
-const usedJti = new Map<string, number>();
-function markUsedOrReject(jti: string, expUnix: number): boolean {
+type PlaybackClaim = { fpHash: string; firstAt: number; lastAt: number; hits: number; exp: number };
+
+// In-memory playback claim store (per-instance fallback). A token can serve the
+// browser's normal Range requests for ONE client fingerprint only; replay from
+// another browser/device gets 410.
+const playbackClaims = new Map<string, PlaybackClaim>();
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function clientFingerprint(req: Request): string {
+  return `${req.headers.get("x-forwarded-for") || ""}|${req.headers.get("user-agent") || ""}`;
+}
+
+function isLikelyMediaRequest(req: Request): boolean {
+  if (req.method === "HEAD") return true;
+  const dest = (req.headers.get("sec-fetch-dest") || "").toLowerCase();
+  if (["video", "audio", "media"].includes(dest)) return true;
+  if (req.headers.has("range")) return true;
+  const accept = (req.headers.get("accept") || "").toLowerCase();
+  return accept.includes("video/") || accept.includes("audio/") || accept.includes("*/*");
+}
+
+async function claimPlaybackOrReject(req: Request, payload: any) {
   const now = Math.floor(Date.now() / 1000);
-  // Sweep expired entries occasionally
-  if (usedJti.size > 5000) {
-    for (const [k, exp] of usedJti) if (exp < now) usedJti.delete(k);
+  if (!isLikelyMediaRequest(req)) return { ok: false as const, reason: "media-only" };
+  if (playbackClaims.size > 5000) {
+    for (const [k, claim] of playbackClaims) if (claim.exp < now) playbackClaims.delete(k);
   }
-  if (usedJti.has(jti)) return false;
-  usedJti.set(jti, expUnix);
-  return true;
+  const fpHash = await sha256Hex(clientFingerprint(req));
+  const existing = playbackClaims.get(payload.jti);
+  if (existing) {
+    if (existing.fpHash !== fpHash) return { ok: false as const, reason: "link expired" };
+    existing.lastAt = Date.now();
+    existing.hits = Math.min(9999, existing.hits + 1);
+    return { ok: true as const };
+  }
+  playbackClaims.set(payload.jti, { fpHash, firstAt: Date.now(), lastAt: Date.now(), hits: 1, exp: payload.exp });
+  return { ok: true as const };
+}
+
+function buildUpstreamHeaders(req: Request): Headers {
+  const headers = new Headers();
+  ["range", "if-range", "if-none-match", "if-modified-since", "accept", "accept-language"].forEach((name) => {
+    const value = req.headers.get(name);
+    if (value) headers.set(name, value);
+  });
+  const ua = req.headers.get("user-agent");
+  if (ua) headers.set("user-agent", ua);
+  return headers;
+}
+
+function buildProxyResponse(upstream: Response, method: string): Response {
+  const headers = new Headers(cors);
+  ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"].forEach((name) => {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  });
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(method === "HEAD" ? null : upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  });
 }
 
 const json = (obj: unknown, status = 200) =>
@@ -149,18 +207,22 @@ Deno.serve(async (req) => {
     const token = url.searchParams.get("t") || "";
     const v = await verifyToken(token, secret);
     if (!v.ok) return text(`link ${v.reason}`, 410);
-    if (!markUsedOrReject(v.payload.jti, v.payload.exp)) return text("link expired", 410);
-    return new Response(null, {
-      status: 302,
-      headers: { ...cors, Location: v.payload.u, "Cache-Control": "no-store" },
+    const claim = await claimPlaybackOrReject(req, v.payload);
+    if (!claim.ok) return text(claim.reason, 410);
+    const upstream = await fetch(v.payload.u, {
+      method: req.method === "HEAD" ? "HEAD" : "GET",
+      headers: buildUpstreamHeaders(req),
+      redirect: "follow",
     });
+    return buildProxyResponse(upstream, req.method);
   }
 
   if (path === "/resolve") {
     const token = url.searchParams.get("t") || "";
     const v = await verifyToken(token, secret);
     if (!v.ok) return json({ error: v.reason }, 410);
-    if (!markUsedOrReject(v.payload.jti, v.payload.exp)) return json({ error: "expired" }, 410);
+    const claim = await claimPlaybackOrReject(req, v.payload);
+    if (!claim.ok) return json({ error: claim.reason }, 410);
     return json({ url: v.payload.u, expiresAt: v.payload.exp * 1000 });
   }
 
