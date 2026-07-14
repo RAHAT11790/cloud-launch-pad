@@ -72,9 +72,22 @@ const iconGradient = (color?: string) => {
   }
 };
 
+const CYCLE_ICONS = [
+  { Icon: Bell, color: "#fbbf24" },
+  { Icon: Users, color: "#a78bfa" },
+  { Icon: MessageCircle, color: "#34d399" },
+];
+
 const TelegramWelcomeModal = () => {
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<TgWelcomeConfig | null>(null);
+  const [cycleIdx, setCycleIdx] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setCycleIdx((i) => (i + 1) % CYCLE_ICONS.length), 1800);
+    return () => clearInterval(id);
+  }, [open]);
 
   useEffect(() => {
     try {
