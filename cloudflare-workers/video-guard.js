@@ -208,7 +208,8 @@ export default {
     if (path === "/" || path === "/health") {
       return json({
         ok: true, name: "video-guard",
-        purpose: "single-use protection for video URLs",
+        purpose: "single-use streaming protection for video URLs",
+        mode: "stream-proxy",
         hasSecret: !!secret,
         store: env?.GUARD_KV ? "kv" : "cache",
       });
