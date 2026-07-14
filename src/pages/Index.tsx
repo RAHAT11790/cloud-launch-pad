@@ -1691,10 +1691,24 @@ const Index = () => {
         const mapped = collection === "movies"
           ? mapFirebaseMovieItem(liveAnimeId, row, { full: true })
           : mapFirebaseWebseriesItem(liveAnimeId, row, { full: true });
-        setSelectedAnime((prev) => (prev && prev.id === liveAnimeId ? { ...prev, ...mapped } : prev));
-        setPlayerState((prev) => (prev && prev.anime?.id === liveAnimeId
-          ? { ...prev, anime: { ...prev.anime, ...mapped } }
-          : prev));
+        setSelectedAnime((prev) => {
+          if (!prev || prev.id !== liveAnimeId) return prev;
+          const merged: any = { ...prev, ...mapped };
+          // Never let a live snapshot without episodes wipe out the ones we
+          // already resolved (e.g. RS content stored only under
+          // seasonsByLanguage[lang]) — that was making the episode list
+          // flash in and disappear a moment later.
+          if (!Array.isArray((mapped as any).seasons) || !(mapped as any).seasons.length) merged.seasons = prev.seasons;
+          if (!(mapped as any).seasonsByLanguage && (prev as any).seasonsByLanguage) merged.seasonsByLanguage = (prev as any).seasonsByLanguage;
+          return merged;
+        });
+        setPlayerState((prev) => {
+          if (!prev || prev.anime?.id !== liveAnimeId) return prev;
+          const mergedAnime: any = { ...prev.anime, ...mapped };
+          if (!Array.isArray((mapped as any).seasons) || !(mapped as any).seasons.length) mergedAnime.seasons = prev.anime.seasons;
+          if (!(mapped as any).seasonsByLanguage && (prev.anime as any).seasonsByLanguage) mergedAnime.seasonsByLanguage = (prev.anime as any).seasonsByLanguage;
+          return { ...prev, anime: mergedAnime };
+        });
       });
     };
     const unsubWs = tryPath("webseries");
