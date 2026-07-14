@@ -1,12 +1,12 @@
 // ============================================================
-// video-guard client — turn any real URL into a single-use guarded URL
+// video-guard client — turn any real URL into a guarded stream URL
 // ============================================================
 // Requires the `video-guard` Cloudflare Worker to be added in
 // EGD Router (with SIGNING_SECRET configured on the worker).
 //
 // Usage:
 //   const safe = await guardVideoUrl(realUrl);
-//   videoEl.src = safe; // plays exactly once; second hit → expired
+//   videoEl.src = safe; // browser sees only /play?t=..., never the real URL
 //
 // If the worker isn't configured, falls back to the original URL
 // so nothing breaks in dev / before deploy.
@@ -30,8 +30,9 @@ async function getGuardBase(): Promise<string> {
 }
 
 /**
- * Wrap a real video URL with a single-use protection token.
- * Returns the guarded URL (302→real on first hit, 410 afterwards).
+ * Wrap a real video URL with a protected streaming token.
+ * Returns the guarded URL (/play?t=...), which streams bytes without redirecting
+ * to the real URL. If copied to another browser/device, it is rejected.
  * If the guard worker is not configured, returns the input unchanged.
  */
 export async function guardVideoUrl(realUrl: string, ttlSec = 6 * 60 * 60): Promise<string> {
