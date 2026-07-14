@@ -10806,7 +10806,7 @@ const AnalyticsSection = memo(({
  allTimeTotals: Record<string, { count?: number; title?: string; poster?: string; lastSeen?: number }>;
 }) => {
  const [tab, setTab] = useState<"today" | "week" | "all">("today");
- const [isPending, startTabTransition] = (React as any).useTransition ? (React as any).useTransition() : [false, (fn: any) => fn()];
+ const [, startTabTransition] = useTransition();
 
  // Defer heavy inputs so tab clicks stay instant even when analytics blob is large.
  const deferredViews = useDeferredValue(analyticsViews);
