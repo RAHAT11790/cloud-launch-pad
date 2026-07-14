@@ -55,6 +55,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       } else if (val && typeof val === "object") {
         next = Object.values(val).filter((s: any) => s && s.domain) as Server[];
       }
+      videoServersCache = next;
       // If the admin is currently editing or typing, park the snapshot
       // and apply it once they finish — never mid-typing.
       if (isBusyRef.current) {
