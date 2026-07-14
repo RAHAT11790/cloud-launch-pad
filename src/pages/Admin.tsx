@@ -10758,6 +10758,8 @@ ${normalizeTelegramBaseHashtags(tgHashtags)} ${getTelegramDubTag(dubType)}`;
   dailyActiveUsers={dailyActiveUsers}
   webseriesData={webseriesData}
   moviesData={moviesData}
+  appUsers={appUsersGlobal}
+  allTimeTotals={allTimeTotals}
   />
   )}
 
