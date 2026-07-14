@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bot, Copy, Loader2, Plus, RefreshCw, Rocket, Trash2, X, FileCode2, KeyRound,
   Link as LinkIcon, ExternalLink, Settings, CheckCircle2, AlertCircle, Download,
-  Library,
+  Library, Search, Save, Terminal, LogOut, Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
