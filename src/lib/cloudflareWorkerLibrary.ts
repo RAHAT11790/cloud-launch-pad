@@ -8,6 +8,7 @@
 // ============================================================
 
 import videoProxySrc    from "../../cloudflare-workers/video-proxy.js?raw";
+import videoGuardSrc    from "../../cloudflare-workers/video-guard.js?raw";
 
 import liveTvProxySrc   from "../../cloudflare-workers/live-tv-proxy.js?raw";
 import videoDownloadSrc from "../../cloudflare-workers/video-download.js?raw";
@@ -65,6 +66,7 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
+  entry("video-guard",     "Video Guard (1-Use)", "🛡️ Single-use URL protection for the video player. Signs any real video URL into a guarded token; the token plays exactly ONCE — the second time it's hit, the player sees 'link expired'. HMAC-SHA256 signed, no bytes proxied (pure protection). Routes: POST /sign → { guarded }, GET /play?t= (302 once), GET /resolve?t= (JSON once). Required secret: SIGNING_SECRET. Optional binding: GUARD_KV (global single-use; falls back to Cache API per-colo).", videoGuardSrc, ["SIGNING_SECRET"], { isNew: true, badgeText: "1-USE", badgeTone: "amber" }),
   entry("video-proxy",     "Video Proxy",     "Universal HLS/video proxy with exact browser Range pass-through, playlist rewriting and multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { badgeText: "UNLIMITED", badgeTone: "emerald" }),
   entry("live-tv-proxy",   "Live TV Proxy",   "Dedicated HLS proxy for Live TV — isolates streaming bandwidth from the main video proxy.", liveTvProxySrc),
   entry("video-download",  "Video Download",  "Hardened attachment-mode download proxy with retries and clean headers.", videoDownloadSrc),
