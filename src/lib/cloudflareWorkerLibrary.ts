@@ -8,6 +8,7 @@
 // ============================================================
 
 import videoProxySrc    from "../../cloudflare-workers/video-proxy.js?raw";
+import videoGuardSrc    from "../../cloudflare-workers/video-guard.js?raw";
 
 import liveTvProxySrc   from "../../cloudflare-workers/live-tv-proxy.js?raw";
 import videoDownloadSrc from "../../cloudflare-workers/video-download.js?raw";
