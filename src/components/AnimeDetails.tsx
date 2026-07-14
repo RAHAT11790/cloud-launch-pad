@@ -41,28 +41,6 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
   const storyline = anime.storyline || (anime as any).overview || "No storyline available yet.";
   const directors = Array.isArray(anime.directors) ? anime.directors.filter(Boolean).slice(0, 4) : [];
   const cast = Array.isArray(anime.cast) ? anime.cast.filter((p) => p?.name || p?.character || p?.photo).slice(0, 12) : [];
-
-  // Resolve seasons for display: prefer explicit `seasons`, otherwise fall
-  // back to `seasonsByLanguage` (RS content stored per-language keeps its
-  // episodes only under seasonsByLanguage[<lang>], so without this fallback
-  // the episode list flashes in briefly and disappears once live-sync merges
-  // an update that leaves `seasons` undefined).
-  const displaySeasons = (() => {
-    if (Array.isArray(anime.seasons) && anime.seasons.length) return anime.seasons;
-    const byLang = anime.seasonsByLanguage;
-    if (byLang && typeof byLang === "object") {
-      const hasEps = (s: any) => Array.isArray(s) && s.some((se: any) => Array.isArray(se?.episodes) && se.episodes.length > 0);
-      const preferKey = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
-      const entries = Object.entries(byLang);
-      const exact = entries.find(([k]) => String(k).trim().toLowerCase() === preferKey)?.[1];
-      if (hasEps(exact)) return exact as any;
-      const firstPlayable = entries.map(([, v]) => v).find(hasEps);
-      if (firstPlayable) return firstPlayable as any;
-    }
-    return anime.seasons;
-  })();
-  const hasSeasons = Array.isArray(displaySeasons) && displaySeasons.length > 0;
-
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -288,7 +266,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             onClick={() => {
               const hasMultiParts = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 1;
               const hasSinglePart = anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length === 1;
-              if ((anime.type === "webseries" && hasSeasons) || hasMultiParts) { onPlay(anime, 0, 0); }
+              if ((anime.type === "webseries" && anime.seasons) || hasMultiParts) { onPlay(anime, 0, 0); }
               else if (hasSinglePart) { onPlay(anime, 0, 0); }
               else { onPlay(anime); }
             }}
@@ -364,9 +342,9 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         )}
 
         {/* Episode List for webseries */}
-        {anime.type === "webseries" && hasSeasons && (
+        {anime.type === "webseries" && anime.seasons && (
           <div className="mb-5 space-y-4">
-            {displaySeasons!.map((season, sIdx) => {
+            {anime.seasons.map((season, sIdx) => {
               const NEW_WINDOW_MS = 36 * 60 * 60 * 1000;
               const now = Date.now();
               const animeUpdated = Number((anime as any).updatedAt || 0);

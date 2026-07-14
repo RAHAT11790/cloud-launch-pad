@@ -1205,7 +1205,6 @@ const Index = () => {
   const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
   }, []);
-  const playbackOpeningRouteRef = useRef("");
   const stopAllPlayback = useCallback(() => {
     // Skip teardown when the suggestion-switch flow wants to keep the player
     // alive so React can swap props in-place (no flash / no reopen).
@@ -1692,24 +1691,10 @@ const Index = () => {
         const mapped = collection === "movies"
           ? mapFirebaseMovieItem(liveAnimeId, row, { full: true })
           : mapFirebaseWebseriesItem(liveAnimeId, row, { full: true });
-        setSelectedAnime((prev) => {
-          if (!prev || prev.id !== liveAnimeId) return prev;
-          const merged: any = { ...prev, ...mapped };
-          // Never let a live snapshot without episodes wipe out the ones we
-          // already resolved (e.g. RS content stored only under
-          // seasonsByLanguage[lang]) — that was making the episode list
-          // flash in and disappear a moment later.
-          if (!Array.isArray((mapped as any).seasons) || !(mapped as any).seasons.length) merged.seasons = prev.seasons;
-          if (!(mapped as any).seasonsByLanguage && (prev as any).seasonsByLanguage) merged.seasonsByLanguage = (prev as any).seasonsByLanguage;
-          return merged;
-        });
-        setPlayerState((prev) => {
-          if (!prev || prev.anime?.id !== liveAnimeId) return prev;
-          const mergedAnime: any = { ...prev.anime, ...mapped };
-          if (!Array.isArray((mapped as any).seasons) || !(mapped as any).seasons.length) mergedAnime.seasons = prev.anime.seasons;
-          if (!(mapped as any).seasonsByLanguage && (prev.anime as any).seasonsByLanguage) mergedAnime.seasonsByLanguage = (prev.anime as any).seasonsByLanguage;
-          return { ...prev, anime: mergedAnime };
-        });
+        setSelectedAnime((prev) => (prev && prev.id === liveAnimeId ? { ...prev, ...mapped } : prev));
+        setPlayerState((prev) => (prev && prev.anime?.id === liveAnimeId
+          ? { ...prev, anime: { ...prev.anime, ...mapped } }
+          : prev));
       });
     };
     const unsubWs = tryPath("webseries");
@@ -2304,7 +2289,6 @@ const Index = () => {
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
-    playbackOpeningRouteRef.current = targetWatchRoute;
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
@@ -2421,14 +2405,10 @@ const Index = () => {
               ? getMoviePartSrc((anime.parts as any[])[resolvedEpIdx + 1])
               : undefined,
       });
-      window.setTimeout(() => {
-        if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
-      }, 250);
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
     } else {
       inPlayerSwitchRef.current = false;
-      if (playbackOpeningRouteRef.current === targetWatchRoute) playbackOpeningRouteRef.current = "";
       if (!isAnimeSaltContent && !alreadyRetriedFresh) {
         const fresh = await loadFullFirebaseAnimeItemWithTimeout(anime, 3600, { forceFresh: true });
         if (fresh && hasStoredFirebasePlayback(fresh)) {
@@ -2444,7 +2424,6 @@ const Index = () => {
 
   useEffect(() => {
     if (!isWatchRoute) {
-      playbackOpeningRouteRef.current = "";
       if (keepPlayerAliveRef.current || inPlayerSwitchRef.current) return;
       stopAllPlayback();
       if (playerStateRef.current) setPlayerState(null);
@@ -2491,7 +2470,6 @@ const Index = () => {
     const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
     const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
     if (sameAnime && sameSeason && sameEpisode && current) return;
-    if (playbackOpeningRouteRef.current === `${location.pathname}${location.search}`) return;
 
     if (isAnimeSaltRouteItem(targetAnime)) {
       void handleCardClick(targetAnime, nextSeasonIdx, nextEpIdx);

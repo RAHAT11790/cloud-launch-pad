@@ -119,27 +119,6 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
         Object.entries(item.seasonsByLanguage).map(([lang, langSeasons]) => [lang, mapSeasons(langSeasons) || []]),
       )
     : undefined;
-  const languageEntries = seasonsByLanguage ? Object.entries(seasonsByLanguage) : [];
-  const hasLanguageEpisodes = (label?: string | null) => {
-    const requested = String(label || "").trim().toLowerCase();
-    if (!requested) return false;
-    return languageEntries.some(([lang, langSeasons]) => (
-      String(lang || "").trim().toLowerCase() === requested
-      && Array.isArray(langSeasons)
-      && langSeasons.some((season) => Array.isArray(season?.episodes) && season.episodes.length > 0)
-    ));
-  };
-  const firstLanguageWithEpisodes = languageEntries.find(([, langSeasons]) => (
-    Array.isArray(langSeasons)
-    && langSeasons.some((season) => Array.isArray(season?.episodes) && season.episodes.length > 0)
-  ))?.[0];
-  const resolvedBaseLanguage = hasLanguageEpisodes(item?.selectedAdminLanguage)
-    ? item.selectedAdminLanguage
-    : hasLanguageEpisodes(item?.baseLanguage)
-      ? item.baseLanguage
-      : hasLanguageEpisodes(item?.language)
-        ? item.language
-        : (firstLanguageWithEpisodes || item?.baseLanguage || item?.language || "");
 
   return {
     id,
@@ -155,8 +134,8 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     logo: item?.logo || item?.titleLogo || "",
     year: normalizeYearFrom(item),
     rating: normalizeRatingFrom(item),
-    language: item?.language || resolvedBaseLanguage || "",
-    baseLanguage: resolvedBaseLanguage,
+    language: item?.language || "",
+    baseLanguage: item?.baseLanguage || item?.language || "",
     availableLanguages: Array.isArray(item?.availableLanguages) ? item.availableLanguages : undefined,
     seasonsByLanguage,
     category: normalizeCategoryFrom(item, genres, ""),
