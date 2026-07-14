@@ -170,7 +170,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
             <p className="text-[11px] text-white/50 mt-1">Only user-click gated — Popunder + Social/Push.</p>
           </div>
           <label className="inline-flex items-center gap-2 text-[11px] text-white/80 shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-            <input type="checkbox" className="accent-fuchsia-500" checked={vpEnabled} onChange={(e) => setVpEnabled(e.target.checked)} />
+            <input type="checkbox" className="accent-fuchsia-500" checked={vpEnabled} onChange={(e) => { markTyping(); setVpEnabled(e.target.checked); }} />
             {vpEnabled ? "Enabled" : "Off"}
           </label>
         </header>
@@ -181,7 +181,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
             <span className="text-[11px] font-semibold text-white/85">One-Click Popunder</span>
             <span className="text-[10px] text-white/40">click-gated</span>
           </div>
-          <textarea value={popunder} onChange={(e) => setPopunder(e.target.value)} rows={3}
+          <textarea value={popunder} onChange={(e) => { markTyping(); setPopunder(e.target.value); }} rows={3}
             className={codeArea}
             placeholder='https://... or <script src="https://.../popunder.js"></script>' />
         </div>
@@ -191,7 +191,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
             <Radio className="w-3.5 h-3.5 text-fuchsia-300" />
             <span className="text-[11px] font-semibold text-white/85">Social Bar / In-Page Push</span>
           </div>
-          <textarea value={socialLink} onChange={(e) => setSocialLink(e.target.value)} rows={3}
+          <textarea value={socialLink} onChange={(e) => { markTyping(); setSocialLink(e.target.value); }} rows={3}
             className={codeArea}
             placeholder='https://... or <script src="https://.../social-bar.js"></script>' />
           <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
@@ -205,7 +205,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           <input
             type="number" min={0} max={3600}
             value={cooldownSec}
-            onChange={(e) => setCooldownSec(Number(e.target.value))}
+            onChange={(e) => { markTyping(); setCooldownSec(Number(e.target.value)); }}
             className={inputClass + " w-full"}
             placeholder="e.g. 50"
           />
