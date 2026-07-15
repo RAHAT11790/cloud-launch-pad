@@ -164,10 +164,6 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
   const generate = async () => {
     if (!activeItem || busy) return;
-    if (mode === "backdrop" && !activeItem.backdrop) {
-      toast.error("This title has no reference backdrop. Add one first so AI can edit the correct anime image.");
-      return;
-    }
     setBusy(true); setProgress(8); setLastError(null);
     const tick = setInterval(() => {
       setProgress((p) => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2)));
@@ -180,8 +176,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider: "lovable",
-        referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
-        useReference: mode === "backdrop",
+        // gpt-image-2 generates from prompt only; no reference image needed.
+        useReference: false,
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
