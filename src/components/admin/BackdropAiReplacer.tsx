@@ -335,7 +335,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             <span className={`w-2 h-2 rounded-full ${statusTone.dot}`} />
             <div className="min-w-0 flex-1">
               <div className="text-[10.5px] font-semibold text-white/90">Lovable AI Gateway</div>
-              <div className="text-[9.5px] text-white/45 truncate">{lovableStatus.model || "google/gemini-3.1-flash-image-preview"}</div>
+              <div className="text-[9.5px] text-white/45 truncate">{lovableStatus.model || "openai/gpt-image-2"}</div>
             </div>
             <button
               onClick={() => checkLovable(false)}
