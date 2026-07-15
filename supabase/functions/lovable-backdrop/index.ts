@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 const DEFAULT_MODEL = "openai/gpt-image-2";
-const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image-preview";
+const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image";
 const IMGBB_KEY = "d5c0bce7c98c54d813bf285ffe453689";
 
 interface Body {
@@ -120,12 +120,12 @@ Deno.serve(async (req) => {
   try {
     const mode = body.mode || "backdrop";
     const prompt = mode === "logo" ? logoPrompt(body) : backdropPrompt(body);
-    const useRef = mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
-
-    // If a reference image is required, gpt-image-2 needs the /edits shape which
-    // is not exposed here — fall back to Gemini image model for that case.
-    const model = body.model || (useRef ? GEMINI_FALLBACK_MODEL : DEFAULT_MODEL);
+    // Default: gpt-image-2 for BOTH backdrop + logo (ChatGPT quality, prompt-only).
+    // Only route to Gemini when caller explicitly asks for reference-image editing
+    // via model override (gpt-image-2 needs /edits endpoint we don't expose here).
+    const model = body.model || DEFAULT_MODEL;
     const isOpenAi = model.startsWith("openai/");
+    const useRef = !isOpenAi && mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
 
     let payload: Record<string, unknown>;
     if (isOpenAi) {
