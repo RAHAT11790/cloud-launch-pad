@@ -348,14 +348,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </div>
           )}
 
-          {mode === "backdrop" && (
-            <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2 text-[10.5px] text-white/80">
-              <span className="text-emerald-300 font-semibold">Reference required</span> — AI edits the current backdrop to stay on-model.
-              {!activeItem.backdrop && (
-                <div className="text-[10px] text-amber-300 mt-1">⚠ No reference backdrop. Add one first.</div>
-              )}
-            </div>
-          )}
+          <div className="bg-fuchsia-500/[0.06] border border-fuchsia-500/25 rounded-lg p-2 text-[10.5px] text-white/80">
+            <span className="text-fuchsia-300 font-semibold">GPT-Image-2</span> · ChatGPT-quality {mode === "backdrop" ? "16:9 cinematic banner" : "1:1 title logo"} from prompt only. Reference image not needed.
+          </div>
 
           {/* Prompt override */}
           <div className="bg-white/[0.03] border border-white/10 rounded-lg p-2">
