@@ -1,6 +1,6 @@
 // Lovable AI Gateway-backed backdrop/logo generator.
-// Auto-deployed by Lovable. Uses LOVABLE_API_KEY (auto-provisioned).
-// Called directly from BackdropAiReplacer via supabase.functions.invoke("lovable-backdrop", ...).
+// Default model: openai/gpt-image-2 (ChatGPT-quality). Falls back to Gemini
+// only when a reference image is attached (gpt-image-2 has different edit shape).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,7 +9,8 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
-const DEFAULT_MODEL = "google/gemini-3.1-flash-image-preview";
+const DEFAULT_MODEL = "openai/gpt-image-2";
+const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image-preview";
 const IMGBB_KEY = "d5c0bce7c98c54d813bf285ffe453689";
 
 interface Body {
@@ -23,6 +24,7 @@ interface Body {
   year?: string | number;
   action?: "check-lovable";
   model?: string;
+  quality?: "low" | "medium" | "high";
 }
 
 function backdropPrompt(b: Body): string {
@@ -94,8 +96,10 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
         body: JSON.stringify({
           model: DEFAULT_MODEL,
-          messages: [{ role: "user", content: "ping" }],
-          modalities: ["image", "text"],
+          prompt: "ping",
+          size: "1024x1024",
+          quality: "low",
+          n: 1,
         }),
       });
       const ok = probe.status < 500 && probe.status !== 401 && probe.status !== 402;
@@ -116,29 +120,49 @@ Deno.serve(async (req) => {
   try {
     const mode = body.mode || "backdrop";
     const prompt = mode === "logo" ? logoPrompt(body) : backdropPrompt(body);
-    const model = body.model || DEFAULT_MODEL;
+    const useRef = mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
 
-    // Build Gemini-style messages with optional reference image
-    const content: any[] = [{ type: "text", text: prompt }];
-    if (mode === "backdrop" && body.useReference && body.referenceImageUrl) {
-      const { b64, mime } = await fetchAsBase64(body.referenceImageUrl);
-      content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } });
+    // If a reference image is required, gpt-image-2 needs the /edits shape which
+    // is not exposed here — fall back to Gemini image model for that case.
+    const model = body.model || (useRef ? GEMINI_FALLBACK_MODEL : DEFAULT_MODEL);
+    const isOpenAi = model.startsWith("openai/");
+
+    let payload: Record<string, unknown>;
+    if (isOpenAi) {
+      // gpt-image-2 supported sizes: 1024x1024, 1024x1536, 1536x1024, auto
+      const size = mode === "logo" ? "1024x1024" : "1536x1024";
+      payload = {
+        model,
+        prompt,
+        size,
+        quality: body.quality || "low",
+        n: 1,
+      };
+    } else {
+      // Gemini image chat shape (supports reference image)
+      const content: any[] = [{ type: "text", text: prompt }];
+      if (useRef) {
+        const { b64, mime } = await fetchAsBase64(body.referenceImageUrl!);
+        content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } });
+      }
+      payload = {
+        model,
+        messages: [{ role: "user", content }],
+        modalities: ["image", "text"],
+      };
     }
 
     const upstream = await fetch(GATEWAY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content }],
-        modalities: ["image", "text"],
-      }),
+      body: JSON.stringify(payload),
     });
 
     const raw = await upstream.text();
     if (!upstream.ok) {
       return new Response(JSON.stringify({
         error: `Lovable AI ${upstream.status}: ${raw.slice(0, 300)}`,
+        model,
       }), { status: upstream.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
