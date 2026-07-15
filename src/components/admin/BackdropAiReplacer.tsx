@@ -164,10 +164,6 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
   const generate = async () => {
     if (!activeItem || busy) return;
-    if (mode === "backdrop" && !activeItem.backdrop) {
-      toast.error("This title has no reference backdrop. Add one first so AI can edit the correct anime image.");
-      return;
-    }
     setBusy(true); setProgress(8); setLastError(null);
     const tick = setInterval(() => {
       setProgress((p) => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2)));
@@ -180,8 +176,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider: "lovable",
-        referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
-        useReference: mode === "backdrop",
+        // gpt-image-2 generates from prompt only; no reference image needed.
+        useReference: false,
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
@@ -335,7 +331,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             <span className={`w-2 h-2 rounded-full ${statusTone.dot}`} />
             <div className="min-w-0 flex-1">
               <div className="text-[10.5px] font-semibold text-white/90">Lovable AI Gateway</div>
-              <div className="text-[9.5px] text-white/45 truncate">{lovableStatus.model || "google/gemini-3.1-flash-image-preview"}</div>
+              <div className="text-[9.5px] text-white/45 truncate">{lovableStatus.model || "openai/gpt-image-2"}</div>
             </div>
             <button
               onClick={() => checkLovable(false)}
@@ -352,14 +348,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </div>
           )}
 
-          {mode === "backdrop" && (
-            <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2 text-[10.5px] text-white/80">
-              <span className="text-emerald-300 font-semibold">Reference required</span> — AI edits the current backdrop to stay on-model.
-              {!activeItem.backdrop && (
-                <div className="text-[10px] text-amber-300 mt-1">⚠ No reference backdrop. Add one first.</div>
-              )}
-            </div>
-          )}
+          <div className="bg-fuchsia-500/[0.06] border border-fuchsia-500/25 rounded-lg p-2 text-[10.5px] text-white/80">
+            <span className="text-fuchsia-300 font-semibold">GPT-Image-2</span> · ChatGPT-quality {mode === "backdrop" ? "16:9 cinematic banner" : "1:1 title logo"} from prompt only. Reference image not needed.
+          </div>
 
           {/* Prompt override */}
           <div className="bg-white/[0.03] border border-white/10 rounded-lg p-2">
