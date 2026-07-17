@@ -347,11 +347,12 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               <div
                 key={release.id}
                 data-anime-card="true"
-                className="relative flex-shrink-0 w-[124px] cursor-pointer group"
+                data-new-release-card="true"
+                className="relative flex-shrink-0 w-[124px] lg:w-[210px] xl:w-[230px] cursor-pointer group"
                 onPointerDown={() => warmRelease(release)}
                 onClick={() => handleClick(release, minEp)}
               >
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden new-release-poster shadow-md">
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
