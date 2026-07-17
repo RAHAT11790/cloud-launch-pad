@@ -347,7 +347,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               <div
                 key={release.id}
                 data-anime-card="true"
-                className="relative flex-shrink-0 w-[124px] cursor-pointer group"
+                data-new-release-card="true"
+                className="relative flex-shrink-0 w-[124px] lg:w-[210px] xl:w-[230px] cursor-pointer group"
                 onPointerDown={() => warmRelease(release)}
                 onClick={() => handleClick(release, minEp)}
               >

@@ -1614,8 +1614,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
   /* ---------- ANIME CARDS — larger on desktop ---------- */
   .poster-hover {
-    min-width: 230px !important;
-    max-width: 250px !important;
+    min-width: 200px !important;
+    max-width: 220px !important;
     border-radius: 18px !important;
     transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms !important;
   }
@@ -1630,15 +1630,37 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .poster-hover span[class*="text-[7px]"],
   .poster-hover span[class*="text-[8px]"] { font-size: 11px !important; }
 
+  /* NewEpisodeReleases cards — inner poster-hover must NOT override the
+     already-responsive w-[124px] lg:w-[210px] wrapper. Let it fill wrapper. */
+  [data-new-release-card] .poster-hover {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
   /* Full-page grid views (Series / Movies tabs) — more columns */
   main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 20px !important; }
   main.relative.overflow-hidden .grid.grid-cols-2 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 20px !important; }
+  main.relative.overflow-hidden .grid.grid-cols-3 .poster-hover,
+  main.relative.overflow-hidden .grid.grid-cols-2 .poster-hover {
+    min-width: 0 !important; max-width: none !important; width: 100% !important;
+  }
 
-  /* ---------- CATEGORY PILLS ---------- */
+  /* ---------- CATEGORY PILLS — stronger contrast ---------- */
   main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="rounded-xl"],
   main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="rounded-full"] {
-    padding: 10px 18px !important;
+    padding: 10px 20px !important;
     font-size: 13px !important;
+    border: 1px solid hsl(var(--border)) !important;
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+  main.relative.overflow-hidden div[class*="overflow-x-auto"] > button[class*="gradient-primary"],
+  main.relative.overflow-hidden div[class*="overflow-x-auto"] > button.gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent))) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    border-color: transparent !important;
+    box-shadow: 0 6px 20px -6px hsl(var(--primary) / 0.55) !important;
   }
 
   /* ---------- LIVE TV — grid layout instead of stacked list ---------- */
@@ -1651,38 +1673,73 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     margin-top: 0 !important;
   }
 
-  /* ---------- VIDEO PLAYER — professional desktop layout ---------- */
+  /* ---------- HERO — center info card, cap width, polish ---------- */
+  main.relative.overflow-hidden [class*="h-[44vh]"],
+  main.relative.overflow-hidden [class*="h-[50vh]"] {
+    height: 62vh !important;
+    max-height: 620px !important;
+    min-height: 460px !important;
+  }
+  .hero-info-card {
+    max-width: 960px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 18px 26px !important;
+    border-radius: 22px !important;
+    backdrop-filter: blur(14px) saturate(1.3) !important;
+    background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.75)) !important;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6) !important;
+  }
+  .hero-info-poster img { width: 84px !important; height: 120px !important; border-radius: 12px !important; }
+  .hero-info-title { font-size: 28px !important; line-height: 1.15 !important; }
+  .hero-info-meta { font-size: 13px !important; opacity: 0.9; }
+  .hero-watch-btn {
+    padding: 12px 26px !important;
+    font-size: 14px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 10px 30px -8px hsl(var(--primary) / 0.6) !important;
+  }
+  .hero-title-text { font-size: clamp(48px, 6vw, 84px) !important; }
+
+  /* ---------- VIDEO PLAYER — professional theater layout ---------- */
+  /* Root becomes a scrolling column; content stacks below the player. */
+  .rs-video-player-root:not(:has(.player-fs-enter)) {
+    padding-top: 24px !important;
+    padding-bottom: 40px !important;
+  }
   .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
     max-width: 1280px !important;
     margin-left: auto !important;
     margin-right: auto !important;
     padding-left: 24px !important;
     padding-right: 24px !important;
-    padding-top: 20px !important;
+    padding-top: 0 !important;
   }
-  /* Rounded video shell */
+  /* Video shell — cap by height so there's ALWAYS room for content below.
+     Use aspect-ratio + max-width via calc so 16:9 is preserved. */
   .rs-video-player-shell:not(.player-fs-enter) {
-    border-radius: 18px !important;
+    position: relative !important;
+    top: auto !important;
+    max-width: calc((100vh - 220px) * 16 / 9) !important;
+    max-height: calc(100vh - 220px) !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    border-radius: 20px !important;
     overflow: hidden !important;
-    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6) !important;
-    max-height: calc(100vh - 130px);
+    box-shadow: 0 40px 100px -30px rgba(0,0,0,0.7), 0 0 0 1px hsl(var(--border) / 0.4) !important;
   }
-  /* Controls layer — scale up to match large player */
-  .player-controls-layer { padding: 18px 24px !important; }
+  /* Controls overlay scale-up */
+  .player-controls-layer { padding: 20px 28px !important; }
   .player-controls-layer button svg { width: 26px !important; height: 26px !important; }
   .player-controls-layer button { min-width: 40px; min-height: 40px; }
-  .player-controls-layer .h-7 { height: 40px !important; }
-  .player-controls-layer .h-8 { height: 42px !important; }
-  .player-controls-layer .w-7 { width: 40px !important; }
-  .player-controls-layer .w-8 { width: 42px !important; }
   .player-controls-layer [class*="text-[10px]"],
-  .player-controls-layer [class*="text-[11px]"] { font-size: 14px !important; }
+  .player-controls-layer [class*="text-[11px]"],
   .player-controls-layer [class*="text-[12px]"],
   .player-controls-layer .text-xs { font-size: 14px !important; }
   .player-controls-layer .max-w-\[78px\],
   .player-controls-layer .max-w-\[54px\],
   .player-controls-layer .max-w-\[62px\] { max-width: none !important; }
-  /* Center play/pause big button */
   .player-controls-layer .rounded-full[class*="w-16"],
   .player-controls-layer .rounded-full[class*="w-14"] {
     width: 88px !important; height: 88px !important;
@@ -1691,24 +1748,23 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .player-controls-layer .rounded-full[class*="w-14"] svg {
     width: 40px !important; height: 40px !important;
   }
-  /* Timeline bar taller & clearer */
   .player-controls-layer .h-1 { height: 6px !important; }
   .player-controls-layer .h-4 { height: 24px !important; }
-  /* Top bar (title / quality / server chips) */
-  .player-controls-layer .absolute.top-0 button,
-  .player-controls-layer .absolute.top-0 span { font-size: 14px !important; }
 
-  /* Episode chips wider so numbers breathe */
+  /* Episode chips */
   .rs-video-player-root button[class*="w-12"][class*="h-11"] {
     width: 60px !important;
     height: 48px !important;
     font-size: 15px !important;
   }
 
-  /* Suggested "For you" grid — keep tighter (user says these look right) */
+  /* "For you" grid */
   .rs-video-player-root .grid.grid-cols-3 {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    gap: 16px !important;
+    gap: 18px !important;
+  }
+  .rs-video-player-root .grid.grid-cols-3 .poster-hover {
+    min-width: 0 !important; max-width: none !important; width: 100% !important;
   }
   .rs-video-player-root .grid.grid-cols-3 p.text-xs {
     font-size: 13px !important;
@@ -1742,7 +1798,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   main.relative.overflow-hidden .space-y-3:has(> div[class*="aspect-video"]) {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
-  .poster-hover { min-width: 250px !important; max-width: 270px !important; }
+  .poster-hover { min-width: 220px !important; max-width: 240px !important; }
 }
 
 /* Ultra-wide / 4K TV (≥1920px) */
@@ -1754,7 +1810,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
     max-width: 1620px !important;
   }
-  .poster-hover { min-width: 270px !important; max-width: 290px !important; }
+  .poster-hover { min-width: 240px !important; max-width: 260px !important; }
   main.relative.overflow-hidden .grid.grid-cols-3 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
 }
+
 
