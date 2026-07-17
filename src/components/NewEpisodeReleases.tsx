@@ -352,7 +352,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 onPointerDown={() => warmRelease(release)}
                 onClick={() => handleClick(release, minEp)}
               >
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden new-release-poster shadow-md">
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
