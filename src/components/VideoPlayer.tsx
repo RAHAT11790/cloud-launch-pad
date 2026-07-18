@@ -4528,6 +4528,40 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const handlePlayerRemoteKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!document.documentElement.classList.contains("tv-mode")) return;
+    const target = e.target as HTMLElement | null;
+    if (target && target !== e.currentTarget && target.matches("button, a, input, select, textarea, [role='button'], [tabindex]")) return;
+
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      togglePlay();
+      resetHideTimer();
+      return;
+    }
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      seek(-10);
+      resetHideTimer();
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      seek(10);
+      resetHideTimer();
+      return;
+    }
+    if (e.key === "MediaPlayPause") {
+      e.preventDefault();
+      togglePlay();
+      resetHideTimer();
+      return;
+    }
+    if (e.key === "Escape" || e.key === "Backspace" || e.key === "BrowserBack") {
+      e.preventDefault();
+      handleBackPress();
+    }
+  }, [handleBackPress, resetHideTimer, seek, togglePlay]);
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
@@ -4546,6 +4580,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         {/* Video Container - will-change for GPU compositing */}
         <div
           ref={videoContainerRef}
+          tabIndex={0}
+          role="region"
+          aria-label="Video player"
           className={`rs-video-player-shell relative bg-black overflow-hidden ${
             isFullscreen 
               ? "w-screen h-screen rounded-none player-fs-enter" 
@@ -4559,6 +4596,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             overscrollBehavior: "contain",
           }}
           onContextMenu={(e) => e.preventDefault()}
+          onKeyDown={handlePlayerRemoteKey}
           onClick={handleVideoClick}
           onPointerDown={startSpeedHold}
           onPointerUp={endSpeedHold}

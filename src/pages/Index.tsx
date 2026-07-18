@@ -707,7 +707,7 @@ const getCardSourceBadge = (anime: AnimeItem | any) => {
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
 const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
-  <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
+  <button key={anime.id} type="button" data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
@@ -725,7 +725,7 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
         </p>
       )}
     </div>
-  </div>
+  </button>
 );
 
 const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
@@ -3330,8 +3330,8 @@ const Index = () => {
                   }
                   const badge = getCardSourceBadge(item);
                   return (
-                    <div key={item.id} onClick={() => handleContinueWatching(item)}
-                      className="flex-shrink-0 w-[130px] cursor-pointer">
+                    <div key={item.id} role="button" tabIndex={0} onClick={() => handleContinueWatching(item)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleContinueWatching(item); } }}
+                      className="flex-shrink-0 w-[130px] cursor-pointer outline-none">
                       <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
                         <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
