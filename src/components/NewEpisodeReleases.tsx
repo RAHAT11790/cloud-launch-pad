@@ -348,9 +348,12 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 key={release.id}
                 data-anime-card="true"
                 data-new-release-card="true"
+                role="button"
+                tabIndex={0}
                 className="relative flex-shrink-0 w-[124px] lg:w-[210px] xl:w-[230px] cursor-pointer group"
                 onPointerDown={() => warmRelease(release)}
                 onClick={() => handleClick(release, minEp)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(release, minEp); } }}
               >
                   <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
                   {/* NEW badge */}

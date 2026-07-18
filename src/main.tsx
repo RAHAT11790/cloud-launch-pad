@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { setupTvNavigation } from "@/hooks/useTvNavigation";
 
 // Theme
 const savedTheme = localStorage.getItem("rs_theme");
@@ -20,5 +21,7 @@ if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-s
     if (isTv) document.documentElement.classList.add("tv-mode");
   } catch {}
 })();
+
+setupTvNavigation();
 
 createRoot(document.getElementById("root")!).render(<App />);

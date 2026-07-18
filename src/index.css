@@ -1385,6 +1385,13 @@ html.tv-mode [tabindex]:focus {
   filter: brightness(1.15);
 }
 
+html.tv-mode [data-anime-card]:focus,
+html.tv-mode [data-new-release-card]:focus,
+html.tv-mode .poster-hover:focus {
+  outline-offset: 6px !important;
+  filter: brightness(1.18) saturate(1.08);
+}
+
 /* Bigger tap targets on TV */
 html.tv-mode button,
 html.tv-mode a,
@@ -1403,19 +1410,52 @@ html.tv-mode [data-anime-card] {
   transform: none !important;
 }
 
-/* Android TV video player layout — larger controls, stable bottom bar, no tiny chips */
+/* Android TV video player layout — theater shell with real content below it */
 html.tv-mode .rs-video-player-root {
+  background: hsl(var(--background)) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  align-items: center !important;
+  padding: 18px 0 56px !important;
+  scroll-behavior: auto !important;
+}
+
+html.tv-mode .rs-video-player-root:has(.player-fs-enter) {
   background: #000 !important;
   overflow: hidden !important;
+  padding: 0 !important;
+}
+
+html.tv-mode .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
+  width: 100% !important;
+  max-width: 1360px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 32px !important;
+  padding-right: 32px !important;
 }
 
 html.tv-mode .rs-video-player-shell {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  border-radius: 0 !important;
+  width: min(calc(100vw - 64px), calc((100vh - 240px) * 16 / 9), 1280px) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  max-height: calc(100vh - 240px) !important;
+  min-height: min(48vh, 420px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  border-radius: 18px !important;
   position: relative !important;
   top: auto !important;
+  box-shadow: 0 28px 72px -28px hsl(0 0% 0% / 0.9), 0 0 0 1px hsl(var(--border) / 0.55) !important;
+}
+
+html.tv-mode .rs-video-player-shell.player-fs-enter {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 html.tv-mode .rs-video-player-shell video,
@@ -1449,6 +1489,43 @@ html.tv-mode .rs-video-player-shell [data-player-panel="true"] {
 html.tv-mode .rs-video-player-shell [data-player-panel="true"] button {
   min-height: 48px !important;
   font-size: 14px !important;
+}
+
+html.tv-mode .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type > div:not(.rs-video-player-shell) {
+  max-width: min(100%, 1280px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+html.tv-mode .rs-video-player-root h2 {
+  font-size: 22px !important;
+}
+
+html.tv-mode .rs-video-player-root h3,
+html.tv-mode .rs-video-player-root .text-\[15px\] {
+  font-size: 18px !important;
+}
+
+html.tv-mode .rs-video-player-root .text-\[10px\],
+html.tv-mode .rs-video-player-root .text-\[11px\],
+html.tv-mode .rs-video-player-root .text-\[12px\],
+html.tv-mode .rs-video-player-root .text-\[13px\] {
+  font-size: 15px !important;
+}
+
+html.tv-mode .rs-video-player-root button[class*="w-12"][class*="h-11"] {
+  width: 72px !important;
+  height: 56px !important;
+  font-size: 18px !important;
+}
+
+html.tv-mode .rs-video-player-root .grid.grid-cols-3 {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 20px !important;
+}
+
+html.tv-mode .rs-video-player-root .grid.grid-cols-3 button {
+  min-height: 0 !important;
 }
 
 /* ============================================================

@@ -134,10 +134,13 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   return (
     <div
       data-anime-card="true"
+      role="button"
+      tabIndex={0}
       className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0 transition-transform duration-150 ease-out active:scale-[0.94] active:brightness-90 ${
         isPremium ? "premium-card-glow ring-1 ring-amber-400/50" : ""
       }`}
       onClick={() => onClick(anime)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(anime); } }}
       onPointerDown={() => { try { (window as any).__rsPrefetchAnime?.(anime); } catch {} }}
       style={{
         boxShadow: isPremium ? "0 6px 24px -6px rgba(251,191,36,0.45)" : "var(--neu-shadow-sm)",
