@@ -1410,7 +1410,9 @@ html.tv-mode [data-anime-card] {
   transform: none !important;
 }
 
-/* Android TV video player layout — theater shell with real content below it */
+/* Android TV video player layout — theater shell with real content below it.
+   Uses [data-player-fs] attribute instead of :has() so it works on older
+   Chromium-based TV WebViews (Android TV 9/10) that don't support :has(). */
 html.tv-mode .rs-video-player-root {
   background: hsl(var(--background)) !important;
   overflow-x: hidden !important;
@@ -1418,22 +1420,31 @@ html.tv-mode .rs-video-player-root {
   align-items: center !important;
   padding: 18px 0 56px !important;
   scroll-behavior: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
-html.tv-mode .rs-video-player-root:has(.player-fs-enter) {
+html.tv-mode .rs-video-player-root[data-player-fs="on"] {
   background: #000 !important;
   overflow: hidden !important;
   padding: 0 !important;
 }
 
-html.tv-mode .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type {
+html.tv-mode .rs-video-player-root[data-player-fs="off"] > div:first-of-type {
   width: 100% !important;
   max-width: 1360px !important;
   margin-left: auto !important;
   margin-right: auto !important;
   padding-left: 32px !important;
   padding-right: 32px !important;
+  height: auto !important;
 }
+
+html.tv-mode .rs-video-player-root[data-player-fs="off"] > div:first-of-type > div:first-of-type {
+  position: relative !important;
+  top: auto !important;
+}
+
 
 html.tv-mode .rs-video-player-shell {
   width: min(calc(100vw - 64px), calc((100vh - 240px) * 16 / 9), 1280px) !important;
