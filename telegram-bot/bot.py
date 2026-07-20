@@ -162,34 +162,42 @@ async def run_capture(*args: str, timeout: int = 120) -> tuple[int, str, str]:
 # yt-dlp probing
 # ---------------------------------------------------------------------------
 async def probe_formats(url: str) -> List[dict]:
-    """Return a de-duplicated list of downloadable video qualities."""
+    """Return a de-duplicated list of downloadable video qualities.
+
+    Robust for direct .m3u8 / .mpd / .mp4 links (Dailymotion CDN, custom CDNs)
+    and for regular site URLs (YouTube, Vimeo, etc.). If yt-dlp cannot enumerate
+    variants, we still return a synthetic 'Best' entry so the user can proceed.
+    """
     code, out, err = await run_capture(
         "yt-dlp",
-        "-J",  # single json for info
+        "-J",
         "--no-warnings",
         "--no-playlist",
         "--allow-unplayable-formats",
+        "--add-header", "Referer: https://www.dailymotion.com/",
+        "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         url,
         timeout=90,
     )
-    if code != 0 or not out.strip():
-        raise RuntimeError(f"Probe failed: {err.strip()[:400] or 'yt-dlp error'}")
-
-    info = json.loads(out)
-    entries = info.get("entries") or [info]
     formats: List[dict] = []
-    for entry in entries:
-        for f in entry.get("formats") or []:
-            if f.get("vcodec") in (None, "none"):
-                continue
-            height = f.get("height") or 0
-            ext = f.get("ext") or "mp4"
-            fmt_id = f.get("format_id")
-            fs = f.get("filesize") or f.get("filesize_approx") or 0
-            proto = f.get("protocol") or ""
-            tbr = f.get("tbr") or 0
-            if not fmt_id:
-                continue
+    if code == 0 and out.strip():
+        try:
+            info = json.loads(out)
+        except Exception:
+            info = {}
+        entries = info.get("entries") or [info]
+        for entry in entries:
+            for f in entry.get("formats") or []:
+                if f.get("vcodec") in (None, "none"):
+                    continue
+                height = f.get("height") or 0
+                ext = f.get("ext") or "mp4"
+                fmt_id = f.get("format_id")
+                fs = f.get("filesize") or f.get("filesize_approx") or 0
+                proto = f.get("protocol") or ""
+                tbr = f.get("tbr") or 0
+                if not fmt_id:
+                    continue
             label = f"{height}p" if height else (f.get("format_note") or fmt_id)
             formats.append({
                 "id": fmt_id,
