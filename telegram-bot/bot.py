@@ -113,6 +113,19 @@ THUMBS: Dict[int, Path] = {}  # user_id -> thumbnail path
 
 
 # ---------------------------------------------------------------------------
+# Dailymotion helper — signed CDN manifest URLs are IP + time bound. If the VPS
+# gets 403, we automatically retry with the canonical dailymotion.com page URL
+# so yt-dlp can mint a fresh token from the VPS's own IP.
+# ---------------------------------------------------------------------------
+DM_CDN_RE = re.compile(r"dailymotion\.com/cdn/[^?#]*?/video/([a-z0-9]+)\.m3u8", re.IGNORECASE)
+
+
+def dailymotion_page_fallback(url: str) -> Optional[str]:
+    m = DM_CDN_RE.search(url)
+    return f"https://www.dailymotion.com/video/{m.group(1)}" if m else None
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
