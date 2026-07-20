@@ -602,7 +602,7 @@ async def on_cb(_, cq: CallbackQuery):
 
     try:
         await safe_edit(status, "⏳ Starting download…")
-        file_path = await download_format(job, fmt["format_id"], out_base, on_dl_progress)
+        file_path = await download_format(job, fmt, out_base, on_dl_progress)
         size = file_path.stat().st_size
         log.info("downloaded: %s (%s)", file_path, human_size(size))
 
