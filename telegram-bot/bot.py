@@ -198,16 +198,16 @@ async def probe_formats(url: str) -> List[dict]:
                 tbr = f.get("tbr") or 0
                 if not fmt_id:
                     continue
-            label = f"{height}p" if height else (f.get("format_note") or fmt_id)
-            formats.append({
-                "id": fmt_id,
-                "label": label,
-                "height": height,
-                "ext": ext,
-                "protocol": proto,
-                "size": fs,
-                "tbr": tbr,
-            })
+                label = f"{height}p" if height else (f.get("format_note") or fmt_id)
+                formats.append({
+                    "id": fmt_id,
+                    "label": label,
+                    "height": height,
+                    "ext": ext,
+                    "protocol": proto,
+                    "size": fs,
+                    "tbr": tbr,
+                })
 
     # collapse duplicates by height, prefer highest tbr / largest known size
     best: Dict[int, dict] = {}
@@ -216,7 +216,7 @@ async def probe_formats(url: str) -> List[dict]:
         if key not in best or (f["size"] or 0) > (best[key]["size"] or 0):
             best[key] = f
     ordered = sorted(best.values(), key=lambda x: (x["height"] or x["tbr"] or 0), reverse=True)
-    # Always add a "best" pseudo-choice as fallback
+    # Always add a "Best (auto)" fallback so direct m3u8 / mp4 links always have a button.
     ordered.insert(0, {"id": "best", "label": "Best (auto)", "height": 0, "ext": "mp4", "protocol": "", "size": 0, "tbr": 0})
     return ordered[:8]
 
