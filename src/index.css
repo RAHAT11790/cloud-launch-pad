@@ -1502,11 +1502,14 @@ html.tv-mode .rs-video-player-shell [data-player-panel="true"] button {
   font-size: 14px !important;
 }
 
-html.tv-mode .rs-video-player-root:not(:has(.player-fs-enter)) > div:first-of-type > div:not(.rs-video-player-shell) {
+html.tv-mode .rs-video-player-root[data-player-fs="off"] > div:first-of-type > div:not(.rs-video-player-shell) {
   max-width: min(100%, 1280px) !important;
   margin-left: auto !important;
   margin-right: auto !important;
+  display: block !important;
+  visibility: visible !important;
 }
+
 
 html.tv-mode .rs-video-player-root h2 {
   font-size: 22px !important;
