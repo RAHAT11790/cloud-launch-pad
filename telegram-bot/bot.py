@@ -1,32 +1,25 @@
 """
-RS Anime — Telegram Video Downloader Bot
-=========================================
-Send any direct MP4 / M3U8 / MPD / yt-dlp supported URL. The bot probes available
-qualities, shows inline buttons, downloads via yt-dlp + ffmpeg, and uploads back
-to Telegram with a live progress bar. Supports up to 2 GB per file (4 GB with a
-Premium user session).
+RS Anime — Telegram Video Downloader Bot (Admin-only)
+=====================================================
+Send any direct MP4 / M3U8 / MPD / yt-dlp supported URL. The bot probes
+available qualities, shows inline buttons, downloads via yt-dlp + ffmpeg,
+and uploads back to Telegram with a professional live progress bar.
 
-Features
---------
-* Pyrogram v2 async, fully non-blocking
-* Multi-quality picker (auto-detected from the source manifest)
-* Live progress bars for both download and upload (rate-limited, no flood)
-* Custom thumbnail — send a photo with `/thumb`, the next upload uses it
-* HLS / DASH remuxing to MP4 via ffmpeg (copy codec = fast, no re-encode)
-* 2 GB safe: auto-splits with ffmpeg if the file exceeds Telegram's cap
-* Robust cleanup, retry with backoff, cancel button per job
+- Admin-only (OWNER_ID must match)
+- No user session / no local bot API server required
+- Everything logged verbosely to stdout so `journalctl` / terminal shows it
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import json
-import math
+import logging
 import os
 import re
 import shutil
+import sys
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,7 +27,6 @@ from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from pyrogram import Client, filters
-from pyrogram.enums import ParseMode
 from pyrogram.errors import FloodWait, MessageNotModified
 from pyrogram.types import (
     CallbackQuery,
@@ -44,523 +36,468 @@ from pyrogram.types import (
 )
 
 # ---------------------------------------------------------------------------
+# Logging (everything to stdout so `python3 bot.py` shows every event)
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+    force=True,
+)
+# Quiet pyrogram internals, keep our logs loud
+logging.getLogger("pyrogram").setLevel(logging.WARNING)
+log = logging.getLogger("rs-bot")
+
+# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 load_dotenv()
 
-API_ID = int(os.getenv("API_ID", "0"))
-API_HASH = os.getenv("API_HASH", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-OWNER_ID = int(os.getenv("OWNER_ID") or 0)
-USER_SESSION = os.getenv("USER_SESSION", "").strip()
-BOT_API_SERVER = os.getenv("BOT_API_SERVER", "").strip()
+API_ID = int(os.getenv("API_ID", "0") or 0)
+API_HASH = os.getenv("API_HASH", "").strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
 WORK_DIR = Path(os.getenv("WORK_DIR", "./downloads")).resolve()
+
+if not (API_ID and API_HASH and BOT_TOKEN and OWNER_ID):
+    log.error("Missing API_ID / API_HASH / BOT_TOKEN / OWNER_ID in .env")
+    sys.exit(1)
+
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
-# Telegram limits: 2000 MiB for bots (with local Bot API) / 2 GB for users / 4 GB Premium
-MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024 - 32 * 1024 * 1024  # ~1.97 GB safety
-PROGRESS_INTERVAL = 3.0  # seconds between progress edits (avoid FloodWait)
-
-if not (API_ID and API_HASH and BOT_TOKEN):
-    raise SystemExit("Set API_ID, API_HASH, BOT_TOKEN in .env")
-
-# ---------------------------------------------------------------------------
-# Pyrogram clients
-# ---------------------------------------------------------------------------
-bot_kwargs: dict = dict(
-    name="rs_downloader_bot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    workdir=str(WORK_DIR),
-    parse_mode=ParseMode.HTML,
-    sleep_threshold=30,
-)
-if BOT_API_SERVER:
-    bot_kwargs["bot_api_server"] = BOT_API_SERVER
-bot = Client(**bot_kwargs)
-
-# Optional user client for 2 GB uploads
-user: Optional[Client] = None
-if USER_SESSION:
-    user = Client(
-        name="rs_downloader_user",
-        api_id=API_ID,
-        api_hash=API_HASH,
-        session_string=USER_SESSION,
-        workdir=str(WORK_DIR),
-        parse_mode=ParseMode.HTML,
-        sleep_threshold=30,
-    )
-
-# ---------------------------------------------------------------------------
-# In-memory job state
-# ---------------------------------------------------------------------------
-@dataclass
-class Job:
-    job_id: str
-    url: str
-    chat_id: int
-    user_id: int
-    status_msg_id: int
-    formats: List[dict] = field(default_factory=list)
-    cancel: asyncio.Event = field(default_factory=asyncio.Event)
-    process: Optional[asyncio.subprocess.Process] = None
-
-
-JOBS: Dict[str, Job] = {}
-THUMBS: Dict[int, Path] = {}  # user_id -> thumbnail path
-
-
-# ---------------------------------------------------------------------------
-# Dailymotion helper — signed CDN manifest URLs are IP + time bound. If the VPS
-# gets 403, we automatically retry with the canonical dailymotion.com page URL
-# so yt-dlp can mint a fresh token from the VPS's own IP.
-# ---------------------------------------------------------------------------
-DM_CDN_RE = re.compile(r"dailymotion\.com/cdn/[^?#]*?/video/([a-z0-9]+)\.m3u8", re.IGNORECASE)
-
-
-def dailymotion_page_fallback(url: str) -> Optional[str]:
-    m = DM_CDN_RE.search(url)
-    return f"https://www.dailymotion.com/video/{m.group(1)}" if m else None
-
+# Telegram bot upload cap ~ 2000 MB
+MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
-
-
 def human_size(n: float) -> str:
-    if not n or n < 0:
-        return "?"
-    for unit in ("B", "KB", "MB", "GB", "TB"):
+    n = float(n or 0)
+    for u in ("B", "KB", "MB", "GB", "TB"):
         if n < 1024:
-            return f"{n:.2f} {unit}"
+            return f"{n:.2f} {u}"
         n /= 1024
     return f"{n:.2f} PB"
 
 
+def human_time(sec: float) -> str:
+    sec = int(max(0, sec))
+    h, r = divmod(sec, 3600)
+    m, s = divmod(r, 60)
+    if h:
+        return f"{h}h {m}m {s}s"
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
 def bar(pct: float, width: int = 18) -> str:
     pct = max(0.0, min(100.0, pct))
-    filled = int(pct * width / 100)
-    return "▰" * filled + "▱" * (width - filled)
+    filled = int(width * pct / 100)
+    return "█" * filled + "░" * (width - filled)
 
 
-async def safe_edit(msg: Message, text: str, reply_markup=None) -> None:
+def progress_box(title: str, done: float, total: float, speed: float, eta: float) -> str:
+    pct = (done / total * 100) if total else 0
+    return (
+        f"<b>{title}</b>\n"
+        f"<code>[{bar(pct)}] {pct:5.1f}%</code>\n"
+        f"┏━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"┃ 📦 <b>Size</b>  : <code>{human_size(done)} / {human_size(total)}</code>\n"
+        f"┃ 🚀 <b>Speed</b> : <code>{human_size(speed)}/s</code>\n"
+        f"┃ ⏱ <b>ETA</b>   : <code>{human_time(eta)}</code>\n"
+        f"┗━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Job state
+# ---------------------------------------------------------------------------
+@dataclass
+class Job:
+    url: str
+    formats: List[dict] = field(default_factory=list)
+    title: str = "video"
+    thumbnail: Optional[str] = None
+    cancel: bool = False
+
+
+JOBS: Dict[str, Job] = {}  # keyed by short id
+USER_THUMB: Dict[int, str] = {}
+
+
+def new_job(url: str) -> str:
+    jid = uuid.uuid4().hex[:8]
+    JOBS[jid] = Job(url=url)
+    return jid
+
+
+# ---------------------------------------------------------------------------
+# yt-dlp: probe formats
+# ---------------------------------------------------------------------------
+def build_ydl_opts(extra: Optional[dict] = None) -> dict:
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "nocheckcertificate": True,
+        "geo_bypass": True,
+        "retries": 20,
+        "fragment_retries": 20,
+        "concurrent_fragment_downloads": 8,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            ),
+            "Referer": "https://www.dailymotion.com/",
+        },
+    }
+    if extra:
+        opts.update(extra)
+    return opts
+
+
+def probe_formats(url: str) -> dict:
+    """Blocking probe — call via asyncio.to_thread."""
+    from yt_dlp import YoutubeDL
+
+    with YoutubeDL(build_ydl_opts()) as ydl:
+        info = ydl.extract_info(url, download=False)
+    return info or {}
+
+
+def dailymotion_fallback(url: str) -> Optional[str]:
+    m = re.search(r"/video/([A-Za-z0-9]+)", url)
+    if m:
+        return f"https://www.dailymotion.com/video/{m.group(1)}"
+    return None
+
+
+def pick_quality_list(info: dict) -> List[dict]:
+    """Return a de-duplicated list of best video formats sorted by height desc."""
+    out: List[dict] = []
+    seen = set()
+    for f in info.get("formats", []) or []:
+        if not f.get("url"):
+            continue
+        vcodec = f.get("vcodec")
+        if vcodec == "none":
+            continue
+        h = f.get("height") or 0
+        proto = f.get("protocol", "")
+        key = (h, proto, f.get("format_id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "format_id": f.get("format_id"),
+                "height": h,
+                "ext": f.get("ext") or "mp4",
+                "tbr": f.get("tbr") or 0,
+                "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
+                "protocol": proto,
+            }
+        )
+    out.sort(key=lambda x: (x["height"] or 0, x["tbr"] or 0), reverse=True)
+    # Deduplicate by height, keep the highest bitrate per height
+    by_h: Dict[int, dict] = {}
+    for f in out:
+        h = f["height"] or 0
+        if h not in by_h:
+            by_h[h] = f
+    result = list(by_h.values())
+    result.sort(key=lambda x: x["height"] or 0, reverse=True)
+    return result[:10]
+
+
+# ---------------------------------------------------------------------------
+# yt-dlp: download with progress
+# ---------------------------------------------------------------------------
+async def download_format(job: Job, fmt_id: str, out_path: Path, on_progress) -> Path:
+    from yt_dlp import YoutubeDL
+
+    loop = asyncio.get_running_loop()
+    last_call = [0.0]
+
+    def hook(d: dict):
+        try:
+            if job.cancel:
+                raise Exception("Cancelled by user")
+            if d.get("status") == "downloading":
+                now = time.time()
+                if now - last_call[0] < 2.5:
+                    return
+                last_call[0] = now
+                done = float(d.get("downloaded_bytes") or 0)
+                total = float(d.get("total_bytes") or d.get("total_bytes_estimate") or 0)
+                speed = float(d.get("speed") or 0)
+                eta = float(d.get("eta") or 0)
+                asyncio.run_coroutine_threadsafe(on_progress(done, total, speed, eta), loop)
+        except Exception as e:
+            if "Cancelled" in str(e):
+                raise
+            log.warning("progress hook error: %s", e)
+
+    opts = build_ydl_opts(
+        {
+            "format": fmt_id,
+            "outtmpl": str(out_path.with_suffix(".%(ext)s")),
+            "merge_output_format": "mp4",
+            "progress_hooks": [hook],
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
+
+    def run() -> Path:
+        with YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(job.url, download=True)
+            filename = ydl.prepare_filename(info)
+            p = Path(filename)
+            # yt-dlp may have merged to mp4
+            mp4 = p.with_suffix(".mp4")
+            if mp4.exists():
+                return mp4
+            return p
+
+    return await asyncio.to_thread(run)
+
+
+# ---------------------------------------------------------------------------
+# Safe message editor (avoids FloodWait spam)
+# ---------------------------------------------------------------------------
+async def safe_edit(msg: Message, text: str, reply_markup=None):
     try:
         await msg.edit_text(text, reply_markup=reply_markup, disable_web_page_preview=True)
     except MessageNotModified:
         pass
     except FloodWait as e:
-        await asyncio.sleep(e.value + 1)
-    except Exception:
-        pass
-
-
-async def run_capture(*args: str, timeout: int = 120) -> tuple[int, str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-    try:
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
-        with contextlib.suppress(ProcessLookupError):
-            proc.kill()
-        return 124, "", "timeout"
-    return proc.returncode or 0, out.decode(errors="ignore"), err.decode(errors="ignore")
+        await asyncio.sleep(int(e.value) + 1)
+    except Exception as e:
+        log.warning("edit failed: %s", e)
 
 
 # ---------------------------------------------------------------------------
-# yt-dlp probing
+# Pyrogram bot
 # ---------------------------------------------------------------------------
-async def probe_formats(url: str) -> List[dict]:
-    """Return a de-duplicated list of downloadable video qualities.
+app = Client(
+    name="rs_dl_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    workdir=str(WORK_DIR),
+    in_memory=False,
+)
 
-    Robust for direct .m3u8 / .mpd / .mp4 links (Dailymotion CDN, custom CDNs)
-    and for regular site URLs (YouTube, Vimeo, etc.). If yt-dlp cannot enumerate
-    variants, we still return a synthetic 'Best' entry so the user can proceed.
-    """
-    
-    async def _probe(u: str) -> tuple[int, str, str]:
-        return await run_capture(
-            "yt-dlp", "-J", "--no-warnings", "--no-playlist", "--allow-unplayable-formats",
-            "--add-header", "Referer: https://www.dailymotion.com/",
-            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-            u, timeout=90,
-        )
-
-    code, out, err = await _probe(url)
-    if code != 0 or not out.strip():
-        fb = dailymotion_page_fallback(url)
-        if fb:
-            code, out, err = await _probe(fb)
-    formats: List[dict] = []
-    if code == 0 and out.strip():
-        try:
-            info = json.loads(out)
-        except Exception:
-            info = {}
-        entries = info.get("entries") or [info]
-        for entry in entries:
-            for f in entry.get("formats") or []:
-                if f.get("vcodec") in (None, "none"):
-                    continue
-                height = f.get("height") or 0
-                ext = f.get("ext") or "mp4"
-                fmt_id = f.get("format_id")
-                fs = f.get("filesize") or f.get("filesize_approx") or 0
-                proto = f.get("protocol") or ""
-                tbr = f.get("tbr") or 0
-                if not fmt_id:
-                    continue
-                label = f"{height}p" if height else (f.get("format_note") or fmt_id)
-                formats.append({
-                    "id": fmt_id,
-                    "label": label,
-                    "height": height,
-                    "ext": ext,
-                    "protocol": proto,
-                    "size": fs,
-                    "tbr": tbr,
-                })
-
-    # collapse duplicates by height, prefer highest tbr / largest known size
-    best: Dict[int, dict] = {}
-    for f in formats:
-        key = f["height"] or int(f["tbr"] or 0)
-        if key not in best or (f["size"] or 0) > (best[key]["size"] or 0):
-            best[key] = f
-    ordered = sorted(best.values(), key=lambda x: (x["height"] or x["tbr"] or 0), reverse=True)
-    # Always add a "Best (auto)" fallback so direct m3u8 / mp4 links always have a button.
-    ordered.insert(0, {"id": "best", "label": "Best (auto)", "height": 0, "ext": "mp4", "protocol": "", "size": 0, "tbr": 0})
-    return ordered[:8]
+admin_filter = filters.user(OWNER_ID) & filters.private
 
 
-# ---------------------------------------------------------------------------
-# Download + upload
-# ---------------------------------------------------------------------------
-async def _run_ytdlp(job: Job, url: str, format_id: str, status: Message) -> tuple[int, Path | None]:
-    out_tpl = str(WORK_DIR / f"{job.job_id}.%(ext)s")
-    cmd = [
-        "yt-dlp",
-        "--no-warnings", "--no-playlist", "--newline", "--progress",
-        "--concurrent-fragments", "8",
-        "--retries", "10", "--fragment-retries", "20",
-        "--http-chunk-size", "10M",
-        "--merge-output-format", "mp4",
-        "--hls-prefer-ffmpeg",
-        "--add-header", "Referer: https://www.dailymotion.com/",
-        "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "-f", f"{format_id}+bestaudio/best/{format_id}" if format_id != "best" else "bv*+ba/b/best",
-        "-o", out_tpl,
-        url,
-    ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
-    )
-    job.process = proc
-
-    last_edit = 0.0
-    percent_re = re.compile(r"(\d{1,3}\.\d)%\s+of\s+~?\s*([\d.]+\s*[KMGT]?i?B)?.*?at\s+([\d.]+\s*[KMGT]?i?B/s)?.*?ETA\s+(\S+)?")
-    assert proc.stdout is not None
-    while True:
-        if job.cancel.is_set():
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
-            raise asyncio.CancelledError()
-        line = await proc.stdout.readline()
-        if not line:
-            break
-        text = line.decode(errors="ignore").strip()
-        m = percent_re.search(text)
-        if m and time.time() - last_edit > PROGRESS_INTERVAL:
-            pct = float(m.group(1))
-            total = m.group(2) or "?"
-            speed = m.group(3) or "?"
-            eta = m.group(4) or "?"
-            await safe_edit(
-                status,
-                f"⬇️ <b>Downloading</b>\n<code>{bar(pct)}</code> {pct:.1f}%\n"
-                f"📦 {total}   🚀 {speed}   ⏳ {eta}",
-                reply_markup=cancel_kb(job.job_id),
-            )
-            last_edit = time.time()
-
-    rc = await proc.wait()
-    if rc == 0:
-        for p in WORK_DIR.glob(f"{job.job_id}.*"):
-            if p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
-                return rc, p
-    return rc, None
-
-
-async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path:
-    rc, path = await _run_ytdlp(job, job.url, format_id, status)
-    if path:
-        return path
-    # Retry via Dailymotion page URL — mints a fresh signed token from THIS server's IP.
-    fb = dailymotion_page_fallback(job.url)
-    if fb:
-        await safe_edit(status, "🔁 Signed URL expired/blocked — retrying via source page…", reply_markup=cancel_kb(job.job_id))
-        # clean any partial artifacts
-        for leftover in WORK_DIR.glob(f"{job.job_id}.*"):
-            with contextlib.suppress(Exception):
-                leftover.unlink()
-        rc2, path2 = await _run_ytdlp(job, fb, format_id, status)
-        if path2:
-            return path2
-        raise RuntimeError(f"yt-dlp failed for both direct and page URL (rc={rc2})")
-    raise RuntimeError(f"yt-dlp exited with code {rc}")
-
-
-
-async def maybe_split(path: Path) -> List[Path]:
-    """Split into <2 GB parts using ffmpeg if the file is too large."""
-    size = path.stat().st_size
-    if size <= MAX_UPLOAD_BYTES:
-        return [path]
-
-    # get duration
-    code, out, _ = await run_capture(
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=nw=1:nk=1", str(path), timeout=30,
-    )
-    dur = float(out.strip() or 0)
-    if dur <= 0:
-        return [path]
-
-    parts_count = math.ceil(size / MAX_UPLOAD_BYTES)
-    seg = math.ceil(dur / parts_count) + 1
-    stem = path.with_suffix("")
-    pattern = f"{stem}.part%03d{path.suffix}"
-    await run_capture(
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(path),
-        "-c", "copy", "-map", "0", "-f", "segment", "-segment_time", str(seg),
-        "-reset_timestamps", "1", pattern, timeout=3600,
-    )
-    parts = sorted(WORK_DIR.glob(f"{path.stem}.part*{path.suffix}"))
-    return parts or [path]
-
-
-def cancel_kb(job_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("✖ Cancel", callback_data=f"cx|{job_id}")]])
-
-
-def make_progress(status: Message, label: str, job: Job):
-    state = {"t": 0.0}
-
-    async def cb(current: int, total: int):
-        if job.cancel.is_set():
-            raise asyncio.CancelledError()
-        now = time.time()
-        if now - state["t"] < PROGRESS_INTERVAL:
-            return
-        state["t"] = now
-        pct = (current / total * 100) if total else 0
-        await safe_edit(
-            status,
-            f"⬆️ <b>{label}</b>\n<code>{bar(pct)}</code> {pct:.1f}%\n"
-            f"📦 {human_size(current)} / {human_size(total)}",
-            reply_markup=cancel_kb(job.job_id),
-        )
-
-    return cb
-
-
-async def upload_file(job: Job, path: Path, status: Message, caption: str) -> None:
-    client = user or bot  # user client handles larger files
-    thumb = str(THUMBS[job.user_id]) if THUMBS.get(job.user_id) else None
-    parts = await maybe_split(path)
-
-    for idx, part in enumerate(parts, 1):
-        label = f"Uploading{' part ' + str(idx) if len(parts) > 1 else ''}"
-        cap = caption + (f"\n<b>Part {idx}/{len(parts)}</b>" if len(parts) > 1 else "")
-        try:
-            await client.send_video(
-                chat_id=job.chat_id,
-                video=str(part),
-                caption=cap,
-                supports_streaming=True,
-                thumb=thumb,
-                progress=make_progress(status, label, job),
-            )
-        except FloodWait as e:
-            await asyncio.sleep(e.value + 1)
-            await client.send_video(
-                chat_id=job.chat_id, video=str(part), caption=cap,
-                supports_streaming=True, thumb=thumb,
-                progress=make_progress(status, label, job),
-            )
-        finally:
-            with contextlib.suppress(Exception):
-                part.unlink()
-
-
-# ---------------------------------------------------------------------------
-# Handlers
-# ---------------------------------------------------------------------------
-def auth_guard(uid: int) -> bool:
-    return not OWNER_ID or uid == OWNER_ID
-
-
-@bot.on_message(filters.command(["start", "help"]))
-async def on_start(_, m: Message):
-    await m.reply(
-        "<b>RS Anime — Video Downloader</b>\n\n"
-        "Send any direct video link (MP4 / M3U8 / MPD or a yt-dlp supported URL) "
-        "and I'll fetch the available qualities. Pick one and I'll download + upload it here.\n\n"
-        "• Up to <b>2 GB</b> per file (auto-split if larger)\n"
-        "• Send a photo with caption <code>/thumb</code> to set a custom thumbnail\n"
-        "• <code>/clearthumb</code> to remove it\n"
-        "• <code>/cancel</code> to abort the current job\n",
+@app.on_message(filters.command(["start", "help"]) & filters.private)
+async def cmd_start(_, m: Message):
+    if m.from_user.id != OWNER_ID:
+        await m.reply_text("⛔ This bot is private.")
+        return
+    await m.reply_text(
+        "👋 <b>RS Downloader Bot</b>\n\n"
+        "Send any direct video URL (MP4 / M3U8 / MPD / Dailymotion CDN, etc.).\n"
+        "I'll show quality buttons — pick one, and I'll download + upload it back.\n\n"
+        "<b>Commands</b>\n"
+        "• /thumb — reply to a photo to set custom thumbnail\n"
+        "• /clearthumb — remove your thumbnail\n"
+        "• /cancel — cancel current job"
     )
 
 
-@bot.on_message(filters.command("thumb") & filters.photo)
-async def on_thumb(_, m: Message):
-    if not auth_guard(m.from_user.id):
+@app.on_message(filters.command("clearthumb") & admin_filter)
+async def cmd_clear_thumb(_, m: Message):
+    USER_THUMB.pop(m.from_user.id, None)
+    await m.reply_text("🗑 Custom thumbnail removed.")
+
+
+@app.on_message(filters.command("thumb") & admin_filter)
+async def cmd_thumb(_, m: Message):
+    target = m.reply_to_message if m.reply_to_message and m.reply_to_message.photo else None
+    if not target:
+        await m.reply_text("Reply to a photo with /thumb to save it.")
         return
     path = WORK_DIR / f"thumb_{m.from_user.id}.jpg"
-    await m.download(file_name=str(path))
-    THUMBS[m.from_user.id] = path
-    await m.reply("✅ Thumbnail saved. It will be used for your next upload.")
+    await target.download(file_name=str(path))
+    USER_THUMB[m.from_user.id] = str(path)
+    await m.reply_text("✅ Thumbnail saved. It will be used for future uploads.")
 
 
-@bot.on_message(filters.command("clearthumb"))
-async def on_clearthumb(_, m: Message):
-    p = THUMBS.pop(m.from_user.id, None)
-    if p:
-        with contextlib.suppress(Exception):
-            Path(p).unlink()
-    await m.reply("🧹 Thumbnail cleared.")
+@app.on_message(filters.command("cancel") & admin_filter)
+async def cmd_cancel(_, m: Message):
+    n = 0
+    for job in JOBS.values():
+        job.cancel = True
+        n += 1
+    await m.reply_text(f"🛑 Cancel flag set on {n} job(s).")
 
 
-@bot.on_message(filters.command("cancel"))
-async def on_cancel(_, m: Message):
-    mine = [j for j in JOBS.values() if j.user_id == m.from_user.id]
-    if not mine:
-        await m.reply("Nothing to cancel.")
-        return
-    for j in mine:
-        j.cancel.set()
-    await m.reply(f"🛑 Cancelling {len(mine)} job(s)…")
+URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 
 
-@bot.on_message(filters.text & ~filters.command(["start", "help", "thumb", "clearthumb", "cancel"]))
-async def on_url(_, m: Message):
-    if not auth_guard(m.from_user.id):
-        return
+@app.on_message(filters.text & admin_filter & ~filters.command(["start", "help", "thumb", "clearthumb", "cancel"]))
+async def handle_url(_, m: Message):
     match = URL_RE.search(m.text or "")
     if not match:
-        await m.reply("Send a valid https URL.")
         return
     url = match.group(0)
+    log.info("URL received from %s: %s", m.from_user.id, url)
 
-    status = await m.reply("🔎 Probing available qualities…")
+    status = await m.reply_text("🔎 Probing URL…", quote=True)
+
+    info: dict = {}
+    error: Optional[str] = None
     try:
-        formats = await probe_formats(url)
+        info = await asyncio.to_thread(probe_formats, url)
     except Exception as e:
-        await safe_edit(status, f"❌ Could not read this link.\n<code>{e}</code>")
-        return
-    if not formats:
-        await safe_edit(status, "❌ No downloadable video streams found.")
+        error = str(e)
+        log.warning("probe failed: %s", error)
+
+    if not info or not info.get("formats"):
+        fb = dailymotion_fallback(url)
+        if fb and fb != url:
+            log.info("Trying Dailymotion page fallback: %s", fb)
+            try:
+                info = await asyncio.to_thread(probe_formats, fb)
+                url = fb
+            except Exception as e:
+                error = str(e)
+                log.error("fallback probe failed: %s", error)
+
+    if not info:
+        await safe_edit(status, f"❌ Could not read this URL.\n<code>{error or 'no info'}</code>")
         return
 
-    job_id = uuid.uuid4().hex[:10]
-    JOBS[job_id] = Job(job_id=job_id, url=url, chat_id=m.chat.id, user_id=m.from_user.id, status_msg_id=status.id, formats=formats)
+    fmts = pick_quality_list(info)
+    if not fmts:
+        # Fallback: single "best" option
+        fmts = [{"format_id": "best", "height": 0, "ext": "mp4", "tbr": 0, "filesize": 0, "protocol": ""}]
 
-    rows: List[List[InlineKeyboardButton]] = []
-    row: List[InlineKeyboardButton] = []
-    for i, f in enumerate(formats):
-        size = f" · {human_size(f['size'])}" if f["size"] else ""
-        row.append(InlineKeyboardButton(f"{f['label']}{size}", callback_data=f"dl|{job_id}|{i}"))
+    jid = new_job(url)
+    JOBS[jid].formats = fmts
+    JOBS[jid].title = (info.get("title") or "video")[:80]
+
+    buttons = []
+    row = []
+    for idx, f in enumerate(fmts):
+        label = f"{f['height']}p" if f["height"] else "Best"
+        if f["filesize"]:
+            label += f" • {human_size(f['filesize'])}"
+        row.append(InlineKeyboardButton(label, callback_data=f"dl|{jid}|{idx}"))
         if len(row) == 2:
-            rows.append(row); row = []
-    if row: rows.append(row)
-    rows.append([InlineKeyboardButton("✖ Cancel", callback_data=f"cx|{job_id}")])
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data=f"x|{jid}")])
 
-    await safe_edit(status, "🎬 <b>Choose quality:</b>", reply_markup=InlineKeyboardMarkup(rows))
-
-
-@bot.on_callback_query(filters.regex(r"^cx\|"))
-async def on_cx(_, cq: CallbackQuery):
-    _, job_id = cq.data.split("|", 1)
-    job = JOBS.get(job_id)
-    if job:
-        job.cancel.set()
-    await cq.answer("Cancelling…")
+    await safe_edit(
+        status,
+        f"🎬 <b>{JOBS[jid].title}</b>\nPick a quality:",
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
 
 
-@bot.on_callback_query(filters.regex(r"^dl\|"))
-async def on_dl(_, cq: CallbackQuery):
-    _, job_id, idx_s = cq.data.split("|", 2)
-    job = JOBS.get(job_id)
+@app.on_callback_query(filters.user(OWNER_ID))
+async def on_cb(_, cq: CallbackQuery):
+    data = cq.data or ""
+    parts = data.split("|")
+    action = parts[0]
+
+    if action == "x" and len(parts) >= 2:
+        job = JOBS.get(parts[1])
+        if job:
+            job.cancel = True
+        await cq.answer("Cancelled.")
+        await safe_edit(cq.message, "🛑 Cancelled.")
+        return
+
+    if action != "dl" or len(parts) < 3:
+        await cq.answer()
+        return
+
+    jid, idx = parts[1], int(parts[2])
+    job = JOBS.get(jid)
     if not job:
-        await cq.answer("Session expired.", show_alert=True); return
-    if job.user_id != cq.from_user.id and not auth_guard(cq.from_user.id):
-        await cq.answer("Not your job.", show_alert=True); return
+        await cq.answer("Session expired. Resend the URL.", show_alert=True)
+        return
+    if idx >= len(job.formats):
+        await cq.answer("Bad selection.")
+        return
 
-    fmt = job.formats[int(idx_s)]
-    await cq.answer(f"Starting {fmt['label']}…")
+    fmt = job.formats[idx]
+    await cq.answer(f"Starting {fmt['height'] or 'best'}p…")
+
     status = cq.message
-    started = time.time()
-    file_path: Optional[Path] = None
+    tmpdir = WORK_DIR / jid
+    tmpdir.mkdir(parents=True, exist_ok=True)
+    out_base = tmpdir / re.sub(r"[^\w\- ]+", "_", job.title)[:60]
+
+    async def on_dl_progress(done, total, speed, eta):
+        await safe_edit(status, progress_box("⬇️ Downloading", done, total, speed, eta))
+
     try:
-        await safe_edit(status, f"⬇️ Preparing <b>{fmt['label']}</b>…", reply_markup=cancel_kb(job_id))
-        file_path = await download_with_ytdlp(job, fmt["id"], status)
+        await safe_edit(status, "⏳ Starting download…")
+        file_path = await download_format(job, fmt["format_id"], out_base, on_dl_progress)
+        log.info("downloaded: %s (%s)", file_path, human_size(file_path.stat().st_size))
+
         size = file_path.stat().st_size
-        await safe_edit(
-            status,
-            f"✅ Download complete — {human_size(size)}\n⬆️ Uploading to Telegram…",
-            reply_markup=cancel_kb(job_id),
+        if size > MAX_UPLOAD_BYTES:
+            await safe_edit(status, f"⚠️ File is {human_size(size)}, exceeds bot upload cap (~1.95 GB). Aborting.")
+            return
+
+        # Upload
+        start = time.time()
+        last = [0.0]
+
+        async def up_progress(cur, tot):
+            now = time.time()
+            if now - last[0] < 2.5 and cur < tot:
+                return
+            last[0] = now
+            elapsed = max(0.001, now - start)
+            speed = cur / elapsed
+            eta = (tot - cur) / speed if speed else 0
+            await safe_edit(status, progress_box("⬆️ Uploading", cur, tot, speed, eta))
+
+        thumb = USER_THUMB.get(cq.from_user.id)
+        caption = f"🎬 <b>{job.title}</b>\n📐 {fmt['height'] or '?'}p • 💾 {human_size(size)}"
+
+        await cq.message.reply_video(
+            video=str(file_path),
+            caption=caption,
+            thumb=thumb if thumb and os.path.exists(thumb) else None,
+            supports_streaming=True,
+            progress=up_progress,
         )
-        caption = (
-            f"🎬 <b>{fmt['label']}</b>\n"
-            f"📦 {human_size(size)}\n"
-            f"⏱ {int(time.time() - started)}s\n"
-            f"🔗 <a href=\"{job.url}\">source</a>"
-        )
-        await upload_file(job, file_path, status, caption)
-        await safe_edit(status, "✅ <b>Done.</b>")
-    except asyncio.CancelledError:
-        await safe_edit(status, "🛑 Cancelled.")
+        await safe_edit(status, f"✅ <b>Done</b>\n{caption}")
+        log.info("upload complete for %s", jid)
     except Exception as e:
-        await safe_edit(status, f"❌ Failed.\n<code>{e}</code>")
+        tb = traceback.format_exc()
+        log.error("Job %s failed: %s\n%s", jid, e, tb)
+        await safe_edit(status, f"❌ <b>Failed</b>\n<code>{str(e)[:500]}</code>")
     finally:
-        JOBS.pop(job_id, None)
-        if file_path and file_path.exists():
-            with contextlib.suppress(Exception):
-                file_path.unlink()
-        for leftover in WORK_DIR.glob(f"{job_id}.*"):
-            with contextlib.suppress(Exception):
-                leftover.unlink()
+        JOBS.pop(jid, None)
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------
-async def _pre_flight() -> None:
-    for tool in ("yt-dlp", "ffmpeg", "ffprobe"):
-        if not shutil.which(tool):
-            raise SystemExit(f"Missing required binary: {tool}. Install it before running the bot.")
-
-
-async def main() -> None:
-    await _pre_flight()
-    async with bot:
-        if user:
-            await user.start()
-        print("Bot is up. Send a video URL.")
-        try:
-            await asyncio.Event().wait()
-        finally:
-            if user:
-                await user.stop()
-
-
 if __name__ == "__main__":
+    log.info("Starting RS Downloader Bot — owner=%s workdir=%s", OWNER_ID, WORK_DIR)
     try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+        app.run()
+    except Exception:
+        log.error("Bot crashed:\n%s", traceback.format_exc())
+        raise
