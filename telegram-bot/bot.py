@@ -181,7 +181,7 @@ async def probe_formats(url: str) -> List[dict]:
     and for regular site URLs (YouTube, Vimeo, etc.). If yt-dlp cannot enumerate
     variants, we still return a synthetic 'Best' entry so the user can proceed.
     """
-    code, out, err = await run_capture(
+    
     async def _probe(u: str) -> tuple[int, str, str]:
         return await run_capture(
             "yt-dlp", "-J", "--no-warnings", "--no-playlist", "--allow-unplayable-formats",
