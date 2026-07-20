@@ -240,17 +240,13 @@ async def probe_formats(url: str) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Download + upload
 # ---------------------------------------------------------------------------
-async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path:
+async def _run_ytdlp(job: Job, url: str, format_id: str, status: Message) -> tuple[int, Path | None]:
     out_tpl = str(WORK_DIR / f"{job.job_id}.%(ext)s")
     cmd = [
         "yt-dlp",
-        "--no-warnings",
-        "--no-playlist",
-        "--newline",
-        "--progress",
+        "--no-warnings", "--no-playlist", "--newline", "--progress",
         "--concurrent-fragments", "8",
-        "--retries", "10",
-        "--fragment-retries", "20",
+        "--retries", "10", "--fragment-retries", "20",
         "--http-chunk-size", "10M",
         "--merge-output-format", "mp4",
         "--hls-prefer-ffmpeg",
@@ -258,9 +254,8 @@ async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path
         "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         "-f", f"{format_id}+bestaudio/best/{format_id}" if format_id != "best" else "bv*+ba/b/best",
         "-o", out_tpl,
-        job.url,
+        url,
     ]
-
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
     )
@@ -293,14 +288,31 @@ async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path
             last_edit = time.time()
 
     rc = await proc.wait()
-    if rc != 0:
-        raise RuntimeError(f"yt-dlp exited with code {rc}")
+    if rc == 0:
+        for p in WORK_DIR.glob(f"{job.job_id}.*"):
+            if p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
+                return rc, p
+    return rc, None
 
-    # find produced file
-    for p in WORK_DIR.glob(f"{job.job_id}.*"):
-        if p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
-            return p
-    raise RuntimeError("Downloaded file not found")
+
+async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path:
+    rc, path = await _run_ytdlp(job, job.url, format_id, status)
+    if path:
+        return path
+    # Retry via Dailymotion page URL — mints a fresh signed token from THIS server's IP.
+    fb = dailymotion_page_fallback(job.url)
+    if fb:
+        await safe_edit(status, "🔁 Signed URL expired/blocked — retrying via source page…", reply_markup=cancel_kb(job.job_id))
+        # clean any partial artifacts
+        for leftover in WORK_DIR.glob(f"{job.job_id}.*"):
+            with contextlib.suppress(Exception):
+                leftover.unlink()
+        rc2, path2 = await _run_ytdlp(job, fb, format_id, status)
+        if path2:
+            return path2
+        raise RuntimeError(f"yt-dlp failed for both direct and page URL (rc={rc2})")
+    raise RuntimeError(f"yt-dlp exited with code {rc}")
+
 
 
 async def maybe_split(path: Path) -> List[Path]:
