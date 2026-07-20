@@ -1,43 +1,52 @@
-# RS Anime — Telegram Video Downloader Bot
+# RS Anime — Telegram Downloader Bot (Admin-only)
 
-Send a direct MP4 / M3U8 / MPD (or any yt-dlp supported) URL → pick a quality → the bot downloads with ffmpeg + yt-dlp and uploads back to Telegram with live progress bars. Supports up to **2 GB per file** (auto-splits larger files), custom thumbnails, and per-job cancel.
+Private bot. Only the Telegram user whose ID matches `OWNER_ID` can talk to it.
 
-## 1. VPS prerequisites (Ubuntu / Debian)
+## 1. VPS setup (Debian / Ubuntu)
 
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv ffmpeg
+cd telegram-bot
 python3 -m venv venv && source venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
-# yt-dlp comes from requirements.txt — verify:
-yt-dlp --version && ffmpeg -version | head -1
 ```
+
+All packages install at their latest versions — no pinned numbers.
 
 ## 2. Configure
 
 ```bash
 cp .env.example .env
-nano .env   # fill API_ID, API_HASH, BOT_TOKEN (from @BotFather)
+nano .env
 ```
 
-Get `API_ID` / `API_HASH` at <https://my.telegram.org/apps>.
+Fill only these four values:
 
-### Optional: 2 GB uploads via user session
-Bots are capped at 2000 MB. To upload closer to the true 2 GB limit (or 4 GB with Telegram Premium) generate a `USER_SESSION` string and paste it into `.env`:
+| Var | Where |
+| --- | --- |
+| `API_ID`, `API_HASH` | <https://my.telegram.org/apps> |
+| `BOT_TOKEN` | @BotFather |
+| `OWNER_ID` | @userinfobot (your numeric Telegram id) |
 
-```bash
-python -m pyrogram
-```
+No `USER_SESSION`, no `BOT_API_SERVER` — not needed.
 
 ## 3. Run
 
 ```bash
-source venv/bin/activate
-python bot.py
+python3 bot.py
 ```
 
-Keep it alive with systemd / pm2 / screen — example `systemd` unit:
+You should see:
+
+```
+HH:MM:SS | INFO    | rs-bot | Starting RS Downloader Bot — owner=… workdir=…
+```
+
+Send the bot any video URL from your admin Telegram account.
+
+## 4. systemd (optional)
 
 ```ini
 # /etc/systemd/system/rs-dl-bot.service
@@ -46,9 +55,9 @@ Description=RS Anime Downloader Bot
 After=network.target
 
 [Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/telegram-bot
-ExecStart=/home/ubuntu/telegram-bot/venv/bin/python bot.py
+User=root
+WorkingDirectory=/root/bots/rs-dl
+ExecStart=/root/bots/rs-dl/venv/bin/python bot.py
 Restart=always
 
 [Install]
@@ -57,21 +66,21 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl enable --now rs-dl-bot
+journalctl -u rs-dl-bot -f     # live log
 ```
 
-## 4. Bot commands
+## Commands
 
 | Command | Description |
 | --- | --- |
 | Send URL | Probes qualities and shows inline buttons |
-| `/thumb` | Reply / send a photo with this caption to set your custom thumbnail |
-| `/clearthumb` | Remove your saved thumbnail |
-| `/cancel` | Abort your current download / upload |
+| `/thumb` | Reply to a photo with this command to save it as your custom thumbnail |
+| `/clearthumb` | Remove saved thumbnail |
+| `/cancel` | Cancel any running job |
 | `/help` | Usage info |
 
-## 5. Notes
+## Notes
 
-* HLS / DASH streams are remuxed to MP4 without re-encoding — fast and lossless.
-* Downloads use 8 parallel fragments + 10 MB HTTP chunks for maximum throughput.
-* Progress bars are rate-limited every 3 s to avoid Telegram FloodWait.
-* Files > ~1.97 GB are automatically split with ffmpeg into `partNNN.mp4` pieces.
+* Bot upload cap ≈ 1.95 GB per file. Larger files are refused with a message.
+* HLS / DASH remuxed to MP4 (no re-encode).
+* Every error is logged in full to stdout / journalctl.
