@@ -376,6 +376,10 @@ serve(async (req) => {
     }
 
 
+    // All non-webhook actions are admin-only — require an RS Anime site origin/referer.
+    if (!isAdminOrigin(req)) {
+      return json({ error: "Access denied" }, 403);
+    }
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 
