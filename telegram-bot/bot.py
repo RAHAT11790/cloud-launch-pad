@@ -237,7 +237,10 @@ async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path
         "--fragment-retries", "20",
         "--http-chunk-size", "10M",
         "--merge-output-format", "mp4",
-        "-f", f"{format_id}+bestaudio/best" if format_id != "best" else "bv*+ba/best",
+        "--hls-prefer-ffmpeg",
+        "--add-header", "Referer: https://www.dailymotion.com/",
+        "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "-f", f"{format_id}+bestaudio/best/{format_id}" if format_id != "best" else "bv*+ba/b/best",
         "-o", out_tpl,
         job.url,
     ]
