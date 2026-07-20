@@ -1,13 +1,12 @@
 """
-RS Anime — Telegram Video Downloader Bot (Admin-only)
-=====================================================
-Send any direct MP4 / M3U8 / MPD / yt-dlp supported URL. The bot probes
-available qualities, shows inline buttons, downloads via yt-dlp + ffmpeg,
-and uploads back to Telegram with a professional live progress bar.
+RS Anime — Telegram Video Downloader Bot (Admin-only, no .env)
+==============================================================
+সব config নিচে CONFIG block-এ hardcoded। শুধু ৪টা value বদলাও, তারপর:
 
-- Admin-only (OWNER_ID must match)
-- No user session / no local bot API server required
-- Everything logged verbosely to stdout so `journalctl` / terminal shows it
+    pip install -r requirements.txt
+    python3 bot.py
+
+Bot শুধু OWNER_ID-এর মালিককেই reply দেবে।
 """
 
 from __future__ import annotations
@@ -25,19 +24,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from dotenv import load_dotenv
-from pyrogram import Client, filters
-from pyrogram.errors import FloodWait, MessageNotModified
-from pyrogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
+# ═══════════════════════════════════════════════════════════════
+# 🔧 CONFIG — এই ৪টা মান বদলাও, আর কিছু লাগবে না
+# ═══════════════════════════════════════════════════════════════
+API_ID    = 1234567                       # https://my.telegram.org/apps
+API_HASH  = "your_api_hash_here"          # https://my.telegram.org/apps
+BOT_TOKEN = "123456:ABC-DEF..."           # @BotFather থেকে
+OWNER_ID  = 123456789                     # @userinfobot — শুধু এই user bot use করতে পারবে
+# ═══════════════════════════════════════════════════════════════
 
-# ---------------------------------------------------------------------------
-# Logging (everything to stdout so `python3 bot.py` shows every event)
-# ---------------------------------------------------------------------------
+WORK_DIR = Path("./downloads").resolve()
+MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024    # ~1.95 GB (bot upload cap)
+
+# ── Logging: সব stdout-এ, log-এ সব দেখা যাবে ──────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
@@ -45,33 +44,45 @@ logging.basicConfig(
     stream=sys.stdout,
     force=True,
 )
-# Quiet pyrogram internals, keep our logs loud
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 log = logging.getLogger("rs-bot")
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-load_dotenv()
-
-API_ID = int(os.getenv("API_ID", "0") or 0)
-API_HASH = os.getenv("API_HASH", "").strip()
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
-WORK_DIR = Path(os.getenv("WORK_DIR", "./downloads")).resolve()
-
-if not (API_ID and API_HASH and BOT_TOKEN and OWNER_ID):
-    log.error("Missing API_ID / API_HASH / BOT_TOKEN / OWNER_ID in .env")
+# ── Sanity check ──────────────────────────────────────────────
+if (
+    not isinstance(API_ID, int) or API_ID <= 0
+    or not API_HASH or "your_api_hash" in API_HASH
+    or not BOT_TOKEN or "ABC-DEF" in BOT_TOKEN
+    or not isinstance(OWNER_ID, int) or OWNER_ID <= 0
+):
+    log.error("❌ CONFIG ঠিক নেই। bot.py-এর উপরে API_ID / API_HASH / BOT_TOKEN / OWNER_ID বসাও।")
     sys.exit(1)
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
-# Telegram bot upload cap ~ 2000 MB
-MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024
+# ── Pyrogram import (installed check) ─────────────────────────
+try:
+    from pyrogram import Client, filters
+    from pyrogram.errors import FloodWait, MessageNotModified
+    from pyrogram.types import (
+        CallbackQuery,
+        InlineKeyboardButton,
+        InlineKeyboardMarkup,
+        Message,
+    )
+except ImportError as e:
+    log.error("❌ Pyrogram install হয়নি: %s\n   চালাও:  pip install -r requirements.txt", e)
+    sys.exit(1)
 
-# ---------------------------------------------------------------------------
+try:
+    import yt_dlp  # noqa: F401
+except ImportError as e:
+    log.error("❌ yt-dlp install হয়নি: %s", e)
+    sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════
 # Helpers
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
 def human_size(n: float) -> str:
     n = float(n or 0)
     for u in ("B", "KB", "MB", "GB", "TB"):
@@ -92,53 +103,48 @@ def human_time(sec: float) -> str:
     return f"{s}s"
 
 
-def bar(pct: float, width: int = 18) -> str:
+def bar(pct: float, width: int = 22) -> str:
     pct = max(0.0, min(100.0, pct))
     filled = int(width * pct / 100)
     return "█" * filled + "░" * (width - filled)
 
 
 def progress_box(title: str, done: float, total: float, speed: float, eta: float) -> str:
+    """Professional monospace box (Telegram <pre> keeps it aligned)."""
     pct = (done / total * 100) if total else 0
-    line = "━" * 26
-    return (
-        f"<b>╭─ {title} ─╮</b>\n"
-        f"<pre>┌{line}┐\n"
-        f"│ {bar(pct, 24)} │\n"
+    line = "─" * 30
+    body = (
+        f"┌{line}┐\n"
+        f"│ {title:<28} │\n"
         f"├{line}┤\n"
-        f"│ ⏳ Progress : {pct:6.2f}%\n"
-        f"│ 📦 Size     : {human_size(done)} / {human_size(total)}\n"
-        f"│ 🚀 Speed    : {human_size(speed)}/s\n"
-        f"│ ⏱  ETA      : {human_time(eta)}\n"
-        f"└{line}┘</pre>"
+        f"│ [{bar(pct)}] {pct:5.1f}% │\n"
+        f"├{line}┤\n"
+        f"│ 📦 Size  : {human_size(done)} / {human_size(total)}\n"
+        f"│ 🚀 Speed : {human_size(speed)}/s\n"
+        f"│ ⏱  ETA   : {human_time(eta)}\n"
+        f"└{line}┘"
     )
+    return f"<pre>{body}</pre>"
 
 
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
 # Job state
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
 @dataclass
 class Job:
     url: str
     formats: List[dict] = field(default_factory=list)
     title: str = "video"
-    thumbnail: Optional[str] = None
     cancel: bool = False
 
 
-JOBS: Dict[str, Job] = {}  # keyed by short id
+JOBS: Dict[str, Job] = {}
 USER_THUMB: Dict[int, str] = {}
 
 
-def new_job(url: str) -> str:
-    jid = uuid.uuid4().hex[:8]
-    JOBS[jid] = Job(url=url)
-    return jid
-
-
-# ---------------------------------------------------------------------------
-# yt-dlp: probe formats
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
+# yt-dlp helpers
+# ═══════════════════════════════════════════════════════════════
 def build_ydl_opts(extra: Optional[dict] = None) -> dict:
     opts = {
         "quiet": True,
@@ -164,63 +170,37 @@ def build_ydl_opts(extra: Optional[dict] = None) -> dict:
 
 
 def probe_formats(url: str) -> dict:
-    """Blocking probe — call via asyncio.to_thread."""
     from yt_dlp import YoutubeDL
-
     with YoutubeDL(build_ydl_opts()) as ydl:
-        info = ydl.extract_info(url, download=False)
-    return info or {}
+        return ydl.extract_info(url, download=False) or {}
 
 
 def dailymotion_fallback(url: str) -> Optional[str]:
     m = re.search(r"/video/([A-Za-z0-9]+)", url)
-    if m:
-        return f"https://www.dailymotion.com/video/{m.group(1)}"
-    return None
+    return f"https://www.dailymotion.com/video/{m.group(1)}" if m else None
 
 
 def pick_quality_list(info: dict) -> List[dict]:
-    """Return a de-duplicated list of best video formats sorted by height desc."""
     out: List[dict] = []
-    seen = set()
     for f in info.get("formats", []) or []:
-        if not f.get("url"):
+        if not f.get("url") or f.get("vcodec") == "none":
             continue
-        vcodec = f.get("vcodec")
-        if vcodec == "none":
-            continue
-        h = f.get("height") or 0
-        proto = f.get("protocol", "")
-        key = (h, proto, f.get("format_id"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(
-            {
-                "format_id": f.get("format_id"),
-                "height": h,
-                "ext": f.get("ext") or "mp4",
-                "tbr": f.get("tbr") or 0,
-                "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
-                "protocol": proto,
-            }
-        )
-    out.sort(key=lambda x: (x["height"] or 0, x["tbr"] or 0), reverse=True)
-    # Deduplicate by height, keep the highest bitrate per height
+        out.append({
+            "format_id": f.get("format_id"),
+            "height": f.get("height") or 0,
+            "ext": f.get("ext") or "mp4",
+            "tbr": f.get("tbr") or 0,
+            "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
+        })
+    # dedupe by height, keep highest tbr
     by_h: Dict[int, dict] = {}
-    for f in out:
-        h = f["height"] or 0
-        if h not in by_h:
-            by_h[h] = f
-    result = list(by_h.values())
-    result.sort(key=lambda x: x["height"] or 0, reverse=True)
+    for f in sorted(out, key=lambda x: (x["height"], x["tbr"]), reverse=True):
+        by_h.setdefault(f["height"], f)
+    result = sorted(by_h.values(), key=lambda x: x["height"], reverse=True)
     return result[:10]
 
 
-# ---------------------------------------------------------------------------
-# yt-dlp: download with progress
-# ---------------------------------------------------------------------------
-async def download_format(job: Job, fmt_id: str, out_path: Path, on_progress) -> Path:
+async def download_format(job: Job, fmt_id: str, out_base: Path, on_progress) -> Path:
     from yt_dlp import YoutubeDL
 
     loop = asyncio.get_running_loop()
@@ -245,34 +225,38 @@ async def download_format(job: Job, fmt_id: str, out_path: Path, on_progress) ->
                 raise
             log.warning("progress hook error: %s", e)
 
-    opts = build_ydl_opts(
-        {
-            "format": fmt_id,
-            "outtmpl": str(out_path.with_suffix(".%(ext)s")),
-            "merge_output_format": "mp4",
-            "progress_hooks": [hook],
-            "quiet": True,
-            "no_warnings": True,
-        }
-    )
+    opts = build_ydl_opts({
+        "format": fmt_id,
+        "outtmpl": str(out_base.with_suffix(".%(ext)s")),
+        "merge_output_format": "mp4",
+        "progress_hooks": [hook],
+    })
 
     def run() -> Path:
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(job.url, download=True)
             filename = ydl.prepare_filename(info)
             p = Path(filename)
-            # yt-dlp may have merged to mp4
             mp4 = p.with_suffix(".mp4")
-            if mp4.exists():
-                return mp4
-            return p
+            return mp4 if mp4.exists() else p
 
     return await asyncio.to_thread(run)
 
 
-# ---------------------------------------------------------------------------
-# Safe message editor (avoids FloodWait spam)
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
+# Pyrogram client
+# ═══════════════════════════════════════════════════════════════
+app = Client(
+    name="rs_dl_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    workdir=str(WORK_DIR),
+    parse_mode=__import__("pyrogram").enums.ParseMode.HTML,
+    in_memory=False,
+)
+
+
 async def safe_edit(msg: Message, text: str, reply_markup=None):
     try:
         await msg.edit_text(text, reply_markup=reply_markup, disable_web_page_preview=True)
@@ -284,56 +268,45 @@ async def safe_edit(msg: Message, text: str, reply_markup=None):
         log.warning("edit failed: %s", e)
 
 
-# ---------------------------------------------------------------------------
-# Pyrogram bot
-# ---------------------------------------------------------------------------
-app = Client(
-    name="rs_dl_bot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN,
-    workdir=str(WORK_DIR),
-    in_memory=False,
-)
-
-admin_filter = filters.user(OWNER_ID) & filters.private
+ADMIN_ONLY = filters.user(OWNER_ID) & filters.private
 
 
 @app.on_message(filters.command(["start", "help"]) & filters.private)
 async def cmd_start(_, m: Message):
+    log.info("/start from user %s (@%s)", m.from_user.id, m.from_user.username)
     if m.from_user.id != OWNER_ID:
-        await m.reply_text("⛔ This bot is private.")
+        await m.reply_text(f"⛔ Private bot. Your id: <code>{m.from_user.id}</code>")
         return
     await m.reply_text(
         "👋 <b>RS Downloader Bot</b>\n\n"
-        "Send any direct video URL (MP4 / M3U8 / MPD / Dailymotion CDN, etc.).\n"
-        "I'll show quality buttons — pick one, and I'll download + upload it back.\n\n"
+        "যেকোনো direct video URL পাঠাও (MP4 / M3U8 / MPD / Dailymotion CDN…)।\n"
+        "Quality button আসবে — pick করলে download + upload হয়ে যাবে।\n\n"
         "<b>Commands</b>\n"
-        "• /thumb — reply to a photo to set custom thumbnail\n"
-        "• /clearthumb — remove your thumbnail\n"
-        "• /cancel — cancel current job"
+        "• /thumb — reply to a photo\n"
+        "• /clearthumb — thumbnail remove\n"
+        "• /cancel — running job বাতিল\n"
     )
 
 
-@app.on_message(filters.command("clearthumb") & admin_filter)
+@app.on_message(filters.command("clearthumb") & ADMIN_ONLY)
 async def cmd_clear_thumb(_, m: Message):
     USER_THUMB.pop(m.from_user.id, None)
-    await m.reply_text("🗑 Custom thumbnail removed.")
+    await m.reply_text("🗑 Thumbnail removed.")
 
 
-@app.on_message(filters.command("thumb") & admin_filter)
+@app.on_message(filters.command("thumb") & ADMIN_ONLY)
 async def cmd_thumb(_, m: Message):
     target = m.reply_to_message if m.reply_to_message and m.reply_to_message.photo else None
     if not target:
-        await m.reply_text("Reply to a photo with /thumb to save it.")
+        await m.reply_text("একটা photo-এ reply করে /thumb পাঠাও।")
         return
     path = WORK_DIR / f"thumb_{m.from_user.id}.jpg"
     await target.download(file_name=str(path))
     USER_THUMB[m.from_user.id] = str(path)
-    await m.reply_text("✅ Thumbnail saved. It will be used for future uploads.")
+    await m.reply_text("✅ Thumbnail saved।")
 
 
-@app.on_message(filters.command("cancel") & admin_filter)
+@app.on_message(filters.command("cancel") & ADMIN_ONLY)
 async def cmd_cancel(_, m: Message):
     n = 0
     for job in JOBS.values():
@@ -345,14 +318,16 @@ async def cmd_cancel(_, m: Message):
 URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 
 
-@app.on_message(filters.text & admin_filter & ~filters.command(["start", "help", "thumb", "clearthumb", "cancel"]))
+@app.on_message(
+    filters.text & ADMIN_ONLY
+    & ~filters.command(["start", "help", "thumb", "clearthumb", "cancel"])
+)
 async def handle_url(_, m: Message):
     match = URL_RE.search(m.text or "")
     if not match:
         return
     url = match.group(0)
-    log.info("URL received from %s: %s", m.from_user.id, url)
-
+    log.info("URL from %s: %s", m.from_user.id, url)
     status = await m.reply_text("🔎 Probing URL…", quote=True)
 
     info: dict = {}
@@ -366,7 +341,7 @@ async def handle_url(_, m: Message):
     if not info or not info.get("formats"):
         fb = dailymotion_fallback(url)
         if fb and fb != url:
-            log.info("Trying Dailymotion page fallback: %s", fb)
+            log.info("Dailymotion page fallback: %s", fb)
             try:
                 info = await asyncio.to_thread(probe_formats, fb)
                 url = fb
@@ -375,35 +350,31 @@ async def handle_url(_, m: Message):
                 log.error("fallback probe failed: %s", error)
 
     if not info:
-        await safe_edit(status, f"❌ Could not read this URL.\n<code>{error or 'no info'}</code>")
+        await safe_edit(status, f"❌ URL পড়া গেল না।\n<code>{(error or 'no info')[:300]}</code>")
         return
 
     fmts = pick_quality_list(info)
     if not fmts:
-        # Fallback: single "best" option
-        fmts = [{"format_id": "best", "height": 0, "ext": "mp4", "tbr": 0, "filesize": 0, "protocol": ""}]
+        fmts = [{"format_id": "best", "height": 0, "ext": "mp4", "tbr": 0, "filesize": 0}]
 
-    jid = new_job(url)
-    JOBS[jid].formats = fmts
-    JOBS[jid].title = (info.get("title") or "video")[:80]
+    jid = uuid.uuid4().hex[:8]
+    JOBS[jid] = Job(url=url, formats=fmts, title=(info.get("title") or "video")[:80])
 
-    buttons = []
-    row = []
+    buttons, row = [], []
     for idx, f in enumerate(fmts):
         label = f"{f['height']}p" if f["height"] else "Best"
         if f["filesize"]:
             label += f" • {human_size(f['filesize'])}"
         row.append(InlineKeyboardButton(label, callback_data=f"dl|{jid}|{idx}"))
         if len(row) == 2:
-            buttons.append(row)
-            row = []
+            buttons.append(row); row = []
     if row:
         buttons.append(row)
     buttons.append([InlineKeyboardButton("❌ Cancel", callback_data=f"x|{jid}")])
 
     await safe_edit(
         status,
-        f"🎬 <b>{JOBS[jid].title}</b>\nPick a quality:",
+        f"🎬 <b>{JOBS[jid].title}</b>\n\nQuality select করো:",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
@@ -423,17 +394,15 @@ async def on_cb(_, cq: CallbackQuery):
         return
 
     if action != "dl" or len(parts) < 3:
-        await cq.answer()
-        return
+        await cq.answer(); return
 
     jid, idx = parts[1], int(parts[2])
     job = JOBS.get(jid)
     if not job:
-        await cq.answer("Session expired. Resend the URL.", show_alert=True)
+        await cq.answer("Session expired. আবার URL পাঠাও।", show_alert=True)
         return
     if idx >= len(job.formats):
-        await cq.answer("Bad selection.")
-        return
+        await cq.answer("Bad selection."); return
 
     fmt = job.formats[idx]
     await cq.answer(f"Starting {fmt['height'] or 'best'}p…")
@@ -444,19 +413,18 @@ async def on_cb(_, cq: CallbackQuery):
     out_base = tmpdir / re.sub(r"[^\w\- ]+", "_", job.title)[:60]
 
     async def on_dl_progress(done, total, speed, eta):
-        await safe_edit(status, progress_box("⬇️ Downloading", done, total, speed, eta))
+        await safe_edit(status, progress_box("⬇️  DOWNLOADING", done, total, speed, eta))
 
     try:
         await safe_edit(status, "⏳ Starting download…")
         file_path = await download_format(job, fmt["format_id"], out_base, on_dl_progress)
-        log.info("downloaded: %s (%s)", file_path, human_size(file_path.stat().st_size))
-
         size = file_path.stat().st_size
+        log.info("downloaded: %s (%s)", file_path, human_size(size))
+
         if size > MAX_UPLOAD_BYTES:
-            await safe_edit(status, f"⚠️ File is {human_size(size)}, exceeds bot upload cap (~1.95 GB). Aborting.")
+            await safe_edit(status, f"⚠️ File {human_size(size)} — bot upload cap (~1.95 GB) ছাড়িয়েছে।")
             return
 
-        # Upload
         start = time.time()
         last = [0.0]
 
@@ -468,7 +436,7 @@ async def on_cb(_, cq: CallbackQuery):
             elapsed = max(0.001, now - start)
             speed = cur / elapsed
             eta = (tot - cur) / speed if speed else 0
-            await safe_edit(status, progress_box("⬆️ Uploading", cur, tot, speed, eta))
+            await safe_edit(status, progress_box("⬆️  UPLOADING", cur, tot, speed, eta))
 
         thumb = USER_THUMB.get(cq.from_user.id)
         caption = f"🎬 <b>{job.title}</b>\n📐 {fmt['height'] or '?'}p • 💾 {human_size(size)}"
@@ -481,24 +449,20 @@ async def on_cb(_, cq: CallbackQuery):
             progress=up_progress,
         )
         await safe_edit(status, f"✅ <b>Done</b>\n{caption}")
-        log.info("upload complete for %s", jid)
+        log.info("upload complete: %s", jid)
     except Exception as e:
-        tb = traceback.format_exc()
-        log.error("Job %s failed: %s\n%s", jid, e, tb)
+        log.error("Job %s failed:\n%s", jid, traceback.format_exc())
         await safe_edit(status, f"❌ <b>Failed</b>\n<code>{str(e)[:500]}</code>")
     finally:
         JOBS.pop(jid, None)
-        try:
-            shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception:
-            pass
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
 # Startup
-# ---------------------------------------------------------------------------
+# ═══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    log.info("Starting RS Downloader Bot — owner=%s workdir=%s", OWNER_ID, WORK_DIR)
+    log.info("🚀 Starting RS Downloader Bot — owner=%s workdir=%s", OWNER_ID, WORK_DIR)
     try:
         app.run()
     except Exception:
