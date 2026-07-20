@@ -113,6 +113,19 @@ THUMBS: Dict[int, Path] = {}  # user_id -> thumbnail path
 
 
 # ---------------------------------------------------------------------------
+# Dailymotion helper — signed CDN manifest URLs are IP + time bound. If the VPS
+# gets 403, we automatically retry with the canonical dailymotion.com page URL
+# so yt-dlp can mint a fresh token from the VPS's own IP.
+# ---------------------------------------------------------------------------
+DM_CDN_RE = re.compile(r"dailymotion\.com/cdn/[^?#]*?/video/([a-z0-9]+)\.m3u8", re.IGNORECASE)
+
+
+def dailymotion_page_fallback(url: str) -> Optional[str]:
+    m = DM_CDN_RE.search(url)
+    return f"https://www.dailymotion.com/video/{m.group(1)}" if m else None
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
@@ -162,44 +175,55 @@ async def run_capture(*args: str, timeout: int = 120) -> tuple[int, str, str]:
 # yt-dlp probing
 # ---------------------------------------------------------------------------
 async def probe_formats(url: str) -> List[dict]:
-    """Return a de-duplicated list of downloadable video qualities."""
-    code, out, err = await run_capture(
-        "yt-dlp",
-        "-J",  # single json for info
-        "--no-warnings",
-        "--no-playlist",
-        "--allow-unplayable-formats",
-        url,
-        timeout=90,
-    )
-    if code != 0 or not out.strip():
-        raise RuntimeError(f"Probe failed: {err.strip()[:400] or 'yt-dlp error'}")
+    """Return a de-duplicated list of downloadable video qualities.
 
-    info = json.loads(out)
-    entries = info.get("entries") or [info]
+    Robust for direct .m3u8 / .mpd / .mp4 links (Dailymotion CDN, custom CDNs)
+    and for regular site URLs (YouTube, Vimeo, etc.). If yt-dlp cannot enumerate
+    variants, we still return a synthetic 'Best' entry so the user can proceed.
+    """
+    
+    async def _probe(u: str) -> tuple[int, str, str]:
+        return await run_capture(
+            "yt-dlp", "-J", "--no-warnings", "--no-playlist", "--allow-unplayable-formats",
+            "--add-header", "Referer: https://www.dailymotion.com/",
+            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            u, timeout=90,
+        )
+
+    code, out, err = await _probe(url)
+    if code != 0 or not out.strip():
+        fb = dailymotion_page_fallback(url)
+        if fb:
+            code, out, err = await _probe(fb)
     formats: List[dict] = []
-    for entry in entries:
-        for f in entry.get("formats") or []:
-            if f.get("vcodec") in (None, "none"):
-                continue
-            height = f.get("height") or 0
-            ext = f.get("ext") or "mp4"
-            fmt_id = f.get("format_id")
-            fs = f.get("filesize") or f.get("filesize_approx") or 0
-            proto = f.get("protocol") or ""
-            tbr = f.get("tbr") or 0
-            if not fmt_id:
-                continue
-            label = f"{height}p" if height else (f.get("format_note") or fmt_id)
-            formats.append({
-                "id": fmt_id,
-                "label": label,
-                "height": height,
-                "ext": ext,
-                "protocol": proto,
-                "size": fs,
-                "tbr": tbr,
-            })
+    if code == 0 and out.strip():
+        try:
+            info = json.loads(out)
+        except Exception:
+            info = {}
+        entries = info.get("entries") or [info]
+        for entry in entries:
+            for f in entry.get("formats") or []:
+                if f.get("vcodec") in (None, "none"):
+                    continue
+                height = f.get("height") or 0
+                ext = f.get("ext") or "mp4"
+                fmt_id = f.get("format_id")
+                fs = f.get("filesize") or f.get("filesize_approx") or 0
+                proto = f.get("protocol") or ""
+                tbr = f.get("tbr") or 0
+                if not fmt_id:
+                    continue
+                label = f"{height}p" if height else (f.get("format_note") or fmt_id)
+                formats.append({
+                    "id": fmt_id,
+                    "label": label,
+                    "height": height,
+                    "ext": ext,
+                    "protocol": proto,
+                    "size": fs,
+                    "tbr": tbr,
+                })
 
     # collapse duplicates by height, prefer highest tbr / largest known size
     best: Dict[int, dict] = {}
@@ -208,7 +232,7 @@ async def probe_formats(url: str) -> List[dict]:
         if key not in best or (f["size"] or 0) > (best[key]["size"] or 0):
             best[key] = f
     ordered = sorted(best.values(), key=lambda x: (x["height"] or x["tbr"] or 0), reverse=True)
-    # Always add a "best" pseudo-choice as fallback
+    # Always add a "Best (auto)" fallback so direct m3u8 / mp4 links always have a button.
     ordered.insert(0, {"id": "best", "label": "Best (auto)", "height": 0, "ext": "mp4", "protocol": "", "size": 0, "tbr": 0})
     return ordered[:8]
 
@@ -216,24 +240,22 @@ async def probe_formats(url: str) -> List[dict]:
 # ---------------------------------------------------------------------------
 # Download + upload
 # ---------------------------------------------------------------------------
-async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path:
+async def _run_ytdlp(job: Job, url: str, format_id: str, status: Message) -> tuple[int, Path | None]:
     out_tpl = str(WORK_DIR / f"{job.job_id}.%(ext)s")
     cmd = [
         "yt-dlp",
-        "--no-warnings",
-        "--no-playlist",
-        "--newline",
-        "--progress",
+        "--no-warnings", "--no-playlist", "--newline", "--progress",
         "--concurrent-fragments", "8",
-        "--retries", "10",
-        "--fragment-retries", "20",
+        "--retries", "10", "--fragment-retries", "20",
         "--http-chunk-size", "10M",
         "--merge-output-format", "mp4",
-        "-f", f"{format_id}+bestaudio/best" if format_id != "best" else "bv*+ba/best",
+        "--hls-prefer-ffmpeg",
+        "--add-header", "Referer: https://www.dailymotion.com/",
+        "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "-f", f"{format_id}+bestaudio/best/{format_id}" if format_id != "best" else "bv*+ba/b/best",
         "-o", out_tpl,
-        job.url,
+        url,
     ]
-
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
     )
@@ -266,14 +288,31 @@ async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path
             last_edit = time.time()
 
     rc = await proc.wait()
-    if rc != 0:
-        raise RuntimeError(f"yt-dlp exited with code {rc}")
+    if rc == 0:
+        for p in WORK_DIR.glob(f"{job.job_id}.*"):
+            if p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
+                return rc, p
+    return rc, None
 
-    # find produced file
-    for p in WORK_DIR.glob(f"{job.job_id}.*"):
-        if p.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}:
-            return p
-    raise RuntimeError("Downloaded file not found")
+
+async def download_with_ytdlp(job: Job, format_id: str, status: Message) -> Path:
+    rc, path = await _run_ytdlp(job, job.url, format_id, status)
+    if path:
+        return path
+    # Retry via Dailymotion page URL — mints a fresh signed token from THIS server's IP.
+    fb = dailymotion_page_fallback(job.url)
+    if fb:
+        await safe_edit(status, "🔁 Signed URL expired/blocked — retrying via source page…", reply_markup=cancel_kb(job.job_id))
+        # clean any partial artifacts
+        for leftover in WORK_DIR.glob(f"{job.job_id}.*"):
+            with contextlib.suppress(Exception):
+                leftover.unlink()
+        rc2, path2 = await _run_ytdlp(job, fb, format_id, status)
+        if path2:
+            return path2
+        raise RuntimeError(f"yt-dlp failed for both direct and page URL (rc={rc2})")
+    raise RuntimeError(f"yt-dlp exited with code {rc}")
+
 
 
 async def maybe_split(path: Path) -> List[Path]:
