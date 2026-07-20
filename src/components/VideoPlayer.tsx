@@ -5954,7 +5954,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel || <span className="text-white/45 font-normal">Ready</span>) : <span className="text-white/30 font-normal">—</span>}
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-emerald-300/90 font-semibold">MP4</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
                                   </span>
                                 </button>
                               );
