@@ -778,7 +778,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const filtered: Record<string, number> = {};
       Object.entries(parsed).forEach(([key, value]) => {
         const n = Number(value || 0);
-        if (Number.isFinite(n) && n > 512 * 1024) filtered[key] = n;
+        // Keep positive sizes AND known-unknown marker (-1) so UI stops probing forever
+        if (Number.isFinite(n) && (n > 512 * 1024 || n === -1)) filtered[key] = n;
       });
       return filtered;
     } catch { return {}; }
@@ -787,6 +788,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const n = Number(url ? downloadSizeCache[url] || 0 : 0);
     return Number.isFinite(n) && n > 512 * 1024 ? n : 0;
   }, [downloadSizeCache]);
+  const hasProbedDownloadSize = useCallback((url?: string) => {
+    if (!url) return false;
+    return Object.prototype.hasOwnProperty.call(downloadSizeCache, url);
+  }, [downloadSizeCache]);
+
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
