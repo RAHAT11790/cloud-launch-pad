@@ -144,10 +144,36 @@ async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: stri
   return { errorStatus: lastStatus } as const;
 }
 
+// Domain allowlist — block open SSRF / bandwidth abuse from other sites.
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const matchesAllowedHost = (urlStr: string | null): boolean => {
+  if (!urlStr) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+};
+const isAllowedRequest = (req: Request): boolean => {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (!origin && !referer) return false;
+  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
+};
+
 Deno.serve(async (req) => {
   try {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405, headers: cors });
+    if (!isAllowedRequest(req)) {
+      return new Response(JSON.stringify({ error: "Access denied", message: "Playback only available from the official RS Anime site." }), {
+        status: 403, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
 
     const reqUrl = new URL(req.url);
     const path = reqUrl.pathname.includes("/an-playback") ? (reqUrl.pathname.split("/an-playback")[1] || "/") : reqUrl.pathname;
