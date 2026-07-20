@@ -100,14 +100,17 @@ def bar(pct: float, width: int = 18) -> str:
 
 def progress_box(title: str, done: float, total: float, speed: float, eta: float) -> str:
     pct = (done / total * 100) if total else 0
+    line = "━" * 26
     return (
-        f"<b>{title}</b>\n"
-        f"<code>[{bar(pct)}] {pct:5.1f}%</code>\n"
-        f"┏━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"┃ 📦 <b>Size</b>  : <code>{human_size(done)} / {human_size(total)}</code>\n"
-        f"┃ 🚀 <b>Speed</b> : <code>{human_size(speed)}/s</code>\n"
-        f"┃ ⏱ <b>ETA</b>   : <code>{human_time(eta)}</code>\n"
-        f"┗━━━━━━━━━━━━━━━━━━━━━━━━"
+        f"<b>╭─ {title} ─╮</b>\n"
+        f"<pre>┌{line}┐\n"
+        f"│ {bar(pct, 24)} │\n"
+        f"├{line}┤\n"
+        f"│ ⏳ Progress : {pct:6.2f}%\n"
+        f"│ 📦 Size     : {human_size(done)} / {human_size(total)}\n"
+        f"│ 🚀 Speed    : {human_size(speed)}/s\n"
+        f"│ ⏱  ETA      : {human_time(eta)}\n"
+        f"└{line}┘</pre>"
     )
 
 
