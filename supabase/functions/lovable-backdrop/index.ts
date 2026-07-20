@@ -75,8 +75,29 @@ async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string }
   return { b64: btoa(bin), mime };
 }
 
+// Domain allowlist — this endpoint is admin-only from the RS Anime panel.
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const matchesAllowedHost = (u: string | null) => {
+  if (!u) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(u).host)); } catch { return false; }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (!matchesAllowedHost(origin) && !matchesAllowedHost(referer)) {
+    return new Response(JSON.stringify({ error: "Access denied" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const key = Deno.env.get("LOVABLE_API_KEY");
   if (!key) {
