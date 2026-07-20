@@ -1293,9 +1293,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const urls: string[] = [];
     downloadEpisodes.forEach((ep) => {
       const u = ep.qualityLinks[quality];
-      if (u && !getCachedDownloadSize(u)) urls.push(u);
+      if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
     if (!urls.length) return;
+
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
       if (isHlsLikeUrl(u)) return [u, -1]; // HLS: mark known, size N/A
