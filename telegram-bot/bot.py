@@ -148,7 +148,29 @@ USER_THUMB: Dict[int, str] = {}
 # ═══════════════════════════════════════════════════════════════
 # yt-dlp helpers
 # ═══════════════════════════════════════════════════════════════
-def build_ydl_opts(extra: Optional[dict] = None) -> dict:
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0 Safari/537.36"
+)
+
+
+def default_headers(url: str) -> Dict[str, str]:
+    ref = "https://www.dailymotion.com/" if "dailymotion" in url else ""
+    origin = "https://www.dailymotion.com" if "dailymotion" in url else ""
+    h = {
+        "User-Agent": BROWSER_UA,
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    if ref:
+        h["Referer"] = ref
+    if origin:
+        h["Origin"] = origin
+    return h
+
+
+def build_ydl_opts(url: str, extra: Optional[dict] = None) -> dict:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -158,23 +180,84 @@ def build_ydl_opts(extra: Optional[dict] = None) -> dict:
         "retries": 20,
         "fragment_retries": 20,
         "concurrent_fragment_downloads": 8,
-        "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0 Safari/537.36"
-            ),
-            "Referer": "https://www.dailymotion.com/",
-        },
+        "http_headers": default_headers(url),
     }
     if extra:
         opts.update(extra)
     return opts
 
 
+def is_direct_manifest(url: str) -> bool:
+    u = url.lower().split("?", 1)[0]
+    return u.endswith(".m3u8") or u.endswith(".mpd") or "/manifest/" in u
+
+
+def http_get(url: str, headers: Dict[str, str], timeout: int = 20) -> bytes:
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def parse_m3u8_variants(manifest_text: str, base_url: str) -> List[dict]:
+    lines = manifest_text.splitlines()
+    variants: List[dict] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith("#EXT-X-STREAM-INF"):
+            bw = 0
+            height = 0
+            m = re.search(r"BANDWIDTH=(\d+)", line)
+            if m:
+                bw = int(m.group(1))
+            m = re.search(r"RESOLUTION=\d+x(\d+)", line)
+            if m:
+                height = int(m.group(1))
+            j = i + 1
+            while j < len(lines) and (not lines[j].strip() or lines[j].startswith("#")):
+                j += 1
+            if j < len(lines):
+                sub = lines[j].strip()
+                full = urllib.parse.urljoin(base_url, sub)
+                variants.append({"height": height, "bandwidth": bw, "url": full})
+            i = j
+        i += 1
+    by_h: Dict[int, dict] = {}
+    for v in sorted(variants, key=lambda x: (x["height"], x["bandwidth"]), reverse=True):
+        by_h.setdefault(v["height"], v)
+    return sorted(by_h.values(), key=lambda x: x["height"], reverse=True)
+
+
+def probe_direct_manifest(url: str) -> dict:
+    """Fetch master HLS manifest directly (bypass yt-dlp extractors)."""
+    headers = default_headers(url)
+    raw = http_get(url, headers, timeout=20)
+    text = raw.decode("utf-8", errors="ignore")
+    if "#EXTM3U" not in text:
+        raise RuntimeError("Not a valid HLS manifest (no #EXTM3U)")
+
+    variants = parse_m3u8_variants(text, url)
+    if not variants:
+        variants = [{"height": 0, "bandwidth": 0, "url": url}]
+
+    formats = [{
+        "format_id": f"hls-{i}",
+        "height": v["height"],
+        "ext": "mp4",
+        "tbr": (v["bandwidth"] / 1000) if v["bandwidth"] else 0,
+        "filesize": 0,
+        "url": v["url"],
+    } for i, v in enumerate(variants)]
+
+    title = re.sub(r"[^\w\-]+", "_", urllib.parse.urlparse(url).path.split("/")[-1] or "video")[:60] or "video"
+    return {"title": title, "formats": formats, "_direct_hls": True}
+
+
 def probe_formats(url: str) -> dict:
+    if is_direct_manifest(url):
+        return probe_direct_manifest(url)
     from yt_dlp import YoutubeDL
-    with YoutubeDL(build_ydl_opts()) as ydl:
+    with YoutubeDL(build_ydl_opts(url)) as ydl:
         return ydl.extract_info(url, download=False) or {}
 
 
@@ -184,6 +267,8 @@ def dailymotion_fallback(url: str) -> Optional[str]:
 
 
 def pick_quality_list(info: dict) -> List[dict]:
+    if info.get("_direct_hls"):
+        return info["formats"][:10]
     out: List[dict] = []
     for f in info.get("formats", []) or []:
         if not f.get("url") or f.get("vcodec") == "none":
@@ -194,18 +279,115 @@ def pick_quality_list(info: dict) -> List[dict]:
             "ext": f.get("ext") or "mp4",
             "tbr": f.get("tbr") or 0,
             "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
+            "url": f.get("url"),
         })
-    # dedupe by height, keep highest tbr
     by_h: Dict[int, dict] = {}
     for f in sorted(out, key=lambda x: (x["height"], x["tbr"]), reverse=True):
         by_h.setdefault(f["height"], f)
-    result = sorted(by_h.values(), key=lambda x: x["height"], reverse=True)
-    return result[:10]
+    return sorted(by_h.values(), key=lambda x: x["height"], reverse=True)[:10]
 
 
-async def download_format(job: Job, fmt_id: str, out_base: Path, on_progress) -> Path:
+_hls_duration: Dict[str, float] = {}
+
+
+async def ffmpeg_download_hls(variant_url: str, referer: str, out_base: Path, on_progress, cancel_flag) -> Path:
+    """Download an HLS variant via ffmpeg → mp4 (stream copy, no re-encode)."""
+    headers_line = (
+        f"Referer: {referer}\r\n"
+        f"User-Agent: {BROWSER_UA}\r\n"
+        f"Origin: {referer.rstrip('/')}\r\n"
+    )
+    out_file = out_base.with_suffix(".mp4")
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "info", "-nostdin", "-y",
+        "-headers", headers_line,
+        "-user_agent", BROWSER_UA,
+        "-referer", referer,
+        "-reconnect", "1", "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "10",
+        "-i", variant_url,
+        "-c", "copy",
+        "-bsf:a", "aac_adtstoasc",
+        "-movflags", "+faststart",
+        "-progress", "pipe:1",
+        str(out_file),
+    ]
+    log.info("ffmpeg start: %s → %s", variant_url[:80], out_file.name)
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+
+    duration = [0.0]
+    tail: List[str] = []
+
+    async def pump_err():
+        assert proc.stderr is not None
+        while True:
+            line = await proc.stderr.readline()
+            if not line:
+                break
+            s = line.decode(errors="ignore").rstrip()
+            if "Duration:" in s and duration[0] == 0:
+                m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", s)
+                if m:
+                    duration[0] = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
+            tail.append(s)
+            if len(tail) > 60:
+                tail.pop(0)
+
+    err_task = asyncio.create_task(pump_err())
+
+    start = time.time()
+    last = 0.0
+    total_us = 0
+    assert proc.stdout is not None
+    try:
+        while True:
+            if cancel_flag():
+                proc.kill()
+                raise RuntimeError("Cancelled by user")
+            raw = await proc.stdout.readline()
+            if not raw:
+                break
+            line = raw.decode(errors="ignore").strip()
+            if line.startswith("out_time_us="):
+                try:
+                    total_us = int(line.split("=", 1)[1])
+                except ValueError:
+                    pass
+            elif line == "progress=end":
+                break
+            now = time.time()
+            if now - last >= 2.0:
+                last = now
+                secs = total_us / 1_000_000
+                done = out_file.stat().st_size if out_file.exists() else 0
+                pct_time = (secs / duration[0]) if duration[0] else 0
+                est_total = int(done / pct_time) if pct_time > 0.01 else 0
+                elapsed = max(0.001, now - start)
+                speed = done / elapsed
+                eta = (est_total - done) / speed if (est_total and speed) else 0
+                try:
+                    await on_progress(done, est_total, speed, eta)
+                except Exception:
+                    pass
+    finally:
+        rc = await proc.wait()
+        err_task.cancel()
+
+    if rc != 0 or not out_file.exists() or out_file.stat().st_size == 0:
+        raise RuntimeError(f"ffmpeg failed (rc={rc}):\n" + "\n".join(tail[-15:])[:800])
+    return out_file
+
+
+async def download_format(job: "Job", fmt: dict, out_base: Path, on_progress) -> Path:
+    # HLS variant → ffmpeg
+    if fmt.get("url") and (".m3u8" in fmt["url"] or "/manifest/" in fmt["url"]):
+        referer = "https://www.dailymotion.com/" if "dailymotion" in fmt["url"] else job.url
+        return await ffmpeg_download_hls(fmt["url"], referer, out_base, on_progress, lambda: job.cancel)
+
     from yt_dlp import YoutubeDL
-
     loop = asyncio.get_running_loop()
     last_call = [0.0]
 
@@ -228,8 +410,8 @@ async def download_format(job: Job, fmt_id: str, out_base: Path, on_progress) ->
                 raise
             log.warning("progress hook error: %s", e)
 
-    opts = build_ydl_opts({
-        "format": fmt_id,
+    opts = build_ydl_opts(job.url, {
+        "format": fmt["format_id"],
         "outtmpl": str(out_base.with_suffix(".%(ext)s")),
         "merge_output_format": "mp4",
         "progress_hooks": [hook],
