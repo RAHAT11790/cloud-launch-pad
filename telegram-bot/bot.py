@@ -182,16 +182,19 @@ async def probe_formats(url: str) -> List[dict]:
     variants, we still return a synthetic 'Best' entry so the user can proceed.
     """
     code, out, err = await run_capture(
-        "yt-dlp",
-        "-J",
-        "--no-warnings",
-        "--no-playlist",
-        "--allow-unplayable-formats",
-        "--add-header", "Referer: https://www.dailymotion.com/",
-        "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        url,
-        timeout=90,
-    )
+    async def _probe(u: str) -> tuple[int, str, str]:
+        return await run_capture(
+            "yt-dlp", "-J", "--no-warnings", "--no-playlist", "--allow-unplayable-formats",
+            "--add-header", "Referer: https://www.dailymotion.com/",
+            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            u, timeout=90,
+        )
+
+    code, out, err = await _probe(url)
+    if code != 0 or not out.strip():
+        fb = dailymotion_page_fallback(url)
+        if fb:
+            code, out, err = await _probe(fb)
     formats: List[dict] = []
     if code == 0 and out.strip():
         try:
