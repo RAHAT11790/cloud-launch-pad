@@ -16,7 +16,7 @@ export const TELEGRAM_CHANNEL_URL = import.meta.env.VITE_TELEGRAM_CHANNEL_URL ||
 export const TELEGRAM_ADMIN_URL = import.meta.env.VITE_TELEGRAM_ADMIN_URL || "";
 
 // --- TMDB ---
-export const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || "37f4b185e3dc487e4fd3e56e2fab2307";
+export const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
 export const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 export const TMDB_IMG_BASE = "https://image.tmdb.org/t/p/";
 

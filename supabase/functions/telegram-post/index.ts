@@ -315,6 +315,21 @@ async function handleGroupQuery(botToken: string, chat_id: number, user_id: numb
 }
 
 
+const ADMIN_ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const isAdminOrigin = (req: Request): boolean => {
+  const check = (u: string | null) => {
+    if (!u) return false;
+    try { return ADMIN_ALLOWED_HOST_RX.some((rx) => rx.test(new URL(u).host)); } catch { return false; }
+  };
+  return check(req.headers.get("origin")) || check(req.headers.get("referer"));
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
