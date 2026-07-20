@@ -16,13 +16,16 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import traceback
+import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # ═══════════════════════════════════════════════════════════════
 # 🔧 CONFIG — এই ৪টা মান বদলাও, আর কিছু লাগবে না
