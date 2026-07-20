@@ -1280,8 +1280,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, [availableDownloadQualities, isPremium, preferredDownloadQuality, selectedDownloadQuality, selectedSeasonHas480p]);
 
-    // Probe file sizes for download picker — fast bounded HEAD/Range via the
-    // download proxy. Unknown size must never block the actual download button.
   useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const quality = selectedDownloadQuality;
@@ -1294,10 +1292,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!urls.length) return;
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
-      if (isHlsLikeUrl(u)) return null;
-      const withTimeout = async (input: string, init: RequestInit) => {
+      if (isHlsLikeUrl(u)) return [u, -1]; // HLS: mark known, size N/A
+      const withTimeout = async (input: string, init: RequestInit, ms = 4000) => {
         const ac = new AbortController();
-        const t = window.setTimeout(() => ac.abort(), 2200);
+        const t = window.setTimeout(() => ac.abort(), ms);
         try { return await fetch(input, { ...init, signal: ac.signal }); }
         finally { window.clearTimeout(t); }
       };
@@ -1306,18 +1304,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const ct = String(r.headers.get("content-type") || "").toLowerCase();
         return !/json|text\/html/.test(ct);
       };
-      const acceptBytes = (n: number) => Number.isFinite(n) && n > 512 * 1024;
-      const proxiedCandidates = [
-        ...buildVideoDownloadUrlCandidates(u, "probe.mp4"),
-      ];
+      const acceptBytes = (n: number) => Number.isFinite(n) && n > 128 * 1024;
+      const proxiedCandidates = buildVideoDownloadUrlCandidates(u, "probe.mp4");
       for (const proxied of proxiedCandidates) {
-        try {
-          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
-          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
-          const len = Number(r.headers.get("content-length") || 0);
-          try { await r.body?.cancel(); } catch {}
-          if (acceptBytes(len)) return [u, len];
-        } catch {}
         try {
           const r2 = await withTimeout(proxied, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
           if (!isValidSizeResponse(r2)) { try { await r2.body?.cancel(); } catch {}; continue; }
@@ -1334,12 +1323,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           try { await r2.body?.cancel(); } catch {}
           if (acceptBytes(len)) return [u, len];
         } catch {}
+        try {
+          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
+          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
+          const len = Number(r.headers.get("content-length") || 0);
+          try { await r.body?.cancel(); } catch {}
+          if (acceptBytes(len)) return [u, len];
+        } catch {}
       }
-      return null;
+      // Nothing worked — mark as "known-unknown" so UI stops showing "Ready" forever
+      return [u, -1];
     };
     (async () => {
-      // Small batches avoid hammering the proxy and causing 504s.
-      const chunk = 3;
+      // High concurrency: 8 in parallel keeps every episode resolving in ~1s
+      const chunk = 8;
       for (let i = 0; i < urls.length; i += chunk) {
         if (cancelled) return;
         const results = await Promise.all(urls.slice(i, i + chunk).map(probe));
@@ -1356,6 +1353,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     })();
     return () => { cancelled = true; };
   }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, getCachedDownloadSize]);
+
 
 
   useEffect(() => {
