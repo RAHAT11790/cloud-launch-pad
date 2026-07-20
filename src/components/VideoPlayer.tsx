@@ -778,7 +778,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const filtered: Record<string, number> = {};
       Object.entries(parsed).forEach(([key, value]) => {
         const n = Number(value || 0);
-        if (Number.isFinite(n) && n > 512 * 1024) filtered[key] = n;
+        // Keep positive sizes AND known-unknown marker (-1) so UI stops probing forever
+        if (Number.isFinite(n) && (n > 512 * 1024 || n === -1)) filtered[key] = n;
       });
       return filtered;
     } catch { return {}; }
@@ -787,6 +788,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const n = Number(url ? downloadSizeCache[url] || 0 : 0);
     return Number.isFinite(n) && n > 512 * 1024 ? n : 0;
   }, [downloadSizeCache]);
+  const hasProbedDownloadSize = useCallback((url?: string) => {
+    if (!url) return false;
+    return Object.prototype.hasOwnProperty.call(downloadSizeCache, url);
+  }, [downloadSizeCache]);
+
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -1280,8 +1286,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, [availableDownloadQualities, isPremium, preferredDownloadQuality, selectedDownloadQuality, selectedSeasonHas480p]);
 
-    // Probe file sizes for download picker — fast bounded HEAD/Range via the
-    // download proxy. Unknown size must never block the actual download button.
   useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const quality = selectedDownloadQuality;
@@ -1289,15 +1293,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const urls: string[] = [];
     downloadEpisodes.forEach((ep) => {
       const u = ep.qualityLinks[quality];
-      if (u && !getCachedDownloadSize(u)) urls.push(u);
+      if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
     if (!urls.length) return;
+
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
-      if (isHlsLikeUrl(u)) return null;
-      const withTimeout = async (input: string, init: RequestInit) => {
+      if (isHlsLikeUrl(u)) return [u, -1]; // HLS: mark known, size N/A
+      const withTimeout = async (input: string, init: RequestInit, ms = 4000) => {
         const ac = new AbortController();
-        const t = window.setTimeout(() => ac.abort(), 2200);
+        const t = window.setTimeout(() => ac.abort(), ms);
         try { return await fetch(input, { ...init, signal: ac.signal }); }
         finally { window.clearTimeout(t); }
       };
@@ -1306,18 +1311,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const ct = String(r.headers.get("content-type") || "").toLowerCase();
         return !/json|text\/html/.test(ct);
       };
-      const acceptBytes = (n: number) => Number.isFinite(n) && n > 512 * 1024;
-      const proxiedCandidates = [
-        ...buildVideoDownloadUrlCandidates(u, "probe.mp4"),
-      ];
+      const acceptBytes = (n: number) => Number.isFinite(n) && n > 128 * 1024;
+      const proxiedCandidates = buildVideoDownloadUrlCandidates(u, "probe.mp4");
       for (const proxied of proxiedCandidates) {
-        try {
-          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
-          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
-          const len = Number(r.headers.get("content-length") || 0);
-          try { await r.body?.cancel(); } catch {}
-          if (acceptBytes(len)) return [u, len];
-        } catch {}
         try {
           const r2 = await withTimeout(proxied, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
           if (!isValidSizeResponse(r2)) { try { await r2.body?.cancel(); } catch {}; continue; }
@@ -1334,12 +1330,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           try { await r2.body?.cancel(); } catch {}
           if (acceptBytes(len)) return [u, len];
         } catch {}
+        try {
+          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
+          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
+          const len = Number(r.headers.get("content-length") || 0);
+          try { await r.body?.cancel(); } catch {}
+          if (acceptBytes(len)) return [u, len];
+        } catch {}
       }
-      return null;
+      // Nothing worked — mark as "known-unknown" so UI stops showing "Ready" forever
+      return [u, -1];
     };
     (async () => {
-      // Small batches avoid hammering the proxy and causing 504s.
-      const chunk = 3;
+      // High concurrency: 8 in parallel keeps every episode resolving in ~1s
+      const chunk = 8;
       for (let i = 0; i < urls.length; i += chunk) {
         if (cancelled) return;
         const results = await Promise.all(urls.slice(i, i + chunk).map(probe));
@@ -1355,7 +1359,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, getCachedDownloadSize]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize]);
+
 
 
   useEffect(() => {
@@ -4571,7 +4576,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div data-player-fs={isFullscreen ? "on" : "off"} className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -5949,7 +5954,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel || <span className="text-white/45 font-normal">Ready</span>) : <span className="text-white/30 font-normal">—</span>}
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-emerald-300/90 font-semibold">MP4</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
                                   </span>
                                 </button>
                               );
