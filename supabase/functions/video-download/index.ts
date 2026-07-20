@@ -171,7 +171,13 @@ const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
-const isAllowedRequest = (_req: Request) => true;
+const isAllowedRequest = (req: Request): boolean => {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  // Require caller to identify itself; block anonymous curl/SSRF probes.
+  if (!origin && !referer) return false;
+  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
