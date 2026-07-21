@@ -113,7 +113,7 @@ import platform
 import subprocess
 import traceback
 import urllib.parse
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Any, Dict, List, Optional, Union, AsyncGenerator
 
 # --- third-party ---------------------------------------------------------
@@ -178,6 +178,11 @@ BROADCAST_LOCK = asyncio.Lock()
 
 # PUBLIC_URL is mutable — cloudflare tunnel will rewrite it at runtime
 URL = PUBLIC_URL if PUBLIC_URL.endswith("/") else PUBLIC_URL + "/"
+
+# Database must never block Telegram handlers. If MongoDB is not configured
+# yet, the bot automatically falls back to an in-memory store so /start and
+# file-to-link generation still work instantly.
+DB_TIMEOUT = 4
 
 
 # =========================================================================
@@ -374,40 +379,167 @@ def decode_batch(payload: str) -> str:
 # =========================================================================
 # 8.  DATABASE  (Motor / MongoDB)
 # =========================================================================
+class _MemoryDeleteResult:
+    def __init__(self, deleted_count: int):
+        self.deleted_count = deleted_count
+
+
+class _MemoryCursor:
+    def __init__(self, docs: List[dict]):
+        self.docs = list(docs)
+        self.i = 0
+
+    async def to_list(self, length=None):
+        return self.docs if length is None else self.docs[:length]
+
+    def __aiter__(self):
+        self.i = 0
+        return self
+
+    async def __anext__(self):
+        if self.i >= len(self.docs):
+            raise StopAsyncIteration
+        item = self.docs[self.i]
+        self.i += 1
+        return item
+
+
+class _MemoryCollection:
+    def __init__(self, key: str = "id"):
+        self.key = key
+        self.docs: List[dict] = []
+
+    @staticmethod
+    def _match(doc: dict, query: Optional[dict]) -> bool:
+        if not query:
+            return True
+        for k, v in query.items():
+            cur = doc.get(k)
+            if isinstance(v, dict):
+                if "$gt" in v and not (cur is not None and cur > v["$gt"]):
+                    return False
+                continue
+            if cur != v:
+                return False
+        return True
+
+    async def find_one(self, query=None):
+        for d in self.docs:
+            if self._match(d, query):
+                return dict(d)
+        return None
+
+    def find(self, query=None):
+        return _MemoryCursor([dict(d) for d in self.docs if self._match(d, query)])
+
+    async def insert_one(self, data: dict):
+        self.docs.append(dict(data))
+        return data
+
+
+    async def update_one(self, query: dict, update: dict, upsert: bool = False):
+        patch = update.get("$set", update)
+        for d in self.docs:
+            if self._match(d, query):
+                d.update(patch)
+                return d
+        if upsert:
+            new_doc = dict(query)
+            new_doc.update(patch)
+            self.docs.append(new_doc)
+            return new_doc
+        return None
+
+    async def delete_one(self, query: dict):
+        before = len(self.docs)
+        for i, d in enumerate(self.docs):
+            if self._match(d, query):
+                del self.docs[i]
+                break
+        return _MemoryDeleteResult(before - len(self.docs))
+
+    async def delete_many(self, query: dict):
+        before = len(self.docs)
+        self.docs = [d for d in self.docs if not self._match(d, query)]
+        return _MemoryDeleteResult(before - len(self.docs))
+
+    async def count_documents(self, query=None):
+        return len([d for d in self.docs if self._match(d, query)])
+
+
+def _database_url_is_placeholder(url: str) -> bool:
+    value = (url or "").strip().lower()
+    return (not value or "user:pass" in value or "cluster.mongodb.net" in value
+            or value in {"mongodb://", "mongodb+srv://"})
+
+
 class Database:
     def __init__(self):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
-        self.db     = self.client[DATABASE_NAME]
-        self.users            = self.db.users
-        self.blocked_users    = self.db.blocked_users
-        self.blocked_channels = self.db.blocked_channels
-        self.files            = self.db.files
-        self.refers           = self.db.refers
-        self.protected_links  = self.db.protected_links
+        self.client = None
+        self.db = None
+        self.memory_mode = _database_url_is_placeholder(DATABASE_URL)
+        if self.memory_mode:
+            log.warning("MongoDB is not configured — using in-memory database fallback.")
+            self._use_memory_collections()
+            return
+        try:
+            self.client = motor.motor_asyncio.AsyncIOMotorClient(
+                DATABASE_URL,
+                serverSelectionTimeoutMS=3000,
+                connectTimeoutMS=3000,
+                socketTimeoutMS=5000,
+                retryWrites=True,
+            )
+            self.db = self.client[DATABASE_NAME]
+            self.users            = self.db.users
+            self.blocked_users    = self.db.blocked_users
+            self.blocked_channels = self.db.blocked_channels
+            self.files            = self.db.files
+            self.refers           = self.db.refers
+            self.protected_links  = self.db.protected_links
+        except Exception as e:
+            log.warning(f"MongoDB init failed — using in-memory fallback: {e}")
+            self.memory_mode = True
+            self._use_memory_collections()
+
+    def _use_memory_collections(self):
+        self.users            = _MemoryCollection("id")
+        self.blocked_users    = _MemoryCollection("user_id")
+        self.blocked_channels = _MemoryCollection("channel_id")
+        self.files            = _MemoryCollection("file_id")
+        self.refers           = _MemoryCollection("user_id")
+        self.protected_links  = _MemoryCollection("token")
+
+    async def _safe(self, label: str, action, default=None):
+        try:
+            return await asyncio.wait_for(action(), timeout=DB_TIMEOUT)
+        except Exception as e:
+            log.warning(f"DB {label} failed; continuing without blocking bot: {e}")
+            return default
 
     # ---- basic user store ----
     async def add_user(self, uid: int, name: str):
-        if not await self.users.find_one({"id": int(uid)}):
-            await self.users.insert_one({"id": int(uid), "name": name})
+        if not await self.is_user_exist(uid):
+            await self._safe("add_user", lambda: self.users.insert_one({"id": int(uid), "name": name}))
 
     async def is_user_exist(self, uid: int) -> bool:
-        return bool(await self.users.find_one({"id": int(uid)}))
+        return bool(await self._safe("is_user_exist", lambda: self.users.find_one({"id": int(uid)}), None))
 
     async def total_users_count(self) -> int:
-        return await self.users.count_documents({})
+        return int(await self._safe("total_users_count", lambda: self.users.count_documents({}), 0) or 0)
 
     async def get_all_users(self):
         return self.users.find({})
 
     async def delete_user(self, uid: int):
-        await self.users.delete_many({"id": int(uid)})
+        await self._safe("delete_user", lambda: self.users.delete_many({"id": int(uid)}))
 
     # ---- premium ----
     async def update_user(self, data: dict):
-        await self.users.update_one({"id": data["id"]}, {"$set": data}, upsert=True)
+        await self._safe("update_user", lambda: self.users.update_one({"id": data["id"]}, {"$set": data}, upsert=True))
 
     async def get_user(self, uid: int):
-        return await self.users.find_one({"id": int(uid)})
+        return await self._safe("get_user", lambda: self.users.find_one({"id": int(uid)}), None)
 
     async def has_premium_access(self, uid: int) -> bool:
         u = await self.get_user(uid)
@@ -418,58 +550,58 @@ class Database:
             return False
         if datetime.now() <= exp:
             return True
-        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        await self._safe("expire_premium", lambda: self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}}))
         return False
 
     async def remove_premium_access(self, uid: int) -> bool:
-        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        await self._safe("remove_premium", lambda: self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}}))
         return True
 
     async def all_premium_count(self) -> int:
-        return await self.users.count_documents({"expiry_time": {"$gt": datetime.now()}})
+        return int(await self._safe("all_premium_count", lambda: self.users.count_documents({"expiry_time": {"$gt": datetime.now()}}), 0) or 0)
 
     # ---- ban / unban users ----
     async def is_user_blocked(self, uid: int) -> bool:
-        return bool(await self.blocked_users.find_one({"user_id": int(uid)}))
+        return bool(await self._safe("is_user_blocked", lambda: self.blocked_users.find_one({"user_id": int(uid)}), None))
 
     async def block_user(self, uid: int, reason: str = ""):
-        await self.blocked_users.update_one(
+        await self._safe("block_user", lambda: self.blocked_users.update_one(
             {"user_id": int(uid)},
             {"$set": {"user_id": int(uid), "reason": reason,
                       "blocked_at": datetime.utcnow()}},
-            upsert=True)
+            upsert=True))
 
     async def unblock_user(self, uid: int):
-        await self.blocked_users.delete_one({"user_id": int(uid)})
+        await self._safe("unblock_user", lambda: self.blocked_users.delete_one({"user_id": int(uid)}))
 
     async def total_blocked_count(self) -> int:
-        return await self.blocked_users.count_documents({})
+        return int(await self._safe("total_blocked_count", lambda: self.blocked_users.count_documents({}), 0) or 0)
 
     # ---- ban channels ----
     async def is_channel_blocked(self, cid: int) -> bool:
-        return bool(await self.blocked_channels.find_one({"channel_id": int(cid)}))
+        return bool(await self._safe("is_channel_blocked", lambda: self.blocked_channels.find_one({"channel_id": int(cid)}), None))
 
     async def block_channel(self, cid: int, reason: str = ""):
-        await self.blocked_channels.update_one(
+        await self._safe("block_channel", lambda: self.blocked_channels.update_one(
             {"channel_id": int(cid)},
             {"$set": {"channel_id": int(cid), "reason": reason,
                       "blocked_at": datetime.utcnow()}},
-            upsert=True)
+            upsert=True))
 
     async def unblock_channel(self, cid: int):
-        await self.blocked_channels.delete_one({"channel_id": int(cid)})
+        await self._safe("unblock_channel", lambda: self.blocked_channels.delete_one({"channel_id": int(cid)}))
 
     async def total_blocked_channels(self) -> int:
-        return await self.blocked_channels.count_documents({})
+        return int(await self._safe("total_blocked_channels", lambda: self.blocked_channels.count_documents({}), 0) or 0)
 
     # ---- referral / points ----
     async def get_refer_points(self, uid: int) -> int:
-        u = await self.refers.find_one({"user_id": int(uid)})
+        u = await self._safe("get_refer_points", lambda: self.refers.find_one({"user_id": int(uid)}), None)
         return u.get("points", 0) if u else 0
 
     async def set_refer_points(self, uid: int, pts: int):
-        await self.refers.update_one({"user_id": int(uid)},
-                                     {"$set": {"points": pts}}, upsert=True)
+        await self._safe("set_refer_points", lambda: self.refers.update_one({"user_id": int(uid)},
+                                     {"$set": {"points": pts}}, upsert=True))
 
     async def change_points(self, uid: int, amount: int) -> int:
         pts = max(0, await self.get_refer_points(uid) + amount)
@@ -477,29 +609,29 @@ class Database:
         return pts
 
     async def is_user_in_refer(self, uid: int) -> bool:
-        return bool(await self.refers.find_one({"user_id": int(uid)}))
+        return bool(await self._safe("is_user_in_refer", lambda: self.refers.find_one({"user_id": int(uid)}), None))
 
     # ---- protected links ----
     async def add_protected_link(self, token, url, password, title, channel_link):
-        await self.protected_links.insert_one({
+        await self._safe("add_protected_link", lambda: self.protected_links.insert_one({
             "token": token, "url": url, "password": password,
-            "title": title, "channel_link": channel_link})
+            "title": title, "channel_link": channel_link}))
 
     async def get_protected_link(self, token):
-        return await self.protected_links.find_one({"token": token})
+        return await self._safe("get_protected_link", lambda: self.protected_links.find_one({"token": token}), None)
 
     async def delete_protected_link(self, token) -> bool:
-        r = await self.protected_links.delete_one({"token": token})
+        r = await self._safe("delete_protected_link", lambda: self.protected_links.delete_one({"token": token}), _MemoryDeleteResult(0))
         return r.deleted_count > 0
 
     async def get_link_by_url(self, url):
-        return await self.protected_links.find_one({"url": url})
+        return await self._safe("get_link_by_url", lambda: self.protected_links.find_one({"url": url}), None)
 
     async def update_protected_link(self, token, password, title, channel_link):
-        await self.protected_links.update_one(
+        await self._safe("update_protected_link", lambda: self.protected_links.update_one(
             {"token": token},
             {"$set": {"password": password, "title": title,
-                      "channel_link": channel_link}})
+                      "channel_link": channel_link}}))
 
     async def get_all_protected_links(self):
         return self.protected_links.find({})
@@ -1015,116 +1147,200 @@ def _home_kb() -> InlineKeyboardMarkup:
     ])
 
 
-@app.on_message(filters.command("start") & filters.incoming)
-async def h_start(client: Client, message: Message):
-    uid  = message.from_user.id
-    name = message.from_user.first_name
-    argv = message.command[1] if len(message.command) > 1 else None
+async def safe_reply_text(message: Message, text: str, **kwargs):
+    try:
+        return await asyncio.wait_for(message.reply_text(text, **kwargs), timeout=20)
+    except Exception as e:
+        log.warning(f"reply failed in chat {getattr(message.chat, 'id', '?')}: {e}")
+        try:
+            return await asyncio.wait_for(app.send_message(message.chat.id, text, **kwargs), timeout=20)
+        except Exception as e2:
+            log.error(f"send fallback failed: {e2}")
+            return None
 
-    if MAINTENANCE_MODE and uid != ADMIN_ID:
-        return await message.reply_text("🚧 ʙᴏᴛ ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ")
 
-    if await db.is_user_blocked(uid):
-        return await message.reply_text("🚫 ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.")
+async def safe_edit_text(message: Message, text: str, **kwargs):
+    try:
+        return await asyncio.wait_for(message.edit_text(text, **kwargs), timeout=20)
+    except Exception as e:
+        log.warning(f"edit failed: {e}")
+        return await safe_reply_text(message, text, **kwargs)
 
-    is_referral = argv and argv.startswith("reff_")
-    if FSUB and not is_referral:
-        if not await is_user_joined(client, message):
-            return
 
+async def ensure_user_record(client: Client, message: Message) -> bool:
+    if not message.from_user:
+        return False
+    uid = message.from_user.id
+    name = message.from_user.first_name or "User"
     fresh = not await db.is_user_exist(uid)
     if fresh:
         await db.add_user(uid, name)
-        try:
-            await client.send_message(
-                LOG_CHANNEL,
-                f"<b>#NEW_USER</b>\nID: <code>{uid}</code>\nName: {message.from_user.mention}")
-        except Exception:
-            pass
-
-    # --- referral deep-link ---
-    if is_referral:
-        try:
-            inviter_id = int(argv.split("_", 1)[1])
-        except Exception:
-            return await message.reply_text("Invalid refer link.")
-        if inviter_id == uid or not fresh:
-            return await message.reply_text("Refer link cannot be used.")
-        if await db.is_user_in_refer(uid):
-            return await message.reply_text("Already invited.")
-        pts_new = await db.change_points(inviter_id, 10)
-        await db.set_refer_points(uid, 0)   # mark presence
-        try:
-            await client.send_message(
-                inviter_id,
-                f"✈️ New Referral!\n{message.from_user.mention} joined.\n"
-                f"➕10  ·  Total: {pts_new}")
-        except Exception:
-            pass
-        if pts_new >= 100:
-            await db.set_refer_points(inviter_id, 0)
-            exp = datetime.now() + timedelta(days=30)
-            await db.update_user({"id": inviter_id, "expiry_time": exp})
+        if LOG_CHANNEL:
             try:
                 await client.send_message(
-                    inviter_id,
-                    "🎉 100 points reached — 1 Month Premium activated!")
+                    LOG_CHANNEL,
+                    f"<b>#NEW_USER</b>\nID: <code>{uid}</code>\nName: {message.from_user.mention}")
+            except Exception as e:
+                log.warning(f"new-user log failed: {e}")
+    return fresh
+
+
+def _media_from_message(m: Message):
+    return (m.document or m.video or m.audio or m.animation or
+            m.voice or m.video_note or m.photo)
+
+
+def _media_name(media, msg_id: int) -> str:
+    return (getattr(media, "file_name", None) or
+            f"Telegram_File_{msg_id}")
+
+
+def _media_size(media) -> str:
+    return humanbytes(getattr(media, "file_size", 0) or 0)
+
+
+async def _store_in_bin(source: Message, status: Optional[Message] = None) -> Optional[Message]:
+    try:
+        return await source.forward(chat_id=BIN_CHANNEL)
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value + 1)
+        return await source.forward(chat_id=BIN_CHANNEL)
+    except Exception as e:
+        log.error(f"BIN_CHANNEL forward failed: {e}")
+        if status:
+            await safe_edit_text(
+                status,
+                "❌ <b>Storage channel error.</b>\n\n"
+                "Bot must be admin in BIN_CHANNEL and allowed to post files.\n"
+                f"Error: <code>{str(e)[:180]}</code>")
+        else:
+            await safe_reply_text(
+                source,
+                "❌ Storage channel error. Bot must be admin in BIN_CHANNEL.")
+        return None
+
+
+async def build_file_links(stored_msg: Message, file_name: str):
+    h = get_hash(stored_msg)
+    safe_name = urllib.parse.quote_plus(file_name)
+    stream   = f"{URL}watch/{stored_msg.id}/{safe_name}?hash={h}"
+    download = f"{URL}{stored_msg.id}/{safe_name}?hash={h}"
+    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{stored_msg.id}"
+    if IS_SHORTLINK:
+        stream, download, tglink = await asyncio.gather(
+            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+    return h, stream, download, tglink
+
+
+async def save_file_record(uid: int, file_name: str, file_size: str, file_id: int, h: str):
+    await db._safe("save_file_record", lambda: db.files.insert_one({
+        "user_id": uid, "file_name": file_name, "file_size": file_size,
+        "file_id": file_id, "hash": h, "timestamp": time.time()}))
+
+
+@app.on_message(filters.command("start") & filters.incoming)
+async def h_start(client: Client, message: Message):
+    try:
+        if not message.from_user:
+            return
+        uid  = message.from_user.id
+        argv = message.command[1] if len(message.command) > 1 else None
+
+        if MAINTENANCE_MODE and uid != ADMIN_ID:
+            return await safe_reply_text(message, "🚧 ʙᴏᴛ ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ")
+
+        if await db.is_user_blocked(uid):
+            return await safe_reply_text(message, "🚫 ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.")
+
+        is_referral = bool(argv and argv.startswith("reff_"))
+        if FSUB and not is_referral:
+            if not await is_user_joined(client, message):
+                return
+
+        fresh = await ensure_user_record(client, message)
+
+        # --- referral deep-link ---
+        if is_referral:
+            try:
+                inviter_id = int(argv.split("_", 1)[1])
+            except Exception:
+                return await safe_reply_text(message, "Invalid refer link.")
+            if inviter_id == uid or not fresh:
+                return await safe_reply_text(message, "Refer link cannot be used.")
+            if await db.is_user_in_refer(uid):
+                return await safe_reply_text(message, "Already invited.")
+            pts_new = await db.change_points(inviter_id, 10)
+            await db.set_refer_points(uid, 0)
+            try:
+                await client.send_message(inviter_id, f"✈️ New Referral!\n{message.from_user.mention} joined.\n➕10  ·  Total: {pts_new}")
             except Exception:
                 pass
-        return await message.reply_text(
-            f"You joined via {inviter_id}'s referral link 🎁")
-
-    # --- file / batch deep-link ---
-    if argv and argv.startswith("file_"):
-        try:
-            fid = int(argv.split("_", 1)[1])
-        except Exception:
-            return await message.reply_text("Invalid file link.")
-        try:
-            await client.copy_message(uid, BIN_CHANNEL, fid)
-        except Exception as e:
-            return await message.reply_text(f"❌ {e}")
-        return
-
-    if argv and argv != "start":
-        payload = decode_batch(argv)
-        if payload.startswith("batch-"):
-            try:
-                _, s, e = payload.split("-")
-                s, e = int(s), int(e)
-            except Exception:
-                return
-            if e - s > BATCH_LIMIT:
-                return await message.reply_text(f"Batch limit is {BATCH_LIMIT} files")
-            status = await message.reply_text("🔄 Sending batch...")
-            sent = 0
-            for i in range(s, e + 1):
+            if pts_new >= 100:
+                await db.set_refer_points(inviter_id, 0)
+                exp = datetime.now() + timedelta(days=30)
+                await db.update_user({"id": inviter_id, "expiry_time": exp})
                 try:
-                    await client.copy_message(uid, BIN_CHANNEL, i)
-                    sent += 1
-                    await asyncio.sleep(1)
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 1)
+                    await client.send_message(inviter_id, "🎉 100 points reached — 1 Month Premium activated!")
                 except Exception:
                     pass
-            await status.edit(f"✅ Sent {sent}/{e - s + 1} files.")
+            return await safe_reply_text(message, f"You joined via {inviter_id}'s referral link 🎁")
+
+        # --- file / batch deep-link ---
+        if argv and argv.startswith("file_"):
+            try:
+                fid = int(argv.split("_", 1)[1])
+            except Exception:
+                return await safe_reply_text(message, "Invalid file link.")
+            try:
+                await client.copy_message(uid, BIN_CHANNEL, fid)
+            except Exception as e:
+                return await safe_reply_text(message, f"❌ {e}")
             return
 
-    # --- default welcome ---
-    await message.reply_text(
-        START_TXT.format(name=message.from_user.mention),
-        reply_markup=_home_kb(), disable_web_page_preview=True)
+        if argv and argv != "start":
+            payload = decode_batch(argv)
+            if payload.startswith("batch-"):
+                try:
+                    _, s, e = payload.split("-")
+                    s, e = int(s), int(e)
+                except Exception:
+                    return await safe_reply_text(message, "Invalid batch link.")
+                if e - s > BATCH_LIMIT:
+                    return await safe_reply_text(message, f"Batch limit is {BATCH_LIMIT} files")
+                status = await safe_reply_text(message, "🔄 Sending batch...")
+                sent = 0
+                for i in range(s, e + 1):
+                    try:
+                        await client.copy_message(uid, BIN_CHANNEL, i)
+                        sent += 1
+                        await asyncio.sleep(1)
+                    except FloodWait as fw:
+                        await asyncio.sleep(fw.value + 1)
+                    except Exception:
+                        pass
+                if status:
+                    await safe_edit_text(status, f"✅ Sent {sent}/{e - s + 1} files.")
+                return
+
+        # --- default welcome ---
+        await safe_reply_text(
+            message,
+            START_TXT.format(name=message.from_user.mention),
+            reply_markup=_home_kb(), disable_web_page_preview=True)
+    except Exception as e:
+        log.exception("/start handler failed")
+        await safe_reply_text(message, f"❌ Start command error: <code>{str(e)[:180]}</code>")
 
 
 @app.on_message(filters.command("help"))
 async def h_help(_c, m: Message):
-    await m.reply_text(HELP_TXT, reply_markup=InlineKeyboardMarkup(
+    await safe_reply_text(m, HELP_TXT, reply_markup=InlineKeyboardMarkup(
         [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
 
 @app.on_message(filters.command("about"))
 async def h_about(_c, m: Message):
-    await m.reply_text(ABOUT_TXT.format(
+    await safe_reply_text(m, ABOUT_TXT.format(
         n=temp.B_NAME, v=BOT_VERSION, pv=pyro_ver,
         up=get_readable_time(time.time() - START_TIME),
         ow=OWNER_USERNAME),
@@ -1135,8 +1351,9 @@ async def h_about(_c, m: Message):
 @app.on_message(filters.command("ping"))
 async def h_ping(_c, m: Message):
     t = time.time()
-    r = await m.reply_text("pinging...")
-    await r.edit(f"🏓 Pong! `{round((time.time()-t)*1000)}ms`")
+    r = await safe_reply_text(m, "pinging...")
+    if r:
+        await safe_edit_text(r, f"🏓 Pong! `{round((time.time()-t)*1000)}ms`")
 
 
 @app.on_message(filters.command("stats") & filters.user(ADMIN_ID))
@@ -1147,7 +1364,7 @@ async def h_stats(client: Client, m: Message):
     tc = await db.total_blocked_channels()
     tf = await db.files.count_documents({})
     tl = await db.protected_links.count_documents({})
-    await m.reply_text(
+    await safe_reply_text(m,
         f"<b>📊 sᴛᴀᴛs</b>\n\n"
         f"👥 ᴜsᴇʀs        : <code>{tu}</code>\n"
         f"💎 ᴘʀᴇᴍɪᴜᴍ    : <code>{tp}</code>\n"
@@ -1396,58 +1613,64 @@ FILE_CAPTION_TXT = (
 
 @app.on_message(filters.private & (filters.document | filters.video | filters.audio), group=4)
 async def h_file_private(client: Client, m: Message):
-    uid = m.from_user.id
-    if MAINTENANCE_MODE and uid != ADMIN_ID:
-        return await m.reply_text("🚧 Maintenance mode.")
-    if await db.is_user_blocked(uid):
-        return await m.reply_text("🚫 You are banned.")
-    if FSUB and not await is_user_joined(client, m):
-        return
-    ok, wait = await is_user_allowed(uid)
-    if not ok:
-        return await m.reply_text(
-            f"🚫 You have sent {MAX_FILES} files. Please try after "
-            f"<b>{wait}s</b>.", quote=True)
-
-    media = m.document or m.video or m.audio
-    fname = media.file_name or f"AV_{int(time.time())}"
-    fsize = humanbytes(media.file_size)
-
+    status = None
     try:
-        fwd = await m.forward(chat_id=BIN_CHANNEL)
-    except FloodWait as fw:
-        await asyncio.sleep(fw.value)
-        fwd = await m.forward(chat_id=BIN_CHANNEL)
+        if not m.from_user:
+            return
+        uid = m.from_user.id
+        if MAINTENANCE_MODE and uid != ADMIN_ID:
+            return await safe_reply_text(m, "🚧 Maintenance mode.")
+        if await db.is_user_blocked(uid):
+            return await safe_reply_text(m, "🚫 You are banned.")
+        if FSUB and not await is_user_joined(client, m):
+            return
+        await ensure_user_record(client, m)
+        ok, wait = await is_user_allowed(uid)
+        if not ok:
+            return await safe_reply_text(
+                m,
+                f"🚫 You have sent {MAX_FILES} files. Please try after "
+                f"<b>{wait}s</b>.", quote=True)
 
-    h = get_hash(fwd)
-    stream   = f"{URL}watch/{fwd.id}/{urllib.parse.quote_plus(fname)}?hash={h}"
-    download = f"{URL}{fwd.id}?hash={h}"
-    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{fwd.id}"
+        media = _media_from_message(m)
+        if not media:
+            return await safe_reply_text(m, "❌ Please send a video, audio, or document file.")
+        fname = _media_name(media, m.id)
+        fsize = _media_size(media)
 
-    if IS_SHORTLINK:
-        stream, download, tglink = await asyncio.gather(
-            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+        status = await safe_reply_text(m, "⚡ <b>Generating your stream links...</b>", quote=True)
+        fwd = await _store_in_bin(m, status)
+        if not fwd:
+            return
 
-    try:
-        await db.files.insert_one({
-            "user_id": uid, "file_name": fname, "file_size": fsize,
-            "file_id": fwd.id, "hash": h, "timestamp": time.time()})
-    except Exception:
-        pass
+        h, stream, download, tglink = await build_file_links(fwd, fname)
+        await save_file_record(uid, fname, fsize, fwd.id, h)
 
-    await fwd.reply_text(
-        f"Requested by: {m.from_user.mention} (<code>{uid}</code>)\n"
-        f"Stream: {stream}", quote=True, disable_web_page_preview=True)
+        try:
+            await fwd.reply_text(
+                f"Requested by: {m.from_user.mention} (<code>{uid}</code>)\n"
+                f"Stream: {stream}", quote=True, disable_web_page_preview=True)
+        except Exception as e:
+            log.warning(f"bin note failed: {e}")
 
-    await m.reply_text(
-        FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download),
-        disable_web_page_preview=True,
-        reply_markup=InlineKeyboardMarkup([
+        text = FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download)
+        kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
              InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
             [InlineKeyboardButton("• ɢᴇᴛ ꜰɪʟᴇ •", url=tglink),
              InlineKeyboardButton("• ᴅᴇʟᴇᴛᴇ •", callback_data=f"delfile_{fwd.id}")],
-            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
+            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]])
+        if status:
+            await safe_edit_text(status, text, disable_web_page_preview=True, reply_markup=kb)
+        else:
+            await safe_reply_text(m, text, disable_web_page_preview=True, reply_markup=kb)
+    except Exception as e:
+        log.exception("private file handler failed")
+        msg = f"❌ Link generate failed: <code>{str(e)[:180]}</code>"
+        if status:
+            await safe_edit_text(status, msg)
+        else:
+            await safe_reply_text(m, msg)
 
 
 # =========================================================================
