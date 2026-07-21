@@ -94,6 +94,12 @@ except ImportError as e:
     log.error("❌ yt-dlp install হয়নি: %s", e)
     sys.exit(1)
 
+try:
+    from aiohttp import web  # HTTP file server
+except ImportError as e:
+    log.error("❌ aiohttp install হয়নি: %s\n   চালাও:  pip install -r requirements.txt", e)
+    sys.exit(1)
+
 
 # ═══════════════════════════════════════════════════════════════
 # Helpers
