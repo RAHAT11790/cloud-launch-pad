@@ -1147,6 +1147,97 @@ def _home_kb() -> InlineKeyboardMarkup:
     ])
 
 
+async def safe_reply_text(message: Message, text: str, **kwargs):
+    try:
+        return await asyncio.wait_for(message.reply_text(text, **kwargs), timeout=20)
+    except Exception as e:
+        log.warning(f"reply failed in chat {getattr(message.chat, 'id', '?')}: {e}")
+        try:
+            return await asyncio.wait_for(app.send_message(message.chat.id, text, **kwargs), timeout=20)
+        except Exception as e2:
+            log.error(f"send fallback failed: {e2}")
+            return None
+
+
+async def safe_edit_text(message: Message, text: str, **kwargs):
+    try:
+        return await asyncio.wait_for(message.edit_text(text, **kwargs), timeout=20)
+    except Exception as e:
+        log.warning(f"edit failed: {e}")
+        return await safe_reply_text(message, text, **kwargs)
+
+
+async def ensure_user_record(client: Client, message: Message) -> bool:
+    if not message.from_user:
+        return False
+    uid = message.from_user.id
+    name = message.from_user.first_name or "User"
+    fresh = not await db.is_user_exist(uid)
+    if fresh:
+        await db.add_user(uid, name)
+        if LOG_CHANNEL:
+            try:
+                await client.send_message(
+                    LOG_CHANNEL,
+                    f"<b>#NEW_USER</b>\nID: <code>{uid}</code>\nName: {message.from_user.mention}")
+            except Exception as e:
+                log.warning(f"new-user log failed: {e}")
+    return fresh
+
+
+def _media_from_message(m: Message):
+    return (m.document or m.video or m.audio or m.animation or
+            m.voice or m.video_note or m.photo)
+
+
+def _media_name(media, msg_id: int) -> str:
+    return (getattr(media, "file_name", None) or
+            f"Telegram_File_{msg_id}")
+
+
+def _media_size(media) -> str:
+    return humanbytes(getattr(media, "file_size", 0) or 0)
+
+
+async def _store_in_bin(source: Message, status: Optional[Message] = None) -> Optional[Message]:
+    try:
+        return await source.forward(chat_id=BIN_CHANNEL)
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value + 1)
+        return await source.forward(chat_id=BIN_CHANNEL)
+    except Exception as e:
+        log.error(f"BIN_CHANNEL forward failed: {e}")
+        if status:
+            await safe_edit_text(
+                status,
+                "❌ <b>Storage channel error.</b>\n\n"
+                "Bot must be admin in BIN_CHANNEL and allowed to post files.\n"
+                f"Error: <code>{str(e)[:180]}</code>")
+        else:
+            await safe_reply_text(
+                source,
+                "❌ Storage channel error. Bot must be admin in BIN_CHANNEL.")
+        return None
+
+
+async def build_file_links(stored_msg: Message, file_name: str):
+    h = get_hash(stored_msg)
+    safe_name = urllib.parse.quote_plus(file_name)
+    stream   = f"{URL}watch/{stored_msg.id}/{safe_name}?hash={h}"
+    download = f"{URL}{stored_msg.id}/{safe_name}?hash={h}"
+    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{stored_msg.id}"
+    if IS_SHORTLINK:
+        stream, download, tglink = await asyncio.gather(
+            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+    return h, stream, download, tglink
+
+
+async def save_file_record(uid: int, file_name: str, file_size: str, file_id: int, h: str):
+    await db._safe("save_file_record", lambda: db.files.insert_one({
+        "user_id": uid, "file_name": file_name, "file_size": file_size,
+        "file_id": file_id, "hash": h, "timestamp": time.time()}))
+
+
 @app.on_message(filters.command("start") & filters.incoming)
 async def h_start(client: Client, message: Message):
     uid  = message.from_user.id
