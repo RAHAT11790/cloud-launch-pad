@@ -1,5 +1,7 @@
 pyrogram
 tgcrypto
-yt-dlp
-Pillow
+motor
+dnspython
 aiohttp
+aiofiles
+pytz

@@ -1,780 +1,1735 @@
 """
-RS Anime — Telegram Video Downloader Bot (Admin-only, no .env)
-==============================================================
-সব config নিচে CONFIG block-এ hardcoded। শুধু ৪টা value বদলাও, তারপর:
+========================================================================
+  AV FILE-TO-LINK PRO  ·  Single-File Edition
+========================================================================
+  All-in-one Telegram File-To-Link + HD Streaming Bot.
 
-    pip install -r requirements.txt
-    python3 bot.py
+  Original multi-file source (~3800 lines / 29 files) consolidated
+  into this single bot.py per user request.
 
-Bot শুধু OWNER_ID-এর মালিককেই reply দেবে।
+  Only two files required:
+      1. bot.py            (this file)
+      2. requirements.txt
+
+  All configuration is hard-coded in the CONFIG block below.
+  No .env file is used. No user session / MULTI_TOKEN needed.
+
+  HTTP -> HTTPS auto-conversion:
+      If PUBLIC_URL starts with http:// (e.g. bot-hosting.net:PORT),
+      the bot launches a Cloudflare "trycloudflare.com" quick tunnel
+      in the background and rewrites every generated link to that
+      HTTPS URL automatically. Downloads cloudflared binary on first
+      run if it is not present.
+
+  Features preserved from the original source:
+      - Private file  -> instant Stream + Download link
+      - Channel post  -> auto-attach Stream / Download / Get-File buttons
+      - Group /link   -> convert replied file to link
+      - HD in-browser streaming page (video / audio / other)
+      - Byte-range streaming (resumable downloads, HTML5 seek)
+      - Force-Subscribe (AUTH_CHANNEL) lock
+      - Ban / Unban users, block channels
+      - Premium subscription (/add_premium /remove_premium /myplan)
+      - File rate limit for non-premium users
+      - Password-protected link (/password  ->  /p/<token>)
+      - Batch mode (/batch  ->  encoded start deep-link)
+      - Broadcast / Pin-broadcast to all users
+      - Stats, file stats, restart, delfile
+      - Referral & points system
+      - Verify / Shortener 2-level gate (optional; ON/OFF flags below)
+========================================================================
 """
 
-from __future__ import annotations
+# =========================================================================
+# 1.  CONFIGURATION  ·  EDIT ONLY THESE 9 VALUES
+# =========================================================================
 
-import asyncio
-import logging
+# --- Telegram credentials ------------------------------------------------
+BOT_TOKEN     = "70917168:AAF8TzmnNYW721xIUUuseLU41xa5bRA"
+API_ID        = 12000656
+API_HASH      = "d927c13beaaf5110f2c071273"
+ADMIN_ID      = 5977931010                # single admin numeric ID
+BOT_SESSION   = "AVBotz"                  # pyrogram session file name
+PORT          = 8080                      # local aiohttp port
+
+# --- Database ------------------------------------------------------------
+DATABASE_URL  = "mongodb+srv://user:pass@cluster.mongodb.net/?appName=AVBotz"
+DATABASE_NAME = "AVBotz"
+
+# --- Public URL (must end with '/') --------------------------------------
+# If http://  ->  auto wrapped through Cloudflare Quick Tunnel to HTTPS
+# If https:// ->  used as-is (no tunnel launched)
+PUBLIC_URL    = "http://de3.bot-hosting.net:20508/"
+
+# =========================================================================
+# 2.  OPTIONAL FEATURE FLAGS  (safe defaults — change only if you know)
+# =========================================================================
+
+BIN_CHANNEL     = -1002114619001   # channel where files are stored
+LOG_CHANNEL     = -1002114619001   # new-user / event log channel
+PREMIUM_LOGS    = -1002114619001   # premium activity log
+SUPPORT_GROUP   = -1002114619001   # support group id (0 to disable)
+AUTH_CHANNEL    = []               # e.g. [-1001234567890]  for force-sub
+
+FSUB            = False            # Force-subscribe on/off
+IS_VERIFY       = False            # Shortener verification on/off
+IS_SHORTLINK    = False            # Shortlink the generated URLs
+SHORTLINK_URL   = "mdiskshortner.link"
+SHORTLINK_API   = ""
+
+ENABLE_LIMIT      = True
+MAX_FILES         = 5              # non-premium files / window
+RATE_LIMIT_TIMEOUT= 600            # seconds
+BATCH_LIMIT       = 60
+MAINTENANCE_MODE  = False
+
+CHANNEL_LINK    = "https://t.me/AV_BOTz_UPDATE"
+SUPPORT_LINK    = "https://t.me/AV_SUPPORT_GROUP"
+OWNER_USERNAME  = "BOT_OWNER26"
+TIMEZONE        = "Asia/Kolkata"
+
+BOT_VERSION     = "v5.0-single-file"
+
+# =========================================================================
+# 3.  IMPORTS
+# =========================================================================
 import os
 import re
-import shutil
-import subprocess
 import sys
+import math
 import time
+import json
+import glob
+import base64
+import random
+import string
+import shutil
+import signal
+import secrets
+import asyncio
+import logging
+import mimetypes
+import platform
+import subprocess
 import traceback
 import urllib.parse
-import urllib.request
-import uuid
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, date
+from typing import Any, Dict, List, Optional, Union, AsyncGenerator
 
-# ═══════════════════════════════════════════════════════════════
-# 🔧 CONFIG — এই মানগুলো বদলাও, আর কিছু লাগবে না
-# ═══════════════════════════════════════════════════════════════
-API_ID    = 1234567                       # https://my.telegram.org/apps
-API_HASH  = "your_api_hash_here"          # https://my.telegram.org/apps
-BOT_TOKEN = "123456:ABC-DEF..."           # @BotFather থেকে
-OWNER_ID  = 123456789                     # @userinfobot — শুধু এই user bot use করতে পারবে
+# --- third-party ---------------------------------------------------------
+try:
+    import pytz
+    import aiohttp
+    from aiohttp import web
+    from aiohttp.http_exceptions import BadStatusLine
+    import motor.motor_asyncio
+    from pyrogram import Client, filters, enums, idle, __version__ as pyro_ver
+    from pyrogram import utils as pyro_utils, raw
+    from pyrogram.raw.all import layer
+    from pyrogram.errors import (
+        FloodWait, UserIsBlocked, InputUserDeactivated, PeerIdInvalid,
+        AuthBytesInvalid, UserNotParticipant, ChatAdminRequired
+    )
+    from pyrogram.file_id import FileId, FileType, ThumbnailSource
+    from pyrogram.session import Session, Auth
+    from pyrogram.types import (
+        Message, CallbackQuery,
+        InlineKeyboardMarkup, InlineKeyboardButton,
+        ReplyKeyboardRemove,
+    )
+except ImportError as e:
+    print(f"[FATAL] Missing dependency: {e}\n"
+          f"        Run:  pip install -r requirements.txt")
+    sys.exit(1)
 
-# 🌐 PUBLIC URL (Railway/VPS) — এইটাই তোমার "public IP"-এর কাজ করবে।
-# Railway-এর Public Networking domain বসাও (https সহ, শেষে / নেই)।
-# উদাহরণ: "https://rsstreambot-production.up.railway.app"
-# খালি রাখলে file-server চলবে ঠিকই কিন্তু public link দেবে না।
-PUBLIC_URL = "https://rsstreambot-production.up.railway.app"
 
-# HTTP file-server port। Railway auto-set করে $PORT env-এ (usually 8080)।
-# TCP Proxy দরকার নেই — Railway এর built-in HTTPS domain-ই যথেষ্ট।
-HTTP_PORT  = int(os.environ.get("PORT", "8080"))
-# ═══════════════════════════════════════════════════════════════
-
-WORK_DIR   = Path("./downloads").resolve()
-PUBLIC_DIR = Path("./public").resolve()     # served over HTTP
-MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024    # ~1.95 GB (bot upload cap)
-
-# ── Logging: সব stdout-এ, log-এ সব দেখা যাবে ──────────────────
+# =========================================================================
+# 4.  LOGGING
+# =========================================================================
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    format="%(asctime)s | %(levelname)-7s | %(name)-14s | %(message)s",
     datefmt="%H:%M:%S",
-    stream=sys.stdout,
-    force=True,
 )
-logging.getLogger("pyrogram").setLevel(logging.WARNING)
-log = logging.getLogger("rs-bot")
+for noisy in ("pyrogram", "aiohttp", "aiohttp.web", "aiohttp.access",
+              "motor", "asyncio"):
+    logging.getLogger(noisy).setLevel(logging.ERROR)
 
-# ── Sanity check ──────────────────────────────────────────────
-if (
-    not isinstance(API_ID, int) or API_ID <= 0
-    or not API_HASH or "your_api_hash" in API_HASH
-    or not BOT_TOKEN or "ABC-DEF" in BOT_TOKEN
-    or not isinstance(OWNER_ID, int) or OWNER_ID <= 0
-):
-    log.error("❌ CONFIG ঠিক নেই। bot.py-এর উপরে API_ID / API_HASH / BOT_TOKEN / OWNER_ID বসাও।")
-    sys.exit(1)
-
-WORK_DIR.mkdir(parents=True, exist_ok=True)
-PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
-
-# ── Pyrogram import (installed check) ─────────────────────────
-try:
-    from pyrogram import Client, filters
-    from pyrogram.errors import FloodWait, MessageNotModified
-    from pyrogram.types import (
-        CallbackQuery,
-        InlineKeyboardButton,
-        InlineKeyboardMarkup,
-        Message,
-    )
-except ImportError as e:
-    log.error("❌ Pyrogram install হয়নি: %s\n   চালাও:  pip install -r requirements.txt", e)
-    sys.exit(1)
-
-try:
-    import yt_dlp  # noqa: F401
-except ImportError as e:
-    log.error("❌ yt-dlp install হয়নি: %s", e)
-    sys.exit(1)
-
-try:
-    from aiohttp import web  # HTTP file server
-except ImportError as e:
-    log.error("❌ aiohttp install হয়নি: %s\n   চালাও:  pip install -r requirements.txt", e)
-    sys.exit(1)
+log = logging.getLogger("avbotz")
 
 
-# ═══════════════════════════════════════════════════════════════
-# Helpers
-# ═══════════════════════════════════════════════════════════════
-def human_size(n: float) -> str:
-    n = float(n or 0)
-    for u in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024:
-            return f"{n:.2f} {u}"
-        n /= 1024
-    return f"{n:.2f} PB"
+# =========================================================================
+# 5.  GLOBAL STATE  (replaces utils.temp)
+# =========================================================================
+class temp:
+    ME:      Optional[int] = None
+    U_NAME:  Optional[str] = None
+    B_NAME:  Optional[str] = None
+    B_LINK:  Optional[str] = None
+    USERS_CANCEL           = False
+
+START_TIME = time.time()
+RATE_LIMIT: Dict[int, List[float]] = {}   # user_id -> [count, last_ts]
+MULTI_CLIENT               = False
+multi_clients: Dict[int, Client] = {}
+work_loads:    Dict[int, int]    = {}
+class_cache:   Dict[Client, Any] = {}
+BROADCAST_LOCK = asyncio.Lock()
+
+# PUBLIC_URL is mutable — cloudflare tunnel will rewrite it at runtime
+URL = PUBLIC_URL if PUBLIC_URL.endswith("/") else PUBLIC_URL + "/"
 
 
-def human_time(sec: float) -> str:
-    sec = int(max(0, sec))
-    h, r = divmod(sec, 3600)
-    m, s = divmod(r, 60)
-    if h:
-        return f"{h}h {m}m {s}s"
-    if m:
-        return f"{m}m {s}s"
-    return f"{s}s"
+# =========================================================================
+# 6.  HTTP -> HTTPS  (Cloudflare Quick Tunnel wrapper)
+# =========================================================================
+CF_BIN = os.path.join(os.getcwd(), "cloudflared")
 
 
-def bar(pct: float, width: int = 22) -> str:
-    pct = max(0.0, min(100.0, pct))
-    filled = int(width * pct / 100)
-    return "█" * filled + "░" * (width - filled)
+def _cloudflared_download_url() -> str:
+    system = platform.system().lower()
+    mach   = platform.machine().lower()
+    base   = "https://github.com/cloudflare/cloudflared/releases/latest/download/"
+    if system == "linux":
+        if "aarch64" in mach or "arm64" in mach:
+            return base + "cloudflared-linux-arm64"
+        if "arm" in mach:
+            return base + "cloudflared-linux-arm"
+        return base + "cloudflared-linux-amd64"
+    if system == "darwin":
+        return base + "cloudflared-darwin-amd64.tgz"
+    if system == "windows":
+        return base + "cloudflared-windows-amd64.exe"
+    return base + "cloudflared-linux-amd64"
 
 
-def progress_box(title: str, done: float, total: float, speed: float, eta: float) -> str:
-    """Professional monospace box (Telegram <pre> keeps it aligned)."""
-    pct = (done / total * 100) if total else 0
-    line = "─" * 30
-    body = (
-        f"┌{line}┐\n"
-        f"│ {title:<28} │\n"
-        f"├{line}┤\n"
-        f"│ [{bar(pct)}] {pct:5.1f}% │\n"
-        f"├{line}┤\n"
-        f"│ 📦 Size  : {human_size(done)} / {human_size(total)}\n"
-        f"│ 🚀 Speed : {human_size(speed)}/s\n"
-        f"│ ⏱  ETA   : {human_time(eta)}\n"
-        f"└{line}┘"
-    )
-    return f"<pre>{body}</pre>"
-
-
-# ═══════════════════════════════════════════════════════════════
-# Job state
-# ═══════════════════════════════════════════════════════════════
-@dataclass
-class Job:
-    url: str
-    formats: List[dict] = field(default_factory=list)
-    title: str = "video"
-    cancel: bool = False
-
-
-JOBS: Dict[str, Job] = {}
-USER_THUMB: Dict[int, str] = {}
-
-
-# ═══════════════════════════════════════════════════════════════
-# yt-dlp helpers
-# ═══════════════════════════════════════════════════════════════
-BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0 Safari/537.36"
-)
-
-
-def default_headers(url: str) -> Dict[str, str]:
-    ref = "https://www.dailymotion.com/" if "dailymotion" in url else ""
-    origin = "https://www.dailymotion.com" if "dailymotion" in url else ""
-    h = {
-        "User-Agent": BROWSER_UA,
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-    if ref:
-        h["Referer"] = ref
-    if origin:
-        h["Origin"] = origin
-    return h
-
-
-def build_ydl_opts(url: str, extra: Optional[dict] = None) -> dict:
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "nocheckcertificate": True,
-        "geo_bypass": True,
-        "retries": 20,
-        "fragment_retries": 20,
-        "concurrent_fragment_downloads": 8,
-        "http_headers": default_headers(url),
-    }
-    if extra:
-        opts.update(extra)
-    return opts
-
-
-def is_direct_manifest(url: str) -> bool:
-    u = url.lower().split("?", 1)[0]
-    return u.endswith(".m3u8") or u.endswith(".mpd") or "/manifest/" in u
-
-
-def http_get(url: str, headers: Dict[str, str], timeout: int = 20) -> bytes:
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
-
-
-def parse_m3u8_variants(manifest_text: str, base_url: str) -> List[dict]:
-    lines = manifest_text.splitlines()
-    variants: List[dict] = []
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith("#EXT-X-STREAM-INF"):
-            bw = 0
-            height = 0
-            m = re.search(r"BANDWIDTH=(\d+)", line)
-            if m:
-                bw = int(m.group(1))
-            m = re.search(r"RESOLUTION=\d+x(\d+)", line)
-            if m:
-                height = int(m.group(1))
-            j = i + 1
-            while j < len(lines) and (not lines[j].strip() or lines[j].startswith("#")):
-                j += 1
-            if j < len(lines):
-                sub = lines[j].strip()
-                full = urllib.parse.urljoin(base_url, sub)
-                variants.append({"height": height, "bandwidth": bw, "url": full})
-            i = j
-        i += 1
-    by_h: Dict[int, dict] = {}
-    for v in sorted(variants, key=lambda x: (x["height"], x["bandwidth"]), reverse=True):
-        by_h.setdefault(v["height"], v)
-    return sorted(by_h.values(), key=lambda x: x["height"], reverse=True)
-
-
-def probe_direct_manifest(url: str) -> dict:
-    """Fetch master HLS manifest directly (bypass yt-dlp extractors)."""
-    headers = default_headers(url)
-    raw = http_get(url, headers, timeout=20)
-    text = raw.decode("utf-8", errors="ignore")
-    if "#EXTM3U" not in text:
-        raise RuntimeError("Not a valid HLS manifest (no #EXTM3U)")
-
-    variants = parse_m3u8_variants(text, url)
-    if not variants:
-        variants = [{"height": 0, "bandwidth": 0, "url": url}]
-
-    formats = [{
-        "format_id": f"hls-{i}",
-        "height": v["height"],
-        "ext": "mp4",
-        "tbr": (v["bandwidth"] / 1000) if v["bandwidth"] else 0,
-        "filesize": 0,
-        "url": v["url"],
-    } for i, v in enumerate(variants)]
-
-    title = re.sub(r"[^\w\-]+", "_", urllib.parse.urlparse(url).path.split("/")[-1] or "video")[:60] or "video"
-    return {"title": title, "formats": formats, "_direct_hls": True}
-
-
-def probe_formats(url: str) -> dict:
-    if is_direct_manifest(url):
-        return probe_direct_manifest(url)
-    from yt_dlp import YoutubeDL
-    with YoutubeDL(build_ydl_opts(url)) as ydl:
-        return ydl.extract_info(url, download=False) or {}
-
-
-def dailymotion_fallback(url: str) -> Optional[str]:
-    m = re.search(r"/video/([A-Za-z0-9]+)", url)
-    return f"https://www.dailymotion.com/video/{m.group(1)}" if m else None
-
-
-def pick_quality_list(info: dict) -> List[dict]:
-    if info.get("_direct_hls"):
-        return info["formats"][:10]
-    out: List[dict] = []
-    for f in info.get("formats", []) or []:
-        if not f.get("url") or f.get("vcodec") == "none":
-            continue
-        out.append({
-            "format_id": f.get("format_id"),
-            "height": f.get("height") or 0,
-            "ext": f.get("ext") or "mp4",
-            "tbr": f.get("tbr") or 0,
-            "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
-            "url": f.get("url"),
-        })
-    by_h: Dict[int, dict] = {}
-    for f in sorted(out, key=lambda x: (x["height"], x["tbr"]), reverse=True):
-        by_h.setdefault(f["height"], f)
-    return sorted(by_h.values(), key=lambda x: x["height"], reverse=True)[:10]
-
-
-_hls_duration: Dict[str, float] = {}
-
-
-async def ffmpeg_download_hls(variant_url: str, referer: str, out_base: Path, on_progress, cancel_flag) -> Path:
-    """Download an HLS variant via ffmpeg → mp4 (stream copy, no re-encode)."""
-    headers_line = (
-        f"Referer: {referer}\r\n"
-        f"User-Agent: {BROWSER_UA}\r\n"
-        f"Origin: {referer.rstrip('/')}\r\n"
-    )
-    out_file = out_base.with_suffix(".mp4")
-    cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "info", "-nostdin", "-y",
-        "-headers", headers_line,
-        "-user_agent", BROWSER_UA,
-        "-referer", referer,
-        "-reconnect", "1", "-reconnect_streamed", "1",
-        "-reconnect_delay_max", "10",
-        "-i", variant_url,
-        "-c", "copy",
-        "-bsf:a", "aac_adtstoasc",
-        "-movflags", "+faststart",
-        "-progress", "pipe:1",
-        str(out_file),
-    ]
-    log.info("ffmpeg start: %s → %s", variant_url[:80], out_file.name)
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-    )
-
-    duration = [0.0]
-    tail: List[str] = []
-
-    async def pump_err():
-        assert proc.stderr is not None
-        while True:
-            line = await proc.stderr.readline()
-            if not line:
-                break
-            s = line.decode(errors="ignore").rstrip()
-            if "Duration:" in s and duration[0] == 0:
-                m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", s)
-                if m:
-                    duration[0] = int(m.group(1))*3600 + int(m.group(2))*60 + float(m.group(3))
-            tail.append(s)
-            if len(tail) > 60:
-                tail.pop(0)
-
-    err_task = asyncio.create_task(pump_err())
-
-    start = time.time()
-    last = 0.0
-    total_us = 0
-    assert proc.stdout is not None
+async def _ensure_cloudflared():
+    """Download cloudflared binary once if missing."""
+    if os.path.isfile(CF_BIN) and os.access(CF_BIN, os.X_OK):
+        return True
+    if shutil.which("cloudflared"):
+        # System already has it
+        return True
+    url = _cloudflared_download_url()
+    log.info(f"⏬ Downloading cloudflared -> {url}")
     try:
-        while True:
-            if cancel_flag():
-                proc.kill()
-                raise RuntimeError("Cancelled by user")
-            raw = await proc.stdout.readline()
-            if not raw:
-                break
-            line = raw.decode(errors="ignore").strip()
-            if line.startswith("out_time_us="):
-                try:
-                    total_us = int(line.split("=", 1)[1])
-                except ValueError:
-                    pass
-            elif line == "progress=end":
-                break
-            now = time.time()
-            if now - last >= 2.0:
-                last = now
-                secs = total_us / 1_000_000
-                done = out_file.stat().st_size if out_file.exists() else 0
-                pct_time = (secs / duration[0]) if duration[0] else 0
-                est_total = int(done / pct_time) if pct_time > 0.01 else 0
-                elapsed = max(0.001, now - start)
-                speed = done / elapsed
-                eta = (est_total - done) / speed if (est_total and speed) else 0
-                try:
-                    await on_progress(done, est_total, speed, eta)
-                except Exception:
-                    pass
-    finally:
-        rc = await proc.wait()
-        err_task.cancel()
-
-    if rc != 0 or not out_file.exists() or out_file.stat().st_size == 0:
-        raise RuntimeError(f"ffmpeg failed (rc={rc}):\n" + "\n".join(tail[-15:])[:800])
-    return out_file
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(url, timeout=aiohttp.ClientTimeout(total=180)) as r:
+                if r.status != 200:
+                    log.error(f"cloudflared download HTTP {r.status}")
+                    return False
+                with open(CF_BIN, "wb") as f:
+                    async for chunk in r.content.iter_chunked(1 << 16):
+                        f.write(chunk)
+        os.chmod(CF_BIN, 0o755)
+        log.info("✅ cloudflared downloaded")
+        return True
+    except Exception as e:
+        log.error(f"cloudflared download failed: {e}")
+        return False
 
 
-async def download_format(job: "Job", fmt: dict, out_base: Path, on_progress) -> Path:
-    # HLS variant → ffmpeg
-    if fmt.get("url") and (".m3u8" in fmt["url"] or "/manifest/" in fmt["url"]):
-        referer = "https://www.dailymotion.com/" if "dailymotion" in fmt["url"] else job.url
-        return await ffmpeg_download_hls(fmt["url"], referer, out_base, on_progress, lambda: job.cancel)
+async def start_https_tunnel(local_port: int) -> Optional[str]:
+    """
+    Launch `cloudflared tunnel --url http://localhost:PORT` and capture
+    the assigned https://<xxx>.trycloudflare.com URL from stderr.
+    Returns the URL (with trailing '/') or None on failure.
+    """
+    ok = await _ensure_cloudflared()
+    if not ok:
+        return None
+    bin_path = CF_BIN if os.path.isfile(CF_BIN) else "cloudflared"
+    args = [
+        bin_path, "tunnel",
+        "--no-autoupdate",
+        "--url", f"http://localhost:{local_port}",
+    ]
+    log.info(f"🚇 Starting Cloudflare Quick Tunnel ...")
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
 
-    from yt_dlp import YoutubeDL
-    loop = asyncio.get_running_loop()
-    last_call = [0.0]
+    async def _reader() -> Optional[str]:
+        pattern = re.compile(r"https://[a-z0-9\-]+\.trycloudflare\.com")
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            try:
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            if not line:
+                await asyncio.sleep(0.2)
+                continue
+            text = line.decode(errors="ignore").strip()
+            if text:
+                logging.getLogger("cloudflared").debug(text)
+            m = pattern.search(text)
+            if m:
+                return m.group(0)
+        return None
 
-    def hook(d: dict):
+    found = await _reader()
+
+    async def _drain():
         try:
-            if job.cancel:
-                raise Exception("Cancelled by user")
-            if d.get("status") == "downloading":
-                now = time.time()
-                if now - last_call[0] < 2.5:
-                    return
-                last_call[0] = now
-                done = float(d.get("downloaded_bytes") or 0)
-                total = float(d.get("total_bytes") or d.get("total_bytes_estimate") or 0)
-                speed = float(d.get("speed") or 0)
-                eta = float(d.get("eta") or 0)
-                asyncio.run_coroutine_threadsafe(on_progress(done, total, speed, eta), loop)
-        except Exception as e:
-            if "Cancelled" in str(e):
-                raise
-            log.warning("progress hook error: %s", e)
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+        except Exception:
+            pass
+    asyncio.create_task(_drain())
 
-    opts = build_ydl_opts(job.url, {
-        "format": fmt["format_id"],
-        "outtmpl": str(out_base.with_suffix(".%(ext)s")),
-        "merge_output_format": "mp4",
-        "progress_hooks": [hook],
+    if not found:
+        log.error("❌ Could not detect Cloudflare tunnel URL within 45s.")
+        return None
+    log.info(f"🔒 HTTPS tunnel live -> {found}")
+    return found.rstrip("/") + "/"
+
+
+async def maybe_upgrade_url_to_https():
+    """If PUBLIC_URL is plain HTTP, spawn Cloudflare tunnel and rewrite URL."""
+    global URL
+    if URL.lower().startswith("https://"):
+        log.info(f"🌐 PUBLIC_URL already HTTPS: {URL}")
+        return
+    log.info(f"🌐 PUBLIC_URL is HTTP ({URL}) — wrapping via Cloudflare ...")
+    https_url = await start_https_tunnel(PORT)
+    if https_url:
+        URL = https_url
+        log.info(f"✅ Runtime URL rewritten to HTTPS: {URL}")
+    else:
+        log.warning("⚠️  Keeping original HTTP URL (tunnel unavailable).")
+
+
+# =========================================================================
+# 7.  UTILITIES  (humanbytes / readable-time / size / shortener stub)
+# =========================================================================
+def humanbytes(size) -> str:
+    if not size:
+        return "0 B"
+    size = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} PB"
+
+get_size = humanbytes  # alias
+
+
+def get_readable_time(seconds: int) -> str:
+    if not seconds:
+        return "0s"
+    parts, units = [], [("d", 86400), ("h", 3600), ("m", 60), ("s", 1)]
+    for label, sec in units:
+        if seconds >= sec:
+            v, seconds = divmod(int(seconds), sec)
+            parts.append(f"{v}{label}")
+    return " ".join(parts) or "0s"
+
+
+async def get_shortlink(link: str) -> str:
+    """Optional shortener. Returns original link if not configured."""
+    if not (IS_SHORTLINK and SHORTLINK_API and SHORTLINK_URL):
+        return link
+    if not link.startswith("https"):
+        link = link.replace("http", "https", 1)
+    try:
+        req = f"https://{SHORTLINK_URL}/api"
+        async with aiohttp.ClientSession() as s:
+            async with s.get(req, params={"api": SHORTLINK_API, "url": link},
+                             ssl=False,
+                             timeout=aiohttp.ClientTimeout(total=10)) as r:
+                data = await r.json(content_type=None)
+                return data.get("shortenedUrl") or data.get("shortlink") or link
+    except Exception as e:
+        log.warning(f"shortener failed: {e}")
+        return link
+
+
+async def auto_delete_message(msg, delay: int = 600):
+    try:
+        await asyncio.sleep(delay)
+        await msg.delete()
+    except Exception:
+        pass
+
+
+def encode_batch(payload: str) -> str:
+    """base64-url-safe encode without padding (matches original decode())."""
+    return base64.urlsafe_b64encode(payload.encode()).decode().strip("=")
+
+
+def decode_batch(payload: str) -> str:
+    payload += "=" * (-len(payload) % 4)
+    try:
+        return base64.urlsafe_b64decode(payload).decode()
+    except Exception:
+        return ""
+
+
+# =========================================================================
+# 8.  DATABASE  (Motor / MongoDB)
+# =========================================================================
+class Database:
+    def __init__(self):
+        self.client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
+        self.db     = self.client[DATABASE_NAME]
+        self.users            = self.db.users
+        self.blocked_users    = self.db.blocked_users
+        self.blocked_channels = self.db.blocked_channels
+        self.files            = self.db.files
+        self.refers           = self.db.refers
+        self.protected_links  = self.db.protected_links
+
+    # ---- basic user store ----
+    async def add_user(self, uid: int, name: str):
+        if not await self.users.find_one({"id": int(uid)}):
+            await self.users.insert_one({"id": int(uid), "name": name})
+
+    async def is_user_exist(self, uid: int) -> bool:
+        return bool(await self.users.find_one({"id": int(uid)}))
+
+    async def total_users_count(self) -> int:
+        return await self.users.count_documents({})
+
+    async def get_all_users(self):
+        return self.users.find({})
+
+    async def delete_user(self, uid: int):
+        await self.users.delete_many({"id": int(uid)})
+
+    # ---- premium ----
+    async def update_user(self, data: dict):
+        await self.users.update_one({"id": data["id"]}, {"$set": data}, upsert=True)
+
+    async def get_user(self, uid: int):
+        return await self.users.find_one({"id": int(uid)})
+
+    async def has_premium_access(self, uid: int) -> bool:
+        u = await self.get_user(uid)
+        if not u:
+            return False
+        exp = u.get("expiry_time")
+        if not isinstance(exp, datetime):
+            return False
+        if datetime.now() <= exp:
+            return True
+        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        return False
+
+    async def remove_premium_access(self, uid: int) -> bool:
+        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        return True
+
+    async def all_premium_count(self) -> int:
+        return await self.users.count_documents({"expiry_time": {"$gt": datetime.now()}})
+
+    # ---- ban / unban users ----
+    async def is_user_blocked(self, uid: int) -> bool:
+        return bool(await self.blocked_users.find_one({"user_id": int(uid)}))
+
+    async def block_user(self, uid: int, reason: str = ""):
+        await self.blocked_users.update_one(
+            {"user_id": int(uid)},
+            {"$set": {"user_id": int(uid), "reason": reason,
+                      "blocked_at": datetime.utcnow()}},
+            upsert=True)
+
+    async def unblock_user(self, uid: int):
+        await self.blocked_users.delete_one({"user_id": int(uid)})
+
+    async def total_blocked_count(self) -> int:
+        return await self.blocked_users.count_documents({})
+
+    # ---- ban channels ----
+    async def is_channel_blocked(self, cid: int) -> bool:
+        return bool(await self.blocked_channels.find_one({"channel_id": int(cid)}))
+
+    async def block_channel(self, cid: int, reason: str = ""):
+        await self.blocked_channels.update_one(
+            {"channel_id": int(cid)},
+            {"$set": {"channel_id": int(cid), "reason": reason,
+                      "blocked_at": datetime.utcnow()}},
+            upsert=True)
+
+    async def unblock_channel(self, cid: int):
+        await self.blocked_channels.delete_one({"channel_id": int(cid)})
+
+    async def total_blocked_channels(self) -> int:
+        return await self.blocked_channels.count_documents({})
+
+    # ---- referral / points ----
+    async def get_refer_points(self, uid: int) -> int:
+        u = await self.refers.find_one({"user_id": int(uid)})
+        return u.get("points", 0) if u else 0
+
+    async def set_refer_points(self, uid: int, pts: int):
+        await self.refers.update_one({"user_id": int(uid)},
+                                     {"$set": {"points": pts}}, upsert=True)
+
+    async def change_points(self, uid: int, amount: int) -> int:
+        pts = max(0, await self.get_refer_points(uid) + amount)
+        await self.set_refer_points(uid, pts)
+        return pts
+
+    async def is_user_in_refer(self, uid: int) -> bool:
+        return bool(await self.refers.find_one({"user_id": int(uid)}))
+
+    # ---- protected links ----
+    async def add_protected_link(self, token, url, password, title, channel_link):
+        await self.protected_links.insert_one({
+            "token": token, "url": url, "password": password,
+            "title": title, "channel_link": channel_link})
+
+    async def get_protected_link(self, token):
+        return await self.protected_links.find_one({"token": token})
+
+    async def delete_protected_link(self, token) -> bool:
+        r = await self.protected_links.delete_one({"token": token})
+        return r.deleted_count > 0
+
+    async def get_link_by_url(self, url):
+        return await self.protected_links.find_one({"url": url})
+
+    async def update_protected_link(self, token, password, title, channel_link):
+        await self.protected_links.update_one(
+            {"token": token},
+            {"$set": {"password": password, "title": title,
+                      "channel_link": channel_link}})
+
+    async def get_all_protected_links(self):
+        return self.protected_links.find({})
+
+
+db = Database()
+
+
+# =========================================================================
+# 9.  FORCE-SUBSCRIBE HELPER
+# =========================================================================
+async def is_user_joined(client: Client, message: Message) -> bool:
+    """Returns True if user is member of every AUTH_CHANNEL."""
+    if not (FSUB and AUTH_CHANNEL):
+        return True
+    uid = message.from_user.id
+    if uid == ADMIN_ID:
+        return True
+    missing = []
+    for ch in AUTH_CHANNEL:
+        try:
+            m = await client.get_chat_member(ch, uid)
+            if m.status in (enums.ChatMemberStatus.LEFT,
+                            enums.ChatMemberStatus.BANNED):
+                missing.append(ch)
+        except UserNotParticipant:
+            missing.append(ch)
+        except Exception as e:
+            log.warning(f"FSUB check err {ch}: {e}")
+    if not missing:
+        return True
+    btns = []
+    for ch in missing:
+        try:
+            invite = await client.export_chat_invite_link(ch)
+        except Exception:
+            invite = CHANNEL_LINK
+        btns.append([InlineKeyboardButton("🔔 Join Channel", url=invite)])
+    btns.append([InlineKeyboardButton("♻️ Try Again", url=f"https://t.me/{temp.U_NAME}?start=start")])
+    await message.reply_text(
+        f"<b>ʜᴇʏ {message.from_user.mention}!\n\n"
+        f"ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴍᴇ 😊</b>",
+        reply_markup=InlineKeyboardMarkup(btns), quote=True)
+    return False
+
+
+# =========================================================================
+# 10.  FILE-RATE-LIMIT HELPER
+# =========================================================================
+async def is_user_allowed(uid: int):
+    if not ENABLE_LIMIT or uid == ADMIN_ID:
+        return True, 0
+    if await db.has_premium_access(uid):
+        return True, 0
+    now = time.time()
+    if uid in RATE_LIMIT:
+        cnt, ts = RATE_LIMIT[uid]
+        if cnt >= MAX_FILES and (now - ts) < RATE_LIMIT_TIMEOUT:
+            return False, int(RATE_LIMIT_TIMEOUT - (now - ts))
+        elif cnt >= MAX_FILES:
+            RATE_LIMIT[uid] = [1, now]
+        else:
+            RATE_LIMIT[uid][0] += 1
+    else:
+        RATE_LIMIT[uid] = [1, now]
+    return True, 0
+
+
+# =========================================================================
+# 11.  BYTE-STREAMER  (streams Telegram file bytes over HTTP with ranges)
+# =========================================================================
+class FileNotFound(Exception):
+    message = "File not found"
+
+
+class InvalidHash(Exception):
+    message = "Invalid hash"
+
+
+def _get_media(msg: Message):
+    for k in ("audio", "document", "photo", "sticker",
+              "animation", "video", "voice", "video_note"):
+        m = getattr(msg, k, None)
+        if m:
+            return m
+    return None
+
+
+def get_hash(msg: Message) -> str:
+    m = _get_media(msg)
+    return getattr(m, "file_unique_id", "")[:6]
+
+
+def get_name(msg: Message) -> str:
+    m = _get_media(msg)
+    return getattr(m, "file_name", "") or ""
+
+
+async def get_file_ids(client: Client, chat_id: int, msg_id: int) -> FileId:
+    msg = await client.get_messages(chat_id, msg_id)
+    if not msg or msg.empty:
+        raise FileNotFound
+    media = _get_media(msg)
+    if not media:
+        raise FileNotFound
+    fid = FileId.decode(media.file_id)
+    setattr(fid, "file_size", getattr(media, "file_size", 0))
+    setattr(fid, "mime_type", getattr(media, "mime_type", ""))
+    setattr(fid, "file_name", getattr(media, "file_name", ""))
+    setattr(fid, "unique_id", media.file_unique_id)
+    return fid
+
+
+class ByteStreamer:
+    def __init__(self, client: Client):
+        self.client = client
+        self.cached: Dict[int, FileId] = {}
+        self.clean_timer = 30 * 60
+        try:
+            asyncio.create_task(self._clean())
+        except RuntimeError:
+            pass
+
+    async def _clean(self):
+        while True:
+            await asyncio.sleep(self.clean_timer)
+            self.cached.clear()
+
+    async def get_file_properties(self, msg_id: int) -> FileId:
+        if msg_id not in self.cached:
+            self.cached[msg_id] = await get_file_ids(self.client, BIN_CHANNEL, msg_id)
+        return self.cached[msg_id]
+
+    async def _media_session(self, file_id: FileId) -> Session:
+        cl = self.client
+        sess = cl.media_sessions.get(file_id.dc_id)
+        if sess is not None:
+            return sess
+        if file_id.dc_id != await cl.storage.dc_id():
+            sess = Session(cl, file_id.dc_id,
+                           await Auth(cl, file_id.dc_id,
+                                      await cl.storage.test_mode()).create(),
+                           await cl.storage.test_mode(),
+                           is_media=True)
+            await sess.start()
+            for _ in range(6):
+                exp = await cl.invoke(
+                    raw.functions.auth.ExportAuthorization(dc_id=file_id.dc_id))
+                try:
+                    await sess.send(raw.functions.auth.ImportAuthorization(
+                        id=exp.id, bytes=exp.bytes))
+                    break
+                except AuthBytesInvalid:
+                    continue
+            else:
+                await sess.stop()
+                raise AuthBytesInvalid
+        else:
+            sess = Session(cl, file_id.dc_id,
+                           await cl.storage.auth_key(),
+                           await cl.storage.test_mode(),
+                           is_media=True)
+            await sess.start()
+        cl.media_sessions[file_id.dc_id] = sess
+        return sess
+
+    @staticmethod
+    async def _location(file_id: FileId):
+        t = file_id.file_type
+        if t == FileType.CHAT_PHOTO:
+            if file_id.chat_id > 0:
+                peer = raw.types.InputPeerUser(
+                    user_id=file_id.chat_id,
+                    access_hash=file_id.chat_access_hash)
+            else:
+                if file_id.chat_access_hash == 0:
+                    peer = raw.types.InputPeerChat(chat_id=-file_id.chat_id)
+                else:
+                    peer = raw.types.InputPeerChannel(
+                        channel_id=pyro_utils.get_channel_id(file_id.chat_id),
+                        access_hash=file_id.chat_access_hash)
+            return raw.types.InputPeerPhotoFileLocation(
+                peer=peer, volume_id=file_id.volume_id,
+                local_id=file_id.local_id,
+                big=file_id.thumbnail_source == ThumbnailSource.CHAT_PHOTO_BIG)
+        if t == FileType.PHOTO:
+            return raw.types.InputPhotoFileLocation(
+                id=file_id.media_id, access_hash=file_id.access_hash,
+                file_reference=file_id.file_reference,
+                thumb_size=file_id.thumbnail_size)
+        return raw.types.InputDocumentFileLocation(
+            id=file_id.media_id, access_hash=file_id.access_hash,
+            file_reference=file_id.file_reference,
+            thumb_size=file_id.thumbnail_size)
+
+    async def yield_file(self, file_id, index, offset,
+                         first_cut, last_cut, part_count, chunk_size):
+        work_loads[index] = work_loads.get(index, 0) + 1
+        current = 1
+        try:
+            sess = await self._media_session(file_id)
+            loc  = await self._location(file_id)
+            r = await sess.send(raw.functions.upload.GetFile(
+                location=loc, offset=offset, limit=chunk_size))
+            if isinstance(r, raw.types.upload.File):
+                while True:
+                    ch = r.bytes
+                    if not ch:
+                        break
+                    if part_count == 1:
+                        yield ch[first_cut:last_cut]
+                    elif current == 1:
+                        yield ch[first_cut:]
+                    elif current == part_count:
+                        yield ch[:last_cut]
+                    else:
+                        yield ch
+                    current += 1
+                    offset += chunk_size
+                    if current > part_count:
+                        break
+                    r = await sess.send(raw.functions.upload.GetFile(
+                        location=loc, offset=offset, limit=chunk_size))
+        except (TimeoutError, AttributeError) as e:
+            log.error(f"yield_file err: {e}")
+        except Exception as e:
+            log.error(f"yield_file unexpected: {e}")
+        finally:
+            work_loads[index] = max(0, work_loads.get(index, 1) - 1)
+
+
+# =========================================================================
+# 12.  AIOHTTP  ROUTES  (streaming + watch + protected links)
+# =========================================================================
+routes = web.RouteTableDef()
+
+
+HTML_WATCH = r"""<!doctype html>
+<html><head><meta charset="utf-8">
+<title>{name} · AV Watch</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{{margin:0;background:#0b0d10;color:#e6e9ef;font-family:system-ui,Segoe UI,Roboto,sans-serif}}
+  .wrap{{max-width:960px;margin:0 auto;padding:16px}}
+  h1{{font-size:1.05rem;margin:.4rem 0 .8rem}}
+  video,audio{{width:100%;background:#000;border-radius:10px}}
+  .row{{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}}
+  a.btn{{flex:1;text-align:center;padding:12px 14px;border-radius:10px;
+        background:#2b6cb0;color:#fff;text-decoration:none;font-weight:600}}
+  a.btn.alt{{background:#38a169}}
+  .meta{{opacity:.75;font-size:.9rem;margin-top:8px}}
+</style></head>
+<body><div class="wrap">
+  <h1>🎬 {name}</h1>
+  {player}
+  <div class="row">
+    <a class="btn"     href="{src}">⬇ Direct Download</a>
+    <a class="btn alt" href="{tglink}">📩 Get on Telegram</a>
+  </div>
+  <div class="meta">Size: {size} · Powered by AV FTL Bot</div>
+</div></body></html>"""
+
+
+HTML_PROTECTED = r"""<!doctype html>
+<html><head><meta charset="utf-8"><title>{title}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{{margin:0;background:#0b0d10;color:#e6e9ef;font-family:system-ui,sans-serif;
+       min-height:100vh;display:flex;align-items:center;justify-content:center}}
+  .card{{background:#161a20;padding:26px 22px;border-radius:14px;max-width:380px;width:92%}}
+  h2{{margin:0 0 10px}}
+  input{{width:100%;padding:12px;border-radius:8px;border:1px solid #2c313a;
+        background:#0f1216;color:#fff;font-size:1rem;box-sizing:border-box}}
+  button{{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;
+         background:#3182ce;color:#fff;font-size:1rem;font-weight:600;cursor:pointer}}
+  .err{{color:#fc8181;margin-top:8px}}
+  a{{color:#63b3ed}}
+</style></head>
+<body><form class="card" method="POST" action="/p/{token}">
+  <h2>🔒 {title}</h2>
+  <p>Enter password to continue.</p>
+  <input type="password" name="password" placeholder="6-digit password" required>
+  <button>Unlock</button>
+  {err_html}{ch_html}
+</form></body></html>"""
+
+
+@routes.get("/", allow_head=True)
+async def _root(_req):
+    return web.json_response({
+        "server_status": "running",
+        "uptime": get_readable_time(time.time() - START_TIME),
+        "bot": "@" + (temp.U_NAME or ""),
+        "connected_clients": len(multi_clients),
+        "public_url": URL,
+        "version": BOT_VERSION,
     })
 
-    def run() -> Path:
-        with YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(job.url, download=True)
-            filename = ydl.prepare_filename(info)
-            p = Path(filename)
-            mp4 = p.with_suffix(".mp4")
-            return mp4 if mp4.exists() else p
 
-    return await asyncio.to_thread(run)
+@routes.get(r"/p/{token}", allow_head=True)
+async def _protected_view(req: web.Request):
+    token = req.match_info["token"]
+    data = await db.get_protected_link(token)
+    if not data:
+        return web.Response(status=404, text="Link not found.")
+    ch = data.get("channel_link")
+    ch_html = f'<p style="margin-top:12px"><a href="{ch}">Get password</a></p>' if ch else ""
+    return web.Response(text=HTML_PROTECTED.format(
+        title=data.get("title", "Protected Link"),
+        token=token, err_html="", ch_html=ch_html),
+        content_type="text/html")
 
 
-# ═══════════════════════════════════════════════════════════════
-# Pyrogram client
-# ═══════════════════════════════════════════════════════════════
+@routes.post(r"/p/{token}")
+async def _protected_verify(req: web.Request):
+    token = req.match_info["token"]
+    form  = await req.post()
+    data  = await db.get_protected_link(token)
+    if not data:
+        return web.Response(status=404, text="Link invalid.")
+    if form.get("password") == data["password"]:
+        raise web.HTTPFound(data["url"])
+    ch = data.get("channel_link")
+    ch_html  = f'<p style="margin-top:12px"><a href="{ch}">Get password</a></p>' if ch else ""
+    err_html = '<div class="err">❌ Wrong password!</div>'
+    return web.Response(text=HTML_PROTECTED.format(
+        title=data.get("title", "Protected Link"),
+        token=token, err_html=err_html, ch_html=ch_html),
+        content_type="text/html")
+
+
+@routes.get(r"/watch/{path:.+}", allow_head=True)
+async def _watch(req: web.Request):
+    try:
+        path = req.match_info["path"]
+        m = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
+        if m:
+            secure_hash, msg_id = m.group(1), int(m.group(2))
+        else:
+            msg_id      = int(re.search(r"(\d+)", path).group(1))
+            secure_hash = req.rel_url.query.get("hash", "")
+        html = await _render_watch_page(msg_id, secure_hash)
+        return web.Response(text=html, content_type="text/html")
+    except InvalidHash as e:
+        raise web.HTTPForbidden(text=e.message)
+    except FileNotFound as e:
+        raise web.HTTPNotFound(text=e.message)
+    except (AttributeError, BadStatusLine, ConnectionResetError):
+        return web.Response(status=400, text="Bad request")
+    except Exception as e:
+        log.exception("watch err")
+        raise web.HTTPInternalServerError(text=str(e))
+
+
+@routes.get(r"/{path:.+}", allow_head=True)
+async def _stream(req: web.Request):
+    try:
+        path = req.match_info["path"]
+        m = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
+        if m:
+            secure_hash, msg_id = m.group(1), int(m.group(2))
+        else:
+            msg_id      = int(re.search(r"(\d+)", path).group(1))
+            secure_hash = req.rel_url.query.get("hash", "")
+        return await _media_streamer(req, msg_id, secure_hash)
+    except InvalidHash as e:
+        raise web.HTTPForbidden(text=e.message)
+    except FileNotFound as e:
+        raise web.HTTPNotFound(text=e.message)
+    except (AttributeError, BadStatusLine, ConnectionResetError):
+        return web.Response(status=400, text="Bad request")
+    except Exception as e:
+        log.exception("stream err")
+        raise web.HTTPInternalServerError(text=str(e))
+
+
+async def _render_watch_page(msg_id: int, secure_hash: str) -> str:
+    idx    = min(work_loads, key=work_loads.get)
+    client = multi_clients[idx]
+    fid    = await get_file_ids(client, BIN_CHANNEL, msg_id)
+    if fid.unique_id[:6] != secure_hash:
+        raise InvalidHash
+    raw_name = fid.file_name or f"File_{msg_id}"
+    name     = raw_name.replace("_", " ")
+    src      = urllib.parse.urljoin(
+        URL, f"{msg_id}/{urllib.parse.quote_plus(str(raw_name))}?hash={secure_hash}")
+    tag  = (fid.mime_type or "").split("/")[0]
+    size = humanbytes(fid.file_size)
+    if tag == "video":
+        player = f'<video controls playsinline preload="metadata" src="{src}"></video>'
+    elif tag == "audio":
+        player = f'<audio controls preload="metadata" src="{src}"></audio>'
+    else:
+        player = f'<p>Direct download only for this file type.</p>'
+    tglink = f"https://t.me/{temp.U_NAME}?start=file_{msg_id}"
+    return HTML_WATCH.format(name=name, player=player, src=src,
+                             tglink=tglink, size=size)
+
+
+async def _media_streamer(req: web.Request, msg_id: int, secure_hash: str):
+    range_header = req.headers.get("Range", 0)
+    idx = min(work_loads, key=work_loads.get)
+    fclient = multi_clients[idx]
+    tg = class_cache.get(fclient) or ByteStreamer(fclient)
+    class_cache[fclient] = tg
+    fid = await tg.get_file_properties(msg_id)
+    if fid.unique_id[:6] != secure_hash:
+        raise InvalidHash
+    file_size = fid.file_size
+
+    if range_header:
+        fr, un = range_header.replace("bytes=", "").split("-")
+        fr = int(fr); un = int(un) if un else file_size - 1
+    else:
+        fr = req.http_range.start or 0
+        un = (req.http_range.stop or file_size) - 1
+
+    if un > file_size or fr < 0 or un < fr:
+        return web.Response(status=416, body="416: Range not satisfiable",
+                            headers={"Content-Range": f"bytes */{file_size}"})
+
+    chunk = 1024 * 1024
+    un     = min(un, file_size - 1)
+    offset = fr - (fr % chunk)
+    fcut   = fr - offset
+    lcut   = un % chunk + 1
+    length = un - fr + 1
+    parts  = math.ceil(un / chunk) - math.floor(offset / chunk)
+    body   = tg.yield_file(fid, idx, offset, fcut, lcut, parts, chunk)
+
+    mime = fid.mime_type
+    name = fid.file_name
+    disp = "attachment"
+    if mime:
+        if not name:
+            try:
+                name = f"{secrets.token_hex(2)}.{mime.split('/')[1]}"
+            except Exception:
+                name = f"{secrets.token_hex(2)}.unknown"
+    else:
+        if name:
+            mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        else:
+            mime = "application/octet-stream"
+            name = f"{secrets.token_hex(2)}.unknown"
+
+    return web.Response(
+        status=206 if range_header else 200,
+        body=body,
+        headers={
+            "Content-Type":        mime,
+            "Content-Range":       f"bytes {fr}-{un}/{file_size}",
+            "Content-Length":      str(length),
+            "Content-Disposition": f'{disp}; filename="{name}"',
+            "Accept-Ranges":       "bytes",
+        })
+
+
+# =========================================================================
+# 13.  PYROGRAM  CLIENT
+# =========================================================================
+pyro_utils.MIN_CHANNEL_ID = -1009147483647  # allow big channel IDs
+
 app = Client(
-    name="rs_dl_bot",
-    api_id=API_ID,
-    api_hash=API_HASH,
+    name=BOT_SESSION,
+    api_id=API_ID, api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    workdir=str(WORK_DIR),
-    parse_mode=__import__("pyrogram").enums.ParseMode.HTML,
+    workers=50, sleep_threshold=60,
     in_memory=False,
 )
 
 
-async def safe_edit(msg: Message, text: str, reply_markup=None):
-    try:
-        await msg.edit_text(text, reply_markup=reply_markup, disable_web_page_preview=True)
-    except MessageNotModified:
-        pass
-    except FloodWait as e:
-        await asyncio.sleep(int(e.value) + 1)
-    except Exception as e:
-        log.warning("edit failed: %s", e)
-
-
-ADMIN_ONLY = filters.user(OWNER_ID) & filters.private
-
-
-@app.on_message(filters.command(["start", "help"]) & filters.private)
-async def cmd_start(_, m: Message):
-    log.info("/start from user %s (@%s)", m.from_user.id, m.from_user.username)
-    if m.from_user.id != OWNER_ID:
-        await m.reply_text(f"⛔ Private bot. Your id: <code>{m.from_user.id}</code>")
-        return
-    await m.reply_text(
-        "👋 <b>RS Downloader Bot</b>\n\n"
-        "যেকোনো direct video URL পাঠাও (MP4 / M3U8 / MPD / Dailymotion CDN…)।\n"
-        "Quality button আসবে — pick করলে download + upload হয়ে যাবে।\n\n"
-        "<b>Commands</b>\n"
-        "• /thumb — reply to a photo\n"
-        "• /clearthumb — thumbnail remove\n"
-        "• /cancel — running job বাতিল\n"
-    )
-
-
-@app.on_message(filters.command("clearthumb") & ADMIN_ONLY)
-async def cmd_clear_thumb(_, m: Message):
-    USER_THUMB.pop(m.from_user.id, None)
-    await m.reply_text("🗑 Thumbnail removed.")
-
-
-@app.on_message(filters.command("thumb") & ADMIN_ONLY)
-async def cmd_thumb(_, m: Message):
-    target = m.reply_to_message if m.reply_to_message and m.reply_to_message.photo else None
-    if not target:
-        await m.reply_text("একটা photo-এ reply করে /thumb পাঠাও।")
-        return
-    path = WORK_DIR / f"thumb_{m.from_user.id}.jpg"
-    await target.download(file_name=str(path))
-    USER_THUMB[m.from_user.id] = str(path)
-    await m.reply_text("✅ Thumbnail saved।")
-
-
-@app.on_message(filters.command("cancel") & ADMIN_ONLY)
-async def cmd_cancel(_, m: Message):
-    n = 0
-    for job in JOBS.values():
-        job.cancel = True
-        n += 1
-    await m.reply_text(f"🛑 Cancel flag set on {n} job(s).")
-
-
-URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
-
-
-@app.on_message(
-    filters.text & ADMIN_ONLY
-    & ~filters.command(["start", "help", "thumb", "clearthumb", "cancel"])
+# =========================================================================
+# 14.  HANDLERS  ·  /start  /help  /about  /stats  /ping  /restart
+# =========================================================================
+START_TXT = (
+    "<b>👋 ʜᴇʏ {name},</b>\n\n"
+    "<b>ɪ ᴀᴍ ᴛʜᴇ ᴜʟᴛɪᴍᴀᴛᴇ ꜰɪʟᴇ-ᴛᴏ-ʟɪɴᴋ ʙᴏᴛ! 🤖</b>\n\n"
+    "📂 sᴇɴᴅ ᴀɴʏ ꜰɪʟᴇ / ᴠɪᴅᴇᴏ ᴀɴᴅ ɢᴇᴛ ɪɴsᴛᴀɴᴛ:\n"
+    "  • 🚀 ʜɪɢʜ-sᴘᴇᴇᴅ ᴅᴏᴡɴʟᴏᴀᴅ ʟɪɴᴋ\n"
+    "  • 📺 ʜᴅ sᴛʀᴇᴀᴍɪɴɢ ʟɪɴᴋ\n"
+    "  • ⚡ ɴᴏ ʙᴜꜰꜰᴇʀɪɴɢ · ɴᴏ ᴀᴅs\n\n"
+    "<i>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴀs ᴀᴅᴍɪɴ ꜰᴏʀ ᴀᴜᴛᴏ-ʙᴜᴛᴛᴏɴs.</i>"
 )
-async def handle_url(_, m: Message):
-    match = URL_RE.search(m.text or "")
-    if not match:
-        return
-    url = match.group(0)
-    log.info("URL from %s: %s", m.from_user.id, url)
-    status = await m.reply_text("🔎 Probing URL…", quote=True)
 
-    info: dict = {}
-    error: Optional[str] = None
-    try:
-        info = await asyncio.to_thread(probe_formats, url)
-    except Exception as e:
-        error = str(e)
-        log.warning("probe failed: %s", error)
+HELP_TXT = (
+    "<b>⚙️ ʜᴏᴡ ᴛᴏ ᴜsᴇ</b>\n\n"
+    "1. sᴇɴᴅ ᴀ ꜰɪʟᴇ / ᴠɪᴅᴇᴏ ɪɴ ᴘʀɪᴠᴀᴛᴇ  →  ɢᴇᴛ ʟɪɴᴋ\n"
+    "2. ᴀᴅᴅ ᴍᴇ ᴀs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ  →  ᴀᴜᴛᴏ ʙᴜᴛᴛᴏɴs\n"
+    "3. ɪɴ ɢʀᴏᴜᴘ, /link ᴀs ʀᴇᴘʟʏ ᴛᴏ ᴀ ꜰɪʟᴇ\n\n"
+    "<b>ᴄᴏᴍᴍᴀɴᴅs</b>\n"
+    "/start · /help · /about · /myplan · /password [pw] [url] · /batch"
+)
 
-    if not info or not info.get("formats"):
-        fb = dailymotion_fallback(url)
-        if fb and fb != url:
-            log.info("Dailymotion page fallback: %s", fb)
-            try:
-                info = await asyncio.to_thread(probe_formats, fb)
-                url = fb
-            except Exception as e:
-                error = str(e)
-                log.error("fallback probe failed: %s", error)
-
-    if not info:
-        await safe_edit(status, f"❌ URL পড়া গেল না।\n<code>{(error or 'no info')[:300]}</code>")
-        return
-
-    fmts = pick_quality_list(info)
-    if not fmts:
-        fmts = [{"format_id": "best", "height": 0, "ext": "mp4", "tbr": 0, "filesize": 0}]
-
-    jid = uuid.uuid4().hex[:8]
-    JOBS[jid] = Job(url=url, formats=fmts, title=(info.get("title") or "video")[:80])
-
-    buttons, row = [], []
-    for idx, f in enumerate(fmts):
-        label = f"{f['height']}p" if f["height"] else "Best"
-        if f["filesize"]:
-            label += f" • {human_size(f['filesize'])}"
-        row.append(InlineKeyboardButton(label, callback_data=f"dl|{jid}|{idx}"))
-        if len(row) == 2:
-            buttons.append(row); row = []
-    if row:
-        buttons.append(row)
-    buttons.append([InlineKeyboardButton("❌ Cancel", callback_data=f"x|{jid}")])
-
-    await safe_edit(
-        status,
-        f"🎬 <b>{JOBS[jid].title}</b>\n\nQuality select করো:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
+ABOUT_TXT = (
+    "<b>╔══❰ {n} ❱\n"
+    "║ ᴠᴇʀꜱɪᴏɴ  : {v}\n"
+    "║ ʟɪʙʀᴀʀʏ  : Pyrogram v{pv}\n"
+    "║ ᴜᴘᴛɪᴍᴇ   : {up}\n"
+    "║ ᴏᴡɴᴇʀ    : @{ow}\n"
+    "╚══════════════════</b>"
+)
 
 
-@app.on_callback_query(filters.user(OWNER_ID))
-async def on_cb(_, cq: CallbackQuery):
-    data = cq.data or ""
-    parts = data.split("|")
-    action = parts[0]
+def _home_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("• ᴜᴘᴅᴀᴛᴇs •", url=CHANNEL_LINK),
+         InlineKeyboardButton("• sᴜᴘᴘᴏʀᴛ •", url=SUPPORT_LINK)],
+        [InlineKeyboardButton("• ʜᴇʟᴘ •",  callback_data="help"),
+         InlineKeyboardButton("• ᴀʙᴏᴜᴛ •", callback_data="about")],
+        [InlineKeyboardButton("💎 ʙᴜʏ ᴘʀᴇᴍɪᴜᴍ", callback_data="premium_info")],
+        [InlineKeyboardButton("🎁 ʀᴇꜰᴇʀ & ᴇᴀʀɴ", callback_data="refer")],
+    ])
 
-    if action == "x" and len(parts) >= 2:
-        job = JOBS.get(parts[1])
-        if job:
-            job.cancel = True
-        await cq.answer("Cancelled.")
-        await safe_edit(cq.message, "🛑 Cancelled.")
-        return
 
-    if action != "dl" or len(parts) < 3:
-        await cq.answer(); return
+@app.on_message(filters.command("start") & filters.incoming)
+async def h_start(client: Client, message: Message):
+    uid  = message.from_user.id
+    name = message.from_user.first_name
+    argv = message.command[1] if len(message.command) > 1 else None
 
-    jid, idx = parts[1], int(parts[2])
-    job = JOBS.get(jid)
-    if not job:
-        await cq.answer("Session expired. আবার URL পাঠাও।", show_alert=True)
-        return
-    if idx >= len(job.formats):
-        await cq.answer("Bad selection."); return
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        return await message.reply_text("🚧 ʙᴏᴛ ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ")
 
-    fmt = job.formats[idx]
-    await cq.answer(f"Starting {fmt['height'] or 'best'}p…")
+    if await db.is_user_blocked(uid):
+        return await message.reply_text("🚫 ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.")
 
-    status = cq.message
-    tmpdir = WORK_DIR / jid
-    tmpdir.mkdir(parents=True, exist_ok=True)
-    out_base = tmpdir / re.sub(r"[^\w\- ]+", "_", job.title)[:60]
-
-    async def on_dl_progress(done, total, speed, eta):
-        await safe_edit(status, progress_box("⬇️  DOWNLOADING", done, total, speed, eta))
-
-    try:
-        await safe_edit(status, "⏳ Starting download…")
-        file_path = await download_format(job, fmt, out_base, on_dl_progress)
-        size = file_path.stat().st_size
-        log.info("downloaded: %s (%s)", file_path, human_size(size))
-
-        # ── Publish file over HTTP first (works even if > 2 GB) ──
-        public_link = publish_public_file(file_path)
-        if public_link:
-            log.info("public link: %s", public_link)
-
-        if size > MAX_UPLOAD_BYTES:
-            msg = (
-                f"⚠️ File {human_size(size)} — Telegram bot upload cap (~1.95 GB) ছাড়িয়েছে।\n"
-                "কিন্তু public streaming link ready:\n"
-                f"🔗 <code>{public_link}</code>" if public_link else
-                f"⚠️ File {human_size(size)} — bot upload cap ছাড়িয়েছে।"
-            )
-            await safe_edit(status, msg)
+    is_referral = argv and argv.startswith("reff_")
+    if FSUB and not is_referral:
+        if not await is_user_joined(client, message):
             return
 
-        start = time.time()
-        last = [0.0]
+    fresh = not await db.is_user_exist(uid)
+    if fresh:
+        await db.add_user(uid, name)
+        try:
+            await client.send_message(
+                LOG_CHANNEL,
+                f"<b>#NEW_USER</b>\nID: <code>{uid}</code>\nName: {message.from_user.mention}")
+        except Exception:
+            pass
 
-        async def up_progress(cur, tot):
-            now = time.time()
-            if now - last[0] < 2.5 and cur < tot:
+    # --- referral deep-link ---
+    if is_referral:
+        try:
+            inviter_id = int(argv.split("_", 1)[1])
+        except Exception:
+            return await message.reply_text("Invalid refer link.")
+        if inviter_id == uid or not fresh:
+            return await message.reply_text("Refer link cannot be used.")
+        if await db.is_user_in_refer(uid):
+            return await message.reply_text("Already invited.")
+        pts_new = await db.change_points(inviter_id, 10)
+        await db.set_refer_points(uid, 0)   # mark presence
+        try:
+            await client.send_message(
+                inviter_id,
+                f"✈️ New Referral!\n{message.from_user.mention} joined.\n"
+                f"➕10  ·  Total: {pts_new}")
+        except Exception:
+            pass
+        if pts_new >= 100:
+            await db.set_refer_points(inviter_id, 0)
+            exp = datetime.now() + timedelta(days=30)
+            await db.update_user({"id": inviter_id, "expiry_time": exp})
+            try:
+                await client.send_message(
+                    inviter_id,
+                    "🎉 100 points reached — 1 Month Premium activated!")
+            except Exception:
+                pass
+        return await message.reply_text(
+            f"You joined via {inviter_id}'s referral link 🎁")
+
+    # --- file / batch deep-link ---
+    if argv and argv.startswith("file_"):
+        try:
+            fid = int(argv.split("_", 1)[1])
+        except Exception:
+            return await message.reply_text("Invalid file link.")
+        try:
+            await client.copy_message(uid, BIN_CHANNEL, fid)
+        except Exception as e:
+            return await message.reply_text(f"❌ {e}")
+        return
+
+    if argv and argv != "start":
+        payload = decode_batch(argv)
+        if payload.startswith("batch-"):
+            try:
+                _, s, e = payload.split("-")
+                s, e = int(s), int(e)
+            except Exception:
                 return
-            last[0] = now
-            elapsed = max(0.001, now - start)
-            speed = cur / elapsed
-            eta = (tot - cur) / speed if speed else 0
-            await safe_edit(status, progress_box("⬆️  UPLOADING", cur, tot, speed, eta))
+            if e - s > BATCH_LIMIT:
+                return await message.reply_text(f"Batch limit is {BATCH_LIMIT} files")
+            status = await message.reply_text("🔄 Sending batch...")
+            sent = 0
+            for i in range(s, e + 1):
+                try:
+                    await client.copy_message(uid, BIN_CHANNEL, i)
+                    sent += 1
+                    await asyncio.sleep(1)
+                except FloodWait as fw:
+                    await asyncio.sleep(fw.value + 1)
+                except Exception:
+                    pass
+            await status.edit(f"✅ Sent {sent}/{e - s + 1} files.")
+            return
 
-        thumb = USER_THUMB.get(cq.from_user.id)
-        caption = f"🎬 <b>{job.title}</b>\n📐 {fmt['height'] or '?'}p • 💾 {human_size(size)}"
-        if public_link:
-            caption += f"\n🔗 <a href=\"{public_link}\">Public stream URL</a>"
-
-        await cq.message.reply_video(
-            video=str(file_path),
-            caption=caption,
-            thumb=thumb if thumb and os.path.exists(thumb) else None,
-            supports_streaming=True,
-            progress=up_progress,
-        )
-        done_msg = f"✅ <b>Done</b>\n{caption}"
-        if public_link:
-            done_msg += f"\n\n<b>Direct link (streamable):</b>\n<code>{public_link}</code>"
-        await safe_edit(status, done_msg)
-        log.info("upload complete: %s", jid)
-    except Exception as e:
-        log.error("Job %s failed:\n%s", jid, traceback.format_exc())
-        await safe_edit(status, f"❌ <b>Failed</b>\n<code>{str(e)[:500]}</code>")
-    finally:
-        JOBS.pop(jid, None)
-        # Note: we DO NOT delete tmpdir here anymore because the file was
-        # moved into PUBLIC_DIR by publish_public_file(). The tmpdir will
-        # only contain leftover fragments, safe to clean.
-        try: shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception: pass
+    # --- default welcome ---
+    await message.reply_text(
+        START_TXT.format(name=message.from_user.mention),
+        reply_markup=_home_kb(), disable_web_page_preview=True)
 
 
-# ═══════════════════════════════════════════════════════════════
-# HTTP FILE SERVER  (Railway/VPS-এর public HTTPS domain-এই কাজ করবে)
-# ═══════════════════════════════════════════════════════════════
-# Railway আপনাকে যে domain দেয় (rsstreambot-production.up.railway.app),
-# সেটাই "public IP"-এর কাজ করে। TCP proxy লাগে না, raw IPv4 লাগে না।
-# এই server port $PORT-এ bind করে; Railway automatic HTTPS termination করে।
-# ═══════════════════════════════════════════════════════════════
+@app.on_message(filters.command("help"))
+async def h_help(_c, m: Message):
+    await m.reply_text(HELP_TXT, reply_markup=InlineKeyboardMarkup(
+        [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
-def publish_public_file(src: Path) -> str:
-    """Move file into PUBLIC_DIR/<token>/ and return its public URL."""
+
+@app.on_message(filters.command("about"))
+async def h_about(_c, m: Message):
+    await m.reply_text(ABOUT_TXT.format(
+        n=temp.B_NAME, v=BOT_VERSION, pv=pyro_ver,
+        up=get_readable_time(time.time() - START_TIME),
+        ow=OWNER_USERNAME),
+        reply_markup=InlineKeyboardMarkup(
+        [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
+
+
+@app.on_message(filters.command("ping"))
+async def h_ping(_c, m: Message):
+    t = time.time()
+    r = await m.reply_text("pinging...")
+    await r.edit(f"🏓 Pong! `{round((time.time()-t)*1000)}ms`")
+
+
+@app.on_message(filters.command("stats") & filters.user(ADMIN_ID))
+async def h_stats(client: Client, m: Message):
+    tu = await db.total_users_count()
+    tp = await db.all_premium_count()
+    tb = await db.total_blocked_count()
+    tc = await db.total_blocked_channels()
+    tf = await db.files.count_documents({})
+    tl = await db.protected_links.count_documents({})
+    await m.reply_text(
+        f"<b>📊 sᴛᴀᴛs</b>\n\n"
+        f"👥 ᴜsᴇʀs        : <code>{tu}</code>\n"
+        f"💎 ᴘʀᴇᴍɪᴜᴍ    : <code>{tp}</code>\n"
+        f"🚫 ʙʟᴏᴄᴋᴇᴅ    : <code>{tb}</code>\n"
+        f"🚷 ʙʟᴏᴄᴋ ᴄʜ  : <code>{tc}</code>\n"
+        f"📁 ꜰɪʟᴇs        : <code>{tf}</code>\n"
+        f"🔒 ᴘʀᴏᴛᴇᴄᴛᴇᴅ : <code>{tl}</code>\n"
+        f"🌐 ᴜʀʟ         : <code>{URL}</code>\n"
+        f"⏰ ᴜᴘᴛɪᴍᴇ    : <code>{get_readable_time(time.time()-START_TIME)}</code>")
+
+
+@app.on_message(filters.command("restart") & filters.user(ADMIN_ID))
+async def h_restart(_c, m: Message):
+    await m.reply_text("♻️ Restarting...")
+    os.execv(sys.executable, [sys.executable, *sys.argv])
+
+
+# =========================================================================
+# 15.  HANDLERS  ·  BAN / UNBAN  &  BROADCAST
+# =========================================================================
+@app.on_message(filters.command("ban") & filters.user(ADMIN_ID))
+async def h_ban(_c, m: Message):
+    if len(m.command) < 2:
+        return await m.reply_text("Usage: /ban <user_id> [reason]")
     try:
-        token = uuid.uuid4().hex[:12]
-        dest_dir = PUBLIC_DIR / token
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        # sanitize filename
-        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", src.name) or "video.mp4"
-        dest = dest_dir / safe
-        shutil.move(str(src), str(dest))
-        if not PUBLIC_URL:
-            return ""
-        return f"{PUBLIC_URL.rstrip('/')}/f/{token}/{urllib.parse.quote(safe)}"
+        uid = int(m.command[1])
+    except ValueError:
+        return await m.reply_text("Invalid ID.")
+    reason = " ".join(m.command[2:]) or "No reason"
+    await db.block_user(uid, reason)
+    await m.reply_text(f"✅ Banned <code>{uid}</code>\nReason: {reason}")
+
+
+@app.on_message(filters.command("unban") & filters.user(ADMIN_ID))
+async def h_unban(_c, m: Message):
+    if len(m.command) < 2:
+        return await m.reply_text("Usage: /unban <user_id>")
+    try:
+        uid = int(m.command[1])
+    except ValueError:
+        return await m.reply_text("Invalid ID.")
+    await db.unblock_user(uid)
+    await m.reply_text(f"✅ Unbanned <code>{uid}</code>")
+
+
+@app.on_message(filters.command("blocked") & filters.user(ADMIN_ID))
+async def h_blocked(_c, m: Message):
+    cur = await db.blocked_users.find({}).to_list(length=None)
+    if not cur:
+        return await m.reply_text("No blocked users.")
+    txt = "\n".join(f"• <code>{u['user_id']}</code> — {u.get('reason','')}" for u in cur[:50])
+    await m.reply_text(f"<b>Blocked ({len(cur)}):</b>\n{txt}")
+
+
+async def _broadcast_worker(client, message, is_pin):
+    if BROADCAST_LOCK.locked():
+        return await message.reply("A broadcast is already running.")
+    users = await db.get_all_users()
+    total = await db.total_users_count()
+    src   = message.reply_to_message
+    sts   = await message.reply_text("<b>📢 Broadcasting…</b>")
+    ok = fail = done = 0
+    t0 = time.time()
+    async with BROADCAST_LOCK:
+        async for u in users:
+            if temp.USERS_CANCEL:
+                temp.USERS_CANCEL = False
+                break
+            try:
+                sent = await src.copy(chat_id=int(u["id"]))
+                if is_pin:
+                    try: await sent.pin(both_sides=True)
+                    except: pass
+                ok += 1
+            except FloodWait as fw:
+                await asyncio.sleep(fw.value)
+                continue
+            except (InputUserDeactivated, UserIsBlocked, PeerIdInvalid):
+                await db.delete_user(int(u["id"]))
+                fail += 1
+            except Exception:
+                fail += 1
+            done += 1
+            if done % 25 == 0:
+                try:
+                    await sts.edit(
+                        f"📢 <b>Broadcast</b>\nTotal: {total}\nDone: {done}\nOK: {ok}\nFail: {fail}",
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("CANCEL", callback_data="bcast_cancel")]]))
+                except Exception:
+                    pass
+    await sts.edit(
+        f"✅ <b>Broadcast complete</b>\n\n"
+        f"Total: {total}\nDone: {done}\n✅ OK: {ok}\n❌ Failed: {fail}\n"
+        f"⏱ {get_readable_time(int(time.time()-t0))}")
+
+
+@app.on_message(filters.command("broadcast") & filters.user(ADMIN_ID) & filters.reply)
+async def h_broadcast(c, m):        await _broadcast_worker(c, m, False)
+
+
+@app.on_message(filters.command("pin_broadcast") & filters.user(ADMIN_ID) & filters.reply)
+async def h_pin_broadcast(c, m):    await _broadcast_worker(c, m, True)
+
+
+# =========================================================================
+# 16.  HANDLERS  ·  PREMIUM
+# =========================================================================
+def _parse_duration(text: str) -> int:
+    """
+    Accepts pairs like '1 day' '3 month' '2 year' '30 min' '5 hour'
+    Returns seconds. 0 on failure.
+    """
+    try:
+        n, unit = text.strip().split()
+        n = int(n); unit = unit.lower().rstrip("s")
+    except Exception:
+        return 0
+    return {"min": 60, "hour": 3600, "day": 86400,
+            "month": 2592000, "year": 31536000}.get(unit, 0) * n
+
+
+@app.on_message(filters.command("add_premium") & filters.user(ADMIN_ID))
+async def h_add_premium(client, m: Message):
+    # /add_premium <user_id> <n> <unit>
+    if len(m.command) != 4:
+        return await m.reply_text(
+            "Usage: /add_premium <user_id> <n> <min|hour|day|month|year>")
+    try:
+        uid = int(m.command[1])
+    except Exception:
+        return await m.reply_text("Invalid user id.")
+    secs = _parse_duration(f"{m.command[2]} {m.command[3]}")
+    if secs <= 0:
+        return await m.reply_text("Invalid duration.")
+    exp = datetime.now() + timedelta(seconds=secs)
+    await db.update_user({"id": uid, "expiry_time": exp})
+    tz = pytz.timezone(TIMEZONE)
+    await m.reply_text(
+        f"✅ Premium added\nID: <code>{uid}</code>\n"
+        f"Expires: <code>{exp.astimezone(tz).strftime('%d-%m-%Y %I:%M %p')}</code>")
+    try:
+        await client.send_message(uid, f"🎉 You got Premium until {exp.strftime('%d-%m-%Y')}!")
+    except Exception:
+        pass
+    try:
+        await client.send_message(
+            PREMIUM_LOGS,
+            f"#PREMIUM_ADDED\nID: <code>{uid}</code>\nExpires: {exp}")
+    except Exception:
+        pass
+
+
+@app.on_message(filters.command("remove_premium") & filters.user(ADMIN_ID))
+async def h_rm_premium(client, m: Message):
+    if len(m.command) != 2:
+        return await m.reply_text("Usage: /remove_premium <user_id>")
+    try:
+        uid = int(m.command[1])
+    except Exception:
+        return await m.reply_text("Invalid id.")
+    await db.remove_premium_access(uid)
+    await m.reply_text("✅ Premium removed.")
+    try:
+        await client.send_message(uid, "😕 Your premium access was removed.")
+    except Exception:
+        pass
+
+
+@app.on_message(filters.command("myplan"))
+async def h_myplan(_c, m: Message):
+    u = await db.get_user(m.from_user.id)
+    exp = (u or {}).get("expiry_time")
+    if isinstance(exp, datetime) and datetime.now() <= exp:
+        tz = pytz.timezone(TIMEZONE)
+        left = exp - datetime.now()
+        await m.reply_text(
+            f"💎 <b>Premium Active</b>\n"
+            f"Expires: <code>{exp.astimezone(tz).strftime('%d-%m-%Y %I:%M %p')}</code>\n"
+            f"Left: <code>{get_readable_time(int(left.total_seconds()))}</code>")
+    else:
+        await m.reply_text("😕 You are not a premium user.")
+
+
+# =========================================================================
+# 17.  HANDLERS  ·  PASSWORD-PROTECTED LINK
+# =========================================================================
+@app.on_message(filters.command("password") & filters.private)
+async def h_password(client, m: Message):
+    try:
+        parts = m.text.split(None, 2)
+        if len(parts) < 3:
+            return await m.reply_text(
+                "❌ Format: /password <6-char-pass> <url>[|title[|channel_link]]")
+        pw = parts[1]
+        if len(pw) != 6:
+            return await m.reply_text("Password must be exactly 6 characters.")
+        raw = parts[2].split("|")
+        url          = raw[0].strip()
+        title        = raw[1].strip() if len(raw) > 1 else "Protected Link"
+        channel_link = raw[2].strip() if len(raw) > 2 else None
+
+        exist = await db.get_link_by_url(url)
+        if exist:
+            token = exist["token"]
+            await db.update_protected_link(token, pw, title, channel_link)
+            action = "Updated"
+        else:
+            token = secrets.token_urlsafe(8)
+            await db.add_protected_link(token, url, pw, title, channel_link)
+            action = "Created"
+        base = URL if URL.endswith("/") else URL + "/"
+        short = f"{base}p/{token}"
+        await m.reply_text(
+            f"🔒 <b>Password Link {action}</b>\n\n"
+            f"Password : <code>{pw}</code>\n"
+            f"Title    : {title}\n"
+            f"Link     : {short}",
+            disable_web_page_preview=True)
     except Exception as e:
-        log.warning("publish_public_file failed: %s", e)
-        return ""
+        await m.reply_text(f"❌ {e}")
 
 
-async def http_health(_req: web.Request) -> web.Response:
-    return web.json_response({
-        "ok": True,
-        "service": "rs-downloader-bot",
-        "public_url": PUBLIC_URL or None,
-        "port": HTTP_PORT,
-    })
+@app.on_message(filters.command("delete_pass") & filters.user(ADMIN_ID) & filters.private)
+async def h_delpass(_c, m: Message):
+    if len(m.command) < 2:
+        return await m.reply_text("Usage: /delete_pass <token-or-full-link>")
+    inp = m.command[1]
+    token = inp.split("/p/")[-1].split("?")[0] if "/p/" in inp else inp.strip()
+    ok = await db.delete_protected_link(token)
+    await m.reply_text("✅ Deleted." if ok else "❌ Token not found.")
 
 
-async def http_serve_file(req: web.Request) -> web.StreamResponse:
-    token = req.match_info["token"]
-    name  = req.match_info["name"]
-    # prevent traversal
-    if "/" in token or ".." in token or "/" in name or ".." in name:
-        raise web.HTTPForbidden()
-    fp = PUBLIC_DIR / token / name
-    if not fp.is_file():
-        raise web.HTTPNotFound()
-    # aiohttp FileResponse handles Range requests → streamable in Telegram/VLC/browsers.
-    resp = web.FileResponse(path=fp, chunk_size=256 * 1024)
-    resp.headers["Cache-Control"] = "public, max-age=3600"
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    return resp
+# =========================================================================
+# 18.  HANDLERS  ·  PRIVATE FILES  →  GENERATE LINK
+# =========================================================================
+FILE_CAPTION_TXT = (
+    "<i><u>ʏᴏᴜʀ ʟɪɴᴋ ɢᴇɴᴇʀᴀᴛᴇᴅ !</u></i>\n\n"
+    "<b>📧 ꜰɪʟᴇ ɴᴀᴍᴇ :</b> <i><a href=\"{s}\">{n}</a></i>\n"
+    "<b>📦 ꜰɪʟᴇ sɪᴢᴇ :</b> <i>{sz}</i>\n\n"
+    "<b>🖥 sᴛʀᴇᴀᴍ  :</b> <code>{s}</code>\n"
+    "<b>📥 ᴅᴏᴡɴʟᴏᴀᴅ :</b> <code>{d}</code>\n\n"
+    "<b>🚸 ɴᴏᴛᴇ : ʟɪɴᴋ ᴡᴏɴ'ᴛ ᴇxᴘɪʀᴇ ᴛɪʟʟ ɪ ᴅᴇʟᴇᴛᴇ 🤡</b>"
+)
 
 
-def build_http_app() -> web.Application:
-    a = web.Application(client_max_size=1024 ** 3)
-    a.router.add_get("/",         http_health)
-    a.router.add_get("/health",   http_health)
-    a.router.add_get("/f/{token}/{name}", http_serve_file)
-    a.router.add_head("/f/{token}/{name}", http_serve_file)
-    return a
+@app.on_message(filters.private & (filters.document | filters.video | filters.audio), group=4)
+async def h_file_private(client: Client, m: Message):
+    uid = m.from_user.id
+    if MAINTENANCE_MODE and uid != ADMIN_ID:
+        return await m.reply_text("🚧 Maintenance mode.")
+    if await db.is_user_blocked(uid):
+        return await m.reply_text("🚫 You are banned.")
+    if FSUB and not await is_user_joined(client, m):
+        return
+    ok, wait = await is_user_allowed(uid)
+    if not ok:
+        return await m.reply_text(
+            f"🚫 You have sent {MAX_FILES} files. Please try after "
+            f"<b>{wait}s</b>.", quote=True)
+
+    media = m.document or m.video or m.audio
+    fname = media.file_name or f"AV_{int(time.time())}"
+    fsize = humanbytes(media.file_size)
+
+    try:
+        fwd = await m.forward(chat_id=BIN_CHANNEL)
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
+        fwd = await m.forward(chat_id=BIN_CHANNEL)
+
+    h = get_hash(fwd)
+    stream   = f"{URL}watch/{fwd.id}/{urllib.parse.quote_plus(fname)}?hash={h}"
+    download = f"{URL}{fwd.id}?hash={h}"
+    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{fwd.id}"
+
+    if IS_SHORTLINK:
+        stream, download, tglink = await asyncio.gather(
+            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+
+    try:
+        await db.files.insert_one({
+            "user_id": uid, "file_name": fname, "file_size": fsize,
+            "file_id": fwd.id, "hash": h, "timestamp": time.time()})
+    except Exception:
+        pass
+
+    await fwd.reply_text(
+        f"Requested by: {m.from_user.mention} (<code>{uid}</code>)\n"
+        f"Stream: {stream}", quote=True, disable_web_page_preview=True)
+
+    await m.reply_text(
+        FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download),
+        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
+             InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
+            [InlineKeyboardButton("• ɢᴇᴛ ꜰɪʟᴇ •", url=tglink),
+             InlineKeyboardButton("• ᴅᴇʟᴇᴛᴇ •", callback_data=f"delfile_{fwd.id}")],
+            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
 
-# ═══════════════════════════════════════════════════════════════
-# Startup — Bot + HTTP server একসাথে চলবে
-# ═══════════════════════════════════════════════════════════════
-async def main() -> None:
-    log.info("🚀 Starting RS Downloader Bot")
-    log.info("   owner      = %s", OWNER_ID)
-    log.info("   workdir    = %s", WORK_DIR)
-    log.info("   public dir = %s", PUBLIC_DIR)
-    log.info("   http port  = %s", HTTP_PORT)
-    log.info("   public URL = %s", PUBLIC_URL or "(not set — public links disabled)")
+# =========================================================================
+# 19.  HANDLERS  ·  CHANNEL AUTO-BUTTONS
+# =========================================================================
+@app.on_message(filters.channel & (filters.document | filters.video) & ~filters.forwarded, group=-1)
+async def h_file_channel(client: Client, m: Message):
+    try:
+        cid = m.chat.id
+        if str(cid).startswith("-100") and await db.is_channel_blocked(cid):
+            try: await client.leave_chat(cid)
+            except: pass
+            return
+        media = m.document or m.video
+        fname = media.file_name if media else f"File_{m.id}"
+        fwd = await m.forward(chat_id=BIN_CHANNEL)
+        h   = get_hash(fwd)
+        stream   = f"{URL}watch/{fwd.id}/{urllib.parse.quote_plus(fname)}?hash={h}"
+        download = f"{URL}{fwd.id}?hash={h}"
+        tglink   = f"https://t.me/{temp.U_NAME}?start=file_{fwd.id}"
+        if IS_SHORTLINK:
+            stream, download, tglink = await asyncio.gather(
+                get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+        try:
+            await client.edit_message_reply_markup(
+                chat_id=cid, message_id=m.id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
+                     InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
+                    [InlineKeyboardButton("• ɢᴇᴛ ꜰɪʟᴇ •", url=tglink)]]))
+        except Exception as e:
+            log.warning(f"channel edit err: {e}")
+    except FloodWait as fw:
+        await asyncio.sleep(fw.value)
+    except Exception:
+        log.exception("channel handler error")
 
-    # 1) HTTP file server
-    http_app = build_http_app()
-    runner = web.AppRunner(http_app)
-    await runner.setup()
-    site = web.TCPSite(runner, host="0.0.0.0", port=HTTP_PORT)
-    await site.start()
-    log.info("🌐 HTTP server listening on 0.0.0.0:%s", HTTP_PORT)
 
-    # 2) Telegram bot
+@app.on_message(filters.command("link") & filters.group & filters.reply)
+async def h_group_link(client: Client, m: Message):
+    r = m.reply_to_message
+    if not (r and (r.document or r.video)):
+        return await m.reply_text("Reply to a file/video with /link")
+    st = await m.reply_text("🔄 Generating…")
+    try:
+        fwd = await r.forward(BIN_CHANNEL)
+    except Exception as e:
+        return await st.edit(f"❌ {e}")
+    media = r.document or r.video
+    fname = media.file_name or f"File_{fwd.id}"
+    h     = get_hash(fwd)
+    stream   = f"{URL}watch/{fwd.id}/{urllib.parse.quote_plus(fname)}?hash={h}"
+    download = f"{URL}{fwd.id}?hash={h}"
+    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{fwd.id}"
+    if IS_SHORTLINK:
+        stream, download, tglink = await asyncio.gather(
+            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+    await st.edit(
+        f"📂 <b>{fname}</b>\n\n🔗 Links ready!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
+             InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
+            [InlineKeyboardButton("• ɢᴇᴛ ꜰɪʟᴇ •", url=tglink)]]))
+
+
+# =========================================================================
+# 20.  HANDLERS  ·  BATCH  &  FILE LIST
+# =========================================================================
+@app.on_message(filters.command("batch") & filters.private)
+async def h_batch(client, m: Message):
+    if len(m.command) != 3:
+        return await m.reply_text(
+            "Usage:\n<code>/batch first_msg_link last_msg_link</code>\n\n"
+            "Or:\n<code>/batch first_id last_id</code>  (numeric bin ids)")
+    def _mid(x: str) -> Optional[int]:
+        if x.isdigit(): return int(x)
+        m = re.search(r"/(\d+)$", x)
+        return int(m.group(1)) if m else None
+    a, b = _mid(m.command[1]), _mid(m.command[2])
+    if not (a and b) or b < a:
+        return await m.reply_text("Invalid ids/links.")
+    if b - a > BATCH_LIMIT:
+        return await m.reply_text(f"Batch max = {BATCH_LIMIT}")
+    payload = encode_batch(f"batch-{a}-{b}")
+    link = f"https://t.me/{temp.U_NAME}?start={payload}"
+    await m.reply_text(f"✅ Batch link:\n{link}", disable_web_page_preview=True)
+
+
+@app.on_message(filters.command("files") & filters.private)
+async def h_files(_c, m: Message):
+    uid = m.from_user.id
+    files = await db.files.find({"user_id": uid}).to_list(length=100)
+    if not files:
+        return await m.reply_text("You haven't uploaded any files.")
+    lines = [f"• <a href='{URL}watch/{f['file_id']}?hash={f['hash']}'>{f['file_name'][:40]}</a>"
+             for f in files[:30]]
+    await m.reply_text(f"📁 <b>Your files ({len(files)}):</b>\n" + "\n".join(lines),
+                       disable_web_page_preview=True)
+
+
+@app.on_message(filters.command("delfile") & filters.user(ADMIN_ID))
+async def h_delfile(_c, m: Message):
+    if len(m.command) < 2:
+        return await m.reply_text("Usage: /delfile <user_id>")
+    try: uid = int(m.command[1])
+    except: return await m.reply_text("Invalid id.")
+    n = await db.files.count_documents({"user_id": uid})
+    await db.files.delete_many({"user_id": uid})
+    await m.reply_text(f"Deleted {n} file records for {uid}")
+
+
+# =========================================================================
+# 21.  HANDLERS  ·  CALLBACK QUERIES
+# =========================================================================
+@app.on_callback_query()
+async def h_cb(client: Client, q: CallbackQuery):
+    data = q.data or ""
+    try:
+        if data == "close":
+            return await q.message.delete()
+        if data == "help":
+            return await q.message.edit_text(
+                HELP_TXT, reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("• ʜᴏᴍᴇ •",  callback_data="home"),
+                      InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
+        if data == "about":
+            return await q.message.edit_text(
+                ABOUT_TXT.format(n=temp.B_NAME, v=BOT_VERSION, pv=pyro_ver,
+                                 up=get_readable_time(time.time()-START_TIME),
+                                 ow=OWNER_USERNAME),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("• ʜᴏᴍᴇ •",  callback_data="home"),
+                      InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
+        if data in ("home", "start"):
+            return await q.message.edit_text(
+                START_TXT.format(name=q.from_user.mention), reply_markup=_home_kb())
+        if data == "premium_info":
+            return await q.message.edit_text(
+                "💎 <b>Premium Benefits</b>\n\n"
+                "• No file limit\n• Direct links (no shortener)\n"
+                "• No verification\n• Ad-free\n• Priority support\n\n"
+                f"Contact @{OWNER_USERNAME}",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("• ʜᴏᴍᴇ •", callback_data="home")]]))
+        if data == "refer":
+            uid = q.from_user.id
+            pts = await db.get_refer_points(uid)
+            ref = f"https://t.me/{temp.U_NAME}?start=reff_{uid}"
+            return await q.message.edit_text(
+                f"🎁 <b>Refer & Earn</b>\n\n"
+                f"Points: <code>{pts}</code>\n"
+                f"+10 pts per join · 100 pts = 1 Month Premium\n\n"
+                f"Your link:\n<code>{ref}</code>",
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("• sʜᴀʀᴇ •",
+                        url=f"https://telegram.me/share/url?url={ref}")],
+                     [InlineKeyboardButton("• ʜᴏᴍᴇ •", callback_data="home")]]))
+        if data == "bcast_cancel":
+            temp.USERS_CANCEL = True
+            return await q.answer("Broadcast will stop.", show_alert=True)
+        if data.startswith("delfile_"):
+            fid = int(data.split("_", 1)[1])
+            doc = await db.files.find_one({"file_id": fid})
+            if not doc:
+                return await q.answer("Already deleted.", show_alert=True)
+            if doc["user_id"] != q.from_user.id and q.from_user.id != ADMIN_ID:
+                return await q.answer("Not your file.", show_alert=True)
+            await db.files.delete_one({"file_id": fid})
+            try: await client.delete_messages(BIN_CHANNEL, fid)
+            except: pass
+            await q.answer("Deleted.", show_alert=True)
+            try: await q.message.edit_text("🗑 File deleted.")
+            except: pass
+    except Exception as e:
+        log.warning(f"cb err: {e}")
+
+
+# =========================================================================
+# 22.  STARTUP  /  SHUTDOWN
+# =========================================================================
+async def _startup_banner():
+    me = await app.get_me()
+    temp.ME     = me.id
+    temp.U_NAME = me.username
+    temp.B_NAME = me.first_name
+    temp.B_LINK = me.mention
+
+    banner = (
+        f"\n{'='*60}\n"
+        f"  AV FILE-TO-LINK  ·  {BOT_VERSION}  ·  Pyrogram v{pyro_ver} (Layer {layer})\n"
+        f"  Bot     : @{me.username}  ({me.id})\n"
+        f"  Admin   : {ADMIN_ID}\n"
+        f"  DB      : {DATABASE_NAME}\n"
+        f"  Port    : {PORT}\n"
+        f"  URL     : {URL}\n"
+        f"{'='*60}\n"
+    )
+    print(banner)
+
+
+async def _notify_restart():
+    tz = pytz.timezone(TIMEZONE)
+    now = datetime.now(tz)
+    txt = (f"<b>♻️ Bot restarted</b>\n"
+           f"📅 {now.strftime('%d-%m-%Y')}\n"
+           f"⏰ {now.strftime('%I:%M:%S %p')}\n"
+           f"🌐 URL: <code>{URL}</code>")
+    for cid in (LOG_CHANNEL, SUPPORT_GROUP):
+        if not cid:
+            continue
+        try:    await app.send_message(cid, txt)
+        except: pass
+    try:
+        await app.send_message(ADMIN_ID, "✅ Bot restarted.")
+    except Exception:
+        pass
+
+
+async def _run():
+    print("\n" + "="*60)
+    print(f"[START] {datetime.utcnow()}")
+    print("="*60)
+
+    # 1. bring up pyrogram
+    log.info("🚀 starting pyrogram client…")
     await app.start()
-    log.info("🤖 Bot started — waiting for messages…")
-    try:
-        await asyncio.Event().wait()   # run forever
-    finally:
-        await app.stop()
-        await runner.cleanup()
+    multi_clients[0] = app
+    work_loads[0]    = 0
+    await _startup_banner()
+
+    # 2. start aiohttp
+    runner = web.AppRunner(web.Application(client_max_size=30_000_000))
+    runner.app.add_routes(routes)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    log.info(f"🌐 aiohttp listening on 0.0.0.0:{PORT}")
+
+    # 3. HTTPS wrapper (Cloudflare Quick Tunnel) if needed
+    await maybe_upgrade_url_to_https()
+
+    # 4. notify
+    await _notify_restart()
+
+    # 5. idle forever
+    await idle()
+
+    # 6. shutdown
+    log.info("Shutting down…")
+    await app.stop()
+
+
+def _install_signals(loop: asyncio.AbstractEventLoop):
+    def _stop(*_):
+        log.warning("Signal received, stopping…")
+        for t in asyncio.all_tasks(loop):
+            t.cancel()
+    for s in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(s, _stop)
+        except NotImplementedError:
+            pass
+
+
+def _global_excepthook(exc_type, exc_value, exc_tb):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        return
+    log.critical("UNHANDLED EXCEPTION",
+                 exc_info=(exc_type, exc_value, exc_tb))
+
+
+sys.excepthook = _global_excepthook
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        log.info("Bye 👋")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        _install_signals(loop)
+        loop.run_until_complete(_run())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        log.info("Service stopped 👋")
     except Exception:
-        log.error("Bot crashed:\n%s", traceback.format_exc())
-        raise
+        log.critical("FATAL ERROR", exc_info=True)
+        sys.exit(1)
