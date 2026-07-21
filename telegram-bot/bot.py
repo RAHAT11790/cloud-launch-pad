@@ -1613,58 +1613,64 @@ FILE_CAPTION_TXT = (
 
 @app.on_message(filters.private & (filters.document | filters.video | filters.audio), group=4)
 async def h_file_private(client: Client, m: Message):
-    uid = m.from_user.id
-    if MAINTENANCE_MODE and uid != ADMIN_ID:
-        return await m.reply_text("🚧 Maintenance mode.")
-    if await db.is_user_blocked(uid):
-        return await m.reply_text("🚫 You are banned.")
-    if FSUB and not await is_user_joined(client, m):
-        return
-    ok, wait = await is_user_allowed(uid)
-    if not ok:
-        return await m.reply_text(
-            f"🚫 You have sent {MAX_FILES} files. Please try after "
-            f"<b>{wait}s</b>.", quote=True)
-
-    media = m.document or m.video or m.audio
-    fname = media.file_name or f"AV_{int(time.time())}"
-    fsize = humanbytes(media.file_size)
-
+    status = None
     try:
-        fwd = await m.forward(chat_id=BIN_CHANNEL)
-    except FloodWait as fw:
-        await asyncio.sleep(fw.value)
-        fwd = await m.forward(chat_id=BIN_CHANNEL)
+        if not m.from_user:
+            return
+        uid = m.from_user.id
+        if MAINTENANCE_MODE and uid != ADMIN_ID:
+            return await safe_reply_text(m, "🚧 Maintenance mode.")
+        if await db.is_user_blocked(uid):
+            return await safe_reply_text(m, "🚫 You are banned.")
+        if FSUB and not await is_user_joined(client, m):
+            return
+        await ensure_user_record(client, m)
+        ok, wait = await is_user_allowed(uid)
+        if not ok:
+            return await safe_reply_text(
+                m,
+                f"🚫 You have sent {MAX_FILES} files. Please try after "
+                f"<b>{wait}s</b>.", quote=True)
 
-    h = get_hash(fwd)
-    stream   = f"{URL}watch/{fwd.id}/{urllib.parse.quote_plus(fname)}?hash={h}"
-    download = f"{URL}{fwd.id}?hash={h}"
-    tglink   = f"https://t.me/{temp.U_NAME}?start=file_{fwd.id}"
+        media = _media_from_message(m)
+        if not media:
+            return await safe_reply_text(m, "❌ Please send a video, audio, or document file.")
+        fname = _media_name(media, m.id)
+        fsize = _media_size(media)
 
-    if IS_SHORTLINK:
-        stream, download, tglink = await asyncio.gather(
-            get_shortlink(stream), get_shortlink(download), get_shortlink(tglink))
+        status = await safe_reply_text(m, "⚡ <b>Generating your stream links...</b>", quote=True)
+        fwd = await _store_in_bin(m, status)
+        if not fwd:
+            return
 
-    try:
-        await db.files.insert_one({
-            "user_id": uid, "file_name": fname, "file_size": fsize,
-            "file_id": fwd.id, "hash": h, "timestamp": time.time()})
-    except Exception:
-        pass
+        h, stream, download, tglink = await build_file_links(fwd, fname)
+        await save_file_record(uid, fname, fsize, fwd.id, h)
 
-    await fwd.reply_text(
-        f"Requested by: {m.from_user.mention} (<code>{uid}</code>)\n"
-        f"Stream: {stream}", quote=True, disable_web_page_preview=True)
+        try:
+            await fwd.reply_text(
+                f"Requested by: {m.from_user.mention} (<code>{uid}</code>)\n"
+                f"Stream: {stream}", quote=True, disable_web_page_preview=True)
+        except Exception as e:
+            log.warning(f"bin note failed: {e}")
 
-    await m.reply_text(
-        FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download),
-        disable_web_page_preview=True,
-        reply_markup=InlineKeyboardMarkup([
+        text = FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download)
+        kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
              InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
             [InlineKeyboardButton("• ɢᴇᴛ ꜰɪʟᴇ •", url=tglink),
              InlineKeyboardButton("• ᴅᴇʟᴇᴛᴇ •", callback_data=f"delfile_{fwd.id}")],
-            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
+            [InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]])
+        if status:
+            await safe_edit_text(status, text, disable_web_page_preview=True, reply_markup=kb)
+        else:
+            await safe_reply_text(m, text, disable_web_page_preview=True, reply_markup=kb)
+    except Exception as e:
+        log.exception("private file handler failed")
+        msg = f"❌ Link generate failed: <code>{str(e)[:180]}</code>"
+        if status:
+            await safe_edit_text(status, msg)
+        else:
+            await safe_reply_text(m, msg)
 
 
 # =========================================================================
