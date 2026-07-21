@@ -1240,114 +1240,107 @@ async def save_file_record(uid: int, file_name: str, file_size: str, file_id: in
 
 @app.on_message(filters.command("start") & filters.incoming)
 async def h_start(client: Client, message: Message):
-    uid  = message.from_user.id
-    name = message.from_user.first_name
-    argv = message.command[1] if len(message.command) > 1 else None
-
-    if MAINTENANCE_MODE and uid != ADMIN_ID:
-        return await message.reply_text("🚧 ʙᴏᴛ ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ")
-
-    if await db.is_user_blocked(uid):
-        return await message.reply_text("🚫 ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.")
-
-    is_referral = argv and argv.startswith("reff_")
-    if FSUB and not is_referral:
-        if not await is_user_joined(client, message):
+    try:
+        if not message.from_user:
             return
+        uid  = message.from_user.id
+        argv = message.command[1] if len(message.command) > 1 else None
 
-    fresh = not await db.is_user_exist(uid)
-    if fresh:
-        await db.add_user(uid, name)
-        try:
-            await client.send_message(
-                LOG_CHANNEL,
-                f"<b>#NEW_USER</b>\nID: <code>{uid}</code>\nName: {message.from_user.mention}")
-        except Exception:
-            pass
+        if MAINTENANCE_MODE and uid != ADMIN_ID:
+            return await safe_reply_text(message, "🚧 ʙᴏᴛ ɪs ᴜɴᴅᴇʀ ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ")
 
-    # --- referral deep-link ---
-    if is_referral:
-        try:
-            inviter_id = int(argv.split("_", 1)[1])
-        except Exception:
-            return await message.reply_text("Invalid refer link.")
-        if inviter_id == uid or not fresh:
-            return await message.reply_text("Refer link cannot be used.")
-        if await db.is_user_in_refer(uid):
-            return await message.reply_text("Already invited.")
-        pts_new = await db.change_points(inviter_id, 10)
-        await db.set_refer_points(uid, 0)   # mark presence
-        try:
-            await client.send_message(
-                inviter_id,
-                f"✈️ New Referral!\n{message.from_user.mention} joined.\n"
-                f"➕10  ·  Total: {pts_new}")
-        except Exception:
-            pass
-        if pts_new >= 100:
-            await db.set_refer_points(inviter_id, 0)
-            exp = datetime.now() + timedelta(days=30)
-            await db.update_user({"id": inviter_id, "expiry_time": exp})
+        if await db.is_user_blocked(uid):
+            return await safe_reply_text(message, "🚫 ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ꜰʀᴏᴍ ᴜsɪɴɢ ᴛʜɪs ʙᴏᴛ.")
+
+        is_referral = bool(argv and argv.startswith("reff_"))
+        if FSUB and not is_referral:
+            if not await is_user_joined(client, message):
+                return
+
+        fresh = await ensure_user_record(client, message)
+
+        # --- referral deep-link ---
+        if is_referral:
             try:
-                await client.send_message(
-                    inviter_id,
-                    "🎉 100 points reached — 1 Month Premium activated!")
+                inviter_id = int(argv.split("_", 1)[1])
+            except Exception:
+                return await safe_reply_text(message, "Invalid refer link.")
+            if inviter_id == uid or not fresh:
+                return await safe_reply_text(message, "Refer link cannot be used.")
+            if await db.is_user_in_refer(uid):
+                return await safe_reply_text(message, "Already invited.")
+            pts_new = await db.change_points(inviter_id, 10)
+            await db.set_refer_points(uid, 0)
+            try:
+                await client.send_message(inviter_id, f"✈️ New Referral!\n{message.from_user.mention} joined.\n➕10  ·  Total: {pts_new}")
             except Exception:
                 pass
-        return await message.reply_text(
-            f"You joined via {inviter_id}'s referral link 🎁")
-
-    # --- file / batch deep-link ---
-    if argv and argv.startswith("file_"):
-        try:
-            fid = int(argv.split("_", 1)[1])
-        except Exception:
-            return await message.reply_text("Invalid file link.")
-        try:
-            await client.copy_message(uid, BIN_CHANNEL, fid)
-        except Exception as e:
-            return await message.reply_text(f"❌ {e}")
-        return
-
-    if argv and argv != "start":
-        payload = decode_batch(argv)
-        if payload.startswith("batch-"):
-            try:
-                _, s, e = payload.split("-")
-                s, e = int(s), int(e)
-            except Exception:
-                return
-            if e - s > BATCH_LIMIT:
-                return await message.reply_text(f"Batch limit is {BATCH_LIMIT} files")
-            status = await message.reply_text("🔄 Sending batch...")
-            sent = 0
-            for i in range(s, e + 1):
+            if pts_new >= 100:
+                await db.set_refer_points(inviter_id, 0)
+                exp = datetime.now() + timedelta(days=30)
+                await db.update_user({"id": inviter_id, "expiry_time": exp})
                 try:
-                    await client.copy_message(uid, BIN_CHANNEL, i)
-                    sent += 1
-                    await asyncio.sleep(1)
-                except FloodWait as fw:
-                    await asyncio.sleep(fw.value + 1)
+                    await client.send_message(inviter_id, "🎉 100 points reached — 1 Month Premium activated!")
                 except Exception:
                     pass
-            await status.edit(f"✅ Sent {sent}/{e - s + 1} files.")
+            return await safe_reply_text(message, f"You joined via {inviter_id}'s referral link 🎁")
+
+        # --- file / batch deep-link ---
+        if argv and argv.startswith("file_"):
+            try:
+                fid = int(argv.split("_", 1)[1])
+            except Exception:
+                return await safe_reply_text(message, "Invalid file link.")
+            try:
+                await client.copy_message(uid, BIN_CHANNEL, fid)
+            except Exception as e:
+                return await safe_reply_text(message, f"❌ {e}")
             return
 
-    # --- default welcome ---
-    await message.reply_text(
-        START_TXT.format(name=message.from_user.mention),
-        reply_markup=_home_kb(), disable_web_page_preview=True)
+        if argv and argv != "start":
+            payload = decode_batch(argv)
+            if payload.startswith("batch-"):
+                try:
+                    _, s, e = payload.split("-")
+                    s, e = int(s), int(e)
+                except Exception:
+                    return await safe_reply_text(message, "Invalid batch link.")
+                if e - s > BATCH_LIMIT:
+                    return await safe_reply_text(message, f"Batch limit is {BATCH_LIMIT} files")
+                status = await safe_reply_text(message, "🔄 Sending batch...")
+                sent = 0
+                for i in range(s, e + 1):
+                    try:
+                        await client.copy_message(uid, BIN_CHANNEL, i)
+                        sent += 1
+                        await asyncio.sleep(1)
+                    except FloodWait as fw:
+                        await asyncio.sleep(fw.value + 1)
+                    except Exception:
+                        pass
+                if status:
+                    await safe_edit_text(status, f"✅ Sent {sent}/{e - s + 1} files.")
+                return
+
+        # --- default welcome ---
+        await safe_reply_text(
+            message,
+            START_TXT.format(name=message.from_user.mention),
+            reply_markup=_home_kb(), disable_web_page_preview=True)
+    except Exception as e:
+        log.exception("/start handler failed")
+        await safe_reply_text(message, f"❌ Start command error: <code>{str(e)[:180]}</code>")
 
 
 @app.on_message(filters.command("help"))
 async def h_help(_c, m: Message):
-    await m.reply_text(HELP_TXT, reply_markup=InlineKeyboardMarkup(
+    await safe_reply_text(m, HELP_TXT, reply_markup=InlineKeyboardMarkup(
         [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
 
 @app.on_message(filters.command("about"))
 async def h_about(_c, m: Message):
-    await m.reply_text(ABOUT_TXT.format(
+    await safe_reply_text(m, ABOUT_TXT.format(
         n=temp.B_NAME, v=BOT_VERSION, pv=pyro_ver,
         up=get_readable_time(time.time() - START_TIME),
         ow=OWNER_USERNAME),
@@ -1358,8 +1351,9 @@ async def h_about(_c, m: Message):
 @app.on_message(filters.command("ping"))
 async def h_ping(_c, m: Message):
     t = time.time()
-    r = await m.reply_text("pinging...")
-    await r.edit(f"🏓 Pong! `{round((time.time()-t)*1000)}ms`")
+    r = await safe_reply_text(m, "pinging...")
+    if r:
+        await safe_edit_text(r, f"🏓 Pong! `{round((time.time()-t)*1000)}ms`")
 
 
 @app.on_message(filters.command("stats") & filters.user(ADMIN_ID))
@@ -1370,7 +1364,7 @@ async def h_stats(client: Client, m: Message):
     tc = await db.total_blocked_channels()
     tf = await db.files.count_documents({})
     tl = await db.protected_links.count_documents({})
-    await m.reply_text(
+    await safe_reply_text(m,
         f"<b>📊 sᴛᴀᴛs</b>\n\n"
         f"👥 ᴜsᴇʀs        : <code>{tu}</code>\n"
         f"💎 ᴘʀᴇᴍɪᴜᴍ    : <code>{tp}</code>\n"
