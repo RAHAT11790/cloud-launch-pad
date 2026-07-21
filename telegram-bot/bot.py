@@ -113,7 +113,7 @@ import platform
 import subprocess
 import traceback
 import urllib.parse
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Any, Dict, List, Optional, Union, AsyncGenerator
 
 # --- third-party ---------------------------------------------------------
@@ -178,6 +178,11 @@ BROADCAST_LOCK = asyncio.Lock()
 
 # PUBLIC_URL is mutable — cloudflare tunnel will rewrite it at runtime
 URL = PUBLIC_URL if PUBLIC_URL.endswith("/") else PUBLIC_URL + "/"
+
+# Database must never block Telegram handlers. If MongoDB is not configured
+# yet, the bot automatically falls back to an in-memory store so /start and
+# file-to-link generation still work instantly.
+DB_TIMEOUT = 4
 
 
 # =========================================================================
@@ -374,40 +379,167 @@ def decode_batch(payload: str) -> str:
 # =========================================================================
 # 8.  DATABASE  (Motor / MongoDB)
 # =========================================================================
+class _MemoryDeleteResult:
+    def __init__(self, deleted_count: int):
+        self.deleted_count = deleted_count
+
+
+class _MemoryCursor:
+    def __init__(self, docs: List[dict]):
+        self.docs = list(docs)
+        self.i = 0
+
+    async def to_list(self, length=None):
+        return self.docs if length is None else self.docs[:length]
+
+    def __aiter__(self):
+        self.i = 0
+        return self
+
+    async def __anext__(self):
+        if self.i >= len(self.docs):
+            raise StopAsyncIteration
+        item = self.docs[self.i]
+        self.i += 1
+        return item
+
+
+class _MemoryCollection:
+    def __init__(self, key: str = "id"):
+        self.key = key
+        self.docs: List[dict] = []
+
+    @staticmethod
+    def _match(doc: dict, query: Optional[dict]) -> bool:
+        if not query:
+            return True
+        for k, v in query.items():
+            cur = doc.get(k)
+            if isinstance(v, dict):
+                if "$gt" in v and not (cur is not None and cur > v["$gt"]):
+                    return False
+                continue
+            if cur != v:
+                return False
+        return True
+
+    async def find_one(self, query=None):
+        for d in self.docs:
+            if self._match(d, query):
+                return dict(d)
+        return None
+
+    def find(self, query=None):
+        return _MemoryCursor([dict(d) for d in self.docs if self._match(d, query)])
+
+    async def insert_one(self, data: dict):
+        self.docs.append(dict(data))
+        return data
+
+
+    async def update_one(self, query: dict, update: dict, upsert: bool = False):
+        patch = update.get("$set", update)
+        for d in self.docs:
+            if self._match(d, query):
+                d.update(patch)
+                return d
+        if upsert:
+            new_doc = dict(query)
+            new_doc.update(patch)
+            self.docs.append(new_doc)
+            return new_doc
+        return None
+
+    async def delete_one(self, query: dict):
+        before = len(self.docs)
+        for i, d in enumerate(self.docs):
+            if self._match(d, query):
+                del self.docs[i]
+                break
+        return _MemoryDeleteResult(before - len(self.docs))
+
+    async def delete_many(self, query: dict):
+        before = len(self.docs)
+        self.docs = [d for d in self.docs if not self._match(d, query)]
+        return _MemoryDeleteResult(before - len(self.docs))
+
+    async def count_documents(self, query=None):
+        return len([d for d in self.docs if self._match(d, query)])
+
+
+def _database_url_is_placeholder(url: str) -> bool:
+    value = (url or "").strip().lower()
+    return (not value or "user:pass" in value or "cluster.mongodb.net" in value
+            or value in {"mongodb://", "mongodb+srv://"})
+
+
 class Database:
     def __init__(self):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
-        self.db     = self.client[DATABASE_NAME]
-        self.users            = self.db.users
-        self.blocked_users    = self.db.blocked_users
-        self.blocked_channels = self.db.blocked_channels
-        self.files            = self.db.files
-        self.refers           = self.db.refers
-        self.protected_links  = self.db.protected_links
+        self.client = None
+        self.db = None
+        self.memory_mode = _database_url_is_placeholder(DATABASE_URL)
+        if self.memory_mode:
+            log.warning("MongoDB is not configured — using in-memory database fallback.")
+            self._use_memory_collections()
+            return
+        try:
+            self.client = motor.motor_asyncio.AsyncIOMotorClient(
+                DATABASE_URL,
+                serverSelectionTimeoutMS=3000,
+                connectTimeoutMS=3000,
+                socketTimeoutMS=5000,
+                retryWrites=True,
+            )
+            self.db = self.client[DATABASE_NAME]
+            self.users            = self.db.users
+            self.blocked_users    = self.db.blocked_users
+            self.blocked_channels = self.db.blocked_channels
+            self.files            = self.db.files
+            self.refers           = self.db.refers
+            self.protected_links  = self.db.protected_links
+        except Exception as e:
+            log.warning(f"MongoDB init failed — using in-memory fallback: {e}")
+            self.memory_mode = True
+            self._use_memory_collections()
+
+    def _use_memory_collections(self):
+        self.users            = _MemoryCollection("id")
+        self.blocked_users    = _MemoryCollection("user_id")
+        self.blocked_channels = _MemoryCollection("channel_id")
+        self.files            = _MemoryCollection("file_id")
+        self.refers           = _MemoryCollection("user_id")
+        self.protected_links  = _MemoryCollection("token")
+
+    async def _safe(self, label: str, action, default=None):
+        try:
+            return await asyncio.wait_for(action(), timeout=DB_TIMEOUT)
+        except Exception as e:
+            log.warning(f"DB {label} failed; continuing without blocking bot: {e}")
+            return default
 
     # ---- basic user store ----
     async def add_user(self, uid: int, name: str):
-        if not await self.users.find_one({"id": int(uid)}):
-            await self.users.insert_one({"id": int(uid), "name": name})
+        if not await self.is_user_exist(uid):
+            await self._safe("add_user", lambda: self.users.insert_one({"id": int(uid), "name": name}))
 
     async def is_user_exist(self, uid: int) -> bool:
-        return bool(await self.users.find_one({"id": int(uid)}))
+        return bool(await self._safe("is_user_exist", lambda: self.users.find_one({"id": int(uid)}), None))
 
     async def total_users_count(self) -> int:
-        return await self.users.count_documents({})
+        return int(await self._safe("total_users_count", lambda: self.users.count_documents({}), 0) or 0)
 
     async def get_all_users(self):
         return self.users.find({})
 
     async def delete_user(self, uid: int):
-        await self.users.delete_many({"id": int(uid)})
+        await self._safe("delete_user", lambda: self.users.delete_many({"id": int(uid)}))
 
     # ---- premium ----
     async def update_user(self, data: dict):
-        await self.users.update_one({"id": data["id"]}, {"$set": data}, upsert=True)
+        await self._safe("update_user", lambda: self.users.update_one({"id": data["id"]}, {"$set": data}, upsert=True))
 
     async def get_user(self, uid: int):
-        return await self.users.find_one({"id": int(uid)})
+        return await self._safe("get_user", lambda: self.users.find_one({"id": int(uid)}), None)
 
     async def has_premium_access(self, uid: int) -> bool:
         u = await self.get_user(uid)
@@ -418,58 +550,58 @@ class Database:
             return False
         if datetime.now() <= exp:
             return True
-        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        await self._safe("expire_premium", lambda: self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}}))
         return False
 
     async def remove_premium_access(self, uid: int) -> bool:
-        await self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}})
+        await self._safe("remove_premium", lambda: self.users.update_one({"id": int(uid)}, {"$set": {"expiry_time": None}}))
         return True
 
     async def all_premium_count(self) -> int:
-        return await self.users.count_documents({"expiry_time": {"$gt": datetime.now()}})
+        return int(await self._safe("all_premium_count", lambda: self.users.count_documents({"expiry_time": {"$gt": datetime.now()}}), 0) or 0)
 
     # ---- ban / unban users ----
     async def is_user_blocked(self, uid: int) -> bool:
-        return bool(await self.blocked_users.find_one({"user_id": int(uid)}))
+        return bool(await self._safe("is_user_blocked", lambda: self.blocked_users.find_one({"user_id": int(uid)}), None))
 
     async def block_user(self, uid: int, reason: str = ""):
-        await self.blocked_users.update_one(
+        await self._safe("block_user", lambda: self.blocked_users.update_one(
             {"user_id": int(uid)},
             {"$set": {"user_id": int(uid), "reason": reason,
                       "blocked_at": datetime.utcnow()}},
-            upsert=True)
+            upsert=True))
 
     async def unblock_user(self, uid: int):
-        await self.blocked_users.delete_one({"user_id": int(uid)})
+        await self._safe("unblock_user", lambda: self.blocked_users.delete_one({"user_id": int(uid)}))
 
     async def total_blocked_count(self) -> int:
-        return await self.blocked_users.count_documents({})
+        return int(await self._safe("total_blocked_count", lambda: self.blocked_users.count_documents({}), 0) or 0)
 
     # ---- ban channels ----
     async def is_channel_blocked(self, cid: int) -> bool:
-        return bool(await self.blocked_channels.find_one({"channel_id": int(cid)}))
+        return bool(await self._safe("is_channel_blocked", lambda: self.blocked_channels.find_one({"channel_id": int(cid)}), None))
 
     async def block_channel(self, cid: int, reason: str = ""):
-        await self.blocked_channels.update_one(
+        await self._safe("block_channel", lambda: self.blocked_channels.update_one(
             {"channel_id": int(cid)},
             {"$set": {"channel_id": int(cid), "reason": reason,
                       "blocked_at": datetime.utcnow()}},
-            upsert=True)
+            upsert=True))
 
     async def unblock_channel(self, cid: int):
-        await self.blocked_channels.delete_one({"channel_id": int(cid)})
+        await self._safe("unblock_channel", lambda: self.blocked_channels.delete_one({"channel_id": int(cid)}))
 
     async def total_blocked_channels(self) -> int:
-        return await self.blocked_channels.count_documents({})
+        return int(await self._safe("total_blocked_channels", lambda: self.blocked_channels.count_documents({}), 0) or 0)
 
     # ---- referral / points ----
     async def get_refer_points(self, uid: int) -> int:
-        u = await self.refers.find_one({"user_id": int(uid)})
+        u = await self._safe("get_refer_points", lambda: self.refers.find_one({"user_id": int(uid)}), None)
         return u.get("points", 0) if u else 0
 
     async def set_refer_points(self, uid: int, pts: int):
-        await self.refers.update_one({"user_id": int(uid)},
-                                     {"$set": {"points": pts}}, upsert=True)
+        await self._safe("set_refer_points", lambda: self.refers.update_one({"user_id": int(uid)},
+                                     {"$set": {"points": pts}}, upsert=True))
 
     async def change_points(self, uid: int, amount: int) -> int:
         pts = max(0, await self.get_refer_points(uid) + amount)
@@ -477,29 +609,29 @@ class Database:
         return pts
 
     async def is_user_in_refer(self, uid: int) -> bool:
-        return bool(await self.refers.find_one({"user_id": int(uid)}))
+        return bool(await self._safe("is_user_in_refer", lambda: self.refers.find_one({"user_id": int(uid)}), None))
 
     # ---- protected links ----
     async def add_protected_link(self, token, url, password, title, channel_link):
-        await self.protected_links.insert_one({
+        await self._safe("add_protected_link", lambda: self.protected_links.insert_one({
             "token": token, "url": url, "password": password,
-            "title": title, "channel_link": channel_link})
+            "title": title, "channel_link": channel_link}))
 
     async def get_protected_link(self, token):
-        return await self.protected_links.find_one({"token": token})
+        return await self._safe("get_protected_link", lambda: self.protected_links.find_one({"token": token}), None)
 
     async def delete_protected_link(self, token) -> bool:
-        r = await self.protected_links.delete_one({"token": token})
+        r = await self._safe("delete_protected_link", lambda: self.protected_links.delete_one({"token": token}), _MemoryDeleteResult(0))
         return r.deleted_count > 0
 
     async def get_link_by_url(self, url):
-        return await self.protected_links.find_one({"url": url})
+        return await self._safe("get_link_by_url", lambda: self.protected_links.find_one({"url": url}), None)
 
     async def update_protected_link(self, token, password, title, channel_link):
-        await self.protected_links.update_one(
+        await self._safe("update_protected_link", lambda: self.protected_links.update_one(
             {"token": token},
             {"$set": {"password": password, "title": title,
-                      "channel_link": channel_link}})
+                      "channel_link": channel_link}}))
 
     async def get_all_protected_links(self):
         return self.protected_links.find({})
