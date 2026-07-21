@@ -28,15 +28,26 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # ═══════════════════════════════════════════════════════════════
-# 🔧 CONFIG — এই ৪টা মান বদলাও, আর কিছু লাগবে না
+# 🔧 CONFIG — এই মানগুলো বদলাও, আর কিছু লাগবে না
 # ═══════════════════════════════════════════════════════════════
 API_ID    = 1234567                       # https://my.telegram.org/apps
 API_HASH  = "your_api_hash_here"          # https://my.telegram.org/apps
 BOT_TOKEN = "123456:ABC-DEF..."           # @BotFather থেকে
 OWNER_ID  = 123456789                     # @userinfobot — শুধু এই user bot use করতে পারবে
+
+# 🌐 PUBLIC URL (Railway/VPS) — এইটাই তোমার "public IP"-এর কাজ করবে।
+# Railway-এর Public Networking domain বসাও (https সহ, শেষে / নেই)।
+# উদাহরণ: "https://rsstreambot-production.up.railway.app"
+# খালি রাখলে file-server চলবে ঠিকই কিন্তু public link দেবে না।
+PUBLIC_URL = "https://rsstreambot-production.up.railway.app"
+
+# HTTP file-server port। Railway auto-set করে $PORT env-এ (usually 8080)।
+# TCP Proxy দরকার নেই — Railway এর built-in HTTPS domain-ই যথেষ্ট।
+HTTP_PORT  = int(os.environ.get("PORT", "8080"))
 # ═══════════════════════════════════════════════════════════════
 
-WORK_DIR = Path("./downloads").resolve()
+WORK_DIR   = Path("./downloads").resolve()
+PUBLIC_DIR = Path("./public").resolve()     # served over HTTP
 MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024    # ~1.95 GB (bot upload cap)
 
 # ── Logging: সব stdout-এ, log-এ সব দেখা যাবে ──────────────────
