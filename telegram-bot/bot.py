@@ -72,6 +72,7 @@ if (
     sys.exit(1)
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Pyrogram import (installed check) ─────────────────────────
 try:
