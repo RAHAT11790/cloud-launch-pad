@@ -28,15 +28,26 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # ═══════════════════════════════════════════════════════════════
-# 🔧 CONFIG — এই ৪টা মান বদলাও, আর কিছু লাগবে না
+# 🔧 CONFIG — এই মানগুলো বদলাও, আর কিছু লাগবে না
 # ═══════════════════════════════════════════════════════════════
 API_ID    = 1234567                       # https://my.telegram.org/apps
 API_HASH  = "your_api_hash_here"          # https://my.telegram.org/apps
 BOT_TOKEN = "123456:ABC-DEF..."           # @BotFather থেকে
 OWNER_ID  = 123456789                     # @userinfobot — শুধু এই user bot use করতে পারবে
+
+# 🌐 PUBLIC URL (Railway/VPS) — এইটাই তোমার "public IP"-এর কাজ করবে।
+# Railway-এর Public Networking domain বসাও (https সহ, শেষে / নেই)।
+# উদাহরণ: "https://rsstreambot-production.up.railway.app"
+# খালি রাখলে file-server চলবে ঠিকই কিন্তু public link দেবে না।
+PUBLIC_URL = "https://rsstreambot-production.up.railway.app"
+
+# HTTP file-server port। Railway auto-set করে $PORT env-এ (usually 8080)।
+# TCP Proxy দরকার নেই — Railway এর built-in HTTPS domain-ই যথেষ্ট।
+HTTP_PORT  = int(os.environ.get("PORT", "8080"))
 # ═══════════════════════════════════════════════════════════════
 
-WORK_DIR = Path("./downloads").resolve()
+WORK_DIR   = Path("./downloads").resolve()
+PUBLIC_DIR = Path("./public").resolve()     # served over HTTP
 MAX_UPLOAD_BYTES = 1_950 * 1024 * 1024    # ~1.95 GB (bot upload cap)
 
 # ── Logging: সব stdout-এ, log-এ সব দেখা যাবে ──────────────────
@@ -61,6 +72,7 @@ if (
     sys.exit(1)
 
 WORK_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Pyrogram import (installed check) ─────────────────────────
 try:
@@ -80,6 +92,12 @@ try:
     import yt_dlp  # noqa: F401
 except ImportError as e:
     log.error("❌ yt-dlp install হয়নি: %s", e)
+    sys.exit(1)
+
+try:
+    from aiohttp import web  # HTTP file server
+except ImportError as e:
+    log.error("❌ aiohttp install হয়নি: %s\n   চালাও:  pip install -r requirements.txt", e)
     sys.exit(1)
 
 
@@ -606,8 +624,19 @@ async def on_cb(_, cq: CallbackQuery):
         size = file_path.stat().st_size
         log.info("downloaded: %s (%s)", file_path, human_size(size))
 
+        # ── Publish file over HTTP first (works even if > 2 GB) ──
+        public_link = publish_public_file(file_path)
+        if public_link:
+            log.info("public link: %s", public_link)
+
         if size > MAX_UPLOAD_BYTES:
-            await safe_edit(status, f"⚠️ File {human_size(size)} — bot upload cap (~1.95 GB) ছাড়িয়েছে।")
+            msg = (
+                f"⚠️ File {human_size(size)} — Telegram bot upload cap (~1.95 GB) ছাড়িয়েছে।\n"
+                "কিন্তু public streaming link ready:\n"
+                f"🔗 <code>{public_link}</code>" if public_link else
+                f"⚠️ File {human_size(size)} — bot upload cap ছাড়িয়েছে।"
+            )
+            await safe_edit(status, msg)
             return
 
         start = time.time()
@@ -625,6 +654,8 @@ async def on_cb(_, cq: CallbackQuery):
 
         thumb = USER_THUMB.get(cq.from_user.id)
         caption = f"🎬 <b>{job.title}</b>\n📐 {fmt['height'] or '?'}p • 💾 {human_size(size)}"
+        if public_link:
+            caption += f"\n🔗 <a href=\"{public_link}\">Public stream URL</a>"
 
         await cq.message.reply_video(
             video=str(file_path),
@@ -633,23 +664,117 @@ async def on_cb(_, cq: CallbackQuery):
             supports_streaming=True,
             progress=up_progress,
         )
-        await safe_edit(status, f"✅ <b>Done</b>\n{caption}")
+        done_msg = f"✅ <b>Done</b>\n{caption}"
+        if public_link:
+            done_msg += f"\n\n<b>Direct link (streamable):</b>\n<code>{public_link}</code>"
+        await safe_edit(status, done_msg)
         log.info("upload complete: %s", jid)
     except Exception as e:
         log.error("Job %s failed:\n%s", jid, traceback.format_exc())
         await safe_edit(status, f"❌ <b>Failed</b>\n<code>{str(e)[:500]}</code>")
     finally:
         JOBS.pop(jid, None)
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        # Note: we DO NOT delete tmpdir here anymore because the file was
+        # moved into PUBLIC_DIR by publish_public_file(). The tmpdir will
+        # only contain leftover fragments, safe to clean.
+        try: shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception: pass
 
 
 # ═══════════════════════════════════════════════════════════════
-# Startup
+# HTTP FILE SERVER  (Railway/VPS-এর public HTTPS domain-এই কাজ করবে)
 # ═══════════════════════════════════════════════════════════════
-if __name__ == "__main__":
-    log.info("🚀 Starting RS Downloader Bot — owner=%s workdir=%s", OWNER_ID, WORK_DIR)
+# Railway আপনাকে যে domain দেয় (rsstreambot-production.up.railway.app),
+# সেটাই "public IP"-এর কাজ করে। TCP proxy লাগে না, raw IPv4 লাগে না।
+# এই server port $PORT-এ bind করে; Railway automatic HTTPS termination করে।
+# ═══════════════════════════════════════════════════════════════
+
+def publish_public_file(src: Path) -> str:
+    """Move file into PUBLIC_DIR/<token>/ and return its public URL."""
     try:
-        app.run()
+        token = uuid.uuid4().hex[:12]
+        dest_dir = PUBLIC_DIR / token
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        # sanitize filename
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", src.name) or "video.mp4"
+        dest = dest_dir / safe
+        shutil.move(str(src), str(dest))
+        if not PUBLIC_URL:
+            return ""
+        return f"{PUBLIC_URL.rstrip('/')}/f/{token}/{urllib.parse.quote(safe)}"
+    except Exception as e:
+        log.warning("publish_public_file failed: %s", e)
+        return ""
+
+
+async def http_health(_req: web.Request) -> web.Response:
+    return web.json_response({
+        "ok": True,
+        "service": "rs-downloader-bot",
+        "public_url": PUBLIC_URL or None,
+        "port": HTTP_PORT,
+    })
+
+
+async def http_serve_file(req: web.Request) -> web.StreamResponse:
+    token = req.match_info["token"]
+    name  = req.match_info["name"]
+    # prevent traversal
+    if "/" in token or ".." in token or "/" in name or ".." in name:
+        raise web.HTTPForbidden()
+    fp = PUBLIC_DIR / token / name
+    if not fp.is_file():
+        raise web.HTTPNotFound()
+    # aiohttp FileResponse handles Range requests → streamable in Telegram/VLC/browsers.
+    resp = web.FileResponse(path=fp, chunk_size=256 * 1024)
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
+
+def build_http_app() -> web.Application:
+    a = web.Application(client_max_size=1024 ** 3)
+    a.router.add_get("/",         http_health)
+    a.router.add_get("/health",   http_health)
+    a.router.add_get("/f/{token}/{name}", http_serve_file)
+    a.router.add_head("/f/{token}/{name}", http_serve_file)
+    return a
+
+
+# ═══════════════════════════════════════════════════════════════
+# Startup — Bot + HTTP server একসাথে চলবে
+# ═══════════════════════════════════════════════════════════════
+async def main() -> None:
+    log.info("🚀 Starting RS Downloader Bot")
+    log.info("   owner      = %s", OWNER_ID)
+    log.info("   workdir    = %s", WORK_DIR)
+    log.info("   public dir = %s", PUBLIC_DIR)
+    log.info("   http port  = %s", HTTP_PORT)
+    log.info("   public URL = %s", PUBLIC_URL or "(not set — public links disabled)")
+
+    # 1) HTTP file server
+    http_app = build_http_app()
+    runner = web.AppRunner(http_app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=HTTP_PORT)
+    await site.start()
+    log.info("🌐 HTTP server listening on 0.0.0.0:%s", HTTP_PORT)
+
+    # 2) Telegram bot
+    await app.start()
+    log.info("🤖 Bot started — waiting for messages…")
+    try:
+        await asyncio.Event().wait()   # run forever
+    finally:
+        await app.stop()
+        await runner.cleanup()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        log.info("Bye 👋")
     except Exception:
         log.error("Bot crashed:\n%s", traceback.format_exc())
         raise
