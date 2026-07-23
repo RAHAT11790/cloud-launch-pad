@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Copy,
   Database,
+  Download,
   FileJson,
   FolderTree,
   Loader2,
@@ -47,6 +48,23 @@ const previewValue = (value: unknown) => {
 };
 
 const sleepFrame = () => new Promise((resolve) => window.setTimeout(resolve, 0));
+
+const downloadJsonFile = (fileName: string, data: unknown) => {
+  const blob = new Blob([JSON.stringify(data ?? {}, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const firebaseBackupName = () => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `rs-anime-firebase-full-backup-${stamp}.json`;
+};
 
 interface TreeRowProps {
   path: string;
@@ -321,6 +339,7 @@ function FirebaseAnalyticsActions({
 const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: string }) {
   const [rootKeys, setRootKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const mountedRef = useRef(true);
@@ -350,6 +369,20 @@ const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: 
   const removeRoot = useCallback((path: string) => {
     const rootName = path.split("/")[0];
     setRootKeys((keys) => keys.filter((key) => key !== rootName));
+  }, []);
+
+  const downloadFullDatabase = useCallback(async () => {
+    if (!confirm("Download the full Firebase Realtime Database as one JSON file?\n\nThis may use bandwidth because it reads the whole database once.")) return;
+    setExporting(true);
+    try {
+      const snap = await get(ref(db));
+      downloadJsonFile(firebaseBackupName(), snap.val() || {});
+      toast.success("Full Firebase JSON download started");
+    } catch (error: any) {
+      toast.error(`Full JSON download failed: ${error?.message || error}`);
+    } finally {
+      if (mountedRef.current) setExporting(false);
+    }
   }, []);
 
   const activeCount = useMemo(() => rootKeys.filter((key) => ACTIVE_ROOTS.has(key)).length, [rootKeys]);
@@ -383,10 +416,16 @@ const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: 
               <p className="truncate text-[11px] text-zinc-500">Expand a path to load only that branch.</p>
             </div>
           </div>
-          <button onClick={loadRoots} disabled={loading} className={`${btnSecondary} inline-flex h-9 items-center gap-2 px-3 text-[12px]`} type="button">
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={downloadFullDatabase} disabled={exporting} className={`${btnSecondary} inline-flex h-9 items-center gap-2 px-3 text-[12px]`} type="button">
+              {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              Full JSON
+            </button>
+            <button onClick={loadRoots} disabled={loading} className={`${btnSecondary} inline-flex h-9 items-center gap-2 px-3 text-[12px]`} type="button">
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              Refresh
+            </button>
+          </div>
         </div>
 
         <div className="border-b border-zinc-800 p-3">
