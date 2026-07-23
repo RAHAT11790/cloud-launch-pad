@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
 import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { readProfilePhoto } from "@/lib/localUser";
 
 /**
  * YouTube-style comment section with nested replies + per-comment reactions.
@@ -19,7 +20,7 @@ interface Props {
   title?: string;
 }
 
-const getLocalUser = (): { id: string; name: string } | null => {
+const getLocalUser = (): { id: string; name: string; photo?: string } | null => {
   try {
     const raw = localStorage.getItem("rsanime_user");
     if (!raw) return null;
@@ -30,7 +31,8 @@ const getLocalUser = (): { id: string; name: string } | null => {
       u.name ||
       u.displayName ||
       (u.email ? String(u.email).split("@")[0] : "User");
-    return { id: String(u.id), name: String(name) };
+    const photo = readProfilePhoto(String(u.id)) || u.photoURL || u.photo || undefined;
+    return { id: String(u.id), name: String(name), photo: photo ? String(photo) : undefined };
   } catch {
     return null;
   }
@@ -60,6 +62,7 @@ interface CommentItem {
   id: string;
   uid: string;
   userName: string;
+  userPhoto?: string;
   text: string;
   ts: number;
   parentId?: string;
@@ -71,6 +74,7 @@ const normalizeComment = (id: string, value: any): CommentItem => ({
   id,
   uid: String(value?.userId || value?.uid || ""),
   userName: String(value?.userName || "User"),
+  userPhoto: value?.userPhoto ? String(value.userPhoto) : undefined,
   text: String(value?.text || ""),
   ts: Number(value?.timestamp || value?.ts || 0),
   parentId: value?.parentId ? String(value.parentId) : undefined,
@@ -92,8 +96,19 @@ const avatarColor = (name: string) => {
   return colors[h % colors.length];
 };
 
-const Avatar = ({ name, size = "md" }: { name: string; size?: "sm" | "md" }) => {
+const Avatar = ({ name, photo, size = "md" }: { name: string; photo?: string; size?: "sm" | "md" }) => {
   const cls = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={name}
+        loading="lazy"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        className={`shrink-0 rounded-full object-cover ${cls} shadow-sm ring-1 ring-border/40`}
+      />
+    );
+  }
   return (
     <div className={`shrink-0 rounded-full bg-gradient-to-br ${avatarColor(name || "?")} ${cls} flex items-center justify-center font-bold text-white shadow-sm`}>
       {(name || "?").trim().charAt(0).toUpperCase()}
@@ -155,6 +170,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       await set(node, {
         userId: user!.id,
         userName: user!.name,
+        ...(user!.photo ? { userPhoto: user!.photo } : {}),
         text: text.slice(0, 500),
         timestamp: Date.now(),
       });
@@ -176,6 +192,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       await set(node, {
         userId: user!.id,
         userName: user!.name,
+        ...(user!.photo ? { userPhoto: user!.photo } : {}),
         text: text.slice(0, 500),
         timestamp: Date.now(),
         parentId,
@@ -237,7 +254,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     const expanded = expandedReplies[c.id];
     return (
       <div key={c.id} className="flex gap-2.5">
-        <Avatar name={c.userName} size={isReply ? "sm" : "md"} />
+        <Avatar name={c.userName} photo={user && c.uid === user.id ? (user.photo || c.userPhoto) : c.userPhoto} size={isReply ? "sm" : "md"} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="truncate text-[12px] font-semibold text-foreground">@{c.userName}</span>
@@ -285,7 +302,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
           {/* Reply composer */}
           {!isReply && replyingTo === c.id && (
             <div className="mt-2 flex items-center gap-2">
-              <Avatar name={user?.name || "?"} size="sm" />
+              <Avatar name={user?.name || "?"} photo={user?.photo} size="sm" />
               <input
                 type="text"
                 autoFocus
@@ -354,7 +371,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
 
         {/* Top composer */}
         <div className="mb-4 flex items-center gap-2.5">
-          <Avatar name={user?.name || "?"} />
+          <Avatar name={user?.name || "?"} photo={user?.photo} />
           <input
             ref={inputRef}
             type="text"
