@@ -254,7 +254,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     const expanded = expandedReplies[c.id];
     return (
       <div key={c.id} className="flex gap-2.5">
-        <Avatar name={c.userName} size={isReply ? "sm" : "md"} />
+        <Avatar name={c.userName} photo={user && c.uid === user.id ? (user.photo || c.userPhoto) : c.userPhoto} size={isReply ? "sm" : "md"} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="truncate text-[12px] font-semibold text-foreground">@{c.userName}</span>
