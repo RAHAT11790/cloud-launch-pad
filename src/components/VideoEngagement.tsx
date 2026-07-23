@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
-import { MessageCircle, Send, Trash2 } from "lucide-react";
+import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -75,6 +75,11 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [dislikeCount, setDislikeCount] = useState(0);
+  const [myReaction, setMyReaction] = useState<"like" | "dislike" | null>(null);
+  const [viewCount, setViewCount] = useState(0);
+  const [reactionBusy, setReactionBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,6 +92,38 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     });
   }, [animeId, user?.id]);
 
+  // Likes
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `engagement/${animeId}/likes`), (snap) => {
+      const raw = snap.val() || {};
+      const keys = Object.keys(raw);
+      setLikeCount(keys.length);
+      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "like" : prev === "like" ? null : prev));
+    });
+  }, [animeId, user?.id]);
+
+  // Dislikes
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `engagement/${animeId}/dislikes`), (snap) => {
+      const raw = snap.val() || {};
+      const keys = Object.keys(raw);
+      setDislikeCount(keys.length);
+      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "dislike" : prev === "dislike" ? null : prev));
+    });
+  }, [animeId, user?.id]);
+
+  // Total views
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `analytics/totals/views/${animeId}`), (snap) => {
+      const v = snap.val();
+      const c = Number(v?.count || 0);
+      setViewCount(c);
+    });
+  }, [animeId]);
+
   const ensureUser = (): boolean => {
     if (!user) {
       toast.error("Please log in to react");
@@ -94,6 +131,32 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     }
     return true;
   };
+
+  const react = async (kind: "like" | "dislike") => {
+    if (!ensureUser() || reactionBusy) return;
+    setReactionBusy(true);
+    const uid = user!.id;
+    const likeRef = ref(db, `engagement/${animeId}/likes/${uid}`);
+    const dislikeRef = ref(db, `engagement/${animeId}/dislikes/${uid}`);
+    try {
+      if (myReaction === kind) {
+        // toggle off
+        await remove(kind === "like" ? likeRef : dislikeRef);
+        setMyReaction(null);
+      } else {
+        // set new, remove opposite
+        await set(kind === "like" ? likeRef : dislikeRef, { ts: Date.now() });
+        await remove(kind === "like" ? dislikeRef : likeRef).catch(() => {});
+        setMyReaction(kind);
+      }
+    } catch {
+      toast.error("Failed to update reaction");
+    } finally {
+      setReactionBusy(false);
+    }
+  };
+
+
 
 
   const postComment = async () => {
@@ -123,7 +186,37 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   };
 
   return (
-      <div className="w-full max-w-full min-w-0 overflow-hidden px-0">
+      <div className="w-full max-w-full min-w-0 overflow-hidden px-0 space-y-3">
+        {/* Reactions + Views bar (YouTube-style) */}
+        <div className="w-full max-w-full min-w-0 rounded-[14px] border border-border/70 bg-card/55 px-3 py-2.5 flex items-center gap-2 overflow-hidden">
+          <div className="flex items-center rounded-full bg-secondary/60 border border-border/60 overflow-hidden">
+            <button
+              onClick={() => react("like")}
+              disabled={reactionBusy}
+              aria-pressed={myReaction === "like"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold transition-all active:scale-95 ${myReaction === "like" ? "text-primary" : "text-foreground/85 hover:text-foreground"}`}
+            >
+              <ThumbsUp className={`h-4 w-4 ${myReaction === "like" ? "fill-primary" : ""}`} strokeWidth={2} />
+              <span className="tabular-nums">{formatCount(likeCount)}</span>
+            </button>
+            <div className="h-5 w-px bg-border/70" />
+            <button
+              onClick={() => react("dislike")}
+              disabled={reactionBusy}
+              aria-pressed={myReaction === "dislike"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold transition-all active:scale-95 ${myReaction === "dislike" ? "text-destructive" : "text-foreground/85 hover:text-foreground"}`}
+            >
+              <ThumbsDown className={`h-4 w-4 ${myReaction === "dislike" ? "fill-destructive" : ""}`} strokeWidth={2} />
+              <span className="tabular-nums">{formatCount(dislikeCount)}</span>
+            </button>
+          </div>
+          <div className="ml-auto flex items-center gap-1.5 rounded-full bg-secondary/60 border border-border/60 px-3 py-1.5 text-[12px] font-semibold text-foreground/85">
+            <Eye className="h-4 w-4 text-primary" strokeWidth={2} />
+            <span className="tabular-nums">{formatCount(viewCount)}</span>
+            <span className="text-muted-foreground font-medium">views</span>
+          </div>
+        </div>
+
         <div className="w-full max-w-full min-w-0 rounded-[12px] border border-border/70 bg-card/55 px-3 py-3 overflow-hidden">
           <div className="mb-3 flex items-center gap-2">
             <MessageCircle className="h-4 w-4 text-primary" strokeWidth={2} />
@@ -132,6 +225,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
               <p className="text-[11px] text-muted-foreground">{comments.length} {comments.length === 1 ? "comment" : "comments"}</p>
             </div>
           </div>
+
 
           <div className="space-y-3">
             {comments.length === 0 ? (
