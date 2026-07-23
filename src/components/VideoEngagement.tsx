@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
 import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { readProfilePhoto } from "@/lib/localUser";
 
 /**
  * YouTube-style comment section with nested replies + per-comment reactions.
