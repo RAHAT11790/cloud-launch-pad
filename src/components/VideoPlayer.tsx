@@ -3745,6 +3745,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
     const onLoaded = () => {
+      clearStartupTimer();
       markPlaybackSourceHealthy();
       setDuration(v.duration);
       applyPendingSeek(v);
@@ -3757,6 +3758,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     };
     const onLoadedData = () => {
+      clearStartupTimer();
       markPlaybackSourceHealthy();
       applyPendingSeek(v);
     };
