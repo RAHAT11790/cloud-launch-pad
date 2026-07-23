@@ -3882,10 +3882,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
     let hardStallTimer: ReturnType<typeof setTimeout> | null = null;
+    let startupTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearStartupTimer = () => {
+      if (startupTimer) { clearTimeout(startupTimer); startupTimer = null; }
+    };
     const clearStallRecoveryTimers = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
       if (hardStallTimer) { clearTimeout(hardStallTimer); hardStallTimer = null; }
+      clearStartupTimer();
+    };
+
+    // Startup watchdog: if the current source produces NO metadata / no first
+    // frame within STARTUP_TIMEOUT, treat it as a dead link and fail over to
+    // the next quality/server instead of showing the endless spinner. HLS and
+    // AN synthetic sources are excluded — hls.js has its own recovery chain.
+    const STARTUP_TIMEOUT_MS = 9000;
+    const armStartupWatchdog = () => {
+      clearStartupTimer();
+      if (isAnimeSaltContent) return;
+      const srcNow = currentSrc;
+      if (!srcNow || /\.m3u8(?:$|[?#])/i.test(srcNow)) return;
+      startupTimer = setTimeout(() => {
+        if (!v || adGateActiveRef.current) return;
+        // Already produced metadata or is playing — nothing to do.
+        if (v.readyState >= 2 || !v.paused) return;
+        // User paused intentionally — don't yank the source.
+        if (!userPlaybackIntentRef.current) return;
+        tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
+      }, STARTUP_TIMEOUT_MS);
     };
 
     const scheduleHardStallRecovery = (delay: number) => {
