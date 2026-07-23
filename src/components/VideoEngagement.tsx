@@ -62,6 +62,7 @@ interface CommentItem {
   id: string;
   uid: string;
   userName: string;
+  userPhoto?: string;
   text: string;
   ts: number;
   parentId?: string;
@@ -73,6 +74,7 @@ const normalizeComment = (id: string, value: any): CommentItem => ({
   id,
   uid: String(value?.userId || value?.uid || ""),
   userName: String(value?.userName || "User"),
+  userPhoto: value?.userPhoto ? String(value.userPhoto) : undefined,
   text: String(value?.text || ""),
   ts: Number(value?.timestamp || value?.ts || 0),
   parentId: value?.parentId ? String(value.parentId) : undefined,
@@ -94,8 +96,19 @@ const avatarColor = (name: string) => {
   return colors[h % colors.length];
 };
 
-const Avatar = ({ name, size = "md" }: { name: string; size?: "sm" | "md" }) => {
+const Avatar = ({ name, photo, size = "md" }: { name: string; photo?: string; size?: "sm" | "md" }) => {
   const cls = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={name}
+        loading="lazy"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+        className={`shrink-0 rounded-full object-cover ${cls} shadow-sm ring-1 ring-border/40`}
+      />
+    );
+  }
   return (
     <div className={`shrink-0 rounded-full bg-gradient-to-br ${avatarColor(name || "?")} ${cls} flex items-center justify-center font-bold text-white shadow-sm`}>
       {(name || "?").trim().charAt(0).toUpperCase()}
