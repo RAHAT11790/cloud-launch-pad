@@ -1,12 +1,17 @@
-// 🆕 NEW v5 (2026-07-04) — RS TRUE-RANGE: exact browser range pass-through. REDEPLOY REQUIRED.
-// After deploy, paste this URL back into Admin → EGD Router → video-proxy.
+// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + streaming pass-through. REDEPLOY REQUIRED.
+// After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
 // ============================================================
-// Cloudflare Worker — video-proxy (CF-native port)
+// Cloudflare Worker — video-proxy (CF-native port, v8)
 // ============================================================
 // Deploy as a Module Worker. Usage:
 //   https://<worker>.<sub>.workers.dev/?url=<ENCODED_VIDEO_URL>
-// Same behavior as Supabase video-proxy: HLS playlist rewriting,
-// exact range streaming, http+https upstream, safe headers.
+// v8 highlights (parity with Supabase v8):
+// - 16MB range window (was 8MB) → half the round-trips on HTTPS RS mirrors,
+//   noticeably less micro-buffering during long sessions.
+// - Streaming pass-through: `res.body` piped straight to the client, never
+//   buffered on the edge → tiny TTFB.
+// - Opt-in `?faststart=1` is accepted for API parity (CF port keeps the
+//   fast-path only; moov-rewrite is Supabase-side).
 // No env vars required.
 // ============================================================
 
@@ -22,7 +27,8 @@ const cors = {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
+// v8: 16MB window — halves round-trips vs the previous 8MB.
+const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -30,9 +36,7 @@ const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pa
 const toOpaqueUrlToken = (value) => {
   try {
     return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 };
 
 const fromOpaqueUrlToken = (value) => {
@@ -41,9 +45,7 @@ const fromOpaqueUrlToken = (value) => {
   try {
     const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
     return decodeURIComponent(escape(atob(padded)));
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 };
 
 function clampInvalidContentRange(headers) {
@@ -95,71 +97,6 @@ function requestedOpenEndedRange(range) {
 function browserRangeResponseHeaders(headers, originalRange) {
   if (!requestedOpenEndedRange(originalRange)) return;
   if (!headers.has("content-range")) headers.delete("content-length");
-}
-
-function parseContentRange(value) {
-  const m = String(value || "").match(/^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i);
-  if (!m) return null;
-  const start = Number(m[1]);
-  const end = Number(m[2]);
-  const total = m[3] === "*" ? NaN : Number(m[3]);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  return { start, end, total };
-}
-
-async function drainReader(reader, controller) {
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    if (value && value.byteLength) controller.enqueue(value);
-  }
-}
-
-function streamOpenEndedRange(target, method, firstResponse, out, rawRange, headers) {
-  if (method === "HEAD" || !requestedOpenEndedRange(rawRange)) return null;
-  const firstRange = parseContentRange(firstResponse.headers.get("content-range"));
-  const requestedStart = Number(String(rawRange || "").match(/^bytes=(\d+)-$/i)?.[1] || NaN);
-  if (!firstRange || !Number.isFinite(firstRange.total) || firstRange.total <= 0 || firstRange.start !== requestedStart) return null;
-
-  out.set("content-range", `bytes ${firstRange.start}-${firstRange.total - 1}/${firstRange.total}`);
-  out.set("content-length", String(firstRange.total - firstRange.start));
-
-  return new ReadableStream({
-    start(controller) {
-      (async () => {
-      let cursor = firstRange.start;
-      try {
-        const firstReader = firstResponse.body?.getReader();
-        if (firstReader) {
-          await drainReader(firstReader, controller);
-          cursor = firstRange.end + 1;
-        }
-        while (cursor < firstRange.total) {
-          const chunkEnd = Math.min(cursor + MEDIA_CHUNK_BYTES - 1, firstRange.total - 1);
-          const res = await fetch(target.toString(), {
-            method: "GET",
-            headers: { ...headers, range: `bytes=${cursor}-${chunkEnd}` },
-            redirect: "follow",
-          });
-          if (!(res.ok || res.status === 206)) {
-            try { await res.body?.cancel(); } catch {}
-            throw new Error(`Upstream chunk ${cursor}-${chunkEnd} failed: ${res.status}`);
-          }
-          const reader = res.body?.getReader();
-          if (!reader) throw new Error("Upstream chunk body missing");
-          await drainReader(reader, controller);
-          cursor = chunkEnd + 1;
-        }
-        controller.close();
-      } catch (e) {
-        try { controller.error(e); } catch {}
-      }
-      })();
-    },
-    cancel() {
-      try { firstResponse.body?.cancel(); } catch {}
-    },
-  });
 }
 
 function proxyUrl(reqUrl, target) {
@@ -214,6 +151,8 @@ export default {
       const v = req.headers.get(k);
       if (v) headers[k] = k === "range" ? (aligned.range || v) : v;
     }
+    // NEVER forward the browser's own Referer (public site host) — some HTTP
+    // mirrors reject public-site referers. We synthesize a same-origin Referer.
     const origin = `${up.protocol}//${up.host}`;
     const attempts = [
       headers,
@@ -221,11 +160,11 @@ export default {
       { ...headers, Referer: `${origin}/`, Origin: origin },
     ];
 
-    let res = null, lastErr = "", effectiveHeaders = headers;
+    let res = null, lastErr = "";
     for (const h of attempts) {
       try {
         res = await fetch(up.toString(), { method: req.method, headers: h, redirect: "follow" });
-        if (res.ok || res.status === 206 || res.status === 304) { effectiveHeaders = h; break; }
+        if (res.ok || res.status === 206 || res.status === 304) break;
         lastErr = `HTTP ${res.status}`;
         try { await res.body?.cancel(); } catch {}
       } catch (e) { lastErr = e?.message || String(e); res = null; }
@@ -256,8 +195,7 @@ export default {
     if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
-    // Keep RS range responses short and bounded. Re-assembling an open-ended
-    // browser range into the full file tail made skip/seek wait on slow mirrors.
+    // Streaming pass-through — never buffer the upstream body on the edge.
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
 };

@@ -58,14 +58,12 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
-  entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"], { isNew: true, badgeText: "BOT", badgeTone: "amber" }),
+  entry("video-proxy",     "Video Proxy",     "🚀 v8 HTTPS BUFFER-KILLER — 16MB range window (was 8MB) halves HTTPS round-trips; streaming pass-through gives tiny TTFB; playlist rewriting + multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { isNew: true, badgeText: "v8 · NEW", badgeTone: "amber" }),
 
-
-  entry("send-fcm",        "Send FCM (Push) — NEW v2", "🔔 v2 Offline-Guaranteed Push worker — Firebase Admin (service-account JWT) → FCM v1 API. NEW in v2: hybrid webpush.notification + data payload, unique notificationId per message, requireInteraction + renotify, tag='rsanime-<id>', 28-day TTL (2419200s) + Urgency:high headers → notifications delivered even when site/tab is closed and device is offline (queued & pushed when back online). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL cleanup (bind Cron → /cleanup). Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v2 · NEW", badgeTone: "amber" }),
-  
-  entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "AN FETCH", badgeTone: "emerald" }),
-  entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
-  entry("video-proxy",     "Video Proxy",     "Universal HLS/video proxy with exact browser Range pass-through, playlist rewriting and multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { badgeText: "UNLIMITED", badgeTone: "emerald" }),
+  entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"]),
+  entry("send-fcm",        "Send FCM (Push) v2", "🔔 v2 Offline-Guaranteed Push worker — Firebase Admin (service-account JWT) → FCM v1 API. Hybrid webpush.notification + data payload, unique notificationId per message, requireInteraction + renotify, tag='rsanime-<id>', 28-day TTL + Urgency:high headers. Routes: /send /register /unregister /cleanup /health. Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"]),
+  entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, []),
+  entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, []),
   entry("live-tv-proxy",   "Live TV Proxy",   "Dedicated HLS proxy for Live TV — isolates streaming bandwidth from the main video proxy.", liveTvProxySrc),
   entry("video-download",  "Video Download",  "Hardened attachment-mode download proxy with retries and clean headers.", videoDownloadSrc),
   entry("verify-admin-pin","Verify Admin PIN","Server-side admin PIN verifier. Set ADMIN_PIN secret in this Worker to control the admin panel PIN privately.", verifyAdminPinSrc, ["ADMIN_PIN"]),
@@ -73,6 +71,7 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   entry("shorten-arolinks","Shorten Arolinks","Arolinks shortener proxy. Requires AROLINKS_API_KEY secret.", shortenArolinksSrc, ["AROLINKS_API_KEY"]),
   entry("telegram-post",   "Telegram Post",   "Posts new episodes / notifications to your Telegram channel via Bot API.", telegramPostSrc, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]),
 ];
+
 
 export const getCfLibraryEntry = (slug: string) =>
   CF_WORKER_LIBRARY.find((e) => e.slug === slug);
