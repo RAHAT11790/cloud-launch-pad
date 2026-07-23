@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
-import { MessageCircle, Send, Trash2 } from "lucide-react";
+import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 /**
