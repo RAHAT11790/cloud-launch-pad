@@ -302,7 +302,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
           {/* Reply composer */}
           {!isReply && replyingTo === c.id && (
             <div className="mt-2 flex items-center gap-2">
-              <Avatar name={user?.name || "?"} size="sm" />
+              <Avatar name={user?.name || "?"} photo={user?.photo} size="sm" />
               <input
                 type="text"
                 autoFocus
