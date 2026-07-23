@@ -113,6 +113,7 @@ import platform
 import subprocess
 import traceback
 import urllib.parse
+import html
 from datetime import datetime, timedelta, date, timezone
 from typing import Any, Dict, List, Optional, Union, AsyncGenerator
 
@@ -182,7 +183,7 @@ URL = PUBLIC_URL if PUBLIC_URL.endswith("/") else PUBLIC_URL + "/"
 # Database must never block Telegram handlers. If MongoDB is not configured
 # yet, the bot automatically falls back to an in-memory store so /start and
 # file-to-link generation still work instantly.
-DB_TIMEOUT = 4
+DB_TIMEOUT = 2
 
 
 # =========================================================================
@@ -1100,7 +1101,11 @@ app = Client(
     api_id=API_ID, api_hash=API_HASH,
     bot_token=BOT_TOKEN,
     workers=50, sleep_threshold=60,
-    in_memory=False,
+    # Always start a fresh in-memory bot session. This prevents stale .session
+    # files / locked sessions from starting successfully but silently missing
+    # /start and media updates on cheap VPS/Railway/bot-hosting panels.
+    in_memory=True,
+    parse_mode=enums.ParseMode.HTML,
 )
 
 
@@ -1153,6 +1158,7 @@ async def safe_reply_text(message: Message, text: str, **kwargs):
     except Exception as e:
         log.warning(f"reply failed in chat {getattr(message.chat, 'id', '?')}: {e}")
         try:
+            kwargs.pop("quote", None)
             return await asyncio.wait_for(app.send_message(message.chat.id, text, **kwargs), timeout=20)
         except Exception as e2:
             log.error(f"send fallback failed: {e2}")
@@ -1199,6 +1205,10 @@ def _media_size(media) -> str:
     return humanbytes(getattr(media, "file_size", 0) or 0)
 
 
+def _safe_html(value: Any) -> str:
+    return html.escape(str(value or ""), quote=True)
+
+
 async def _store_in_bin(source: Message, status: Optional[Message] = None) -> Optional[Message]:
     try:
         return await source.forward(chat_id=BIN_CHANNEL)
@@ -1238,7 +1248,7 @@ async def save_file_record(uid: int, file_name: str, file_size: str, file_id: in
         "file_id": file_id, "hash": h, "timestamp": time.time()}))
 
 
-@app.on_message(filters.command("start") & filters.incoming)
+@app.on_message(filters.private & filters.command("start", prefixes=["/", "!", "."]), group=-100)
 async def h_start(client: Client, message: Message):
     try:
         if not message.from_user:
@@ -1332,13 +1342,13 @@ async def h_start(client: Client, message: Message):
         await safe_reply_text(message, f"❌ Start command error: <code>{str(e)[:180]}</code>")
 
 
-@app.on_message(filters.command("help"))
+@app.on_message(filters.command("help", prefixes=["/", "!", "."]), group=-90)
 async def h_help(_c, m: Message):
     await safe_reply_text(m, HELP_TXT, reply_markup=InlineKeyboardMarkup(
         [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
 
-@app.on_message(filters.command("about"))
+@app.on_message(filters.command("about", prefixes=["/", "!", "."]), group=-90)
 async def h_about(_c, m: Message):
     await safe_reply_text(m, ABOUT_TXT.format(
         n=temp.B_NAME, v=BOT_VERSION, pv=pyro_ver,
@@ -1348,7 +1358,7 @@ async def h_about(_c, m: Message):
         [[InlineKeyboardButton("• ᴄʟᴏsᴇ •", callback_data="close")]]))
 
 
-@app.on_message(filters.command("ping"))
+@app.on_message(filters.command("ping", prefixes=["/", "!", "."]), group=-90)
 async def h_ping(_c, m: Message):
     t = time.time()
     r = await safe_reply_text(m, "pinging...")
@@ -1611,7 +1621,12 @@ FILE_CAPTION_TXT = (
 )
 
 
-@app.on_message(filters.private & (filters.document | filters.video | filters.audio), group=4)
+@app.on_message(
+    filters.private
+    & ~filters.command(["start", "help", "about", "ping", "stats", "restart", "ban", "unban", "blocked", "broadcast", "pin_broadcast", "add_premium", "remove_premium", "myplan", "password", "delete_pass", "batch", "files", "delfile"], prefixes=["/", "!", "."])
+    & (filters.document | filters.video | filters.audio | filters.animation | filters.voice | filters.video_note | filters.photo),
+    group=-80,
+)
 async def h_file_private(client: Client, m: Message):
     status = None
     try:
@@ -1653,7 +1668,12 @@ async def h_file_private(client: Client, m: Message):
         except Exception as e:
             log.warning(f"bin note failed: {e}")
 
-        text = FILE_CAPTION_TXT.format(s=stream, n=fname, sz=fsize, d=download)
+        text = FILE_CAPTION_TXT.format(
+            s=_safe_html(stream),
+            n=_safe_html(fname),
+            sz=_safe_html(fsize),
+            d=_safe_html(download),
+        )
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("• sᴛʀᴇᴀᴍ •",   url=stream),
              InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download)],
