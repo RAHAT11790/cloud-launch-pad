@@ -20,7 +20,7 @@ interface Props {
   title?: string;
 }
 
-const getLocalUser = (): { id: string; name: string } | null => {
+const getLocalUser = (): { id: string; name: string; photo?: string } | null => {
   try {
     const raw = localStorage.getItem("rsanime_user");
     if (!raw) return null;
@@ -31,7 +31,8 @@ const getLocalUser = (): { id: string; name: string } | null => {
       u.name ||
       u.displayName ||
       (u.email ? String(u.email).split("@")[0] : "User");
-    return { id: String(u.id), name: String(name) };
+    const photo = readProfilePhoto(String(u.id)) || u.photoURL || u.photo || undefined;
+    return { id: String(u.id), name: String(name), photo: photo ? String(photo) : undefined };
   } catch {
     return null;
   }
