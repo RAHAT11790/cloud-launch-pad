@@ -122,7 +122,38 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       const c = Number(v?.count || 0);
       setViewCount(c);
     });
-  }, [animeId]);
+  const ensureUser = (): boolean => {
+    if (!user) {
+      toast.error("Please log in to react");
+      return false;
+    }
+    return true;
+  };
+
+  const react = async (kind: "like" | "dislike") => {
+    if (!ensureUser() || reactionBusy) return;
+    setReactionBusy(true);
+    const uid = user!.id;
+    const likeRef = ref(db, `engagement/${animeId}/likes/${uid}`);
+    const dislikeRef = ref(db, `engagement/${animeId}/dislikes/${uid}`);
+    try {
+      if (myReaction === kind) {
+        // toggle off
+        await remove(kind === "like" ? likeRef : dislikeRef);
+        setMyReaction(null);
+      } else {
+        // set new, remove opposite
+        await set(kind === "like" ? likeRef : dislikeRef, { ts: Date.now() });
+        await remove(kind === "like" ? dislikeRef : likeRef).catch(() => {});
+        setMyReaction(kind);
+      }
+    } catch {
+      toast.error("Failed to update reaction");
+    } finally {
+      setReactionBusy(false);
+    }
+  };
+
 
 
 
