@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
-import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, Eye } from "lucide-react";
+import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 /**
- * YouTube-style engagement bar shown directly below the video player.
- * Like / Dislike / Comment / Share with live counts, persisted in Firebase RTDB.
+ * YouTube-style comment section with nested replies + per-comment reactions.
  *
- * Firebase shape (per anime):
- *   engagement/{animeId}/likes/{uid}            = { ts }
- *   engagement/{animeId}/dislikes/{uid}         = { ts }
- *   engagement/{animeId}/comments/{cid}         = { uid, userName, text, ts, likes: { uid: true } }
+ * Firebase shape (flat, parentId links replies to top-level comments):
+ *   comments/{animeId}/{cid} = {
+ *     userId, userName, text, timestamp,
+ *     parentId?: string,
+ *     likes?: { uid: true },
+ *     dislikes?: { uid: true }
+ *   }
  */
 interface Props {
   animeId: string;
@@ -42,16 +44,16 @@ const formatCount = (n: number): string => {
 
 const timeAgo = (ts: number): string => {
   const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s`;
+  if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
+  if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d`;
+  if (d < 30) return `${d}d ago`;
   const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo`;
-  return `${Math.floor(mo / 12)}y`;
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
 };
 
 interface CommentItem {
@@ -60,6 +62,9 @@ interface CommentItem {
   userName: string;
   text: string;
   ts: number;
+  parentId?: string;
+  likes: string[];
+  dislikes: string[];
 }
 
 const normalizeComment = (id: string, value: any): CommentItem => ({
@@ -68,18 +73,44 @@ const normalizeComment = (id: string, value: any): CommentItem => ({
   userName: String(value?.userName || "User"),
   text: String(value?.text || ""),
   ts: Number(value?.timestamp || value?.ts || 0),
+  parentId: value?.parentId ? String(value.parentId) : undefined,
+  likes: value?.likes && typeof value.likes === "object" ? Object.keys(value.likes) : [],
+  dislikes: value?.dislikes && typeof value.dislikes === "object" ? Object.keys(value.dislikes) : [],
 });
+
+const avatarColor = (name: string) => {
+  const colors = [
+    "from-rose-500 to-pink-600",
+    "from-amber-500 to-orange-600",
+    "from-emerald-500 to-teal-600",
+    "from-sky-500 to-blue-600",
+    "from-violet-500 to-purple-600",
+    "from-fuchsia-500 to-pink-600",
+  ];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return colors[h % colors.length];
+};
+
+const Avatar = ({ name, size = "md" }: { name: string; size?: "sm" | "md" }) => {
+  const cls = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
+  return (
+    <div className={`shrink-0 rounded-full bg-gradient-to-br ${avatarColor(name || "?")} ${cls} flex items-center justify-center font-bold text-white shadow-sm`}>
+      {(name || "?").trim().charAt(0).toUpperCase()}
+    </div>
+  );
+};
 
 const VideoEngagement = ({ animeId, title }: Props) => {
   const user = useMemo(() => getLocalUser(), []);
-  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [allComments, setAllComments] = useState<CommentItem[]>([]);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
-  const [dislikeCount, setDislikeCount] = useState(0);
-  const [myReaction, setMyReaction] = useState<"like" | "dislike" | null>(null);
-  const [viewCount, setViewCount] = useState(0);
-  const [reactionBusy, setReactionBusy] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+  const [reactionBusy, setReactionBusy] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -88,76 +119,31 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       const raw = snap.val() || {};
       const list: CommentItem[] = Object.entries(raw).map(([id, v]: [string, any]) => normalizeComment(id, v));
       list.sort((a, b) => b.ts - a.ts);
-      setComments(list);
-    });
-  }, [animeId, user?.id]);
-
-  // Likes
-  useEffect(() => {
-    if (!animeId) return;
-    return onValue(ref(db, `engagement/${animeId}/likes`), (snap) => {
-      const raw = snap.val() || {};
-      const keys = Object.keys(raw);
-      setLikeCount(keys.length);
-      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "like" : prev === "like" ? null : prev));
-    });
-  }, [animeId, user?.id]);
-
-  // Dislikes
-  useEffect(() => {
-    if (!animeId) return;
-    return onValue(ref(db, `engagement/${animeId}/dislikes`), (snap) => {
-      const raw = snap.val() || {};
-      const keys = Object.keys(raw);
-      setDislikeCount(keys.length);
-      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "dislike" : prev === "dislike" ? null : prev));
-    });
-  }, [animeId, user?.id]);
-
-  // Total views
-  useEffect(() => {
-    if (!animeId) return;
-    return onValue(ref(db, `analytics/totals/views/${animeId}`), (snap) => {
-      const v = snap.val();
-      const c = Number(v?.count || 0);
-      setViewCount(c);
+      setAllComments(list);
     });
   }, [animeId]);
 
+  const { topLevel, repliesByParent, totalCount } = useMemo(() => {
+    const top: CommentItem[] = [];
+    const map: Record<string, CommentItem[]> = {};
+    for (const c of allComments) {
+      if (c.parentId) {
+        (map[c.parentId] ||= []).push(c);
+      } else {
+        top.push(c);
+      }
+    }
+    Object.values(map).forEach((arr) => arr.sort((a, b) => a.ts - b.ts));
+    return { topLevel: top, repliesByParent: map, totalCount: allComments.length };
+  }, [allComments]);
+
   const ensureUser = (): boolean => {
     if (!user) {
-      toast.error("Please log in to react");
+      toast.error("Please log in to continue");
       return false;
     }
     return true;
   };
-
-  const react = async (kind: "like" | "dislike") => {
-    if (!ensureUser() || reactionBusy) return;
-    setReactionBusy(true);
-    const uid = user!.id;
-    const likeRef = ref(db, `engagement/${animeId}/likes/${uid}`);
-    const dislikeRef = ref(db, `engagement/${animeId}/dislikes/${uid}`);
-    try {
-      if (myReaction === kind) {
-        // toggle off
-        await remove(kind === "like" ? likeRef : dislikeRef);
-        setMyReaction(null);
-      } else {
-        // set new, remove opposite
-        await set(kind === "like" ? likeRef : dislikeRef, { ts: Date.now() });
-        await remove(kind === "like" ? dislikeRef : likeRef).catch(() => {});
-        setMyReaction(kind);
-      }
-    } catch {
-      toast.error("Failed to update reaction");
-    } finally {
-      setReactionBusy(false);
-    }
-  };
-
-
-
 
   const postComment = async () => {
     if (!ensureUser()) return;
@@ -180,118 +166,235 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     }
   };
 
-  const deleteComment = async (c: CommentItem) => {
-    if (!user || user.id !== c.uid) return;
-    await remove(ref(db, `comments/${animeId}/${c.id}`)).catch(() => {});
+  const postReply = async (parentId: string) => {
+    if (!ensureUser()) return;
+    const text = replyText.trim();
+    if (!text) return;
+    setReplySending(true);
+    try {
+      const node = push(ref(db, `comments/${animeId}`));
+      await set(node, {
+        userId: user!.id,
+        userName: user!.name,
+        text: text.slice(0, 500),
+        timestamp: Date.now(),
+        parentId,
+      });
+      setReplyText("");
+      setReplyingTo(null);
+      setExpandedReplies((prev) => ({ ...prev, [parentId]: true }));
+    } catch {
+      toast.error("Failed to post reply");
+    } finally {
+      setReplySending(false);
+    }
   };
 
-  return (
-      <div className="w-full max-w-full min-w-0 overflow-hidden px-0 space-y-3">
-        {/* Reactions + Views bar (YouTube-style) */}
-        <div className="w-full max-w-full min-w-0 rounded-[14px] border border-border/70 bg-card/55 px-3 py-2.5 flex items-center gap-2 overflow-hidden">
-          <div className="flex items-center rounded-full bg-secondary/60 border border-border/60 overflow-hidden">
+  const deleteComment = async (c: CommentItem) => {
+    if (!user || user.id !== c.uid) return;
+    // remove the comment
+    await remove(ref(db, `comments/${animeId}/${c.id}`)).catch(() => {});
+    // if top-level, remove its replies too
+    if (!c.parentId) {
+      const kids = repliesByParent[c.id] || [];
+      await Promise.all(kids.map((k) => remove(ref(db, `comments/${animeId}/${k.id}`)).catch(() => {})));
+    }
+  };
+
+  const reactToComment = async (c: CommentItem, kind: "like" | "dislike") => {
+    if (!ensureUser() || reactionBusy) return;
+    setReactionBusy(c.id);
+    const uid = user!.id;
+    const likedNow = c.likes.includes(uid);
+    const dislikedNow = c.dislikes.includes(uid);
+    const likeRef = ref(db, `comments/${animeId}/${c.id}/likes/${uid}`);
+    const dislikeRef = ref(db, `comments/${animeId}/${c.id}/dislikes/${uid}`);
+    try {
+      if (kind === "like") {
+        if (likedNow) await remove(likeRef);
+        else {
+          await set(likeRef, true);
+          if (dislikedNow) await remove(dislikeRef).catch(() => {});
+        }
+      } else {
+        if (dislikedNow) await remove(dislikeRef);
+        else {
+          await set(dislikeRef, true);
+          if (likedNow) await remove(likeRef).catch(() => {});
+        }
+      }
+    } catch {
+      toast.error("Failed to update reaction");
+    } finally {
+      setReactionBusy(null);
+    }
+  };
+
+  const renderComment = (c: CommentItem, isReply = false) => {
+    const myLike = user ? c.likes.includes(user.id) : false;
+    const myDislike = user ? c.dislikes.includes(user.id) : false;
+    const kids = repliesByParent[c.id] || [];
+    const expanded = expandedReplies[c.id];
+    return (
+      <div key={c.id} className="flex gap-2.5">
+        <Avatar name={c.userName} size={isReply ? "sm" : "md"} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="truncate text-[12px] font-semibold text-foreground">@{c.userName}</span>
+            <span className="text-[10px] text-muted-foreground">{timeAgo(c.ts)}</span>
+          </div>
+          <p className="break-words whitespace-pre-wrap text-[13px] leading-[1.35rem] text-foreground/90">{c.text}</p>
+          <div className="mt-1 flex items-center gap-1 -ml-1.5">
             <button
-              onClick={() => react("like")}
-              disabled={reactionBusy}
-              aria-pressed={myReaction === "like"}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold transition-all active:scale-95 ${myReaction === "like" ? "text-primary" : "text-foreground/85 hover:text-foreground"}`}
+              onClick={() => reactToComment(c, "like")}
+              disabled={reactionBusy === c.id}
+              className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myLike ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
             >
-              <ThumbsUp className={`h-4 w-4 ${myReaction === "like" ? "fill-primary" : ""}`} strokeWidth={2} />
-              <span className="tabular-nums">{formatCount(likeCount)}</span>
+              <ThumbsUp className={`h-3.5 w-3.5 ${myLike ? "fill-primary" : ""}`} strokeWidth={2} />
+              {c.likes.length > 0 && <span className="tabular-nums">{formatCount(c.likes.length)}</span>}
             </button>
-            <div className="h-5 w-px bg-border/70" />
             <button
-              onClick={() => react("dislike")}
-              disabled={reactionBusy}
-              aria-pressed={myReaction === "dislike"}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold transition-all active:scale-95 ${myReaction === "dislike" ? "text-destructive" : "text-foreground/85 hover:text-foreground"}`}
+              onClick={() => reactToComment(c, "dislike")}
+              disabled={reactionBusy === c.id}
+              className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myDislike ? "text-destructive" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
             >
-              <ThumbsDown className={`h-4 w-4 ${myReaction === "dislike" ? "fill-destructive" : ""}`} strokeWidth={2} />
-              <span className="tabular-nums">{formatCount(dislikeCount)}</span>
+              <ThumbsDown className={`h-3.5 w-3.5 ${myDislike ? "fill-destructive" : ""}`} strokeWidth={2} />
+              {c.dislikes.length > 0 && <span className="tabular-nums">{formatCount(c.dislikes.length)}</span>}
             </button>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5 rounded-full bg-secondary/60 border border-border/60 px-3 py-1.5 text-[12px] font-semibold text-foreground/85">
-            <Eye className="h-4 w-4 text-primary" strokeWidth={2} />
-            <span className="tabular-nums">{formatCount(viewCount)}</span>
-            <span className="text-muted-foreground font-medium">views</span>
-          </div>
-        </div>
-
-        <div className="w-full max-w-full min-w-0 rounded-[12px] border border-border/70 bg-card/55 px-3 py-3 overflow-hidden">
-          <div className="mb-3 flex items-center gap-2">
-            <MessageCircle className="h-4 w-4 text-primary" strokeWidth={2} />
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Comments</h3>
-              <p className="text-[11px] text-muted-foreground">{comments.length} {comments.length === 1 ? "comment" : "comments"}</p>
-            </div>
-          </div>
-
-
-          <div className="space-y-3">
-            {comments.length === 0 ? (
-              <div className="rounded-[10px] bg-secondary/40 px-3 py-6 text-center text-muted-foreground">
-                <MessageCircle className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                <p className="text-sm">Be the first to comment</p>
-              </div>
-            ) : (
-              comments.map((c) => (
-                <div key={c.id} className="flex gap-3 rounded-[10px] bg-secondary/35 px-3 py-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground">
-                    {(c.userName || "?").trim().charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 flex items-center gap-2">
-                      <span className="truncate text-xs font-semibold text-foreground">{c.userName}</span>
-                      <span className="text-[10px] text-muted-foreground">{timeAgo(c.ts)}</span>
-                    </div>
-                    <p className="break-words whitespace-pre-wrap text-[13px] leading-5 text-foreground/90">{c.text}</p>
-                    {user?.id === c.uid && (
-                      <button
-                        onClick={() => deleteComment(c)}
-                        className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground transition-all active:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        <span>Delete</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
+            {!isReply && (
+              <button
+                onClick={() => {
+                  setReplyingTo((prev) => (prev === c.id ? null : c.id));
+                  setReplyText("");
+                }}
+                className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground active:scale-95"
+              >
+                Reply
+              </button>
+            )}
+            {user?.id === c.uid && (
+              <button
+                onClick={() => deleteComment(c)}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground transition-all hover:text-destructive active:scale-95"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             )}
           </div>
 
-          <div className="mt-3 border-t border-border/60 pt-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground">
-                {(user?.name || "?").trim().charAt(0).toUpperCase()}
-              </div>
+          {/* Reply composer */}
+          {!isReply && replyingTo === c.id && (
+            <div className="mt-2 flex items-center gap-2">
+              <Avatar name={user?.name || "?"} size="sm" />
               <input
-                ref={inputRef}
                 type="text"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
+                autoFocus
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    postComment();
+                    postReply(c.id);
                   }
                 }}
-                placeholder={user ? `Comment on ${title || "this anime"}...` : "Log in to comment"}
-                disabled={!user || sending}
+                placeholder={`Reply to @${c.userName}...`}
+                disabled={!user || replySending}
                 maxLength={500}
-                className="min-w-0 flex-1 rounded-full bg-secondary/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                className="min-w-0 flex-1 border-b border-border bg-transparent px-1 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
               />
               <button
-                onClick={postComment}
-                disabled={!user || sending || !commentText.trim()}
-                className="flex h-10 w-10 items-center justify-center rounded-full gradient-primary text-primary-foreground transition-all active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+                onClick={() => {
+                  setReplyingTo(null);
+                  setReplyText("");
+                }}
+                className="rounded-full px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-foreground/10"
               >
-                <Send className="h-4 w-4" />
+                Cancel
+              </button>
+              <button
+                onClick={() => postReply(c.id)}
+                disabled={!user || replySending || !replyText.trim()}
+                className="rounded-full gradient-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground disabled:opacity-40 active:scale-95"
+              >
+                Reply
               </button>
             </div>
-          </div>
+          )}
+
+          {/* Reply toggle + list */}
+          {!isReply && kids.length > 0 && (
+            <div className="mt-2">
+              <button
+                onClick={() => setExpandedReplies((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold text-primary transition-all hover:bg-primary/10 active:scale-95"
+              >
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {kids.length} {kids.length === 1 ? "reply" : "replies"}
+              </button>
+              {expanded && (
+                <div className="mt-2 space-y-3 pl-1">
+                  {kids.map((k) => renderComment(k, true))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="w-full max-w-full min-w-0 overflow-hidden px-0">
+      <div className="w-full max-w-full min-w-0 rounded-[14px] border border-border/70 bg-card/55 px-3.5 py-3.5 overflow-hidden">
+        <div className="mb-3.5 flex items-center gap-2">
+          <MessageCircle className="h-4 w-4 text-primary" strokeWidth={2.25} />
+          <h3 className="text-[14px] font-bold text-foreground">Comments</h3>
+          <span className="text-[12px] font-semibold text-muted-foreground tabular-nums">{formatCount(totalCount)}</span>
+        </div>
+
+        {/* Top composer */}
+        <div className="mb-4 flex items-center gap-2.5">
+          <Avatar name={user?.name || "?"} />
+          <input
+            ref={inputRef}
+            type="text"
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                postComment();
+              }
+            }}
+            placeholder={user ? "Add a comment..." : "Log in to comment"}
+            disabled={!user || sending}
+            maxLength={500}
+            className="min-w-0 flex-1 border-b border-border bg-transparent px-1 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+          />
+          <button
+            onClick={postComment}
+            disabled={!user || sending || !commentText.trim()}
+            className="flex h-9 w-9 items-center justify-center rounded-full gradient-primary text-primary-foreground transition-all active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+            aria-label="Post comment"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Comments list */}
+        <div className="space-y-4">
+          {topLevel.length === 0 ? (
+            <div className="rounded-[10px] bg-secondary/30 px-3 py-8 text-center text-muted-foreground">
+              <MessageCircle className="mx-auto mb-2 h-8 w-8 opacity-40" />
+              <p className="text-sm font-medium">Be the first to comment</p>
+              <p className="text-[11px] opacity-70 mt-0.5">on {title || "this anime"}</p>
+            </div>
+          ) : (
+            topLevel.map((c) => renderComment(c))
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
