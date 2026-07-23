@@ -371,7 +371,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
 
         {/* Top composer */}
         <div className="mb-4 flex items-center gap-2.5">
-          <Avatar name={user?.name || "?"} />
+          <Avatar name={user?.name || "?"} photo={user?.photo} />
           <input
             ref={inputRef}
             type="text"
