@@ -5233,6 +5233,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </button>
             </div>
 
+            {animeId && <VideoReactionsBar animeId={animeId} className="mt-3" />}
+
+
+
 
             {episodeList && episodeList.length > 0 && (
               <div className="mt-5">
