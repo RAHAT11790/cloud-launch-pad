@@ -446,14 +446,23 @@ Deno.serve(async (req) => {
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  try {
-    const faststart = await tryFaststartMp4(req, upstreamUrl, rawRange, baseHeaders, ac.signal);
-    if (faststart) return faststart;
-  } catch {
-    // Fall through to the normal streaming proxy if fast-start rewriting cannot
-    // be applied for this source. Playback must never fail only because the
-    // optimization path could not parse a particular MP4 layout.
+  // FAST-PATH: skip the moov-at-end rewriter unless the client explicitly asks
+  // for it with `?faststart=1`. The rewriter does 3+ blocking fetches (probe
+  // size + head + tail) BEFORE any byte reaches the browser, which killed TTFB
+  // on the HTTP RS server. Well-authored Telegram MP4s have moov at the front
+  // and never need it; the client only opts in when direct playback stalls.
+  const wantsFaststart = reqUrl.searchParams.get("faststart") === "1";
+  if (wantsFaststart) {
+    try {
+      const faststart = await tryFaststartMp4(req, upstreamUrl, rawRange, baseHeaders, ac.signal);
+      if (faststart) return faststart;
+    } catch {
+      // Fall through to the normal streaming proxy if fast-start rewriting cannot
+      // be applied for this source. Playback must never fail only because the
+      // optimization path could not parse a particular MP4 layout.
+    }
   }
+
 
   let up: Response | null = null;
   let lastError = "";

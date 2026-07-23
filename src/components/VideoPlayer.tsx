@@ -3805,6 +3805,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     };
     const MAX_RETRIES = manualQualitySelectedRef.current ? 4 : 1;
+    // Opt-in faststart retry: if the current source is a video-proxy URL and
+    // the browser can't decode the initial bytes (moov-at-end MP4), reload
+    // once with `&faststart=1` so the edge rewrites the container. Skipping
+    // this by default keeps TTFB near-zero for well-authored files.
+    const tryFaststartProxyRetry = (savedTimeForRetry: number): boolean => {
+      const cur = currentSrc || "";
+      if (!isVideoProxyPlaybackUrl(cur, proxyUrl)) return false;
+      if (/[?&]faststart=1(?:&|$)/.test(cur)) return false;
+      const boosted = cur + (cur.includes("?") ? "&" : "?") + "faststart=1";
+      try {
+        v.src = boosted;
+        v.load();
+        v.addEventListener("loadedmetadata", () => {
+          if (savedTimeForRetry > 0) v.currentTime = savedTimeForRetry;
+          v.play().catch(() => {});
+        }, { once: true });
+        return true;
+      } catch { return false; }
+    };
     const onError = () => {
       const errSrc = currentSrc;
       const savedTimeForRetry = preserveResumePoint(lastKnownTime || v?.currentTime || 0);
@@ -3812,6 +3831,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const next = prev + 1;
       retryAttemptsRef.current.set(errSrc, next);
       if (next > MAX_RETRIES) {
+        // Last resort before switching route: give proxy MP4 a faststart pass.
+        if (tryFaststartProxyRetry(savedTimeForRetry)) return;
         tryNextPlaybackRoute(savedTimeForRetry);
         return;
       }
@@ -3838,6 +3859,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
       }, delay);
     };
+
     const onCanPlay = () => {
       markPlaybackSourceHealthy();
       finishSeekRecoveryIfReady(v);
