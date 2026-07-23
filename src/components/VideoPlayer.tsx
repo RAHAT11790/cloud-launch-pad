@@ -16,6 +16,7 @@ import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import VideoReactionsBar from "@/components/VideoReactionsBar";
 import { guestStore, isGuest } from "@/lib/guestStore";
+import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
@@ -1651,6 +1652,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
     return () => unsub();
   }, []);
+
+  // Ad-blocker / ad-DNS guard — arms only for non-premium users.
+  useEffect(() => {
+    if (isPremium === null) return;
+    startAdGuard({ isPremium: !!isPremium });
+    return () => { stopAdGuard(); };
+  }, [isPremium]);
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
