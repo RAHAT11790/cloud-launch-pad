@@ -75,6 +75,11 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [dislikeCount, setDislikeCount] = useState(0);
+  const [myReaction, setMyReaction] = useState<"like" | "dislike" | null>(null);
+  const [viewCount, setViewCount] = useState(0);
+  const [reactionBusy, setReactionBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,13 +92,38 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     });
   }, [animeId, user?.id]);
 
-  const ensureUser = (): boolean => {
-    if (!user) {
-      toast.error("Please log in to react");
-      return false;
-    }
-    return true;
-  };
+  // Likes
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `engagement/${animeId}/likes`), (snap) => {
+      const raw = snap.val() || {};
+      const keys = Object.keys(raw);
+      setLikeCount(keys.length);
+      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "like" : prev === "like" ? null : prev));
+    });
+  }, [animeId, user?.id]);
+
+  // Dislikes
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `engagement/${animeId}/dislikes`), (snap) => {
+      const raw = snap.val() || {};
+      const keys = Object.keys(raw);
+      setDislikeCount(keys.length);
+      if (user?.id) setMyReaction((prev) => (keys.includes(user.id) ? "dislike" : prev === "dislike" ? null : prev));
+    });
+  }, [animeId, user?.id]);
+
+  // Total views
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `analytics/totals/views/${animeId}`), (snap) => {
+      const v = snap.val();
+      const c = Number(v?.count || 0);
+      setViewCount(c);
+    });
+  }, [animeId]);
+
 
 
   const postComment = async () => {
