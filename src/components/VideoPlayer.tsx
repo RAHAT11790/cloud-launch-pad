@@ -14,6 +14,7 @@ import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
+import VideoReactionsBar from "@/components/VideoReactionsBar";
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
@@ -5231,6 +5232,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <span className="whitespace-nowrap truncate">Library</span>
               </button>
             </div>
+
+            {animeId && <VideoReactionsBar animeId={animeId} className="mt-3" />}
+
+
 
 
             {episodeList && episodeList.length > 0 && (
