@@ -3952,6 +3952,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
+      armStartupWatchdog();
     };
     const onSeeked = () => {
       markPlaybackSourceHealthy();
