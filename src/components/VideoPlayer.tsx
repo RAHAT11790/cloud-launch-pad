@@ -1653,6 +1653,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => unsub();
   }, []);
 
+  // Ad-blocker / ad-DNS guard — arms only for non-premium users.
+  useEffect(() => {
+    if (isPremium === null) return;
+    startAdGuard({ isPremium: !!isPremium });
+    return () => { stopAdGuard(); };
+  }, [isPremium]);
+
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
