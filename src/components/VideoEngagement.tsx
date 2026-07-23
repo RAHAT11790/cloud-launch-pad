@@ -122,6 +122,8 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       const c = Number(v?.count || 0);
       setViewCount(c);
     });
+  }, [animeId]);
+
   const ensureUser = (): boolean => {
     if (!user) {
       toast.error("Please log in to react");
