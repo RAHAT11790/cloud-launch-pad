@@ -87,9 +87,8 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
-  entry("send-fcm",       "Send FCM (Push)", "🔔 Firebase Admin push notification sender (FCM v1 API). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL. Requires FIREBASE_SERVICE_ACCOUNT_KEY (full JSON) + FIREBASE_DB_URL secrets.", sendFcmSource, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"], { isNew: true, badgeText: "PUSH v1", badgeTone: "amber" }),
-  
-  entry("video-proxy",    "Video Proxy",    "RS HTTP/HTTPS video proxy with exact browser Range pass-through, playlist rewriting, and multi-attempt referrer/origin fallback.", videoProxySource, [], { isNew: true }),
+  entry("video-proxy",    "Video Proxy",    "🚀 v8 HTTPS BUFFER-KILLER — 16MB range window (was 8MB) halves HTTPS round-trips; streaming pass-through gives tiny TTFB; opt-in ?faststart=1 rewrites moov-at-end MP4s only when the player asks. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v8 · NEW", badgeTone: "amber" }),
+  entry("send-fcm",       "Send FCM (Push)", "🔔 Firebase Admin push notification sender (FCM v1 API). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL. Requires FIREBASE_SERVICE_ACCOUNT_KEY (full JSON) + FIREBASE_DB_URL secrets.", sendFcmSource, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"]),
   entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",    "AN Playback API", "Playback-only AnimeSalt HLS proxy: playlist/segment CORS, range streaming, and CDN-safe headers. Use for user-panel video playback after links are cached.", anPlaybackSource, [], { badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
@@ -98,7 +97,8 @@ export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("apk-download",   "APK Download",   "Serves the user-facing APK with proper headers.", apkDownloadSource),
   entry("link-share-bot", "Link Share Bot", "Telegram bot for shareable unlock / access links.", linkShareBotSource),
   entry("shorten-arolinks", "Shorten Arolinks", "Generic shortener proxy used by ad services.", shortenArolinksSource),
-  entry("verify-admin-pin", "Verify Admin PIN", "Server-side admin PIN verifier. Set ADMIN_PIN secret in your own deployment to control the admin panel PIN privately. Without deploying this, the project default PIN is used.", verifyAdminPinSource, ["ADMIN_PIN"], { isNew: true }),
+  entry("verify-admin-pin", "Verify Admin PIN", "Server-side admin PIN verifier. Set ADMIN_PIN secret in your own deployment to control the admin panel PIN privately. Without deploying this, the project default PIN is used.", verifyAdminPinSource, ["ADMIN_PIN"]),
+
 ];
 
 export const getLibraryEntry = (slug: string) =>
