@@ -170,6 +170,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       await set(node, {
         userId: user!.id,
         userName: user!.name,
+        ...(user!.photo ? { userPhoto: user!.photo } : {}),
         text: text.slice(0, 500),
         timestamp: Date.now(),
       });
