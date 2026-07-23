@@ -1,6 +1,6 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v7 (2026-07-04) — RS TRUE-RANGE: exact browser range pass-through. REDEPLOY REQUIRED.
+// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + opt-in faststart. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
@@ -8,8 +8,12 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 // Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
 // - Accepts http:// and https:// upstream URLs.
 // - Rewrites HLS playlists so variants/segments also travel through this proxy.
-// - For known RS mirrors, tries sibling mirrors with the same path when one host
-//   is blocked/down, while preserving normal per-server direct playback first.
+// - v8 HTTPS OPT: 16MB range window (was 8MB) → half the round-trips per file,
+//   noticeably smoother RS HTTPS playback with the same total bandwidth.
+// - Fast-path streaming: `res.body` piped straight to the client, no
+//   `arrayBuffer()` buffering on the edge → tiny TTFB.
+// - Opt-in `?faststart=1` moov-rewriter only kicks in when the player asks
+//   for it (moov-at-end MP4 recovery), never blocks the happy path.
 // ============================================================
 
 const cors: Record<string, string> = {
@@ -22,13 +26,15 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-// Cap only open-ended browser ranges (`bytes=N-`). Keep the window large enough
-// for smooth RS playback after a seek, but never let mirrors answer with the
-// whole remaining file (often 40MB-2GB), which makes skip/recovery hang.
-const MEDIA_CHUNK_BYTES = 8 * 1024 * 1024;
+// v8: 16MB range window. Halves the number of range round-trips per MP4 vs
+// the previous 8MB, which was the last visible cause of micro-stalls on RS
+// HTTPS mirrors during long playback sessions. Still bounded enough that
+// seek/skip returns quickly.
+const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
 const FASTSTART_WINDOW_BYTES = 8 * 1024 * 1024;
 const FASTSTART_HEAD_BYTES = 2 * 1024 * 1024;
 const FASTSTART_TAIL_BYTES = 16 * 1024 * 1024;
+
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
