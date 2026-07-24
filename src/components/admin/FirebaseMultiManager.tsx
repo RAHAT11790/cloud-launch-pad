@@ -8,7 +8,7 @@ import {
   ALL_SECTIONS, DEFAULT_RTDB_RULES, MAIN_DB_LABEL,
   listExtraFirebases, saveExtraFirebase, deleteExtraFirebase, updateSections,
   pingExtra, pushSection, pushAllSelectedSections, pullSectionJson, uploadSectionJson,
-  triggerJsonDownload, streamJsonDownload, getMainRemoteJsonDownloadUrl, getExtraRemoteJsonDownloadUrl, triggerRemoteJsonDownload, disposeExtraFirebase,
+  triggerJsonDownload, streamJsonDownload, getMainRemoteJsonDownloadUrl, getExtraRemoteJsonDownloadUrl, getExtraRemoteSectionDownloadUrl, triggerRemoteJsonDownload, disposeExtraFirebase,
   pullMainFullJson, pullExtraFullJson, uploadMainFullJson, uploadExtraFullJson,
   analyzeMainStorage, analyzeExtraStorage, setAutoMirror,
   type ExtraFirebaseConfig, type ProgressFn, type StorageStats,
@@ -145,10 +145,15 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
 
   const onPullJson = async (cfg: ExtraFirebaseConfig, section: string) => {
     try {
-      const data = await pullSectionJson(cfg, section);
-      if (data == null) { toast.error(`${section} is empty in ${cfg.displayName}`); return; }
       const stamp = new Date().toISOString().slice(0, 10);
-      triggerJsonDownload(`${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`, data);
+      const url = await getExtraRemoteSectionDownloadUrl(cfg, section, `${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`);
+      if (url) {
+        triggerRemoteJsonDownload(url);
+      } else {
+        const data = await pullSectionJson(cfg, section);
+        if (data == null) { toast.error(`${section} is empty in ${cfg.displayName}`); return; }
+        triggerJsonDownload(`${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`, data);
+      }
       toast.success(`Downloaded ${section}.json`);
     } catch (e: any) { toast.error("Pull failed: " + (e?.message || e)); }
   };

@@ -310,10 +310,18 @@ export function triggerJsonDownload(filename: string, data: any) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-async function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string, includeMainAuth = false) {
+const encodeDatabasePath = (path: string) =>
+  String(path || "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+
+async function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string, includeMainAuth = false, path = "") {
   const base = String(databaseURL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
-  const url = new URL(`${base}/.json`);
+  const encodedPath = encodeDatabasePath(path);
+  const url = new URL(`${base}/${encodedPath ? encodedPath : ""}.json`);
   url.searchParams.set("download", filename);
   if (includeMainAuth) {
     try {
@@ -331,6 +339,10 @@ export async function getMainRemoteJsonDownloadUrl(filename: string) {
 
 export async function getExtraRemoteJsonDownloadUrl(cfg: ExtraFirebaseConfig, filename: string) {
   return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename, false);
+}
+
+export async function getExtraRemoteSectionDownloadUrl(cfg: ExtraFirebaseConfig, section: string, filename: string) {
+  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename, false, section);
 }
 
 export function triggerRemoteJsonDownload(downloadUrl: string) {
