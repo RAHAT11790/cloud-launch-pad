@@ -310,25 +310,27 @@ export function triggerJsonDownload(filename: string, data: any) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-async function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string) {
+async function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string, includeMainAuth = false) {
   const base = String(databaseURL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
   const url = new URL(`${base}/.json`);
   url.searchParams.set("download", filename);
-  try {
-    const token = await mainAuth.currentUser?.getIdToken(false);
-    if (token) url.searchParams.set("auth", token);
-  } catch {}
+  if (includeMainAuth) {
+    try {
+      const token = await mainAuth.currentUser?.getIdToken(false);
+      if (token) url.searchParams.set("auth", token);
+    } catch {}
+  }
   return url.toString();
 }
 
 export async function getMainRemoteJsonDownloadUrl(filename: string) {
   const mainUrl = String((mainDb as any)?.app?.options?.databaseURL || "").trim();
-  return buildRealtimeJsonDownloadUrl(mainUrl, filename);
+  return buildRealtimeJsonDownloadUrl(mainUrl, filename, true);
 }
 
 export async function getExtraRemoteJsonDownloadUrl(cfg: ExtraFirebaseConfig, filename: string) {
-  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename);
+  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename, false);
 }
 
 export function triggerRemoteJsonDownload(downloadUrl: string) {
