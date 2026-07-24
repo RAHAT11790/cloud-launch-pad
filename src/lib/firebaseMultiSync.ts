@@ -10,7 +10,7 @@
 
 import { initializeApp, deleteApp, getApps, type FirebaseApp } from "firebase/app";
 import { getDatabase, ref as rRef, get as rGet, set as rSet, update as rUpdate, type Database } from "firebase/database";
-import { db as mainDb, ref as mainRef, get as mainGet, set as mainSet, remove as mainRemove, update as mainUpdate } from "@/lib/firebase";
+import { auth as mainAuth, db as mainDb, ref as mainRef, get as mainGet, set as mainSet, remove as mainRemove, update as mainUpdate } from "@/lib/firebase";
 
 // Re-export the main DB so the UI can label it without re-importing firebase directly.
 export const MAIN_DB_LABEL = "Main Firebase (primary)";
@@ -310,19 +310,39 @@ export function triggerJsonDownload(filename: string, data: any) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string) {
+const encodeDatabasePath = (path: string) =>
+  String(path || "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+
+async function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string, includeMainAuth = false, path = "") {
   const base = String(databaseURL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
-  return `${base}/.json?download=${encodeURIComponent(filename)}`;
+  const encodedPath = encodeDatabasePath(path);
+  const url = new URL(`${base}/${encodedPath ? encodedPath : ""}.json`);
+  url.searchParams.set("download", filename);
+  if (includeMainAuth) {
+    try {
+      const token = await mainAuth.currentUser?.getIdToken(false);
+      if (token) url.searchParams.set("auth", token);
+    } catch {}
+  }
+  return url.toString();
 }
 
-export function getMainRemoteJsonDownloadUrl(filename: string) {
+export async function getMainRemoteJsonDownloadUrl(filename: string) {
   const mainUrl = String((mainDb as any)?.app?.options?.databaseURL || "").trim();
-  return buildRealtimeJsonDownloadUrl(mainUrl, filename);
+  return buildRealtimeJsonDownloadUrl(mainUrl, filename, true);
 }
 
-export function getExtraRemoteJsonDownloadUrl(cfg: ExtraFirebaseConfig, filename: string) {
-  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename);
+export async function getExtraRemoteJsonDownloadUrl(cfg: ExtraFirebaseConfig, filename: string) {
+  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename, false);
+}
+
+export async function getExtraRemoteSectionDownloadUrl(cfg: ExtraFirebaseConfig, section: string, filename: string) {
+  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename, false, section);
 }
 
 export function triggerRemoteJsonDownload(downloadUrl: string) {

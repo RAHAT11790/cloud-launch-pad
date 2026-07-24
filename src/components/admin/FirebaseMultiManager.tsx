@@ -8,7 +8,7 @@ import {
   ALL_SECTIONS, DEFAULT_RTDB_RULES, MAIN_DB_LABEL,
   listExtraFirebases, saveExtraFirebase, deleteExtraFirebase, updateSections,
   pingExtra, pushSection, pushAllSelectedSections, pullSectionJson, uploadSectionJson,
-  triggerJsonDownload, streamJsonDownload, getMainRemoteJsonDownloadUrl, getExtraRemoteJsonDownloadUrl, triggerRemoteJsonDownload, disposeExtraFirebase,
+  triggerJsonDownload, streamJsonDownload, getMainRemoteJsonDownloadUrl, getExtraRemoteJsonDownloadUrl, getExtraRemoteSectionDownloadUrl, triggerRemoteJsonDownload, disposeExtraFirebase,
   pullMainFullJson, pullExtraFullJson, uploadMainFullJson, uploadExtraFullJson,
   analyzeMainStorage, analyzeExtraStorage, setAutoMirror,
   type ExtraFirebaseConfig, type ProgressFn, type StorageStats,
@@ -145,10 +145,15 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
 
   const onPullJson = async (cfg: ExtraFirebaseConfig, section: string) => {
     try {
-      const data = await pullSectionJson(cfg, section);
-      if (data == null) { toast.error(`${section} is empty in ${cfg.displayName}`); return; }
       const stamp = new Date().toISOString().slice(0, 10);
-      triggerJsonDownload(`${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`, data);
+      const url = await getExtraRemoteSectionDownloadUrl(cfg, section, `${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`);
+      if (url) {
+        triggerRemoteJsonDownload(url);
+      } else {
+        const data = await pullSectionJson(cfg, section);
+        if (data == null) { toast.error(`${section} is empty in ${cfg.displayName}`); return; }
+        triggerJsonDownload(`${section}-${cfg.displayName.replace(/\W+/g, "_")}-${stamp}.json`, data);
+      }
       toast.success(`Downloaded ${section}.json`);
     } catch (e: any) { toast.error("Pull failed: " + (e?.message || e)); }
   };
@@ -234,7 +239,7 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
       setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 5, label: "Reading database…" } }));
       const stamp = new Date().toISOString().slice(0, 10);
       const filename = `main-firebase-FULL-${stamp}.json`;
-      const directUrl = getMainRemoteJsonDownloadUrl(filename);
+      const directUrl = await getMainRemoteJsonDownloadUrl(filename);
       if (directUrl) {
         setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 35, label: "Starting browser download…" } }));
         triggerRemoteJsonDownload(directUrl);
@@ -262,7 +267,7 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
       setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 5, label: `Reading ${cfg.displayName}…` } }));
       const stamp = new Date().toISOString().slice(0, 10);
       const filename = `${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`;
-      const directUrl = getExtraRemoteJsonDownloadUrl(cfg, filename);
+      const directUrl = await getExtraRemoteJsonDownloadUrl(cfg, filename);
       if (directUrl) {
         setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 35, label: "Starting browser download…" } }));
         triggerRemoteJsonDownload(directUrl);
