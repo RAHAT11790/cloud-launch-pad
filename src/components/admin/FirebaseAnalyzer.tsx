@@ -55,7 +55,7 @@ const buildDirectDatabaseDownloadUrl = async (fileName: string, path = "") => {
     .filter(Boolean)
     .map((part) => encodeURIComponent(part))
     .join("/");
-  const url = new URL(`${base}/${encodedPath ? `${encodedPath}/` : ""}.json`);
+  const url = new URL(`${base}/${encodedPath ? `${encodedPath}` : ""}.json`);
   url.searchParams.set("download", fileName);
   try {
     const token = await auth.currentUser?.getIdToken(false);

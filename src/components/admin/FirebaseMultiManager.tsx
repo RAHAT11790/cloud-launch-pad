@@ -234,7 +234,7 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
       setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 5, label: "Reading database…" } }));
       const stamp = new Date().toISOString().slice(0, 10);
       const filename = `main-firebase-FULL-${stamp}.json`;
-      const directUrl = getMainRemoteJsonDownloadUrl(filename);
+      const directUrl = await getMainRemoteJsonDownloadUrl(filename);
       if (directUrl) {
         setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 35, label: "Starting browser download…" } }));
         triggerRemoteJsonDownload(directUrl);
@@ -262,7 +262,7 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
       setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 5, label: `Reading ${cfg.displayName}…` } }));
       const stamp = new Date().toISOString().slice(0, 10);
       const filename = `${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`;
-      const directUrl = getExtraRemoteJsonDownloadUrl(cfg, filename);
+      const directUrl = await getExtraRemoteJsonDownloadUrl(cfg, filename);
       if (directUrl) {
         setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 35, label: "Starting browser download…" } }));
         triggerRemoteJsonDownload(directUrl);
