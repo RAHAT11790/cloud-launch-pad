@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { db, get, ref } from "@/lib/firebase";
+import { auth, db, get, ref } from "@/lib/firebase";
 import { firebaseRestClearCache, firebaseRestDelete, firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 
 import { toast } from "sonner";
@@ -47,18 +47,30 @@ const previewValue = (value: unknown) => {
   }
 };
 
-const sleepFrame = () => new Promise((resolve) => window.setTimeout(resolve, 0));
+const buildDirectDatabaseDownloadUrl = async (fileName: string, path = "") => {
+  const base = String(db.app.options.databaseURL || "").replace(/\/+$/, "");
+  if (!base) throw new Error("Firebase databaseURL is missing");
+  const encodedPath = String(path || "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  const url = new URL(`${base}/${encodedPath ? `${encodedPath}/` : ""}.json`);
+  url.searchParams.set("download", fileName);
+  try {
+    const token = await auth.currentUser?.getIdToken(false);
+    if (token) url.searchParams.set("auth", token);
+  } catch {}
+  return url.toString();
+};
 
-const downloadJsonFile = (fileName: string, data: unknown) => {
-  const blob = new Blob([JSON.stringify(data ?? {}, null, 2)], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+const triggerDirectDownload = (url: string) => {
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = fileName;
+  anchor.rel = "noopener noreferrer";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 const firebaseBackupName = () => {
@@ -372,11 +384,11 @@ const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: 
   }, []);
 
   const downloadFullDatabase = useCallback(async () => {
-    if (!confirm("Download the full Firebase Realtime Database as one JSON file?\n\nThis may use bandwidth because it reads the whole database once.")) return;
+    if (!confirm("Download the full Firebase Realtime Database as one JSON file?\n\nThis will use Firebase's direct REST download so the website does not load the whole database into memory.")) return;
     setExporting(true);
     try {
-      const snap = await get(ref(db));
-      downloadJsonFile(firebaseBackupName(), snap.val() || {});
+      const downloadUrl = await buildDirectDatabaseDownloadUrl(firebaseBackupName());
+      triggerDirectDownload(downloadUrl);
       toast.success("Full Firebase JSON download started");
     } catch (error: any) {
       toast.error(`Full JSON download failed: ${error?.message || error}`);
