@@ -3846,10 +3846,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const tryFaststartProxyRetry = (savedTimeForRetry: number): boolean => {
       const cur = currentSrc || "";
       if (!isVideoProxyPlaybackUrl(cur, proxyUrl)) return false;
+      // Custom Cloudflare worker URLs do not all include the Supabase faststart
+      // rewriter. Appending faststart to an old worker just repeats the same ORB
+      // blocked fallback forever, so skip it and let server/route failover run.
+      if (/\.workers\.dev\//i.test(cur)) return false;
       if (/[?&]faststart=1(?:&|$)/.test(cur)) return false;
       const boosted = cur + (cur.includes("?") ? "&" : "?") + "faststart=1";
       try {
+        failedSrcsRef.current.add(cur);
+        const nested = unwrapProxyPlaybackTarget(cur);
+        if (nested) failedSrcsRef.current.add(nested);
         v.src = boosted;
+        setCurrentSrc(boosted);
         v.load();
         v.addEventListener("loadedmetadata", () => {
           if (savedTimeForRetry > 0) v.currentTime = savedTimeForRetry;
