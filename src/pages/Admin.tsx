@@ -654,13 +654,17 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const [testing, setTesting] = useState<string | null>(null);
  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
 
+ // video-proxy-cf is a Cloudflare Worker URL; skip supabase-shaped normalization.
+ const normalize = (slug: string, val: string) =>
+  slug === "video-proxy-cf" ? String(val || "").trim().replace(/\/+$/, "") : normalizeFunctionEndpointUrl(slug, val);
+
  useEffect(() => {
  const unsub = onValue(ref(db, "settings/functionOverrides"), (snap) => {
  const v = snap.val() || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
   ROUTER_FUNCTIONS.forEach(({ slug }) => {
-  u[slug] = normalizeFunctionEndpointUrl(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
+  u[slug] = normalize(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
   e[slug] = Boolean(u[slug]) && v?.[slug]?.enabled !== false;
  });
  setUrls(u);
@@ -672,7 +676,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   const save = async (slug: string) => {
    setSaving(slug);
    try {
-    const url = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
+    const url = normalize(slug, (urls[slug] || "").trim());
     if (url && !/^https?:\/\//i.test(url)) { toast.error("Paste a valid http/https function URL"); return; }
      const active = Boolean(url) && enabled[slug] === true;
    await set(ref(db, `settings/functionOverrides/${slug}`), {
@@ -695,7 +699,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  };
 
  const ping = async (slug: string) => {
-  const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
+  const u = normalize(slug, (urls[slug] || "").trim());
  if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
