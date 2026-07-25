@@ -677,7 +677,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   
   // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
-  // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
+  // Used for HTTP and HTTPS RS sources; direct HTTPS remains an instant fallback.
   useEffect(() => {
     let cancelled = false;
     let routerBase = "";
@@ -1938,8 +1938,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // must start at 0 — never re-apply the previous episode's initialSeekTime.
     const isFreshEpisodeSwitch = initialMountKeyRef.current !== "" && initialMountKeyRef.current !== key;
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
+    const explicitResumeTime = hasExplicitResume ? initialSeekTime : 0;
     pendingSeek.current = hasExplicitResume && !isFreshEpisodeSwitch
-      ? initialSeekTime!
+      ? explicitResumeTime
       : 0;
     if (isFreshEpisodeSwitch) return;
     try {
@@ -1957,7 +1958,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const episodeMatches = currentSeasonIdx === undefined && currentEpisodeIdx === undefined
               ? storedSeasonIdx === undefined && storedEpisodeIdx === undefined
               : storedSeasonIdx === currentSeasonIdx && storedEpisodeIdx === currentEpisodeIdx;
-            const resumeFrom = hasExplicitResume ? initialSeekTime! : (episodeMatches ? data.currentTime : 0);
+            const resumeFrom = hasExplicitResume ? explicitResumeTime : (episodeMatches ? data.currentTime : 0);
             if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
             }
