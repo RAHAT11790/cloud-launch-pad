@@ -3849,7 +3849,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Custom Cloudflare worker URLs do not all include the Supabase faststart
       // rewriter. Appending faststart to an old worker just repeats the same ORB
       // blocked fallback forever, so skip it and let server/route failover run.
-      if (/\.workers\.dev\//i.test(cur)) return false;
+      if (/\.workers\.dev(?:[/?#]|$)/i.test(cur)) return false;
       if (/[?&]faststart=1(?:&|$)/.test(cur)) return false;
       const boosted = cur + (cur.includes("?") ? "&" : "?") + "faststart=1";
       try {
