@@ -3858,8 +3858,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const boosted = cur + (cur.includes("?") ? "&" : "?") + "faststart=1";
       try {
         failedSrcsRef.current.add(cur);
-        const nested = unwrapProxyPlaybackTarget(cur);
-        if (nested) failedSrcsRef.current.add(nested);
         v.src = boosted;
         setCurrentSrc(boosted);
         v.load();
