@@ -57,7 +57,7 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
   // Existing Cloudflare Worker deployments accept `?url=` while Lovable-hosted
   // function copies accept opaque `?src=`.
-  else if (/\.workers\.dev(?:\/)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
+  else if (/\.workers\.dev(?:\/.*)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
   // Default: append an opaque src token, not the raw upstream URL.
   else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
@@ -683,6 +683,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let routerBase = "";
     let overrideRaw: any = null;
     let cfOverrideRaw: any = null;
+    const isAnHls = isAnApiHlsProxyUrl(src || "");
     const applyProxyRoute = () => {
       if (cancelled) return;
       if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
@@ -713,8 +714,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const val = snap.val();
       setCdnEnabled(val !== false);
     });
-
-    const isAnHls = isAnApiHlsProxyUrl(src || "");
 
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       if (cancelled) return;
