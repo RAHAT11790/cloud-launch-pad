@@ -170,7 +170,7 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false, fallbackProxyUrls: string[] = []): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -200,27 +200,29 @@ const isBypassSource = (url: string): boolean => {
   // browser walk sequential byte windows and delays playback even more.
   const isHttp = isInsecureHttpSource(url);
 
+  const proxyBases = Array.from(new Set([proxyUrl, ...fallbackProxyUrls].map((value) => String(value || "").trim()).filter(Boolean)));
+  const proxyCandidates = proxyBases.map((base) => buildProxyPlaybackUrl(base, url, proxyApiKey)).filter(Boolean);
+
   if (isHttp) {
-    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    proxyCandidates.forEach(addCandidate);
     // Never hand raw http:// media to the browser from an HTTPS app. It will be
     // blocked as mixed content (or fail as a media format error) and can trap the
     // fallback scanner on a route that has no legal playback path.
     return candidates;
   }
 
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const customProxyCandidate = proxyCandidates[0] || null;
   // When a playback proxy is configured, use it first for BOTH HTTP and HTTPS
   // RS files. The proxy owns same-origin range headers, upstream referer fixes,
   // and edge-cache windows; direct HTTPS remains as instant fallback only.
-  if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
+  if (preferProxy) proxyCandidates.forEach(addCandidate);
   addCandidate(url);
-  if (customProxyCandidate && !preferProxy) addCandidate(customProxyCandidate);
+  if (!preferProxy) proxyCandidates.forEach(addCandidate);
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy)[0] || (isInsecureHttpSource(url) ? "" : url);
+const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false, fallbackProxyUrls: string[] = []): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy, fallbackProxyUrls)[0] || (isInsecureHttpSource(url) ? "" : url);
 };
 
 const isDirectDownloadCandidate = (url: string): boolean => {
