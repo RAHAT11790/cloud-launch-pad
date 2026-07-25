@@ -1990,7 +1990,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls);
   }, [cdnEnabled, noProxy, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
@@ -2268,7 +2268,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         .sort((a, b) => qualityRank(a.label) - qualityRank(b.label))
         .find((option) => {
           const raw = getServerScopedSource(option.src, activeServerIndex);
-          const resolved = buildPlaybackCandidates(raw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+          const resolved = buildPlaybackCandidates(raw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls)[0];
           return !!resolved
             && resolved !== currentSrc
             && resolved !== failedKey
@@ -2279,7 +2279,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       if (qualityFallback) {
         const nextRaw = getServerScopedSource(qualityFallback.src, activeServerIndex);
-        const nextResolved = buildPlaybackCandidates(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+        const nextResolved = buildPlaybackCandidates(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls)[0];
         if (nextResolved) {
           pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
           sourceBaseRef.current = qualityFallback.src;
@@ -2315,7 +2315,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined,
-          preferProxy
+          preferProxy,
+          fallbackProxyUrls
         );
         const nextResolved = nextCandidates.find((candidate) => candidate && !failedSrcsRef.current.has(candidate));
         if (!nextResolved || failedSrcsRef.current.has(nextResolved)) continue;
@@ -4233,7 +4234,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const liveVideo = videoRef.current;
         if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
         if (finishSeekRecoveryIfReady(liveVideo)) return;
-        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
+        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true, fallbackProxyUrls)
           .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
         if (!proxyCandidate) return;
         slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
@@ -5777,7 +5778,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                   <video
-                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
+                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, false, fallbackProxyUrls)}
                     className="w-full h-full"
                     controls
                     autoPlay
