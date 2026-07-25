@@ -459,6 +459,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
+  const [fallbackProxyUrls, setFallbackProxyUrls] = useState<string[]>([]);
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
@@ -536,6 +537,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     addOrigin(src);
     effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
     if (proxyUrl) addOrigin(proxyUrl);
+    fallbackProxyUrls.forEach(addOrigin);
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -553,7 +555,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     };
-  }, [effectiveVideoServers, proxyUrl, src]);
+  }, [effectiveVideoServers, fallbackProxyUrls, proxyUrl, src]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -688,7 +690,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const isAnHls = isAnApiHlsProxyUrl(src || "");
     const applyProxyRoute = () => {
       if (cancelled) return;
-      if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
+      if (isAnHls || noProxy) { setProxyUrl(""); setFallbackProxyUrls([]); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
       const cfRaw = String(cfOverrideRaw?.customUrl || cfOverrideRaw?.url || "").trim().replace(/\/+$/, "");
       const cfEnabled = Boolean(cfRaw) && cfOverrideRaw?.enabled !== false;
@@ -703,7 +705,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const finalUrl = cfEnabled
         ? cfRaw
         : (supabaseEnabled ? overrideUrl : (selfHostedUrl || backendProxyUrl));
+      const fallbacks = [
+        ...(cfEnabled ? [overrideUrl, selfHostedUrl, backendProxyUrl] : [cfRaw, selfHostedUrl, backendProxyUrl]),
+      ].map((value) => String(value || "").trim().replace(/\/+$/, ""))
+        .filter((value, index, arr) => Boolean(value) && value !== finalUrl && arr.indexOf(value) === index);
       setProxyUrl(finalUrl);
+      setFallbackProxyUrls(fallbacks);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
       try {
