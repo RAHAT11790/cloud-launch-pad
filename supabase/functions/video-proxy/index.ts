@@ -601,7 +601,9 @@ Deno.serve(async (req) => {
       writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, buf, up.status, out, false);
       return new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
     } catch {
-      // Fall through to streaming if buffering fails (very large windows on constrained isolates).
+      // The body may be disturbed after a failed arrayBuffer(); never pass it to
+      // new Response() or Deno throws "ReadableStream is locked or disturbed".
+      return fallbackResponse("Upstream stream interrupted", "cache buffer failed", up.status);
     }
   }
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });

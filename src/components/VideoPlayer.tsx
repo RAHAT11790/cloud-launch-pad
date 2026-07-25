@@ -170,7 +170,7 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false, fallbackProxyUrls: string[] = []): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, _preferProxy = false, fallbackProxyUrls: string[] = []): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];

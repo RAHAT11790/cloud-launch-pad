@@ -224,11 +224,15 @@ export default {
 
     const canBufferForCache = isPlaylist || !mediaLike;
     if (req.method === "GET" && cacheable && canBufferForCache && (res.status === 200 || res.status === 206)) {
-      const buf = await res.arrayBuffer();
-      const resp = new Response(buf, { status: res.status, headers: out });
-      const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
-      ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: ch })));
-      return resp;
+      try {
+        const buf = await res.arrayBuffer();
+        const resp = new Response(buf, { status: res.status, headers: out });
+        const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
+        ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: ch })));
+        return resp;
+      } catch {
+        return fallbackResponse("Upstream stream interrupted", "cache buffer failed", res.status);
+      }
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
