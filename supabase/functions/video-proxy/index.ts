@@ -598,10 +598,9 @@ Deno.serve(async (req) => {
   // Non-cacheable (unknown types / HEAD / faststart): streaming pass-through.
   if (req.method === "GET" && cacheableKind && (up.status === 200 || up.status === 206)) {
     try {
-      const buf = await up.arrayBuffer();
-      const resp = new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
-      writeEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null, resp.clone()).catch(() => {});
-      return resp;
+      const buf = new Uint8Array(await up.arrayBuffer());
+      writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, buf, up.status, out, false);
+      return new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
     } catch {
       // Fall through to streaming if buffering fails (very large windows on constrained isolates).
     }
