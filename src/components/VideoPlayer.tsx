@@ -57,7 +57,7 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
   // Existing Cloudflare Worker deployments accept `?url=` while Lovable-hosted
   // function copies accept opaque `?src=`.
-  else if (/\.workers\.dev(?:\/)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
+  else if (/\.workers\.dev(?:\/.*)?$/i.test(base.replace(/\?.*$/, ""))) url = `${base.replace(/\/+$/, '')}?url=${encoded}`;
   // Default: append an opaque src token, not the raw upstream URL.
   else url = `${base.replace(/\/$/, '')}?src=${encodeURIComponent(toOpaqueUrlToken(targetUrl))}`;
   // Append API key if provided
@@ -170,7 +170,7 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false, fallbackProxyUrls: string[] = []): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -200,24 +200,29 @@ const isBypassSource = (url: string): boolean => {
   // browser walk sequential byte windows and delays playback even more.
   const isHttp = isInsecureHttpSource(url);
 
+  const proxyBases = Array.from(new Set([proxyUrl, ...fallbackProxyUrls].map((value) => String(value || "").trim()).filter(Boolean)));
+  const proxyCandidates = proxyBases.map((base) => buildProxyPlaybackUrl(base, url, proxyApiKey)).filter(Boolean);
+
   if (isHttp) {
-    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    proxyCandidates.forEach(addCandidate);
     // Never hand raw http:// media to the browser from an HTTPS app. It will be
     // blocked as mixed content (or fail as a media format error) and can trap the
     // fallback scanner on a route that has no legal playback path.
     return candidates;
   }
 
+  const customProxyCandidate = proxyCandidates[0] || null;
+  // When a playback proxy is configured, use it first for BOTH HTTP and HTTPS
+  // RS files. The proxy owns same-origin range headers, upstream referer fixes,
+  // and edge-cache windows; direct HTTPS remains as instant fallback only.
+  if (preferProxy) proxyCandidates.forEach(addCandidate);
   addCandidate(url);
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
+  if (!preferProxy) proxyCandidates.forEach(addCandidate);
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy)[0] || (isInsecureHttpSource(url) ? "" : url);
+const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false, fallbackProxyUrls: string[] = []): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy, fallbackProxyUrls)[0] || (isInsecureHttpSource(url) ? "" : url);
 };
 
 const isDirectDownloadCandidate = (url: string): boolean => {
@@ -400,7 +405,7 @@ const normalizeDownloadQualityKey = (label: string) => {
   return value || "default";
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = true }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -454,6 +459,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
+  const [fallbackProxyUrls, setFallbackProxyUrls] = useState<string[]>([]);
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
@@ -531,6 +537,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     addOrigin(src);
     effectiveVideoServers.slice(0, 2).forEach((server) => addOrigin(server.domain));
     if (proxyUrl) addOrigin(proxyUrl);
+    fallbackProxyUrls.forEach(addOrigin);
     document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     origins.forEach((origin) => {
       const preconnect = document.createElement("link");
@@ -548,7 +555,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       document.querySelectorAll('link[data-rs-video-preconnect="true"]').forEach((node) => node.remove());
     };
-  }, [effectiveVideoServers, proxyUrl, src]);
+  }, [effectiveVideoServers, fallbackProxyUrls, proxyUrl, src]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -674,15 +681,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   
   // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
-  // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
+  // Used for HTTP and HTTPS RS sources; direct HTTPS remains an instant fallback.
   useEffect(() => {
     let cancelled = false;
     let routerBase = "";
     let overrideRaw: any = null;
     let cfOverrideRaw: any = null;
+    const isAnHls = isAnApiHlsProxyUrl(src || "");
     const applyProxyRoute = () => {
       if (cancelled) return;
-      if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
+      if (isAnHls || noProxy) { setProxyUrl(""); setFallbackProxyUrls([]); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
       const cfRaw = String(cfOverrideRaw?.customUrl || cfOverrideRaw?.url || "").trim().replace(/\/+$/, "");
       const cfEnabled = Boolean(cfRaw) && cfOverrideRaw?.enabled !== false;
@@ -697,7 +705,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const finalUrl = cfEnabled
         ? cfRaw
         : (supabaseEnabled ? overrideUrl : (selfHostedUrl || backendProxyUrl));
+      const fallbacks = [
+        ...(cfEnabled ? [overrideUrl, selfHostedUrl, backendProxyUrl] : [cfRaw, selfHostedUrl, backendProxyUrl]),
+      ].map((value) => String(value || "").trim().replace(/\/+$/, ""))
+        .filter((value, index, arr) => Boolean(value) && value !== finalUrl && arr.indexOf(value) === index);
       setProxyUrl(finalUrl);
+      setFallbackProxyUrls(fallbacks);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
       try {
@@ -710,8 +723,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const val = snap.val();
       setCdnEnabled(val !== false);
     });
-
-    const isAnHls = isAnApiHlsProxyUrl(src || "");
 
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       if (cancelled) return;
@@ -1936,8 +1947,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // must start at 0 — never re-apply the previous episode's initialSeekTime.
     const isFreshEpisodeSwitch = initialMountKeyRef.current !== "" && initialMountKeyRef.current !== key;
     const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
+    const explicitResumeTime = hasExplicitResume ? initialSeekTime : 0;
     pendingSeek.current = hasExplicitResume && !isFreshEpisodeSwitch
-      ? initialSeekTime!
+      ? explicitResumeTime
       : 0;
     if (isFreshEpisodeSwitch) return;
     try {
@@ -1955,7 +1967,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const episodeMatches = currentSeasonIdx === undefined && currentEpisodeIdx === undefined
               ? storedSeasonIdx === undefined && storedEpisodeIdx === undefined
               : storedSeasonIdx === currentSeasonIdx && storedEpisodeIdx === currentEpisodeIdx;
-            const resumeFrom = hasExplicitResume ? initialSeekTime! : (episodeMatches ? data.currentTime : 0);
+            const resumeFrom = hasExplicitResume ? explicitResumeTime : (episodeMatches ? data.currentTime : 0);
             if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
             }
@@ -1978,8 +1990,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
-  }, [cdnEnabled, noProxy, proxyUrl, proxyApiKey, preferProxy]);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls);
+  }, [cdnEnabled, fallbackProxyUrls, noProxy, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     if (isBypassSource(rawUrl)) return rawUrl;
@@ -2210,6 +2222,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
+    // Important: a proxy URL failing does NOT prove the raw video URL is bad.
+    // Keep raw/direct and the other proxy slot eligible so route fallback can
+    // walk CF proxy → backend proxy → direct → next admin server without loops.
 
     // Same quality, alternate route first (proxy ↔ direct) before touching quality/server.
     const sameQualityRouteFallback = buildPlaybackCandidates(
@@ -2217,13 +2232,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cdnEnabled,
       proxyUrl || undefined,
       proxyApiKey || undefined,
-      preferProxy
+      preferProxy,
+      fallbackProxyUrls
     ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
 
     if (sameQualityRouteFallback) {
-      pendingSeek.current = activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0);
+      const mediaReadyForResume = (videoRef.current?.readyState || 0) >= 1;
+      pendingSeek.current = mediaReadyForResume ? (activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0)) : 0;
       mediaRecoverySeekRef.current = pendingSeek.current;
-      seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
+      // Only enter long seek-recovery mode when we are actually restoring a
+      // meaningful resume/seek point. Startup route fallback at 0s must be free
+      // to continue to the next admin server immediately if both proxy slots fail.
+      seekRecoveryUntilRef.current = pendingSeek.current > 1 ? Date.now() + RS_SEEK_GRACE_MS : 0;
       rsSoftRetriesRef.current = 0;
       setCurrentSrc(sameQualityRouteFallback);
       setVideoError(false);
@@ -2249,7 +2269,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         .sort((a, b) => qualityRank(a.label) - qualityRank(b.label))
         .find((option) => {
           const raw = getServerScopedSource(option.src, activeServerIndex);
-          const resolved = buildPlaybackCandidates(raw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+          const resolved = buildPlaybackCandidates(raw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls)[0];
           return !!resolved
             && resolved !== currentSrc
             && resolved !== failedKey
@@ -2260,7 +2280,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       if (qualityFallback) {
         const nextRaw = getServerScopedSource(qualityFallback.src, activeServerIndex);
-        const nextResolved = buildPlaybackCandidates(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy)[0];
+        const nextResolved = buildPlaybackCandidates(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls)[0];
         if (nextResolved) {
           pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
           sourceBaseRef.current = qualityFallback.src;
@@ -2283,7 +2303,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // server, don't trap playback on a dead origin and show "Link expired" —
     // move through the next admin-configured RS servers with the same episode
     // path/query. This is explicit server failover, not hidden mirror swapping.
-    if (!isSeekRecovery && effectiveVideoServers.length > 1) {
+    const startupSourceFailure = !isCurrentPlaybackSourceValid() && ((videoRef.current?.readyState || 0) < 1 || !!videoRef.current?.error);
+    if ((!isSeekRecovery || startupSourceFailure) && effectiveVideoServers.length > 1) {
       failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
       for (let offset = 1; offset < effectiveVideoServers.length; offset += 1) {
         const nextIndex = (activeServerIndex + offset) % effectiveVideoServers.length;
@@ -2291,13 +2312,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (!nextServer || (nextServer.locked && !isPremium)) continue;
         if (failedSrcsRef.current.has(`__server_failover_${nextIndex}`)) continue;
         const nextRaw = getServerScopedSource(sourceBaseRef.current || activeSourceBaseRef.current, nextIndex);
-        const nextResolved = buildPlaybackCandidates(
+        const nextCandidates = buildPlaybackCandidates(
           nextRaw,
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined,
-          preferProxy
-        )[0];
+          preferProxy,
+          fallbackProxyUrls
+        );
+        const nextResolved = nextCandidates.find((candidate) => candidate && !failedSrcsRef.current.has(candidate));
         if (!nextResolved || failedSrcsRef.current.has(nextResolved)) continue;
         pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
         activeSourceBaseRef.current = nextRaw;
@@ -2337,7 +2360,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, fallbackProxyUrls, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
@@ -3326,22 +3349,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(timer);
   }, [activeServerIndex, adGateActive, currentSrc, getServerScopedSource, isAnimeSaltContent, isEmbedPlayback, isHlsSrc, playbackRouteReady, src, tryNextPlaybackRoute]);
 
-  // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
-  // can fail with a quick 502 while the video element waits much longer before
-  // firing a media error. Probe one byte and move to the direct/failover route
-  // immediately when the proxy endpoint itself reports failure.
+  // Fast-detect blocked proxy responses. Old/custom workers can return a JSON
+  // fallback body to <video>, which Chromium blocks with ORB and then keeps
+  // retrying the same URL. Probe one byte through fetch and move to the direct
+  // or next-server route immediately when the proxy endpoint reports fallback.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
     if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
-    const nested = unwrapProxyPlaybackTarget(currentSrc);
-    if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
-    const t = window.setTimeout(() => ac.abort(), 6500);
+    const t = window.setTimeout(() => ac.abort(), 3500);
     fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
       .then((res) => {
         const proxyFallback = res.headers.get("x-rs-proxy-fallback") === "1"
           || /application\/json/i.test(res.headers.get("content-type") || "");
         if (proxyFallback || res.status >= 500 || res.status === 403 || res.status === 404) {
+          failedSrcsRef.current.add(currentSrc);
           tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         }
         try { res.body?.cancel(); } catch {}
@@ -3833,10 +3855,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const tryFaststartProxyRetry = (savedTimeForRetry: number): boolean => {
       const cur = currentSrc || "";
       if (!isVideoProxyPlaybackUrl(cur, proxyUrl)) return false;
+      // Custom Cloudflare worker URLs do not all include the Supabase faststart
+      // rewriter. Appending faststart to an old worker just repeats the same ORB
+      // blocked fallback forever, so skip it and let server/route failover run.
+      if (/\.workers\.dev(?:[/?#]|$)/i.test(cur)) return false;
       if (/[?&]faststart=1(?:&|$)/.test(cur)) return false;
       const boosted = cur + (cur.includes("?") ? "&" : "?") + "faststart=1";
       try {
+        failedSrcsRef.current.add(cur);
         v.src = boosted;
+        setCurrentSrc(boosted);
         v.load();
         v.addEventListener("loadedmetadata", () => {
           if (savedTimeForRetry > 0) v.currentTime = savedTimeForRetry;
@@ -4203,7 +4231,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const liveVideo = videoRef.current;
         if (!liveVideo || currentSrcRef.current !== directSrcAtSeek) return;
         if (finishSeekRecoveryIfReady(liveVideo)) return;
-        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true)
+        const proxyCandidate = buildPlaybackCandidates(rawSourceAtSeek, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, true, fallbackProxyUrls)
           .find((candidate) => candidate && candidate !== directSrcAtSeek && isVideoProxyPlaybackUrl(candidate, proxyUrl));
         if (!proxyCandidate) return;
         slowSeekEventsRef.current = [...slowSeekEventsRef.current.filter((ts) => Date.now() - ts < 2 * 60 * 1000), Date.now()];
@@ -5747,7 +5775,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                   <video
-                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
+                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, false, fallbackProxyUrls)}
                     className="w-full h-full"
                     controls
                     autoPlay

@@ -1,18 +1,19 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v9 (2026-07-25) — EDGE CACHE + HIGH-CONCURRENCY. REDEPLOY REQUIRED.
+// 🆕 NEW v10 (2026-07-25) — STREAM-FIRST EDGE CACHE. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
 // ============================================================
 // Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
-// v9 highlights (scale to millions of concurrent viewers):
+// v10 highlights (scale to millions of concurrent viewers):
 // - Deno Deploy edge cache (`caches.open`) for aligned MP4 range windows,
 //   HLS playlists, and HLS segments. Popular content is served straight
 //   from the edge → 1 origin fetch feeds N users of the same segment.
 // - Cache key includes the requested range so 16MB windows are cached
 //   independently and seek/skip lands on hot bytes instantly.
-// - Streaming pass-through preserved (tiny TTFB).
+// - STREAM-FIRST for full MP4 requests: never arrayBuffer() a whole movie before
+//   responding. This fixes blank playback and 10–12 minute resume taking forever.
 // - Opt-in `?faststart=1` moov-rewriter still available on demand.
 // ============================================================
 
@@ -55,23 +56,15 @@ function clampInvalidContentRange(headers: Headers) {
 }
 
 function fallbackResponse(message: string, detail = "", upstreamStatus?: number) {
-  return new Response(JSON.stringify({
-    error: "VIDEO_SOURCE_UNAVAILABLE",
-    fallback: true,
-    message,
-    detail,
-    upstreamStatus: upstreamStatus || null,
-  }), {
-    // Keep this 200 so the browser/runtime does not report the edge call itself
-    // as a fatal 502/5xx. The player reads x-rs-proxy-fallback/json and moves
-    // to the next configured route/server instead of leaving a blank screen.
-    status: 200,
+  return new Response("VIDEO_SOURCE_UNAVAILABLE", {
+    status: upstreamStatus && upstreamStatus >= 400 ? upstreamStatus : 502,
     headers: {
       ...cors,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
       "x-rs-proxy-fallback": "1",
       "x-rs-proxy-error": message,
+      "x-rs-proxy-detail": detail.slice(0, 180),
     },
   });
 }
@@ -594,9 +587,14 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  // Cacheable segment/window: buffer + store in edge cache, then serve.
-  // Non-cacheable (unknown types / HEAD / faststart): streaming pass-through.
-  if (req.method === "GET" && cacheableKind && (up.status === 200 || up.status === 206)) {
+  // Cacheable segment/window: buffer + store only bounded range/HLS bodies.
+  // CRITICAL: a browser may request an MP4 with no Range header. Buffering that
+  // means downloading the whole movie before the first byte reaches <video>, so
+  // playback appears completely blocked. Full-file MP4 requests always stream.
+  const canBufferForCache = isPlaylistPath(effectiveUrl)
+    || !isDirectMp4Like(effectiveUrl)
+    || Boolean(baseHeaders.range || rawRange || up.headers.get("content-range"));
+  if (req.method === "GET" && cacheableKind && canBufferForCache && (up.status === 200 || up.status === 206)) {
     try {
       const buf = new Uint8Array(await up.arrayBuffer());
       writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, buf, up.status, out, false);
