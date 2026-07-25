@@ -633,9 +633,18 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // "Default" button pastes the Lovable-hosted URL so admin can fall back when
 // self-hosted credits run out, and switch back to their own URL anytime.
 const LOVABLE_DEFAULT_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1` : "";
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
-);
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = (() => {
+ const base = EDGE_FUNCTION_LIBRARY.map(
+  (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone as any, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
+ );
+ // Inject a second Cloudflare-only slot right after video-proxy so admin can
+ // paste both Supabase Proxy URL and Cloudflare Proxy URL side-by-side.
+ const cfEntry = { slug: "video-proxy-cf", label: "Video Proxy (Cloudflare)", isNew: true, badgeText: "CF EDGE", badgeTone: "amber" as const, defaultUrl: "" };
+ const idx = base.findIndex((e) => e.slug === "video-proxy");
+ if (idx >= 0) base.splice(idx + 1, 0, cfEntry);
+ else base.unshift(cfEntry);
+ return base;
+})();
 
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
