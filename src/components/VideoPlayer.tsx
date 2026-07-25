@@ -2222,13 +2222,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
-    const nestedFailedTarget = unwrapProxyPlaybackTarget(failedKey);
-    if (nestedFailedTarget) failedSrcsRef.current.add(nestedFailedTarget);
-    if (activeSourceBaseRef.current) {
-      failedSrcsRef.current.add(activeSourceBaseRef.current);
-      const pairedProxy = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, activeSourceBaseRef.current, proxyApiKey || undefined) : "";
-      if (pairedProxy) failedSrcsRef.current.add(pairedProxy);
-    }
+    // Important: a proxy URL failing does NOT prove the raw video URL is bad.
+    // Keep raw/direct and the other proxy slot eligible so route fallback can
+    // walk CF proxy → backend proxy → direct → next admin server without loops.
 
     // Same quality, alternate route first (proxy ↔ direct) before touching quality/server.
     const sameQualityRouteFallback = buildPlaybackCandidates(
@@ -3363,9 +3359,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           || /application\/json/i.test(res.headers.get("content-type") || "");
         if (proxyFallback || res.status >= 500 || res.status === 403 || res.status === 404) {
           failedSrcsRef.current.add(currentSrc);
-          const nested = unwrapProxyPlaybackTarget(currentSrc);
-          if (nested) failedSrcsRef.current.add(nested);
-          if (activeSourceBaseRef.current) failedSrcsRef.current.add(activeSourceBaseRef.current);
           tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         }
         try { res.body?.cancel(); } catch {}
