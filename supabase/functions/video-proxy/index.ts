@@ -585,7 +585,7 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
     const resp = new Response(body, { status: up.status, statusText: up.statusText, headers: out });
     // Micro-cache the rewritten playlist so a stampede of joiners share one origin fetch.
-    if (cacheableKind) writeEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null, resp.clone()).catch(() => {});
+    if (cacheableKind) writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, new TextEncoder().encode(body), up.status, out, true);
     return resp;
   }
 
