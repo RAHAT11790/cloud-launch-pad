@@ -1991,7 +1991,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy, fallbackProxyUrls);
-  }, [cdnEnabled, noProxy, proxyUrl, proxyApiKey, preferProxy]);
+  }, [cdnEnabled, fallbackProxyUrls, noProxy, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     if (isBypassSource(rawUrl)) return rawUrl;
@@ -2236,7 +2236,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cdnEnabled,
       proxyUrl || undefined,
       proxyApiKey || undefined,
-      preferProxy
+      preferProxy,
+      fallbackProxyUrls
     ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
 
     if (sameQualityRouteFallback) {
@@ -2358,7 +2359,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // All soft retries exhausted → really expired.
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, fallbackProxyUrls, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {
