@@ -730,7 +730,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="space-y-2">
   {ROUTER_FUNCTIONS.map(({ slug, label, isNew, badgeText, badgeTone, defaultUrl }) => {
  const res = testResult[slug];
- const isVideoProxy = slug === "video-proxy";
+ const isVideoProxy = slug === "video-proxy" || slug === "video-proxy-cf";
   const isDefault = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim()) === defaultUrl;
  const badgeClass = badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
    : badgeTone === "amber" ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
