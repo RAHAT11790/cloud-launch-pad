@@ -1,19 +1,20 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v10 (2026-07-25) — STREAM-FIRST EDGE CACHE. REDEPLOY REQUIRED.
+// 🆕 NEW v11 (2026-07-25) — ZERO-WAIT RANGE STREAMING. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
 // ============================================================
 // Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
-// v10 highlights (scale to millions of concurrent viewers):
+// v11 highlights (scale to millions of concurrent viewers):
 // - Deno Deploy edge cache (`caches.open`) for aligned MP4 range windows,
 //   HLS playlists, and HLS segments. Popular content is served straight
 //   from the edge → 1 origin fetch feeds N users of the same segment.
 // - Cache key includes the requested range so 16MB windows are cached
 //   independently and seek/skip lands on hot bytes instantly.
-// - STREAM-FIRST for full MP4 requests: never arrayBuffer() a whole movie before
-//   responding. This fixes blank playback and 10–12 minute resume taking forever.
+// - ZERO-WAIT for MP4 requests: never arrayBuffer() a media range/full movie
+//   before responding. First byte streams immediately, so HTTP resume/seek no
+//   longer waits for a full 16MB proxy window to download first.
 // - Opt-in `?faststart=1` moov-rewriter still available on demand.
 // ============================================================
 
@@ -587,20 +588,22 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  // Cacheable segment/window: buffer + store only bounded range/HLS bodies.
-  // CRITICAL: a browser may request an MP4 with no Range header. Buffering that
-  // means downloading the whole movie before the first byte reaches <video>, so
-  // playback appears completely blocked. Full-file MP4 requests always stream.
-  const canBufferForCache = isPlaylistPath(effectiveUrl)
-    || !isDirectMp4Like(effectiveUrl)
-    || Boolean(baseHeaders.range || rawRange || up.headers.get("content-range"));
+  // Cacheable non-MP4 bodies may be buffered for the tiny in-isolate cache.
+  // CRITICAL: MP4/MKV/WebM range requests must NOT arrayBuffer() first. The old
+  // v10 path waited for the whole aligned 16MB window before returning byte 1,
+  // which made HTTP Server 1 resume/seek feel extremely slow even while the
+  // origin itself was alive. Stream media immediately; cache playlists/small
+  // non-video assets only.
+  const canBufferForCache = isPlaylistPath(effectiveUrl) || !isDirectMp4Like(effectiveUrl);
   if (req.method === "GET" && cacheableKind && canBufferForCache && (up.status === 200 || up.status === 206)) {
     try {
       const buf = new Uint8Array(await up.arrayBuffer());
       writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, buf, up.status, out, false);
       return new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
     } catch {
-      // Fall through to streaming if buffering fails (very large windows on constrained isolates).
+      // The body may be disturbed after a failed arrayBuffer(); never pass it to
+      // new Response() or Deno throws "ReadableStream is locked or disturbed".
+      return fallbackResponse("Upstream stream interrupted", "cache buffer failed", up.status);
     }
   }
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });

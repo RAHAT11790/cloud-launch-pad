@@ -1,13 +1,13 @@
-// 🆕 NEW v10 (2026-07-25) — STREAM-FIRST EDGE CACHE. REDEPLOY REQUIRED.
+// 🆕 NEW v11 (2026-07-25) — ZERO-WAIT RANGE STREAMING. REDEPLOY REQUIRED.
 // After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
 // ============================================================
-// Cloudflare Worker — video-proxy (CF-native port, v10)
+// Cloudflare Worker — video-proxy (CF-native port, v11)
 // ============================================================
-// v10 highlights (scale to millions of concurrent viewers):
+// v11 highlights (scale to millions of concurrent viewers):
 // - Cloudflare edge cache (`caches.default`) for aligned MP4 range windows,
 //   HLS playlists, and HLS segments. One origin fetch feeds every viewer of
 //   the same window on the same POP.
-// - STREAM-FIRST full MP4 requests: never buffer a whole movie before first byte.
+// - ZERO-WAIT MP4 requests: never buffer a range/full movie before first byte.
 // - 16MB range window matches Supabase parity.
 // No env vars required.
 // ============================================================
@@ -210,16 +210,29 @@ export default {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
 
-    // Cacheable segment/window → buffer + cache only bounded range/HLS bodies.
-    // If the browser sends a full MP4 request with no Range, stream immediately;
-    // otherwise first frame/resume waits for the entire movie download.
-    const canBufferForCache = isPlaylist || !isDirectMp4Like(up) || Boolean(headers.range || rawRange || res.headers.get("content-range"));
-    if (req.method === "GET" && cacheable && canBufferForCache && (res.status === 200 || res.status === 206)) {
-      const buf = await res.arrayBuffer();
-      const resp = new Response(buf, { status: res.status, headers: out });
-      const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
-      ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: ch })));
+    // Cacheable segment/window → stream MP4 ranges immediately and cache via a
+    // cloned streaming response in the background. The previous arrayBuffer()
+    // path waited for the whole 16MB window before first byte, which made HTTP
+    // resume/seek painfully slow despite a healthy origin.
+    const mediaLike = isDirectMp4Like(up);
+    if (req.method === "GET" && cacheable && mediaLike && (res.status === 200 || res.status === 206)) {
+      const respHeaders = new Headers(out);
+      const resp = new Response(res.body, { status: res.status, headers: respHeaders });
+      try { ctx?.waitUntil?.(cache.put(cacheKey, resp.clone())); } catch {}
       return resp;
+    }
+
+    const canBufferForCache = isPlaylist || !mediaLike;
+    if (req.method === "GET" && cacheable && canBufferForCache && (res.status === 200 || res.status === 206)) {
+      try {
+        const buf = await res.arrayBuffer();
+        const resp = new Response(buf, { status: res.status, headers: out });
+        const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
+        ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: ch })));
+        return resp;
+      } catch {
+        return fallbackResponse("Upstream stream interrupted", "cache buffer failed", res.status);
+      }
     }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
