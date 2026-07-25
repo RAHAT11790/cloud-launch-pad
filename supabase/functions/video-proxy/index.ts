@@ -566,7 +566,10 @@ Deno.serve(async (req) => {
     out.delete("content-length");
     out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
-    return new Response(body, { status: up.status, statusText: up.statusText, headers: out });
+    const resp = new Response(body, { status: up.status, statusText: up.statusText, headers: out });
+    // Micro-cache the rewritten playlist so a stampede of joiners share one origin fetch.
+    if (cacheableKind) writeEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null, resp.clone()).catch(() => {});
+    return resp;
   }
 
   // Long cache for immutable media chunks — lets any downstream CDN/browser skip instantly.
@@ -574,10 +577,17 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  // For RS direct files, keep the upstream response bounded to the small range
-  // requested in alignMediaRange(). Do NOT re-assemble `bytes=N-` into a single
-  // huge tail response; that was tying up slow mirrors and made seek/skip wait
-  // until the edge had streamed a long body. Browsers handle short 206 chunks and
-  // immediately ask for the next window, which feels much closer to native download.
+  // Cacheable segment/window: buffer + store in edge cache, then serve.
+  // Non-cacheable (unknown types / HEAD / faststart): streaming pass-through.
+  if (req.method === "GET" && cacheableKind && (up.status === 200 || up.status === 206)) {
+    try {
+      const buf = await up.arrayBuffer();
+      const resp = new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
+      writeEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null, resp.clone()).catch(() => {});
+      return resp;
+    } catch {
+      // Fall through to streaming if buffering fails (very large windows on constrained isolates).
+    }
+  }
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });
 });
