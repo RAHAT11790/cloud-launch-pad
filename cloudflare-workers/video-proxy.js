@@ -217,7 +217,6 @@ export default {
     const mediaLike = isDirectMp4Like(up);
     if (req.method === "GET" && cacheable && mediaLike && (res.status === 200 || res.status === 206)) {
       const respHeaders = new Headers(out);
-      const cacheHeaders = new Headers(out); cacheHeaders.set("x-edge-cache", "MISS");
       const resp = new Response(res.body, { status: res.status, headers: respHeaders });
       try { ctx?.waitUntil?.(cache.put(cacheKey, resp.clone())); } catch {}
       return resp;
