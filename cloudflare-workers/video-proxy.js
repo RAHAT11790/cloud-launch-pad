@@ -1,17 +1,14 @@
-// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + streaming pass-through. REDEPLOY REQUIRED.
+// 🆕 NEW v9 (2026-07-25) — EDGE CACHE + HIGH-CONCURRENCY. REDEPLOY REQUIRED.
 // After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
 // ============================================================
-// Cloudflare Worker — video-proxy (CF-native port, v8)
+// Cloudflare Worker — video-proxy (CF-native port, v9)
 // ============================================================
-// Deploy as a Module Worker. Usage:
-//   https://<worker>.<sub>.workers.dev/?url=<ENCODED_VIDEO_URL>
-// v8 highlights (parity with Supabase v8):
-// - 16MB range window (was 8MB) → half the round-trips on HTTPS RS mirrors,
-//   noticeably less micro-buffering during long sessions.
-// - Streaming pass-through: `res.body` piped straight to the client, never
-//   buffered on the edge → tiny TTFB.
-// - Opt-in `?faststart=1` is accepted for API parity (CF port keeps the
-//   fast-path only; moov-rewrite is Supabase-side).
+// v9 highlights (scale to millions of concurrent viewers):
+// - Cloudflare edge cache (`caches.default`) for aligned MP4 range windows,
+//   HLS playlists, and HLS segments. One origin fetch feeds every viewer of
+//   the same window on the same POP.
+// - Streaming pass-through preserved (never buffer non-cacheable bodies).
+// - 16MB range window matches Supabase parity.
 // No env vars required.
 // ============================================================
 
