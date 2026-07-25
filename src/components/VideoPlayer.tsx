@@ -2239,7 +2239,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (sameQualityRouteFallback) {
       pendingSeek.current = activeSeekTargetRef.current ?? (lastKnownTime || videoRef.current?.currentTime || 0);
       mediaRecoverySeekRef.current = pendingSeek.current;
-      seekRecoveryUntilRef.current = Date.now() + RS_SEEK_GRACE_MS;
+      // Only enter long seek-recovery mode when we are actually restoring a
+      // meaningful resume/seek point. Startup route fallback at 0s must be free
+      // to continue to the next admin server immediately if both proxy slots fail.
+      seekRecoveryUntilRef.current = pendingSeek.current > 1 ? Date.now() + RS_SEEK_GRACE_MS : 0;
       rsSoftRetriesRef.current = 0;
       setCurrentSrc(sameQualityRouteFallback);
       setVideoError(false);
@@ -2299,7 +2302,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // server, don't trap playback on a dead origin and show "Link expired" —
     // move through the next admin-configured RS servers with the same episode
     // path/query. This is explicit server failover, not hidden mirror swapping.
-    if (!isSeekRecovery && effectiveVideoServers.length > 1) {
+    const startupSourceFailure = savedTime <= 1 && !isCurrentPlaybackSourceValid();
+    if ((!isSeekRecovery || startupSourceFailure) && effectiveVideoServers.length > 1) {
       failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
       for (let offset = 1; offset < effectiveVideoServers.length; offset += 1) {
         const nextIndex = (activeServerIndex + offset) % effectiveVideoServers.length;
