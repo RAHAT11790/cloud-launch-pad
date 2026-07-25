@@ -1,17 +1,14 @@
-// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + streaming pass-through. REDEPLOY REQUIRED.
+// 🆕 NEW v9 (2026-07-25) — EDGE CACHE + HIGH-CONCURRENCY. REDEPLOY REQUIRED.
 // After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
 // ============================================================
-// Cloudflare Worker — video-proxy (CF-native port, v8)
+// Cloudflare Worker — video-proxy (CF-native port, v9)
 // ============================================================
-// Deploy as a Module Worker. Usage:
-//   https://<worker>.<sub>.workers.dev/?url=<ENCODED_VIDEO_URL>
-// v8 highlights (parity with Supabase v8):
-// - 16MB range window (was 8MB) → half the round-trips on HTTPS RS mirrors,
-//   noticeably less micro-buffering during long sessions.
-// - Streaming pass-through: `res.body` piped straight to the client, never
-//   buffered on the edge → tiny TTFB.
-// - Opt-in `?faststart=1` is accepted for API parity (CF port keeps the
-//   fast-path only; moov-rewrite is Supabase-side).
+// v9 highlights (scale to millions of concurrent viewers):
+// - Cloudflare edge cache (`caches.default`) for aligned MP4 range windows,
+//   HLS playlists, and HLS segments. One origin fetch feeds every viewer of
+//   the same window on the same POP.
+// - Streaming pass-through preserved (never buffer non-cacheable bodies).
+// - 16MB range window matches Supabase parity.
 // No env vars required.
 // ============================================================
 
@@ -151,6 +148,23 @@ export default {
       const v = req.headers.get(k);
       if (v) headers[k] = k === "range" ? (aligned.range || v) : v;
     }
+
+    // ⚡ CF edge cache lookup — one fetch per POP feeds every viewer of this window.
+    const isSeg = /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac|mp3)(?:$|[?#])/i.test(up.pathname + up.search);
+    const isPlaylist = /\.m3u8(?:$|[?#])/i.test(up.pathname + up.search);
+    const cacheable = isSeg || isPlaylist;
+    const cache = caches.default;
+    const cacheKeyUrl = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${encodeURIComponent(toOpaqueUrlToken(up.toString()))}&r=${encodeURIComponent(headers.range || "")}`;
+    const cacheKey = new Request(cacheKeyUrl, { method: "GET" });
+    if (req.method === "GET" && cacheable) {
+      const hit = await cache.match(cacheKey);
+      if (hit) {
+        const h2 = new Headers(hit.headers);
+        h2.set("x-edge-cache", "HIT");
+        return new Response(hit.body, { status: hit.status, headers: h2 });
+      }
+    }
+
     // NEVER forward the browser's own Referer (public site host) — some HTTP
     // mirrors reject public-site referers. We synthesize a same-origin Referer.
     const origin = `${up.protocol}//${up.host}`;
@@ -189,13 +203,26 @@ export default {
       out.delete("content-length");
       out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
       out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
-      return new Response(body, { status: res.status, headers: out });
+      const resp = new Response(body, { status: res.status, headers: out });
+      if (cacheable) {
+        const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
+        ctx?.waitUntil?.(cache.put(cacheKey, new Response(body, { status: res.status, headers: ch })));
+      }
+      return resp;
     }
 
     if (isDirectMp4Like(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
-    // Streaming pass-through — never buffer the upstream body on the edge.
+
+    // Cacheable segment window → buffer + cache; else streaming pass-through.
+    if (req.method === "GET" && cacheable && (res.status === 200 || res.status === 206)) {
+      const buf = await res.arrayBuffer();
+      const resp = new Response(buf, { status: res.status, headers: out });
+      const ch = new Headers(out); ch.set("x-edge-cache", "MISS");
+      ctx?.waitUntil?.(cache.put(cacheKey, new Response(buf, { status: res.status, headers: ch })));
+      return resp;
+    }
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });
   },
 };

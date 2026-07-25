@@ -58,7 +58,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
-  entry("video-proxy",     "Video Proxy",     "🚀 v8 HTTPS BUFFER-KILLER — 16MB range window (was 8MB) halves HTTPS round-trips; streaming pass-through gives tiny TTFB; playlist rewriting + multi-attempt referrer/origin fallback. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { isNew: true, badgeText: "v8 · NEW", badgeTone: "amber" }),
+  entry("video-proxy",     "Video Proxy",     "⚡ v9 EDGE CACHE + HIGH-CONCURRENCY — caches.default for aligned MP4 windows, HLS playlists, and segments. One origin fetch per POP feeds every viewer of the same window → scales to millions of concurrent users. Unlimited bandwidth on Cloudflare.", videoProxySrc, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
 
   entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"]),
   entry("send-fcm",        "Send FCM (Push) v2", "🔔 v2 Offline-Guaranteed Push worker — Firebase Admin (service-account JWT) → FCM v1 API. Hybrid webpush.notification + data payload, unique notificationId per message, requireInteraction + renotify, tag='rsanime-<id>', 28-day TTL + Urgency:high headers. Routes: /send /register /unregister /cleanup /health. Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"]),
