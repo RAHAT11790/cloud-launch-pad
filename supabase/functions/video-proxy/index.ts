@@ -418,42 +418,59 @@ const isAllowedRequestVP = (req: Request): boolean => {
   return matchesAllowedHostVP(origin) || matchesAllowedHostVP(referer);
 };
 
-// Deno Deploy edge cache — region-local, but survives across all users hitting
-// the same POP. One warm segment feeds every subsequent viewer with zero
-// origin round-trip. Bucket per major asset kind so eviction is predictable.
-let _edgeCache: Cache | null = null;
-async function edgeCache(): Promise<Cache | null> {
-  if (_edgeCache) return _edgeCache;
-  try { _edgeCache = await caches.open("rs-video-proxy-v1"); return _edgeCache; } catch { return null; }
+// In-isolate LRU byte cache. Supabase Edge Runtime does not expose the Web
+// Cache API, so we run our own bounded map: popular segments/windows stay hot
+// per isolate and every subsequent viewer of the same content is served with
+// zero origin round-trip. Upstream POPs also honor our long cache-control, so
+// downstream CDN/browser layers absorb even more concurrency.
+const CACHE_MAX_BYTES = 256 * 1024 * 1024; // ~256 MB per isolate
+const CACHE_MAX_ENTRY = 20 * 1024 * 1024;  // don't pin very large blobs
+const CACHE_TTL_MS_SEG = 6 * 60 * 60 * 1000;   // 6h for segments/MP4 windows
+const CACHE_TTL_MS_M3U8 = 6 * 1000;            // 6s for playlists (freshness)
+type CacheEntry = { body: Uint8Array; status: number; headers: Record<string,string>; expires: number; bytes: number };
+const _mem = new Map<string, CacheEntry>();
+let _memBytes = 0;
+function _evictIfNeeded() {
+  if (_memBytes <= CACHE_MAX_BYTES) return;
+  for (const [k, v] of _mem) {
+    _mem.delete(k); _memBytes -= v.bytes;
+    if (_memBytes <= CACHE_MAX_BYTES * 0.85) break;
+  }
+}
+function _keyFor(reqUrl: URL, upstream: URL, rangeSent: string | null): string {
+  const src = reqUrl.searchParams.get("src") || toOpaqueUrlToken(upstream.toString());
+  return `${src}|${rangeSent || ""}`;
+}
+function readMemCache(reqUrl: URL, upstream: URL, rangeSent: string | null): Response | null {
+  const k = _keyFor(reqUrl, upstream, rangeSent);
+  const e = _mem.get(k);
+  if (!e) return null;
+  if (Date.now() > e.expires) { _mem.delete(k); _memBytes -= e.bytes; return null; }
+  // LRU refresh
+  _mem.delete(k); _mem.set(k, e);
+  const h = new Headers(e.headers);
+  h.set("x-edge-cache", "HIT");
+  return new Response(e.body, { status: e.status, headers: h });
+}
+function writeMemCache(reqUrl: URL, upstream: URL, rangeSent: string | null, body: Uint8Array, status: number, headers: Headers, isPlaylist: boolean) {
+  if (body.byteLength === 0 || body.byteLength > CACHE_MAX_ENTRY) return;
+  const k = _keyFor(reqUrl, upstream, rangeSent);
+  const hdrs: Record<string,string> = {};
+  headers.forEach((v, kk) => { hdrs[kk] = v; });
+  const prev = _mem.get(k);
+  if (prev) _memBytes -= prev.bytes;
+  const entry: CacheEntry = {
+    body, status, headers: hdrs,
+    expires: Date.now() + (isPlaylist ? CACHE_TTL_MS_M3U8 : CACHE_TTL_MS_SEG),
+    bytes: body.byteLength,
+  };
+  _mem.set(k, entry);
+  _memBytes += entry.bytes;
+  _evictIfNeeded();
 }
 const isLikelySegmentPath = (u: URL) =>
   /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac|mp3)(?:$|[?#])/i.test(u.pathname + u.search);
 const isPlaylistPath = (u: URL) => /\.m3u8(?:$|[?#])/i.test(u.pathname + u.search);
-
-function edgeCacheKey(reqUrl: URL, upstream: URL, rangeSent: string | null): Request {
-  // Key on the token'd request URL + range so aligned windows cache independently.
-  const src = reqUrl.searchParams.get("src") || toOpaqueUrlToken(upstream.toString());
-  const u = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${src}&r=${encodeURIComponent(rangeSent || "")}`;
-  return new Request(u, { method: "GET" });
-}
-async function readEdgeCache(reqUrl: URL, upstream: URL, rangeSent: string | null): Promise<Response | null> {
-  const c = await edgeCache(); if (!c) return null;
-  try {
-    const hit = await c.match(edgeCacheKey(reqUrl, upstream, rangeSent));
-    if (!hit) return null;
-    const h = new Headers(hit.headers);
-    h.set("x-edge-cache", "HIT");
-    return new Response(hit.body, { status: hit.status, headers: h });
-  } catch { return null; }
-}
-async function writeEdgeCache(reqUrl: URL, upstream: URL, rangeSent: string | null, res: Response) {
-  const c = await edgeCache(); if (!c) return;
-  try {
-    const h = new Headers(res.headers);
-    h.set("x-edge-cache", "MISS");
-    await c.put(edgeCacheKey(reqUrl, upstream, rangeSent), new Response(res.body, { status: res.status, headers: h }));
-  } catch {}
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
