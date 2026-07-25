@@ -3329,17 +3329,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(timer);
   }, [activeServerIndex, adGateActive, currentSrc, getServerScopedSource, isAnimeSaltContent, isEmbedPlayback, isHlsSrc, playbackRouteReady, src, tryNextPlaybackRoute]);
 
-  // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
-  // can fail with a quick 502 while the video element waits much longer before
-  // firing a media error. Probe one byte and move to the direct/failover route
-  // immediately when the proxy endpoint itself reports failure.
+  // Fast-detect blocked proxy responses. Old/custom workers can return a JSON
+  // fallback body to <video>, which Chromium blocks with ORB and then keeps
+  // retrying the same URL. Probe one byte through fetch and move to the direct
+  // or next-server route immediately when the proxy endpoint reports fallback.
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
     if (!isVideoProxyPlaybackUrl(currentSrc, proxyUrl)) return;
-    const nested = unwrapProxyPlaybackTarget(currentSrc);
-    if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
-    const t = window.setTimeout(() => ac.abort(), 6500);
+    const t = window.setTimeout(() => ac.abort(), 3500);
     fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
       .then((res) => {
         const proxyFallback = res.headers.get("x-rs-proxy-fallback") === "1"

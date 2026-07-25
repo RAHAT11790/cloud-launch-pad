@@ -60,20 +60,15 @@ function clampInvalidContentRange(headers) {
 }
 
 function fallbackResponse(message, detail = "", upstreamStatus) {
-  return new Response(JSON.stringify({
-    error: "VIDEO_SOURCE_UNAVAILABLE",
-    fallback: true,
-    message,
-    detail,
-    upstreamStatus: upstreamStatus || null,
-  }), {
-    status: 200,
+  return new Response("VIDEO_SOURCE_UNAVAILABLE", {
+    status: upstreamStatus && upstreamStatus >= 400 ? upstreamStatus : 502,
     headers: {
       ...cors,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
       "x-rs-proxy-fallback": "1",
       "x-rs-proxy-error": message,
+      "x-rs-proxy-detail": String(detail || "").slice(0, 180),
     },
   });
 }

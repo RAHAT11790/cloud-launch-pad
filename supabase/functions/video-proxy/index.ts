@@ -56,23 +56,15 @@ function clampInvalidContentRange(headers: Headers) {
 }
 
 function fallbackResponse(message: string, detail = "", upstreamStatus?: number) {
-  return new Response(JSON.stringify({
-    error: "VIDEO_SOURCE_UNAVAILABLE",
-    fallback: true,
-    message,
-    detail,
-    upstreamStatus: upstreamStatus || null,
-  }), {
-    // Keep this 200 so the browser/runtime does not report the edge call itself
-    // as a fatal 502/5xx. The player reads x-rs-proxy-fallback/json and moves
-    // to the next configured route/server instead of leaving a blank screen.
-    status: 200,
+  return new Response("VIDEO_SOURCE_UNAVAILABLE", {
+    status: upstreamStatus && upstreamStatus >= 400 ? upstreamStatus : 502,
     headers: {
       ...cors,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store",
       "x-rs-proxy-fallback": "1",
       "x-rs-proxy-error": message,
+      "x-rs-proxy-detail": detail.slice(0, 180),
     },
   });
 }
