@@ -507,7 +507,7 @@ Deno.serve(async (req) => {
   // Only GET; HEAD stays direct so origins can validate size.
   const cacheableKind = isLikelySegmentPath(upstreamUrl) || isPlaylistPath(upstreamUrl);
   if (req.method === "GET" && cacheableKind && !reqUrl.searchParams.get("faststart")) {
-    const hit = await readEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null);
+    const hit = readMemCache(reqUrl, upstreamUrl, baseHeaders.range || null);
     if (hit) return hit;
   }
 
