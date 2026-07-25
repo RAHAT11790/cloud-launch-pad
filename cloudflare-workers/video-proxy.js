@@ -1,13 +1,13 @@
-// 🆕 NEW v9 (2026-07-25) — EDGE CACHE + HIGH-CONCURRENCY. REDEPLOY REQUIRED.
+// 🆕 NEW v10 (2026-07-25) — STREAM-FIRST EDGE CACHE. REDEPLOY REQUIRED.
 // After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
 // ============================================================
-// Cloudflare Worker — video-proxy (CF-native port, v9)
+// Cloudflare Worker — video-proxy (CF-native port, v10)
 // ============================================================
-// v9 highlights (scale to millions of concurrent viewers):
+// v10 highlights (scale to millions of concurrent viewers):
 // - Cloudflare edge cache (`caches.default`) for aligned MP4 range windows,
 //   HLS playlists, and HLS segments. One origin fetch feeds every viewer of
 //   the same window on the same POP.
-// - Streaming pass-through preserved (never buffer non-cacheable bodies).
+// - STREAM-FIRST full MP4 requests: never buffer a whole movie before first byte.
 // - 16MB range window matches Supabase parity.
 // No env vars required.
 // ============================================================
@@ -17,7 +17,7 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers":
-    "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error",
+    "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error, x-edge-cache",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -215,8 +215,11 @@ export default {
       out.set("cache-control", "public, max-age=604800, immutable");
     }
 
-    // Cacheable segment window → buffer + cache; else streaming pass-through.
-    if (req.method === "GET" && cacheable && (res.status === 200 || res.status === 206)) {
+    // Cacheable segment/window → buffer + cache only bounded range/HLS bodies.
+    // If the browser sends a full MP4 request with no Range, stream immediately;
+    // otherwise first frame/resume waits for the entire movie download.
+    const canBufferForCache = isPlaylist || !isDirectMp4Like(up) || Boolean(headers.range || rawRange || res.headers.get("content-range"));
+    if (req.method === "GET" && cacheable && canBufferForCache && (res.status === 200 || res.status === 206)) {
       const buf = await res.arrayBuffer();
       const resp = new Response(buf, { status: res.status, headers: out });
       const ch = new Headers(out); ch.set("x-edge-cache", "MISS");

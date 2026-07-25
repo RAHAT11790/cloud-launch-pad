@@ -209,10 +209,13 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  addCandidate(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  // When a playback proxy is configured, use it first for BOTH HTTP and HTTPS
+  // RS files. The proxy owns same-origin range headers, upstream referer fixes,
+  // and edge-cache windows; direct HTTPS remains as instant fallback only.
   if (customProxyCandidate && preferProxy) addCandidate(customProxyCandidate);
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
+  addCandidate(url);
+  if (customProxyCandidate && !preferProxy) addCandidate(customProxyCandidate);
   return candidates;
 };
 
@@ -400,7 +403,7 @@ const normalizeDownloadQualityKey = (label: string) => {
   return value || "default";
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = true }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
