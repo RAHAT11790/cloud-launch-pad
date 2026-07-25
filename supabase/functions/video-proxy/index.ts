@@ -1,19 +1,19 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + opt-in faststart. REDEPLOY REQUIRED.
+// 🆕 NEW v9 (2026-07-25) — EDGE CACHE + HIGH-CONCURRENCY. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
 // ============================================================
 // Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
-// - Accepts http:// and https:// upstream URLs.
-// - Rewrites HLS playlists so variants/segments also travel through this proxy.
-// - v8 HTTPS OPT: 16MB range window (was 8MB) → half the round-trips per file,
-//   noticeably smoother RS HTTPS playback with the same total bandwidth.
-// - Fast-path streaming: `res.body` piped straight to the client, no
-//   `arrayBuffer()` buffering on the edge → tiny TTFB.
-// - Opt-in `?faststart=1` moov-rewriter only kicks in when the player asks
-//   for it (moov-at-end MP4 recovery), never blocks the happy path.
+// v9 highlights (scale to millions of concurrent viewers):
+// - Deno Deploy edge cache (`caches.open`) for aligned MP4 range windows,
+//   HLS playlists, and HLS segments. Popular content is served straight
+//   from the edge → 1 origin fetch feeds N users of the same segment.
+// - Cache key includes the requested range so 16MB windows are cached
+//   independently and seek/skip lands on hot bytes instantly.
+// - Streaming pass-through preserved (tiny TTFB).
+// - Opt-in `?faststart=1` moov-rewriter still available on demand.
 // ============================================================
 
 const cors: Record<string, string> = {
