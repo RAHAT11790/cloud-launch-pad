@@ -418,6 +418,43 @@ const isAllowedRequestVP = (req: Request): boolean => {
   return matchesAllowedHostVP(origin) || matchesAllowedHostVP(referer);
 };
 
+// Deno Deploy edge cache — region-local, but survives across all users hitting
+// the same POP. One warm segment feeds every subsequent viewer with zero
+// origin round-trip. Bucket per major asset kind so eviction is predictable.
+let _edgeCache: Cache | null = null;
+async function edgeCache(): Promise<Cache | null> {
+  if (_edgeCache) return _edgeCache;
+  try { _edgeCache = await caches.open("rs-video-proxy-v1"); return _edgeCache; } catch { return null; }
+}
+const isLikelySegmentPath = (u: URL) =>
+  /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac|mp3)(?:$|[?#])/i.test(u.pathname + u.search);
+const isPlaylistPath = (u: URL) => /\.m3u8(?:$|[?#])/i.test(u.pathname + u.search);
+
+function edgeCacheKey(reqUrl: URL, upstream: URL, rangeSent: string | null): Request {
+  // Key on the token'd request URL + range so aligned windows cache independently.
+  const src = reqUrl.searchParams.get("src") || toOpaqueUrlToken(upstream.toString());
+  const u = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${src}&r=${encodeURIComponent(rangeSent || "")}`;
+  return new Request(u, { method: "GET" });
+}
+async function readEdgeCache(reqUrl: URL, upstream: URL, rangeSent: string | null): Promise<Response | null> {
+  const c = await edgeCache(); if (!c) return null;
+  try {
+    const hit = await c.match(edgeCacheKey(reqUrl, upstream, rangeSent));
+    if (!hit) return null;
+    const h = new Headers(hit.headers);
+    h.set("x-edge-cache", "HIT");
+    return new Response(hit.body, { status: hit.status, headers: h });
+  } catch { return null; }
+}
+async function writeEdgeCache(reqUrl: URL, upstream: URL, rangeSent: string | null, res: Response) {
+  const c = await edgeCache(); if (!c) return;
+  try {
+    const h = new Headers(res.headers);
+    h.set("x-edge-cache", "MISS");
+    await c.put(edgeCacheKey(reqUrl, upstream, rangeSent), new Response(res.body, { status: res.status, headers: h }));
+  } catch {}
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405, headers: cors });
@@ -449,24 +486,25 @@ Deno.serve(async (req) => {
     if (value) baseHeaders[key] = key === "range" ? aligned.range || value : value;
   }
 
+  // ⚡ Edge-cache lookup — serve popular segments/windows straight from the POP.
+  // Only GET; HEAD stays direct so origins can validate size.
+  const cacheableKind = isLikelySegmentPath(upstreamUrl) || isPlaylistPath(upstreamUrl);
+  if (req.method === "GET" && cacheableKind && !reqUrl.searchParams.get("faststart")) {
+    const hit = await readEdgeCache(reqUrl, upstreamUrl, baseHeaders.range || null);
+    if (hit) return hit;
+  }
+
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
   // FAST-PATH: skip the moov-at-end rewriter unless the client explicitly asks
-  // for it with `?faststart=1`. The rewriter does 3+ blocking fetches (probe
-  // size + head + tail) BEFORE any byte reaches the browser, which killed TTFB
-  // on the HTTP RS server. Well-authored Telegram MP4s have moov at the front
-  // and never need it; the client only opts in when direct playback stalls.
+  // for it with `?faststart=1`.
   const wantsFaststart = reqUrl.searchParams.get("faststart") === "1";
   if (wantsFaststart) {
     try {
       const faststart = await tryFaststartMp4(req, upstreamUrl, rawRange, baseHeaders, ac.signal);
       if (faststart) return faststart;
-    } catch {
-      // Fall through to the normal streaming proxy if fast-start rewriting cannot
-      // be applied for this source. Playback must never fail only because the
-      // optimization path could not parse a particular MP4 layout.
-    }
+    } catch {}
   }
 
 
