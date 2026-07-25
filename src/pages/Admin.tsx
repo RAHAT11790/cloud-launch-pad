@@ -633,18 +633,9 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // "Default" button pastes the Lovable-hosted URL so admin can fall back when
 // self-hosted credits run out, and switch back to their own URL anytime.
 const LOVABLE_DEFAULT_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1` : "";
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = (() => {
- const base = EDGE_FUNCTION_LIBRARY.map(
-  (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone as any, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
- );
- // Inject a second Cloudflare-only slot right after video-proxy so admin can
- // paste both Supabase Proxy URL and Cloudflare Proxy URL side-by-side.
- const cfEntry = { slug: "video-proxy-cf", label: "Video Proxy (Cloudflare)", isNew: true, badgeText: "CF EDGE", badgeTone: "amber" as const, defaultUrl: "" };
- const idx = base.findIndex((e) => e.slug === "video-proxy");
- if (idx >= 0) base.splice(idx + 1, 0, cfEntry);
- else base.unshift(cfEntry);
- return base;
-})();
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
+);
 
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
@@ -654,17 +645,13 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const [testing, setTesting] = useState<string | null>(null);
  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
 
- // video-proxy-cf is a Cloudflare Worker URL; skip supabase-shaped normalization.
- const normalize = (slug: string, val: string) =>
-  slug === "video-proxy-cf" ? String(val || "").trim().replace(/\/+$/, "") : normalizeFunctionEndpointUrl(slug, val);
-
  useEffect(() => {
  const unsub = onValue(ref(db, "settings/functionOverrides"), (snap) => {
  const v = snap.val() || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
   ROUTER_FUNCTIONS.forEach(({ slug }) => {
-  u[slug] = normalize(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
+  u[slug] = normalizeFunctionEndpointUrl(slug, String(v?.[slug]?.customUrl || v?.[slug]?.url || ""));
   e[slug] = Boolean(u[slug]) && v?.[slug]?.enabled !== false;
  });
  setUrls(u);
@@ -676,7 +663,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   const save = async (slug: string) => {
    setSaving(slug);
    try {
-    const url = normalize(slug, (urls[slug] || "").trim());
+    const url = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
     if (url && !/^https?:\/\//i.test(url)) { toast.error("Paste a valid http/https function URL"); return; }
      const active = Boolean(url) && enabled[slug] === true;
    await set(ref(db, `settings/functionOverrides/${slug}`), {
@@ -699,7 +686,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  };
 
  const ping = async (slug: string) => {
-  const u = normalize(slug, (urls[slug] || "").trim());
+  const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
  if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
@@ -730,7 +717,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="space-y-2">
   {ROUTER_FUNCTIONS.map(({ slug, label, isNew, badgeText, badgeTone, defaultUrl }) => {
  const res = testResult[slug];
- const isVideoProxy = slug === "video-proxy" || slug === "video-proxy-cf";
+ const isVideoProxy = slug === "video-proxy";
   const isDefault = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim()) === defaultUrl;
  const badgeClass = badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
    : badgeTone === "amber" ? "bg-amber-500/20 text-amber-300 border-amber-500/40"

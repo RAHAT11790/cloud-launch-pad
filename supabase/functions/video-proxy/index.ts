@@ -1,28 +1,26 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 
-// 🆕 NEW v11 (2026-07-25) — ZERO-WAIT RANGE STREAMING. REDEPLOY REQUIRED.
+// 🆕 NEW v8 (2026-07-24) — HTTPS BUFFER-KILLER + opt-in faststart. REDEPLOY REQUIRED.
 // After deploy, paste this URL back into Admin → EGD Router.
 // ============================================================
 // video-proxy — Universal HLS/video proxy (no scripts, no protection)
 // ============================================================
 // Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
-// v11 highlights (scale to millions of concurrent viewers):
-// - Deno Deploy edge cache (`caches.open`) for aligned MP4 range windows,
-//   HLS playlists, and HLS segments. Popular content is served straight
-//   from the edge → 1 origin fetch feeds N users of the same segment.
-// - Cache key includes the requested range so 16MB windows are cached
-//   independently and seek/skip lands on hot bytes instantly.
-// - ZERO-WAIT for MP4 requests: never arrayBuffer() a media range/full movie
-//   before responding. First byte streams immediately, so HTTP resume/seek no
-//   longer waits for a full 16MB proxy window to download first.
-// - Opt-in `?faststart=1` moov-rewriter still available on demand.
+// - Accepts http:// and https:// upstream URLs.
+// - Rewrites HLS playlists so variants/segments also travel through this proxy.
+// - v8 HTTPS OPT: 16MB range window (was 8MB) → half the round-trips per file,
+//   noticeably smoother RS HTTPS playback with the same total bandwidth.
+// - Fast-path streaming: `res.body` piped straight to the client, no
+//   `arrayBuffer()` buffering on the edge → tiny TTFB.
+// - Opt-in `?faststart=1` moov-rewriter only kicks in when the player asks
+//   for it (moov-at-end MP4 recovery), never blocks the happy path.
 // ============================================================
 
 const cors: Record<string, string> = {
   ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
-  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error, x-rs-proxy-range, x-rs-window, x-edge-cache",
+  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, x-rs-proxy-fallback, x-rs-proxy-error, x-rs-proxy-range, x-rs-window",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -57,15 +55,23 @@ function clampInvalidContentRange(headers: Headers) {
 }
 
 function fallbackResponse(message: string, detail = "", upstreamStatus?: number) {
-  return new Response("VIDEO_SOURCE_UNAVAILABLE", {
-    status: upstreamStatus && upstreamStatus >= 400 ? upstreamStatus : 502,
+  return new Response(JSON.stringify({
+    error: "VIDEO_SOURCE_UNAVAILABLE",
+    fallback: true,
+    message,
+    detail,
+    upstreamStatus: upstreamStatus || null,
+  }), {
+    // Keep this 200 so the browser/runtime does not report the edge call itself
+    // as a fatal 502/5xx. The player reads x-rs-proxy-fallback/json and moves
+    // to the next configured route/server instead of leaving a blank screen.
+    status: 200,
     headers: {
       ...cors,
-      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
       "x-rs-proxy-fallback": "1",
       "x-rs-proxy-error": message,
-      "x-rs-proxy-detail": detail.slice(0, 180),
     },
   });
 }
@@ -412,60 +418,6 @@ const isAllowedRequestVP = (req: Request): boolean => {
   return matchesAllowedHostVP(origin) || matchesAllowedHostVP(referer);
 };
 
-// In-isolate LRU byte cache. Supabase Edge Runtime does not expose the Web
-// Cache API, so we run our own bounded map: popular segments/windows stay hot
-// per isolate and every subsequent viewer of the same content is served with
-// zero origin round-trip. Upstream POPs also honor our long cache-control, so
-// downstream CDN/browser layers absorb even more concurrency.
-const CACHE_MAX_BYTES = 256 * 1024 * 1024; // ~256 MB per isolate
-const CACHE_MAX_ENTRY = 20 * 1024 * 1024;  // don't pin very large blobs
-const CACHE_TTL_MS_SEG = 6 * 60 * 60 * 1000;   // 6h for segments/MP4 windows
-const CACHE_TTL_MS_M3U8 = 6 * 1000;            // 6s for playlists (freshness)
-type CacheEntry = { body: Uint8Array; status: number; headers: Record<string,string>; expires: number; bytes: number };
-const _mem = new Map<string, CacheEntry>();
-let _memBytes = 0;
-function _evictIfNeeded() {
-  if (_memBytes <= CACHE_MAX_BYTES) return;
-  for (const [k, v] of _mem) {
-    _mem.delete(k); _memBytes -= v.bytes;
-    if (_memBytes <= CACHE_MAX_BYTES * 0.85) break;
-  }
-}
-function _keyFor(reqUrl: URL, upstream: URL, rangeSent: string | null): string {
-  const src = reqUrl.searchParams.get("src") || toOpaqueUrlToken(upstream.toString());
-  return `${src}|${rangeSent || ""}`;
-}
-function readMemCache(reqUrl: URL, upstream: URL, rangeSent: string | null): Response | null {
-  const k = _keyFor(reqUrl, upstream, rangeSent);
-  const e = _mem.get(k);
-  if (!e) return null;
-  if (Date.now() > e.expires) { _mem.delete(k); _memBytes -= e.bytes; return null; }
-  // LRU refresh
-  _mem.delete(k); _mem.set(k, e);
-  const h = new Headers(e.headers);
-  h.set("x-edge-cache", "HIT");
-  return new Response(e.body, { status: e.status, headers: h });
-}
-function writeMemCache(reqUrl: URL, upstream: URL, rangeSent: string | null, body: Uint8Array, status: number, headers: Headers, isPlaylist: boolean) {
-  if (body.byteLength === 0 || body.byteLength > CACHE_MAX_ENTRY) return;
-  const k = _keyFor(reqUrl, upstream, rangeSent);
-  const hdrs: Record<string,string> = {};
-  headers.forEach((v, kk) => { hdrs[kk] = v; });
-  const prev = _mem.get(k);
-  if (prev) _memBytes -= prev.bytes;
-  const entry: CacheEntry = {
-    body, status, headers: hdrs,
-    expires: Date.now() + (isPlaylist ? CACHE_TTL_MS_M3U8 : CACHE_TTL_MS_SEG),
-    bytes: body.byteLength,
-  };
-  _mem.set(k, entry);
-  _memBytes += entry.bytes;
-  _evictIfNeeded();
-}
-const isLikelySegmentPath = (u: URL) =>
-  /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac|mp3)(?:$|[?#])/i.test(u.pathname + u.search);
-const isPlaylistPath = (u: URL) => /\.m3u8(?:$|[?#])/i.test(u.pathname + u.search);
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405, headers: cors });
@@ -497,25 +449,24 @@ Deno.serve(async (req) => {
     if (value) baseHeaders[key] = key === "range" ? aligned.range || value : value;
   }
 
-  // ⚡ Edge-cache lookup — serve popular segments/windows straight from the POP.
-  // Only GET; HEAD stays direct so origins can validate size.
-  const cacheableKind = isLikelySegmentPath(upstreamUrl) || isPlaylistPath(upstreamUrl);
-  if (req.method === "GET" && cacheableKind && !reqUrl.searchParams.get("faststart")) {
-    const hit = readMemCache(reqUrl, upstreamUrl, baseHeaders.range || null);
-    if (hit) return hit;
-  }
-
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
   // FAST-PATH: skip the moov-at-end rewriter unless the client explicitly asks
-  // for it with `?faststart=1`.
+  // for it with `?faststart=1`. The rewriter does 3+ blocking fetches (probe
+  // size + head + tail) BEFORE any byte reaches the browser, which killed TTFB
+  // on the HTTP RS server. Well-authored Telegram MP4s have moov at the front
+  // and never need it; the client only opts in when direct playback stalls.
   const wantsFaststart = reqUrl.searchParams.get("faststart") === "1";
   if (wantsFaststart) {
     try {
       const faststart = await tryFaststartMp4(req, upstreamUrl, rawRange, baseHeaders, ac.signal);
       if (faststart) return faststart;
-    } catch {}
+    } catch {
+      // Fall through to the normal streaming proxy if fast-start rewriting cannot
+      // be applied for this source. Playback must never fail only because the
+      // optimization path could not parse a particular MP4 layout.
+    }
   }
 
 
@@ -577,10 +528,7 @@ Deno.serve(async (req) => {
     out.delete("content-length");
     out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     out.set("cache-control", "public, max-age=6, stale-while-revalidate=30");
-    const resp = new Response(body, { status: up.status, statusText: up.statusText, headers: out });
-    // Micro-cache the rewritten playlist so a stampede of joiners share one origin fetch.
-    if (cacheableKind) writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, new TextEncoder().encode(body), up.status, out, true);
-    return resp;
+    return new Response(body, { status: up.status, statusText: up.statusText, headers: out });
   }
 
   // Long cache for immutable media chunks — lets any downstream CDN/browser skip instantly.
@@ -588,23 +536,10 @@ Deno.serve(async (req) => {
     out.set("cache-control", "public, max-age=604800, immutable");
   }
 
-  // Cacheable non-MP4 bodies may be buffered for the tiny in-isolate cache.
-  // CRITICAL: MP4/MKV/WebM range requests must NOT arrayBuffer() first. The old
-  // v10 path waited for the whole aligned 16MB window before returning byte 1,
-  // which made HTTP Server 1 resume/seek feel extremely slow even while the
-  // origin itself was alive. Stream media immediately; cache playlists/small
-  // non-video assets only.
-  const canBufferForCache = isPlaylistPath(effectiveUrl) || !isDirectMp4Like(effectiveUrl);
-  if (req.method === "GET" && cacheableKind && canBufferForCache && (up.status === 200 || up.status === 206)) {
-    try {
-      const buf = new Uint8Array(await up.arrayBuffer());
-      writeMemCache(reqUrl, upstreamUrl, baseHeaders.range || null, buf, up.status, out, false);
-      return new Response(buf, { status: up.status, statusText: up.statusText, headers: out });
-    } catch {
-      // The body may be disturbed after a failed arrayBuffer(); never pass it to
-      // new Response() or Deno throws "ReadableStream is locked or disturbed".
-      return fallbackResponse("Upstream stream interrupted", "cache buffer failed", up.status);
-    }
-  }
+  // For RS direct files, keep the upstream response bounded to the small range
+  // requested in alignMediaRange(). Do NOT re-assemble `bytes=N-` into a single
+  // huge tail response; that was tying up slow mirrors and made seek/skip wait
+  // until the edge had streamed a long body. Browsers handle short 206 chunks and
+  // immediately ask for the next window, which feels much closer to native download.
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });
 });
