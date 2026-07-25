@@ -2213,6 +2213,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
+    const nestedFailedTarget = unwrapProxyPlaybackTarget(failedKey);
+    if (nestedFailedTarget) failedSrcsRef.current.add(nestedFailedTarget);
+    if (activeSourceBaseRef.current) {
+      failedSrcsRef.current.add(activeSourceBaseRef.current);
+      const pairedProxy = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, activeSourceBaseRef.current, proxyApiKey || undefined) : "";
+      if (pairedProxy) failedSrcsRef.current.add(pairedProxy);
+    }
 
     // Same quality, alternate route first (proxy ↔ direct) before touching quality/server.
     const sameQualityRouteFallback = buildPlaybackCandidates(
@@ -2294,13 +2301,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (!nextServer || (nextServer.locked && !isPremium)) continue;
         if (failedSrcsRef.current.has(`__server_failover_${nextIndex}`)) continue;
         const nextRaw = getServerScopedSource(sourceBaseRef.current || activeSourceBaseRef.current, nextIndex);
-        const nextResolved = buildPlaybackCandidates(
+        const nextCandidates = buildPlaybackCandidates(
           nextRaw,
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined,
           preferProxy
-        )[0];
+        );
+        const nextResolved = nextCandidates.find((candidate) => candidate && !failedSrcsRef.current.has(candidate));
         if (!nextResolved || failedSrcsRef.current.has(nextResolved)) continue;
         pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
         activeSourceBaseRef.current = nextRaw;
@@ -3343,6 +3351,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const proxyFallback = res.headers.get("x-rs-proxy-fallback") === "1"
           || /application\/json/i.test(res.headers.get("content-type") || "");
         if (proxyFallback || res.status >= 500 || res.status === 403 || res.status === 404) {
+          failedSrcsRef.current.add(currentSrc);
+          const nested = unwrapProxyPlaybackTarget(currentSrc);
+          if (nested) failedSrcsRef.current.add(nested);
+          if (activeSourceBaseRef.current) failedSrcsRef.current.add(activeSourceBaseRef.current);
           tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         }
         try { res.body?.cancel(); } catch {}
