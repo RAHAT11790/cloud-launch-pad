@@ -196,8 +196,9 @@ const isBypassSource = (url: string): boolean => {
 
   // Protocol is detected PURELY from the URL — no server number is hardcoded.
   // http:// sources must use video-proxy because an HTTPS app cannot play raw HTTP.
-  // HTTPS RS files play DIRECT first; testing showed proxying MP4 seek makes the
-  // browser walk sequential byte windows and delays playback even more.
+  // HTTPS RS files play DIRECT first; proxying a healthy HTTPS MP4 adds an extra
+  // hop and makes resume/seek wait on proxy range windows. Proxies stay as
+  // fallback only for HTTPS.
   const isHttp = isInsecureHttpSource(url);
 
   const proxyBases = Array.from(new Set([proxyUrl, ...fallbackProxyUrls].map((value) => String(value || "").trim()).filter(Boolean)));
@@ -211,13 +212,8 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  const customProxyCandidate = proxyCandidates[0] || null;
-  // When a playback proxy is configured, use it first for BOTH HTTP and HTTPS
-  // RS files. The proxy owns same-origin range headers, upstream referer fixes,
-  // and edge-cache windows; direct HTTPS remains as instant fallback only.
-  if (preferProxy) proxyCandidates.forEach(addCandidate);
   addCandidate(url);
-  if (!preferProxy) proxyCandidates.forEach(addCandidate);
+  proxyCandidates.forEach(addCandidate);
   return candidates;
 };
 
