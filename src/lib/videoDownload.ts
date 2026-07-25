@@ -93,12 +93,17 @@ const applyDownloadRoute = () => {
   } catch {}
 };
 
+let cfProxyOverrideRaw: any = null;
+
 const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
+  const cfUrl = String(cfProxyOverrideRaw?.customUrl || cfProxyOverrideRaw?.url || "").trim().replace(/\/+$/, "");
+  const cfEnabled = Boolean(cfUrl) && cfProxyOverrideRaw?.enabled !== false;
   const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
   const backendHosted = backendFunctionUrl("video-proxy");
   const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
-  const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
+  // Prefer Cloudflare Worker → Supabase override → self-hosted → backend.
+  const adminUrl = cfEnabled ? cfUrl : (adminEnabled ? overrideUrl : (selfHosted || ""));
   playbackProxyBaseUrl = adminUrl || backendHosted;
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
   playbackProxyIsAdmin = Boolean(adminUrl);
@@ -115,6 +120,10 @@ try {
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       proxyOverrideRaw = snap.val() || {};
+      applyProxyRoute();
+    });
+    onValue(ref(db, "settings/functionOverrides/video-proxy-cf"), (snap) => {
+      cfProxyOverrideRaw = snap.val() || {};
       applyProxyRoute();
     });
     onValue(ref(db, "settings/edgeRouter"), (snap) => {
