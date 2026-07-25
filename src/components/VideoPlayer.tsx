@@ -679,18 +679,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let cancelled = false;
     let routerBase = "";
     let overrideRaw: any = null;
+    let cfOverrideRaw: any = null;
     const applyProxyRoute = () => {
       if (cancelled) return;
       if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
+      const cfRaw = String(cfOverrideRaw?.customUrl || cfOverrideRaw?.url || "").trim().replace(/\/+$/, "");
+      const cfEnabled = Boolean(cfRaw) && cfOverrideRaw?.enabled !== false;
       const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
       const backendProxyUrl = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")
         ? `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")}/functions/v1/video-proxy`
         : "";
-      const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      // Admin override wins. Otherwise keep a backend video-proxy ready for HTTP
-      // sources and last-resort fallback without forcing HTTPS RS through it.
-      const finalUrl = enabled ? overrideUrl : (selfHostedUrl || backendProxyUrl);
+      const supabaseEnabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
+      // Priority: Cloudflare Worker (edge cache, lowest TTFB) → Supabase override
+      // → self-hosted → Lovable backend fallback. Both slots are optimized for
+      // HTTP + HTTPS origins with edge caching enabled in v9 proxies.
+      const finalUrl = cfEnabled
+        ? cfRaw
+        : (supabaseEnabled ? overrideUrl : (selfHostedUrl || backendProxyUrl));
       setProxyUrl(finalUrl);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
@@ -705,12 +711,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCdnEnabled(val !== false);
     });
 
-    // Single proxy: `video-proxy` only. AN URLs use their own an-playback proxy.
     const isAnHls = isAnApiHlsProxyUrl(src || "");
 
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       if (cancelled) return;
       overrideRaw = snap.val();
+      applyProxyRoute();
+    });
+
+    const unsub2b = onValue(ref(db, "settings/functionOverrides/video-proxy-cf"), (snap) => {
+      if (cancelled) return;
+      cfOverrideRaw = snap.val();
       applyProxyRoute();
     });
 
@@ -720,7 +731,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyProxyRoute();
     });
 
-    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
+    return () => { cancelled = true; unsub1(); unsub2(); unsub2b(); unsub3(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
