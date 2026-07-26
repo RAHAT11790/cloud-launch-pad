@@ -460,32 +460,45 @@ serve(async (req) => {
     // Telegram calls our URL directly with an `update` object — detect & handle.
     if (body?.update_id !== undefined || body?.message || body?.edited_message) {
       const update = body;
+      // Hard dedup against Telegram retries (fixes "random duplicate replies").
+      if (typeof update.update_id === "number" && markUpdateProcessed(update.update_id)) {
+        return json({ ok: true, dedup: true });
+      }
       const msg = update.message || update.edited_message;
       if (msg) {
         const chatType = msg.chat?.type;
         const text: string = msg.text || msg.caption || "";
 
-        // PRIVATE chat: handle /start and other commands with a welcome message
+        // PRIVATE chat: ONLY /start or /help sends the welcome. Random free-text
+        // no longer auto-triggers the welcome (was spammy).
         if (chatType === "private" && msg.chat?.id) {
           const firstName = String(msg.from?.first_name || "there").slice(0, 40);
           if (text.startsWith("/start") || text.startsWith("/help")) {
             sendStartMessage(botToken, msg.chat.id, firstName)
               .catch((e) => console.error("[start message]", e));
-          } else if (text && !text.startsWith("/")) {
-            // any other free-text in DM → also send welcome (acts as discovery)
-            sendStartMessage(botToken, msg.chat.id, firstName)
-              .catch((e) => console.error("[start message]", e));
           }
         }
 
-        // GROUP chat: anime-share
-        if ((chatType === "group" || chatType === "supergroup") && text && !text.startsWith("/") && msg.from?.id) {
-          handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, text, msg.message_id)
-            .catch((e) => console.error("[group anime share]", e));
+        // GROUP chat: anime-share.
+        // Strict trigger — either explicit (/anime <name> | @mention | reply to bot)
+        // OR a strong fuzzy match. Prevents random-message auto-reply floods.
+        if ((chatType === "group" || chatType === "supergroup") && text && msg.from?.id) {
+          const botUsername = await getBotUsername(botToken).catch(() => null);
+          const repliedToBot =
+            msg.reply_to_message?.from?.is_bot === true &&
+            (!botUsername || msg.reply_to_message.from?.username === botUsername);
+          const { query, isExplicit } = extractExplicitQuery(text, botUsername);
+          const explicit = isExplicit || repliedToBot;
+          // Skip pure commands unless it's our /anime family (handled by extractExplicitQuery)
+          if (query && (!query.startsWith("/") || explicit)) {
+            handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, query, msg.message_id, explicit)
+              .catch((e) => console.error("[group anime share]", e));
+          }
         }
       }
       return json({ ok: true });
     }
+
 
 
     // All non-webhook actions are admin-only — require an RS Anime site origin/referer.
