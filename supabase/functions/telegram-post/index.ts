@@ -114,53 +114,81 @@ async function getBotUsername(botToken: string): Promise<string | null> {
   }
 }
 
-// ============== GROUP ANIME LINK-SHARE (moved from link-share-bot) ==============
+// ============== GROUP ANIME LINK-SHARE ==============
 // Users type anime name in a group where THIS bot is a member → bot replies
-// with a backdrop photo + buttons that deep-link directly to the website player.
+// with ONE consolidated card (top match + buttons for alternates + season/
+// episode breakdown from Firebase). Random auto-replies eliminated via:
+//   • update_id dedup (Telegram retries won't re-fire)
+//   • per-chat query debounce
+//   • strict trigger: `/anime <name>`, @mention, reply-to-bot, OR score ≥ 0.92
+//   • hard noise-word blocklist
 const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-type CatalogItem = { id: string; title: string; backdrop: string; poster: string; source: "RS" | "AN" };
+type CatalogItem = {
+  id: string; title: string; backdrop: string; poster: string; source: "RS" | "AN";
+  seasonSummary?: string; totalEpisodes?: number; totalSeasons?: number; kind?: "series" | "movie";
+};
 let _rsCache: { items: CatalogItem[]; ts: number } | null = null;
 let _anCache: { items: CatalogItem[]; ts: number } | null = null;
 const CATALOG_TTL = 10 * 60_000;
-const recentGroupUpdates = new Map<number, number>();
+const recentGroupUpdates = new Map<number, number>(); // per (chat,message) → replied ts
+const processedUpdateIds = new Set<number>();          // hard dedup for Telegram retries
+const recentChatQueries = new Map<number, { q: string; ts: number }>(); // per-chat debounce
+const DEDUP_CAP = 5000;
+
+function markUpdateProcessed(id: number): boolean {
+  if (!id) return false;
+  if (processedUpdateIds.has(id)) return true;
+  processedUpdateIds.add(id);
+  if (processedUpdateIds.size > DEDUP_CAP) {
+    // trim oldest by re-creating from tail entries
+    const arr = Array.from(processedUpdateIds).slice(-Math.floor(DEDUP_CAP / 2));
+    processedUpdateIds.clear();
+    for (const v of arr) processedUpdateIds.add(v);
+  }
+  return false;
+}
+
+function summarizeSeasons(raw: any): { summary: string; totalEp: number; totalSeasons: number } {
+  const seasons = Array.isArray(raw?.seasons) ? raw.seasons : [];
+  if (!seasons.length) return { summary: "", totalEp: 0, totalSeasons: 0 };
+  const lines: string[] = [];
+  let totalEp = 0;
+  seasons.forEach((s: any, i: number) => {
+    const eps = Array.isArray(s?.episodes) ? s.episodes.length : 0;
+    if (!eps) return;
+    totalEp += eps;
+    const name = String(s?.name || `Season ${i + 1}`).trim();
+    lines.push(`📺 <b>${escHtml(name)}</b> — ${eps} Episode${eps === 1 ? "" : "s"}`);
+  });
+  return { summary: lines.join("\n"), totalEp, totalSeasons: lines.length };
+}
 
 async function loadRsCatalog(): Promise<CatalogItem[]> {
   if (_rsCache && Date.now() - _rsCache.ts < CATALOG_TTL) return _rsCache.items;
   const items: CatalogItem[] = [];
-  for (const [path, sourcePath] of [["adminContentIndex/webseries", "webseries"], ["adminContentIndex/movies", "movies"]] as const) {
-    try {
-      const data: any = await fbGet(path);
-      if (!data) continue;
-      for (const [id, raw] of Object.entries<any>(data)) {
-        if (!raw || typeof raw !== "object" || raw.visibility === "private") continue;
-        const title = String((raw as any).title || (raw as any).name || "").trim();
-        if (!title) continue;
-        items.push({
-          id, title,
-          backdrop: String((raw as any).backdrop || (raw as any).poster || ""),
-          poster: String((raw as any).poster || (raw as any).backdrop || ""),
-          source: "RS",
-        });
-      }
-    } catch (e) { console.error("[loadRsCatalog:index]", sourcePath, e); }
-  }
-  if (items.length) {
-    _rsCache = { items, ts: Date.now() };
-    return items;
-  }
-  for (const path of ["webseries", "movies"]) {
+  const seen = new Set<string>();
+
+  // Prefer full webseries/movies (has seasons array); fall back to index if missing.
+  for (const path of ["webseries", "movies"] as const) {
     try {
       const data: any = await fbGet(path);
       if (!data) continue;
       for (const [id, raw] of Object.entries<any>(data)) {
         if (!raw || typeof raw !== "object") continue;
         const title = String((raw as any).title || (raw as any).name || "").trim();
-        if (!title) continue;
+        if (!title || seen.has(id)) continue;
+        seen.add(id);
+        const kind: "series" | "movie" = path === "movies" ? "movie" : "series";
+        const info = kind === "series" ? summarizeSeasons(raw) : { summary: "", totalEp: 0, totalSeasons: 0 };
         items.push({
           id, title,
           backdrop: String((raw as any).backdrop || (raw as any).poster || ""),
           poster: String((raw as any).poster || (raw as any).backdrop || ""),
           source: "RS",
+          kind,
+          seasonSummary: info.summary,
+          totalEpisodes: info.totalEp,
+          totalSeasons: info.totalSeasons,
         });
       }
     } catch (e) { console.error("[loadRsCatalog]", path, e); }
@@ -183,7 +211,7 @@ async function loadAnCatalog(): Promise<CatalogItem[]> {
         if (!title) continue;
         const poster = String((raw as any).poster || (raw as any).tmdbPoster || (raw as any).posterUrl || (raw as any).backdrop || "");
         const backdrop = String((raw as any).backdrop || (raw as any).tmdbBackdrop || poster || "");
-        items.push({ id: `as_${slug}`, title, backdrop, poster, source: "AN" });
+        items.push({ id: `as_${slug}`, title, backdrop, poster, source: "AN", kind: "series" });
       }
     }
   } catch (e) { console.error("[loadAnCatalog]", e); }
@@ -267,11 +295,46 @@ async function sendGroupPhoto(botToken: string, chat_id: number, photo: string, 
     }),
   }).catch(() => {});
 }
-async function handleGroupQuery(botToken: string, chat_id: number, user_id: number, from: any, text: string, reply_to: number) {
+
+// Extract explicit anime query if user used /anime <name> or mentioned the bot.
+function extractExplicitQuery(text: string, botUsername: string | null): { query: string; isExplicit: boolean } {
+  const t = text.trim();
+  // /anime name  or  /find name  or  /search name
+  const cmd = t.match(/^\/(anime|find|search)(?:@\w+)?\s+(.+)/i);
+  if (cmd) return { query: cmd[2].trim(), isExplicit: true };
+  if (botUsername) {
+    const mentionRx = new RegExp(`@${botUsername}\\b`, "i");
+    if (mentionRx.test(t)) {
+      return { query: t.replace(mentionRx, "").trim(), isExplicit: true };
+    }
+  }
+  return { query: t, isExplicit: false };
+}
+
+async function handleGroupQuery(
+  botToken: string,
+  chat_id: number,
+  user_id: number,
+  from: any,
+  text: string,
+  reply_to: number,
+  isExplicit: boolean,
+) {
   const q = text.trim();
-  if (q.length < 3 || q.length > 1200) return;
-  const NOISE = new Set(["hi", "hello", "hey", "ok", "okay", "thanks", "thank", "bro", "bot", "lol", "yes", "no", "hmm"]);
+  if (q.length < 3 || q.length > 200) return;
+
+  const NOISE = new Set([
+    "hi", "hello", "hey", "ok", "okay", "thanks", "thank", "bro", "bot", "lol",
+    "yes", "no", "hmm", "good", "nice", "cool", "wow", "haha", "hehe", "sir", "vai", "bhai",
+  ]);
   if (NOISE.has(q.toLowerCase())) return;
+
+  // Per-chat query debounce — same query within 3s from same chat = ignore.
+  const prev = recentChatQueries.get(chat_id);
+  if (prev && prev.q === q.toLowerCase() && Date.now() - prev.ts < 3000) return;
+  recentChatQueries.set(chat_id, { q: q.toLowerCase(), ts: Date.now() });
+
+  // Per-message dedup
   const key = chat_id * 1_000_000_000 + reply_to;
   if (recentGroupUpdates.get(key) && Date.now() - recentGroupUpdates.get(key)! < 10 * 60_000) return;
   recentGroupUpdates.set(key, Date.now());
@@ -280,14 +343,33 @@ async function handleGroupQuery(botToken: string, chat_id: number, user_id: numb
     loadRsCatalog().catch(() => [] as CatalogItem[]),
     loadAnCatalog().catch(() => [] as CatalogItem[]),
   ]);
+
+  // Stricter threshold when the message wasn't explicit — avoids random auto-replies.
+  const threshold = isExplicit ? 0.75 : 0.92;
   const filterFn = (it: CatalogItem) => {
     const s = scoreItem(q, it.title);
-    return s >= 0.88 ? { it, score: s } : null;
+    return s >= threshold ? { it, score: s } : null;
   };
   const rs = rsAll.map(filterFn).filter(Boolean).sort((a, b) => b!.score - a!.score) as any[];
   const an = anAll.map(filterFn).filter(Boolean).sort((a, b) => b!.score - a!.score) as any[];
-  if (!rs.length && !an.length) return;
+  if (!rs.length && !an.length) {
+    if (isExplicit) {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id,
+          text: `❌ No match for <code>${escHtml(q)}</code>`,
+          parse_mode: "HTML",
+          reply_to_message_id: reply_to,
+          allow_sending_without_reply: true,
+        }),
+      }).catch(() => {});
+    }
+    return;
+  }
 
+  // Group by normalized title so RS + AN of the same anime collapse into one entry.
   type Group = { title: string; backdrop: string; rs?: CatalogItem; an?: CatalogItem; score: number };
   const groups = new Map<string, Group>();
   const addToGroup = (item: CatalogItem, score: number) => {
@@ -299,20 +381,50 @@ async function handleGroupQuery(botToken: string, chat_id: number, user_id: numb
     if (item.source === "AN" && !g.an) g.an = item;
     if (!g.backdrop && (item.backdrop || item.poster)) g.backdrop = item.backdrop || item.poster;
   };
-  rs.slice(0, 12).forEach((x: any) => addToGroup(x.it, x.score));
-  an.slice(0, 12).forEach((x: any) => addToGroup(x.it, x.score));
-  const ranked = Array.from(groups.values()).sort((a, b) => b.score - a.score).slice(0, 6);
+  rs.slice(0, 6).forEach((x: any) => addToGroup(x.it, x.score));
+  an.slice(0, 6).forEach((x: any) => addToGroup(x.it, x.score));
+  const ranked = Array.from(groups.values()).sort((a, b) => b.score - a.score).slice(0, 4);
+  if (!ranked.length) return;
 
+  // ONE consolidated card: top match's poster + caption + inline buttons for
+  // every result. This kills the "6 replies at once" bug.
+  const top = ranked[0];
+  const primary = top.rs || top.an!;
   const name = escHtml([from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "there");
-  for (const g of ranked) {
-    const rows: any[][] = [];
-    if (g.rs) rows.push([{ text: `▶️ ${truncate(g.rs.title, 22)} • RS`, url: shareUrlFor(g.rs) }]);
-    if (g.an) rows.push([{ text: `▶️ ${truncate(g.an.title, 22)} • AN`, url: shareUrlFor(g.an) }]);
-    if (!rows.length) continue;
-    const caption = `╭─ <b>RS ANIME GROUP SHARE</b>\n│\n│ 👤 <a href="tg://user?id=${user_id}">${name}</a>\n│ 🎬 <b>${escHtml(g.title)}</b>\n│ ${g.rs && g.an ? "Available in both RS &amp; AN" : g.rs ? "Available in RS catalog" : "Available in AN catalog"}\n│ Tap a button below to open details\n╰─`;
-    await sendGroupPhoto(botToken, chat_id, g.backdrop, caption, reply_to, rows);
+
+  // Season/Episode breakdown block
+  let bodyBlock = "";
+  if (primary.kind === "movie") {
+    bodyBlock = `🎬 <b>Full Movie</b>`;
+  } else if (primary.seasonSummary && primary.totalEpisodes) {
+    bodyBlock = `${primary.seasonSummary}\n\n<b>Total:</b> ${primary.totalEpisodes} Episode${primary.totalEpisodes === 1 ? "" : "s"} across ${primary.totalSeasons} Season${primary.totalSeasons === 1 ? "" : "s"}`;
+  } else {
+    bodyBlock = `<i>Tap below to open on the website</i>`;
   }
+
+  const caption =
+`╭─  <b>RS ANIME</b>  ─╮
+│
+│  🎬  <b>${escHtml(primary.title)}</b>
+│  👤  <a href="tg://user?id=${user_id}">${name}</a>
+│
+${bodyBlock.split("\n").map(l => `│  ${l}`).join("\n")}
+│
+╰─  <i>Tap a button to open ↓</i>`;
+
+  // Buttons: primary Watch on top, alternates below (max 4 total).
+  const rows: any[][] = [];
+  if (top.rs) rows.push([{ text: `▶️ Watch on RS ANIME`, url: shareUrlFor(top.rs) }]);
+  if (top.an) rows.push([{ text: `🌸 Watch on AN (Sub/Dub)`, url: shareUrlFor(top.an) }]);
+  ranked.slice(1).forEach((g) => {
+    const it = g.rs || g.an!;
+    rows.push([{ text: `🎯 ${truncate(it.title, 30)}`, url: shareUrlFor(it) }]);
+  });
+  rows.push([{ text: "🌐 Visit Website", url: SITE_URL }]);
+
+  await sendGroupPhoto(botToken, chat_id, primary.backdrop || primary.poster, caption, reply_to, rows);
 }
+
 
 
 const ADMIN_ALLOWED_HOST_RX = [
@@ -348,32 +460,45 @@ serve(async (req) => {
     // Telegram calls our URL directly with an `update` object — detect & handle.
     if (body?.update_id !== undefined || body?.message || body?.edited_message) {
       const update = body;
+      // Hard dedup against Telegram retries (fixes "random duplicate replies").
+      if (typeof update.update_id === "number" && markUpdateProcessed(update.update_id)) {
+        return json({ ok: true, dedup: true });
+      }
       const msg = update.message || update.edited_message;
       if (msg) {
         const chatType = msg.chat?.type;
         const text: string = msg.text || msg.caption || "";
 
-        // PRIVATE chat: handle /start and other commands with a welcome message
+        // PRIVATE chat: ONLY /start or /help sends the welcome. Random free-text
+        // no longer auto-triggers the welcome (was spammy).
         if (chatType === "private" && msg.chat?.id) {
           const firstName = String(msg.from?.first_name || "there").slice(0, 40);
           if (text.startsWith("/start") || text.startsWith("/help")) {
             sendStartMessage(botToken, msg.chat.id, firstName)
               .catch((e) => console.error("[start message]", e));
-          } else if (text && !text.startsWith("/")) {
-            // any other free-text in DM → also send welcome (acts as discovery)
-            sendStartMessage(botToken, msg.chat.id, firstName)
-              .catch((e) => console.error("[start message]", e));
           }
         }
 
-        // GROUP chat: anime-share
-        if ((chatType === "group" || chatType === "supergroup") && text && !text.startsWith("/") && msg.from?.id) {
-          handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, text, msg.message_id)
-            .catch((e) => console.error("[group anime share]", e));
+        // GROUP chat: anime-share.
+        // Strict trigger — either explicit (/anime <name> | @mention | reply to bot)
+        // OR a strong fuzzy match. Prevents random-message auto-reply floods.
+        if ((chatType === "group" || chatType === "supergroup") && text && msg.from?.id) {
+          const botUsername = await getBotUsername(botToken).catch(() => null);
+          const repliedToBot =
+            msg.reply_to_message?.from?.is_bot === true &&
+            (!botUsername || msg.reply_to_message.from?.username === botUsername);
+          const { query, isExplicit } = extractExplicitQuery(text, botUsername);
+          const explicit = isExplicit || repliedToBot;
+          // Skip pure commands unless it's our /anime family (handled by extractExplicitQuery)
+          if (query && (!query.startsWith("/") || explicit)) {
+            handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, query, msg.message_id, explicit)
+              .catch((e) => console.error("[group anime share]", e));
+          }
         }
       }
       return json({ ok: true });
     }
+
 
 
     // All non-webhook actions are admin-only — require an RS Anime site origin/referer.

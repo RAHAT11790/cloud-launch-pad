@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { db, ref, onValue, set, remove, push } from "@/lib/firebase";
-import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from "lucide-react";
+import { db, ref, onValue, set, remove, push, update, get } from "@/lib/firebase";
+import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { readProfilePhoto } from "@/lib/localUser";
 
 /**
  * YouTube-style comment section with nested replies + per-comment reactions.
+ * Owner-only edit/delete + push notification on reply.
  *
- * Firebase shape (flat, parentId links replies to top-level comments):
+ * Firebase shape:
  *   comments/{animeId}/{cid} = {
- *     userId, userName, text, timestamp,
- *     parentId?: string,
- *     likes?: { uid: true },
- *     dislikes?: { uid: true }
+ *     userId, userName, userPhoto?, text, timestamp,
+ *     parentId?: string, editedAt?: number,
+ *     likes?: { uid: true }, dislikes?: { uid: true }
  *   }
  */
 interface Props {
@@ -65,6 +65,7 @@ interface CommentItem {
   userPhoto?: string;
   text: string;
   ts: number;
+  editedAt?: number;
   parentId?: string;
   likes: string[];
   dislikes: string[];
@@ -77,6 +78,7 @@ const normalizeComment = (id: string, value: any): CommentItem => ({
   userPhoto: value?.userPhoto ? String(value.userPhoto) : undefined,
   text: String(value?.text || ""),
   ts: Number(value?.timestamp || value?.ts || 0),
+  editedAt: value?.editedAt ? Number(value.editedAt) : undefined,
   parentId: value?.parentId ? String(value.parentId) : undefined,
   likes: value?.likes && typeof value.likes === "object" ? Object.keys(value.likes) : [],
   dislikes: value?.dislikes && typeof value.dislikes === "object" ? Object.keys(value.dislikes) : [],
@@ -116,6 +118,31 @@ const Avatar = ({ name, photo, size = "md" }: { name: string; photo?: string; si
   );
 };
 
+// Fire-and-forget push notification to parent-comment owner when someone replies.
+async function notifyReplyOwner(params: {
+  parentUid: string;
+  parentAuthorName: string;
+  replierName: string;
+  replyText: string;
+  animeTitle?: string;
+  animeId: string;
+}) {
+  try {
+    if (!params.parentUid) return;
+    const { sendPushNotification } = await import("@/lib/pushNotifications");
+    const short = params.replyText.length > 90 ? params.replyText.slice(0, 87) + "…" : params.replyText;
+    await sendPushNotification({
+      userIds: [params.parentUid],
+      title: `💬 ${params.replierName} replied to your comment`,
+      body: short,
+      deepLink: `/?anime=${encodeURIComponent(params.animeId)}#comments`,
+      data: { kind: "comment_reply", animeId: params.animeId },
+    });
+  } catch {
+    // silent — reply already saved, notification is best-effort
+  }
+}
+
 const VideoEngagement = ({ animeId, title }: Props) => {
   const user = useMemo(() => getLocalUser(), []);
   const [allComments, setAllComments] = useState<CommentItem[]>([]);
@@ -126,6 +153,10 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   const [replySending, setReplySending] = useState(false);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [reactionBusy, setReactionBusy] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -182,7 +213,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     }
   };
 
-  const postReply = async (parentId: string) => {
+  const postReply = async (parent: CommentItem) => {
     if (!ensureUser()) return;
     const text = replyText.trim();
     if (!text) return;
@@ -195,11 +226,23 @@ const VideoEngagement = ({ animeId, title }: Props) => {
         ...(user!.photo ? { userPhoto: user!.photo } : {}),
         text: text.slice(0, 500),
         timestamp: Date.now(),
-        parentId,
+        parentId: parent.id,
       });
       setReplyText("");
       setReplyingTo(null);
-      setExpandedReplies((prev) => ({ ...prev, [parentId]: true }));
+      setExpandedReplies((prev) => ({ ...prev, [parent.id]: true }));
+
+      // Notify parent-comment owner (skip self-reply)
+      if (parent.uid && parent.uid !== user!.id) {
+        notifyReplyOwner({
+          parentUid: parent.uid,
+          parentAuthorName: parent.userName,
+          replierName: user!.name,
+          replyText: text,
+          animeTitle: title,
+          animeId,
+        });
+      }
     } catch {
       toast.error("Failed to post reply");
     } finally {
@@ -207,14 +250,44 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     }
   };
 
-  const deleteComment = async (c: CommentItem) => {
+  const beginEdit = (c: CommentItem) => {
+    setEditingId(c.id);
+    setEditText(c.text);
+  };
+
+  const saveEdit = async (c: CommentItem) => {
     if (!user || user.id !== c.uid) return;
-    // remove the comment
-    await remove(ref(db, `comments/${animeId}/${c.id}`)).catch(() => {});
-    // if top-level, remove its replies too
-    if (!c.parentId) {
-      const kids = repliesByParent[c.id] || [];
-      await Promise.all(kids.map((k) => remove(ref(db, `comments/${animeId}/${k.id}`)).catch(() => {})));
+    const text = editText.trim();
+    if (!text) return;
+    if (text === c.text) { setEditingId(null); return; }
+    setEditSaving(true);
+    try {
+      await update(ref(db, `comments/${animeId}/${c.id}`), {
+        text: text.slice(0, 500),
+        editedAt: Date.now(),
+      });
+      setEditingId(null);
+      setEditText("");
+    } catch {
+      toast.error("Failed to save edit");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const confirmDelete = async (c: CommentItem) => {
+    if (!user || user.id !== c.uid) return;
+    try {
+      await remove(ref(db, `comments/${animeId}/${c.id}`));
+      // Cascade delete replies for top-level comments
+      if (!c.parentId) {
+        const kids = repliesByParent[c.id] || [];
+        await Promise.all(kids.map((k) => remove(ref(db, `comments/${animeId}/${k.id}`)).catch(() => {})));
+      }
+    } catch {
+      toast.error("Failed to delete");
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -252,52 +325,118 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     const myDislike = user ? c.dislikes.includes(user.id) : false;
     const kids = repliesByParent[c.id] || [];
     const expanded = expandedReplies[c.id];
+    const isMine = !!user && user.id === c.uid;
+    const isEditing = editingId === c.id;
     return (
       <div key={c.id} className="flex gap-2.5">
-        <Avatar name={c.userName} photo={user && c.uid === user.id ? (user.photo || c.userPhoto) : c.userPhoto} size={isReply ? "sm" : "md"} />
+        <Avatar name={c.userName} photo={isMine ? (user!.photo || c.userPhoto) : c.userPhoto} size={isReply ? "sm" : "md"} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="truncate text-[12px] font-semibold text-foreground">@{c.userName}</span>
             <span className="text-[10px] text-muted-foreground">{timeAgo(c.ts)}</span>
+            {c.editedAt && <span className="text-[10px] text-muted-foreground italic">(edited)</span>}
           </div>
-          <p className="break-words whitespace-pre-wrap text-[13px] leading-[1.35rem] text-foreground/90">{c.text}</p>
-          <div className="mt-1 flex items-center gap-1 -ml-1.5">
-            <button
-              onClick={() => reactToComment(c, "like")}
-              disabled={reactionBusy === c.id}
-              className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myLike ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
-            >
-              <ThumbsUp className={`h-3.5 w-3.5 ${myLike ? "fill-primary" : ""}`} strokeWidth={2} />
-              {c.likes.length > 0 && <span className="tabular-nums">{formatCount(c.likes.length)}</span>}
-            </button>
-            <button
-              onClick={() => reactToComment(c, "dislike")}
-              disabled={reactionBusy === c.id}
-              className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myDislike ? "text-destructive" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
-            >
-              <ThumbsDown className={`h-3.5 w-3.5 ${myDislike ? "fill-destructive" : ""}`} strokeWidth={2} />
-              {c.dislikes.length > 0 && <span className="tabular-nums">{formatCount(c.dislikes.length)}</span>}
-            </button>
-            {!isReply && (
+
+          {isEditing ? (
+            <div className="mt-1 flex items-start gap-1.5">
+              <textarea
+                autoFocus
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                rows={2}
+                maxLength={500}
+                className="min-w-0 flex-1 resize-none rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-foreground focus:border-primary focus:outline-none"
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => saveEdit(c)}
+                  disabled={editSaving || !editText.trim()}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+                  aria-label="Save edit"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => { setEditingId(null); setEditText(""); }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground hover:text-foreground"
+                  aria-label="Cancel edit"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="break-words whitespace-pre-wrap text-[13px] leading-[1.35rem] text-foreground/90">{c.text}</p>
+          )}
+
+          {!isEditing && (
+            <div className="mt-1 flex items-center gap-1 -ml-1.5 flex-wrap">
               <button
-                onClick={() => {
-                  setReplyingTo((prev) => (prev === c.id ? null : c.id));
-                  setReplyText("");
-                }}
-                className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                onClick={() => reactToComment(c, "like")}
+                disabled={reactionBusy === c.id}
+                className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myLike ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
               >
-                Reply
+                <ThumbsUp className={`h-3.5 w-3.5 ${myLike ? "fill-primary" : ""}`} strokeWidth={2} />
+                {c.likes.length > 0 && <span className="tabular-nums">{formatCount(c.likes.length)}</span>}
               </button>
-            )}
-            {user?.id === c.uid && (
               <button
-                onClick={() => deleteComment(c)}
-                className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground transition-all hover:text-destructive active:scale-95"
+                onClick={() => reactToComment(c, "dislike")}
+                disabled={reactionBusy === c.id}
+                className={`flex items-center gap-1 rounded-full px-2 py-1 text-[11px] transition-all active:scale-90 ${myDislike ? "text-destructive" : "text-muted-foreground hover:text-foreground hover:bg-foreground/10"}`}
               >
-                <Trash2 className="h-3 w-3" />
+                <ThumbsDown className={`h-3.5 w-3.5 ${myDislike ? "fill-destructive" : ""}`} strokeWidth={2} />
+                {c.dislikes.length > 0 && <span className="tabular-nums">{formatCount(c.dislikes.length)}</span>}
               </button>
-            )}
-          </div>
+              {!isReply && (
+                <button
+                  onClick={() => {
+                    setReplyingTo((prev) => (prev === c.id ? null : c.id));
+                    setReplyText("");
+                  }}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:bg-foreground/10 hover:text-foreground active:scale-95"
+                >
+                  Reply
+                </button>
+              )}
+              {isMine && (
+                <>
+                  <button
+                    onClick={() => beginEdit(c)}
+                    className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground transition-all hover:text-primary active:scale-95"
+                    aria-label="Edit"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(c.id)}
+                    className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground transition-all hover:text-destructive active:scale-95"
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Delete confirm */}
+          {confirmDeleteId === c.id && (
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5">
+              <span className="text-[11px] text-foreground">Delete this {c.parentId ? "reply" : "comment"}?</span>
+              <button
+                onClick={() => confirmDelete(c)}
+                className="rounded-full bg-destructive px-2.5 py-0.5 text-[11px] font-bold text-destructive-foreground active:scale-95"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-foreground/10"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
           {/* Reply composer */}
           {!isReply && replyingTo === c.id && (
@@ -311,7 +450,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    postReply(c.id);
+                    postReply(c);
                   }
                 }}
                 placeholder={`Reply to @${c.userName}...`}
@@ -329,7 +468,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
                 Cancel
               </button>
               <button
-                onClick={() => postReply(c.id)}
+                onClick={() => postReply(c)}
                 disabled={!user || replySending || !replyText.trim()}
                 className="rounded-full gradient-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground disabled:opacity-40 active:scale-95"
               >
