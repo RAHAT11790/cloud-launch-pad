@@ -155,6 +155,28 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
         </p>
       </div>
 
+      {/* Master danger zone — logout every admin device globally */}
+      <div className={`${glassCard} p-4 border-red-500/20 bg-red-500/[0.03]`}>
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-white mb-1">Force Sign-Out — All Devices</h3>
+            <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
+              Instantly log the admin panel out on every device where an owner is currently signed in
+              (including this one). Use this if a phone/laptop is lost or a session leak is suspected.
+              Owners will need the PIN + Google login to return.
+            </p>
+            <button
+              onClick={handleLogoutAll}
+              className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white flex items-center gap-1.5 transition-colors"
+            >
+              <LogOut size={13} /> Logout from all admin devices
+            </button>
+          </div>
+        </div>
+      </div>
+
+
       <div className={`${glassCard} p-3 flex flex-wrap gap-2 items-center`}>
         <button
           onClick={() => setTab("logs")}
