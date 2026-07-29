@@ -95,9 +95,48 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
 
   const handleClearOld = async () => {
     if (!confirm("Delete login logs older than 30 days?")) return;
-    await clearOldLogs();
-    toast.success("Old logs cleared");
+    try {
+      const n = await clearOldLogs();
+      if (n === 0) toast.info("No logs older than 30 days.");
+      else toast.success(`Cleared ${n} old log entr${n === 1 ? "y" : "ies"}.`);
+    } catch (e: any) {
+      toast.error(e?.message || "Clear failed — check Firebase rules.");
+    }
   };
+
+  const handleClearAll = async () => {
+    if (!confirm("Delete ALL login logs? This cannot be undone.")) return;
+    try {
+      const n = await clearAllLogs();
+      toast.success(`Cleared ${n} log entr${n === 1 ? "y" : "ies"}.`);
+    } catch (e: any) {
+      toast.error(e?.message || "Clear failed — check Firebase rules.");
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!confirm(
+      "Force sign-out of the admin panel on EVERY device (including this one)?\n\n" +
+      "You will need to re-enter the PIN and sign back in with Google after this."
+    )) return;
+    try {
+      await setGlobalAdminLogout();
+      toast.success("Sign-out broadcast to all admin devices.");
+      // Give the local subscriber a moment to react, then hard-reload as a fallback.
+      setTimeout(() => {
+        try {
+          localStorage.removeItem("rs_admin_session");
+          localStorage.removeItem("rs_admin_google");
+          localStorage.removeItem("rs_admin_google_name");
+          sessionStorage.removeItem("rs_admin_pin");
+        } catch {}
+        window.location.reload();
+      }, 1200);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to broadcast logout");
+    }
+  };
+
 
   const successCount = sortedLogs.filter((l) => l.success).length;
   const failCount = sortedLogs.filter((l) => !l.success).length;
