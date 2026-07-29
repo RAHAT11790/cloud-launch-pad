@@ -212,7 +212,14 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
             <button onClick={handleClearOld} className={`${btnSecondary} px-3 py-1.5 text-xs flex items-center gap-1`}>
               <Trash2 size={12} /> Clear 30d+
             </button>
+            <button
+              onClick={handleClearAll}
+              className="px-3 py-1.5 rounded-lg text-xs bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 flex items-center gap-1"
+            >
+              <Trash2 size={12} /> Clear ALL
+            </button>
           </div>
+
 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-[11px] min-w-[700px]">
