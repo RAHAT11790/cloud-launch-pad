@@ -81,7 +81,6 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
   }, [historyIds, allAnime]);
 
   const openingCardRef = useRef<string | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number; t: number; id: string } | null>(null);
 
   const handleCardClick = (anime: AnimeItem) => {
     if (openingCardRef.current === anime.id) return;
@@ -95,28 +94,9 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
     }, 1200);
   };
 
-  // Tap vs scroll disambiguation: pointerdown-এ open করলে scroll করলেই card
-  // খুলে যাচ্ছিল। এখন pointerdown-এ শুধু position record করি, pointerup-এ
-  // যদি finger 10px-এর কম সরে থাকে ও 500ms-এর কম press হয় তবেই tap ধরা হয়।
-  const handleCardPointerDown = (e: React.PointerEvent, anime: AnimeItem) => {
-    touchStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now(), id: anime.id };
-  };
-
-  const handleCardPointerUp = (e: React.PointerEvent, anime: AnimeItem) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start || start.id !== anime.id) return;
-    const dx = Math.abs(e.clientX - start.x);
-    const dy = Math.abs(e.clientY - start.y);
-    const dt = Date.now() - start.t;
-    if (dx > 10 || dy > 10 || dt > 500) return;
-    handleCardClick(anime);
-  };
-
-  const handleCardPointerCancel = () => {
-    touchStartRef.current = null;
-  };
-
+  // Native onClick fires only after a true tap (browser already filters
+  // scroll gestures). Previous onPointerDown handler was opening cards
+  // mid-scroll — removed for that reason.
   const handleCardKeyDown = (e: React.KeyboardEvent, anime: AnimeItem) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
