@@ -52,7 +52,7 @@ import TgUrlChangerManager from "@/components/admin/TgUrlChangerManager";
 import UrlChangerManager from "@/components/admin/UrlChangerManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
-import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
+import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName, subscribeGlobalLogout } from "@/lib/securityGuard";
 
 // Heavy admin sections are lazy-loaded so the main Admin shell stays responsive.
 const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
