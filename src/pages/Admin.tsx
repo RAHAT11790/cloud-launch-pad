@@ -2582,7 +2582,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setTgFooterLinks([
  { label: "Jᴏɪɴ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url: "https://t.me/CARTOONFUNNY03", emoji: "🔰" },
  { label: "Jᴏɪɴ Cʜᴀᴛ Gʀᴏᴜᴘ", url: "https://t.me/HINDIANIME03", emoji: "🔰" },
- { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/ADMIN", emoji: "🔰" },
+ { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/RSAnime03_Support", emoji: "🔰" },
  ]);
  }
  });
