@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Shield, Ban, Trash2, RefreshCw, CheckCircle2, XCircle, Lock } from "lucide-react";
+import { Shield, Ban, Trash2, RefreshCw, CheckCircle2, XCircle, Lock, LogOut, AlertTriangle } from "lucide-react";
 import {
   subscribeLogs,
   subscribeBlocks,
   addBlock,
   removeBlock,
   clearOldLogs,
+  clearAllLogs,
+  setGlobalAdminLogout,
   OWNER_EMAILS,
   isOwnerEmail,
   type AdminAccessLog,
   type BlockEntry,
 } from "@/lib/securityGuard";
+
 
 interface Props {
   glassCard: string;
