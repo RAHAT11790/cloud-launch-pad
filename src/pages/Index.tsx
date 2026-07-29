@@ -2752,35 +2752,39 @@ const Index = () => {
         setSelectedAnime(null);
       }
     } else {
-      if (anime.movieLink) {
-        const hasAccess = await checkAndShowAdGate(anime);
-        if (!hasAccess) return;
-        const anMovie = buildAnMoviePlayback(anime);
-        const nextState = {
-          src: anMovie?.src || getMovieSrc(anime),
-          title: anime.title,
-          subtitle: "Movie",
-          anime,
-          audioTracks: (anMovie?.audioTracks as any) || anime.audioTracks,
-          subtitleTracks: (anime as any).subtitleTracks,
-          qualityOptions: anMovie?.qualityOptions || getMovieQualityOptions(anime),
-          resumeTime: item.currentTime || 0,
-        };
-        if (!nextState.src) {
-          handleCardClick(anime);
-          return;
-        }
-        playerStateRef.current = nextState;
-        setPlayerState(nextState);
-        const targetWatchRoute = buildWatchRoute(anime.id);
-        if (`${location.pathname}${location.search}` !== targetWatchRoute) {
-          navigate(targetWatchRoute);
-        }
-        addToWatchHistory(anime, undefined, undefined, true);
-        setSelectedAnime(null);
+      // MOVIE continue-watching. Previously gated on `anime.movieLink` which
+      // silently swallowed clicks when the lightweight card object had no
+      // direct link (very common for TMDB-only or quality-tiered movies).
+      // Always try to build a playable source; if none, open the details page.
+      const hasAccess = await checkAndShowAdGate(anime);
+      if (!hasAccess) return;
+      const anMovie = buildAnMoviePlayback(anime);
+      const src = anMovie?.src || getMovieSrc(anime) || anime.movieLink || "";
+      if (!src) {
+        handleCardClick(anime);
+        return;
       }
+      const nextState = {
+        src,
+        title: anime.title,
+        subtitle: "Movie",
+        anime,
+        audioTracks: (anMovie?.audioTracks as any) || anime.audioTracks,
+        subtitleTracks: (anime as any).subtitleTracks,
+        qualityOptions: anMovie?.qualityOptions || getMovieQualityOptions(anime),
+        resumeTime: item.currentTime || 0,
+      };
+      playerStateRef.current = nextState;
+      setPlayerState(nextState);
+      const targetWatchRoute = buildWatchRoute(anime.id);
+      if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+        navigate(targetWatchRoute);
+      }
+      addToWatchHistory(anime, undefined, undefined, true);
+      setSelectedAnime(null);
     }
   };
+
 
   const handleHeroPlay = useCallback((index: number) => {
     const slide = heroSlides[index];

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Shield, Ban, Trash2, RefreshCw, CheckCircle2, XCircle, Lock } from "lucide-react";
+import { Shield, Ban, Trash2, RefreshCw, CheckCircle2, XCircle, Lock, LogOut, AlertTriangle } from "lucide-react";
 import {
   subscribeLogs,
   subscribeBlocks,
   addBlock,
   removeBlock,
   clearOldLogs,
+  clearAllLogs,
+  setGlobalAdminLogout,
   OWNER_EMAILS,
   isOwnerEmail,
   type AdminAccessLog,
   type BlockEntry,
 } from "@/lib/securityGuard";
+
 
 interface Props {
   glassCard: string;
@@ -92,9 +95,48 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
 
   const handleClearOld = async () => {
     if (!confirm("Delete login logs older than 30 days?")) return;
-    await clearOldLogs();
-    toast.success("Old logs cleared");
+    try {
+      const n = await clearOldLogs();
+      if (n === 0) toast.info("No logs older than 30 days.");
+      else toast.success(`Cleared ${n} old log entr${n === 1 ? "y" : "ies"}.`);
+    } catch (e: any) {
+      toast.error(e?.message || "Clear failed — check Firebase rules.");
+    }
   };
+
+  const handleClearAll = async () => {
+    if (!confirm("Delete ALL login logs? This cannot be undone.")) return;
+    try {
+      const n = await clearAllLogs();
+      toast.success(`Cleared ${n} log entr${n === 1 ? "y" : "ies"}.`);
+    } catch (e: any) {
+      toast.error(e?.message || "Clear failed — check Firebase rules.");
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!confirm(
+      "Force sign-out of the admin panel on EVERY device (including this one)?\n\n" +
+      "You will need to re-enter the PIN and sign back in with Google after this."
+    )) return;
+    try {
+      await setGlobalAdminLogout();
+      toast.success("Sign-out broadcast to all admin devices.");
+      // Give the local subscriber a moment to react, then hard-reload as a fallback.
+      setTimeout(() => {
+        try {
+          localStorage.removeItem("rs_admin_session");
+          localStorage.removeItem("rs_admin_google");
+          localStorage.removeItem("rs_admin_google_name");
+          sessionStorage.removeItem("rs_admin_pin");
+        } catch {}
+        window.location.reload();
+      }, 1200);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to broadcast logout");
+    }
+  };
+
 
   const successCount = sortedLogs.filter((l) => l.success).length;
   const failCount = sortedLogs.filter((l) => !l.success).length;
@@ -112,6 +154,28 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
           accounts ({OWNER_EMAILS.join(", ")}) can never be blocked.
         </p>
       </div>
+
+      {/* Master danger zone — logout every admin device globally */}
+      <div className={`${glassCard} p-4 border-red-500/20 bg-red-500/[0.03]`}>
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-white mb-1">Force Sign-Out — All Devices</h3>
+            <p className="text-[11px] text-zinc-400 leading-relaxed mb-3">
+              Instantly log the admin panel out on every device where an owner is currently signed in
+              (including this one). Use this if a phone/laptop is lost or a session leak is suspected.
+              Owners will need the PIN + Google login to return.
+            </p>
+            <button
+              onClick={handleLogoutAll}
+              className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white flex items-center gap-1.5 transition-colors"
+            >
+              <LogOut size={13} /> Logout from all admin devices
+            </button>
+          </div>
+        </div>
+      </div>
+
 
       <div className={`${glassCard} p-3 flex flex-wrap gap-2 items-center`}>
         <button
@@ -148,7 +212,14 @@ export default function SecurityCenter({ glassCard, btnPrimary, btnSecondary, in
             <button onClick={handleClearOld} className={`${btnSecondary} px-3 py-1.5 text-xs flex items-center gap-1`}>
               <Trash2 size={12} /> Clear 30d+
             </button>
+            <button
+              onClick={handleClearAll}
+              className="px-3 py-1.5 rounded-lg text-xs bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 flex items-center gap-1"
+            >
+              <Trash2 size={12} /> Clear ALL
+            </button>
           </div>
+
 
           <div className="overflow-x-auto -mx-1">
             <table className="w-full text-[11px] min-w-[700px]">

@@ -52,7 +52,7 @@ import TgUrlChangerManager from "@/components/admin/TgUrlChangerManager";
 import UrlChangerManager from "@/components/admin/UrlChangerManager";
 
 import SecurityCenter from "@/components/admin/SecurityCenter";
-import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
+import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName, subscribeGlobalLogout } from "@/lib/securityGuard";
 
 // Heavy admin sections are lazy-loaded so the main Admin shell stays responsive.
 const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
@@ -2582,7 +2582,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setTgFooterLinks([
  { label: "Jᴏɪɴ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url: "https://t.me/CARTOONFUNNY03", emoji: "🔰" },
  { label: "Jᴏɪɴ Cʜᴀᴛ Gʀᴏᴜᴘ", url: "https://t.me/HINDIANIME03", emoji: "🔰" },
- { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/ADMIN", emoji: "🔰" },
+ { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/RSAnime03_Support", emoji: "🔰" },
  ]);
  }
  });
@@ -2805,8 +2805,36 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setIsAuthenticated(false);
  localStorage.removeItem("rs_admin_session");
  }
- }
+  }
  }, [isAuthenticated]);
+
+ // Subscribe to the global admin-logout marker. If an owner presses
+ // "Logout from all devices" in Security Center, every device whose local
+ // session was minted BEFORE that timestamp force-clears and reloads.
+ useEffect(() => {
+  if (!isAuthenticated) return;
+  const unsub = subscribeGlobalLogout((globalTs) => {
+   if (!globalTs) return;
+   try {
+    const raw = localStorage.getItem("rs_admin_session");
+    const parsed = raw ? JSON.parse(raw) : null;
+    const localTs = Number(parsed?.ts || 0);
+    if (localTs && localTs < globalTs) {
+     localStorage.removeItem("rs_admin_session");
+     localStorage.removeItem("rs_admin_google");
+     localStorage.removeItem("rs_admin_google_name");
+     sessionStorage.removeItem("rs_admin_pin");
+     setIsAuthenticated(false);
+     // Hard reload so any in-memory state is dropped.
+     setTimeout(() => window.location.reload(), 200);
+    }
+   } catch {}
+  });
+  return () => { try { unsub?.(); } catch {} };
+ }, [isAuthenticated]);
+
+
+
 
  // Load saved Telegram channel
  useEffect(() => {
