@@ -181,15 +181,47 @@ export const subscribeBlocks = (cb: (blocks: Record<string, BlockEntry>) => void
   return onValue(r, (snap) => cb(snap.val() || {}));
 };
 
-export const clearOldLogs = async (olderThanMs = 30 * 24 * 60 * 60 * 1000) => {
-  try {
-    const snap = await get(ref(db, "adminAccess/logs"));
-    const all: Record<string, AdminAccessLog> = snap.val() || {};
-    const cutoff = Date.now() - olderThanMs;
-    const updates: Record<string, null> = {};
-    Object.entries(all).forEach(([k, v]) => {
-      if ((v?.ts || 0) < cutoff) updates[`adminAccess/logs/${k}`] = null;
-    });
-    if (Object.keys(updates).length) await update(ref(db), updates);
-  } catch {}
+export const clearOldLogs = async (olderThanMs = 30 * 24 * 60 * 60 * 1000): Promise<number> => {
+  const snap = await get(ref(db, "adminAccess/logs"));
+  const all: Record<string, AdminAccessLog> = snap.val() || {};
+  const cutoff = Date.now() - olderThanMs;
+  const updates: Record<string, null> = {};
+  Object.entries(all).forEach(([k, v]) => {
+    if ((v?.ts || 0) < cutoff) updates[`adminAccess/logs/${k}`] = null;
+  });
+  const count = Object.keys(updates).length;
+  if (count) await update(ref(db), updates);
+  return count;
 };
+
+/**
+ * Wipe EVERY login log entry. Use when the log table has grown huge.
+ */
+export const clearAllLogs = async (): Promise<number> => {
+  const snap = await get(ref(db, "adminAccess/logs"));
+  const all: Record<string, AdminAccessLog> = snap.val() || {};
+  const count = Object.keys(all).length;
+  if (count) await remove(ref(db, "adminAccess/logs"));
+  return count;
+};
+
+/**
+ * Global admin sign-out marker. Every admin device subscribes to this key;
+ * when the timestamp is newer than the device's local `rs_admin_session.ts`,
+ * that device force-clears its session and reloads.
+ * Owner emails are exempt from the auto-logout for the CURRENT device only if
+ * they re-login within the same second; otherwise they log out too (intended).
+ */
+export const setGlobalAdminLogout = async (): Promise<number> => {
+  const ts = Date.now();
+  await set(ref(db, "adminAccess/globalLogoutTs"), ts);
+  return ts;
+};
+
+export const subscribeGlobalLogout = (cb: (ts: number) => void) => {
+  return onValue(ref(db, "adminAccess/globalLogoutTs"), (snap) => {
+    const v = snap.val();
+    cb(typeof v === "number" ? v : 0);
+  });
+};
+
