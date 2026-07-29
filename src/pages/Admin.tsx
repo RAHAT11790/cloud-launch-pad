@@ -2831,6 +2831,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    } catch {}
   });
   return () => { try { unsub?.(); } catch {} };
+ }, [isAuthenticated]);
+
+
 
 
  // Load saved Telegram channel
