@@ -2805,8 +2805,33 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setIsAuthenticated(false);
  localStorage.removeItem("rs_admin_session");
  }
- }
+  }
  }, [isAuthenticated]);
+
+ // Subscribe to the global admin-logout marker. If an owner presses
+ // "Logout from all devices" in Security Center, every device whose local
+ // session was minted BEFORE that timestamp force-clears and reloads.
+ useEffect(() => {
+  if (!isAuthenticated) return;
+  const unsub = subscribeGlobalLogout((globalTs) => {
+   if (!globalTs) return;
+   try {
+    const raw = localStorage.getItem("rs_admin_session");
+    const parsed = raw ? JSON.parse(raw) : null;
+    const localTs = Number(parsed?.ts || 0);
+    if (localTs && localTs < globalTs) {
+     localStorage.removeItem("rs_admin_session");
+     localStorage.removeItem("rs_admin_google");
+     localStorage.removeItem("rs_admin_google_name");
+     sessionStorage.removeItem("rs_admin_pin");
+     setIsAuthenticated(false);
+     // Hard reload so any in-memory state is dropped.
+     setTimeout(() => window.location.reload(), 200);
+    }
+   } catch {}
+  });
+  return () => { try { unsub?.(); } catch {} };
+
 
  // Load saved Telegram channel
  useEffect(() => {
