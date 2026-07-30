@@ -136,6 +136,62 @@ const TG_DIVIDER = "━━━━━━━━━━━━━━━━━━";
 const DEFAULT_TG_HASHTAGS = "#CARTOONFUNNY03 #ANIME";
 const DEFAULT_TG_BUTTON_TEXT = "📥 WATCH AND DOWNLOAD 📥";
 const getTelegramDubTag = (dubType: "official" | "fandub") => TG_DUB_TAGS[dubType];
+
+// ===== Telegram post template engine =====
+// Every line below is admin-editable (Template Editor) and stored in
+// Firebase at admin/tgTemplates/{series|movie}. Tokens are resolved by
+// renderTelegramTemplate() and shared by both the preview and the sender.
+export const TG_TEMPLATE_TOKENS = [
+  "{title}", "{season}", "{totalEpisodes}", "{episodeLine}", "{movieType}",
+  "{quality}", "{rating}", "{genres}", "{languages}", "{dubTag}", "{status}",
+  "{hashtags}", "{footerLinks}", "{divider}", "{watchUrl}", "{owner}",
+] as const;
+
+const DEFAULT_TG_TEMPLATE_SERIES = `♨️ <b>Tɪᴛʟᴇ :</b> {title}
+┌──────────────────
+│ ✦ <b>Sᴇᴀsᴏɴ :</b> {season}
+│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> {totalEpisodes}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 {languages} {dubTag}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> {quality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ {rating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> {genres}
+│ ✦ <b>Sᴛᴀᴛᴜs :</b> {status}
+└──────────────────
+{divider}
+📌 {episodeLine}
+{divider}
+{footerLinks}
+{divider}
+{hashtags} {dubTag}`;
+
+const DEFAULT_TG_TEMPLATE_MOVIE = `🎬 <b>Tɪᴛʟᴇ :</b> {title}
+┌──────────────────
+│ ✦ <b>Tʏᴘᴇ :</b> {movieType}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 {languages} {dubTag}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> {quality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ {rating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> {genres}
+└──────────────────
+{divider}
+📌 {movieType} Aᴅᴅᴇᴅ
+{divider}
+{footerLinks}
+{divider}
+{hashtags} {dubTag}`;
+
+const DEFAULT_TG_OWNER_USERNAME = "rs_woner";
+
+export type TgTemplateVars = Record<string, string>;
+
+const renderTelegramTemplate = (template: string, vars: TgTemplateVars) =>
+  String(template || "")
+    .replace(/\{(\w+)\}/g, (m, key) => (key in vars ? vars[key] : m))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const stripTelegramHtml = (value: string) =>
+  String(value || "").replace(/<a href="([^"]*)">([^<]*)<\/a>/g, "$2 → $1").replace(/<[^>]+>/g, "");
+
 const normalizeTelegramBaseHashtags = (tags: string) => {
  const normalized = String(tags || DEFAULT_TG_HASHTAGS)
  .replace(/#ɪᴄғᴀɴɪᴍᴇ/gi, "#CARTOONFUNNY03")
@@ -2537,6 +2593,41 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
  const [tgHashtags, setTgHashtags] = useState(DEFAULT_TG_HASHTAGS);
 
+ // ===== Content kind + editable templates =====
+ const [tgContentKind, setTgContentKind] = useState<"series" | "movie">("series");
+ const [tgMovieType, setTgMovieType] = useState("Full Movie");
+ const [tgOwnerUsername, setTgOwnerUsername] = useState(DEFAULT_TG_OWNER_USERNAME);
+ const [tgTemplateSeries, setTgTemplateSeries] = useState(DEFAULT_TG_TEMPLATE_SERIES);
+ const [tgTemplateMovie, setTgTemplateMovie] = useState(DEFAULT_TG_TEMPLATE_MOVIE);
+ const [tgTemplateTab, setTgTemplateTab] = useState<"series" | "movie">("series");
+ const [tgTemplateSaving, setTgTemplateSaving] = useState(false);
+
+ useEffect(() => {
+  const unsub = onValue(ref(db, "admin/tgTemplates"), (snap) => {
+   const v = snap.val() || {};
+   if (typeof v.series === "string" && v.series.trim()) setTgTemplateSeries(v.series);
+   if (typeof v.movie === "string" && v.movie.trim()) setTgTemplateMovie(v.movie);
+   if (typeof v.ownerUsername === "string" && v.ownerUsername.trim()) setTgOwnerUsername(v.ownerUsername.trim());
+  });
+  return () => unsub();
+ }, []);
+
+ const saveTgTemplates = async () => {
+  setTgTemplateSaving(true);
+  try {
+   await set(ref(db, "admin/tgTemplates"), {
+    series: tgTemplateSeries,
+    movie: tgTemplateMovie,
+    ownerUsername: (tgOwnerUsername || DEFAULT_TG_OWNER_USERNAME).replace(/^@/, "").trim(),
+    updatedAt: Date.now(),
+   });
+   toast.success("Templates saved");
+  } catch (e: any) { toast.error("Save failed: " + (e?.message || e)); }
+  finally { setTgTemplateSaving(false); }
+ };
+
+
+
  // Auto-derive Ongoing/Complete from total vs latest added episode (live)
  useEffect(() => {
  if (!tgStatusAuto) return;
@@ -2767,6 +2858,39 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ? `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText}-${endText} Aᴅᴅᴇᴅ`
  : `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText} Aᴅᴅᴇᴅ`;
  }, []);
+
+ // Shared caption builder — one source of truth for preview + sender.
+ const buildTelegramCaption = useCallback((mode: "html" | "plain") => {
+  const footerLinksHtml = tgFooterLinks
+   .map(l => `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`)
+   .join("\n");
+  const [epStart, epEnd] = String(tgNewEpAdded || "01").split("-").map(v => v.trim());
+  const vars: TgTemplateVars = {
+   title: tgTitle || "{title}",
+   season: tgSeason || "N/A",
+   totalEpisodes: tgTotalEpisodes || "N/A",
+   episodeLine: formatEpisodeRangeLabel(tgSeason, epStart, epEnd),
+   movieType: tgMovieType || "Full Movie",
+   quality: tgQuality || "N/A",
+   rating: tgRating || "N/A",
+   genres: tgGenres || "N/A",
+   languages: tgLanguages || "N/A",
+   dubTag: getTelegramDubTag(tgDubType),
+   status: tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢",
+   hashtags: sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle),
+   footerLinks: footerLinksHtml,
+   divider: TG_DIVIDER,
+   watchUrl: tgButtonLink || SITE_URL,
+   owner: `@${(tgOwnerUsername || DEFAULT_TG_OWNER_USERNAME).replace(/^@/, "")}`,
+  };
+  const template = tgContentKind === "movie" ? tgTemplateMovie : tgTemplateSeries;
+  const out = renderTelegramTemplate(template, vars);
+  return mode === "plain" ? stripTelegramHtml(out) : out;
+ }, [tgFooterLinks, tgNewEpAdded, tgTitle, tgSeason, tgTotalEpisodes, tgMovieType, tgQuality,
+     tgRating, tgGenres, tgLanguages, tgDubType, tgStatus, tgHashtags, tgButtonLink,
+     tgOwnerUsername, tgContentKind, tgTemplateMovie, tgTemplateSeries, formatEpisodeRangeLabel]);
+
+
 
 
  useEffect(() => {
@@ -5125,27 +5249,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   setAdminBusyTask("Sending Telegram post…");
   await yieldAdminFrame();
  try {
- // Build footer links HTML
- const footerLinksHtml = tgFooterLinks.map(l =>
- `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`
- ).join("\n");
+ // Caption comes from the admin-editable template (series or movie).
+ const caption = buildTelegramCaption("html");
 
- const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${tgTitle}
-┌──────────────────
-│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
-│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
-│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
-│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
-│ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
-│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
-└──────────────────
-${TG_DIVIDER}
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-${TG_DIVIDER}
-${footerLinksHtml}
-${TG_DIVIDER}
-${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
@@ -5427,10 +5533,20 @@ ${tgBulkFooter}
  setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
  }
  if (release.episodeInfo) {
- if (release.episodeInfo.type === "movie") {
+ const epType = String(release.episodeInfo.type || "");
+ if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
+ // 🎬 Movie auto-detection — never show "Episode" for movies.
+ setTgContentKind("movie");
  setTgSeason("Movie");
- setTgNewEpAdded("Full Movie");
+ const pStart = release.episodeInfo.partStart;
+ const pEnd = release.episodeInfo.partEnd;
+ const movieLabel = pStart
+   ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
+   : "Full Movie";
+ setTgMovieType(movieLabel);
+ setTgNewEpAdded(movieLabel);
  } else {
+ setTgContentKind("series");
  // Extract just the season number (e.g., "01", "02")
  const seasonNum = release.episodeInfo.seasonNumber || '';
  setTgSeason(String(seasonNum).padStart(2, '0'));
@@ -5440,6 +5556,7 @@ ${tgBulkFooter}
  setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
  }
  }
+
  // Get quality info from content
  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
  ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
@@ -7095,7 +7212,13 @@ ${tgBulkFooter}
    ? (firstAuto?.startEp ?? 1)
    : (parseInt(wsNotifyEpisode) + 1);
  const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
+ const capturedEpNumberEnd = usingMulti
+   ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
+   : (wsNotifyEpisodeEnd !== ""
+      ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
+      : capturedEpNumber);
  const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
+
  toast.success("✅ Notification sent — redirecting to Telegram post...");
  setWsSaveNotifyModal(false);
  setWsNotifyStep("release");
@@ -7107,7 +7230,10 @@ ${tgBulkFooter}
  // Switch section then preselect — find the matching release (most recent for this seriesId)
  setActiveSection("telegram-post");
  setTimeout(async () => {
- const matching = releasesData.find(r => r.contentId === seriesId);
+ const matching = releasesData
+   .filter(r => r.contentId === seriesId)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+ setTgContentKind("series");
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  // Force-override with the captured deep link so it always points at the
@@ -7115,7 +7241,16 @@ ${tgBulkFooter}
  if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
    setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
  }
+ // ✅ Range fix — always restore the exact captured episode range.
+ setTgContentKind("series");
+ setTgSeason(String(capturedSeasonIdx + 1).padStart(2, "0"));
+ {
+   const s = String(capturedEpNumber).padStart(2, "0");
+   const e = String(capturedEpNumberEnd).padStart(2, "0");
+   setTgNewEpAdded(e !== s ? `${s}-${e}` : s);
+  }
  } else if (seriesId) {
+
  // Fallback: fill directly from webseries data
  const ws = webseriesData.find(s => s.id === seriesId);
  if (ws) {
@@ -7695,7 +7830,12 @@ ${tgBulkFooter}
  setMvPartsAutoRange(null);
  setActiveSection("telegram-post");
  setTimeout(async () => {
- const matching = releasesData.find(r => r.contentId === movieIdForRedirect);
+ const capturedMovieType = partsRange
+   ? (partsRange.end !== partsRange.start ? `Part ${partsRange.start}-${partsRange.end}` : `Part ${partsRange.start}`)
+   : "Full Movie";
+ const matching = releasesData
+   .filter(r => r.contentId === movieIdForRedirect)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  } else {
@@ -7715,7 +7855,13 @@ ${tgBulkFooter}
  } catch {}
  }
  }
+ // 🎬 Always force movie mode + captured part range for movie releases.
+ setTgContentKind("movie");
+ setTgSeason("Movie");
+ setTgMovieType(capturedMovieType);
+ setTgNewEpAdded(capturedMovieType);
  }, 250);
+
  } catch (err: any) {
  setAdminBusyTask(null);
  toast.error("Error: " + err.message);
@@ -8730,13 +8876,43 @@ ${tgBulkFooter}
  <div className="pb-52 scroll-mb-52">
  <div className={`${glassCard} relative z-[80] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> Telegram post তৈরি 
+ <Send size={14} className="text-blue-400" /> Create Telegram Post
  </h3>
  <p className="text-[11px] text-zinc-400 mb-4">
- New Release from Select or manually field fill ।
+ Pick a title from your library (or a new release) — fields auto-fill. You can edit anything before sending.
  </p>
+
+ {/* Content kind switch */}
+ <div className="mb-4">
+ <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Content type</label>
+ <div className="flex gap-2">
+ {(["series", "movie"] as const).map(kind => (
+ <button key={kind} type="button" onClick={() => setTgContentKind(kind)}
+ className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgContentKind === kind ? (kind === "movie" ? "bg-pink-600 border-pink-500 text-white" : "bg-blue-600 border-blue-500 text-white") : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {kind === "series" ? "📺 Series" : "🎬 Movie"}
+ </button>
+ ))}
+ </div>
+ </div>
+
+ {tgContentKind === "movie" && (
+ <div className="mb-4">
+ <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Movie type</label>
+ <div className="grid grid-cols-3 gap-2 mb-2">
+ {["Full Movie", "Complete Movie", "Part 1"].map(t => (
+ <button key={t} type="button" onClick={() => setTgMovieType(t)}
+ className={`py-2 rounded-lg text-[11px] font-semibold border transition-all ${tgMovieType === t ? "bg-pink-600 border-pink-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {t}
+ </button>
+ ))}
+ </div>
+ <input value={tgMovieType} onChange={e => setTgMovieType(e.target.value)} className={inputClass} placeholder="Full Movie / Part 1-2 / Complete Movie" />
+ </div>
+ )}
+
  <div className="mb-4" ref={tgDropdownRef}>
- <label className="block text-xs text-zinc-400 mb-2 font-medium">anime / movie Select (latest update টপে)</label>
+ <label className="block text-xs text-zinc-400 mb-2 font-medium">Select anime / movie (latest updates first)</label>
+
  <div className="relative z-[130]">
  <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
  className={`${selectClass} w-full text-left flex items-center gap-2`}>
@@ -8767,11 +8943,16 @@ ${tgBulkFooter}
  <div className="overflow-y-auto max-h-[260px]">
  {filtered.map(r => {
  // Build a synthetic release object so existing fillTelegramFromRelease works.
- const matching = releasesData.find(rel => rel.contentId === r.id);
+ // Always take the LATEST release entry for this content (range fix).
+ const matching = releasesData
+   .filter(rel => rel.contentId === r.id)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
  return (
  <div key={`${r.type}_${r.id}`} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
  onClick={async () => {
+ setTgContentKind(r.type === "movie" ? "movie" : "series");
  if (matching) {
+
  fillTelegramFromRelease(matching.id);
  } else {
  // Manual fill from webseries/movies data when no release entry exists
@@ -9017,10 +9198,76 @@ ${tgBulkFooter}
  </div>
  </div>
 
+ {/* ============= TEMPLATE EDITOR ============= */}
+ <div className={`${glassCard} p-4 mb-4 border border-amber-500/25`}>
+ <div className="flex items-center justify-between mb-3">
+ <h3 className="text-sm font-semibold flex items-center gap-2">
+ <Edit size={14} className="text-amber-400" /> Template Editor
+ </h3>
+ <button type="button" onClick={saveTgTemplates} disabled={tgTemplateSaving}
+ className={`${btnPrimary} !px-3 !py-1.5 !text-[11px] disabled:opacity-50 flex items-center gap-1.5`}>
+ <Save size={12} /> {tgTemplateSaving ? "Saving…" : "Save Templates"}
+ </button>
+ </div>
+ <p className="text-[11px] text-zinc-400 mb-3">
+ Edit every line of the caption. Tokens are replaced automatically when the post is sent.
+ </p>
+
+ <div className="flex gap-2 mb-3">
+ {(["series", "movie"] as const).map(tab => (
+ <button key={tab} type="button" onClick={() => setTgTemplateTab(tab)}
+ className={`flex-1 py-2 rounded-lg text-[12px] font-semibold border transition-all ${tgTemplateTab === tab ? "bg-amber-600 border-amber-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {tab === "series" ? "📺 Series Template" : "🎬 Movie Template"}
+ </button>
+ ))}
+ </div>
+
+ <textarea
+ value={tgTemplateTab === "series" ? tgTemplateSeries : tgTemplateMovie}
+ onChange={e => tgTemplateTab === "series" ? setTgTemplateSeries(e.target.value) : setTgTemplateMovie(e.target.value)}
+ className={`${inputClass} min-h-[280px] font-mono !text-[11px] leading-relaxed resize-y`}
+ spellCheck={false}
+ />
+
+ <div className="flex flex-wrap gap-1.5 mt-2.5">
+ {TG_TEMPLATE_TOKENS.map(tok => (
+ <button key={tok} type="button"
+ onClick={() => {
+ if (tgTemplateTab === "series") setTgTemplateSeries(t => `${t}${t.endsWith("\n") ? "" : "\n"}${tok}`);
+ else setTgTemplateMovie(t => `${t}${t.endsWith("\n") ? "" : "\n"}${tok}`);
+ }}
+ className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] text-amber-300 hover:bg-amber-500/15">
+ {tok}
+ </button>
+ ))}
+ </div>
+
+ <div className="grid grid-cols-2 gap-3 mt-4">
+ <div>
+ <label className="block text-xs text-zinc-400 mb-1.5">Owner username (for {"{owner}"})</label>
+ <input value={tgOwnerUsername} onChange={e => setTgOwnerUsername(e.target.value)} className={inputClass} placeholder="your_username" />
+ </div>
+ <div className="flex items-end">
+ <button type="button"
+ onClick={() => {
+ if (!confirm("Reset this template to the default layout?")) return;
+ if (tgTemplateTab === "series") setTgTemplateSeries(DEFAULT_TG_TEMPLATE_SERIES);
+ else setTgTemplateMovie(DEFAULT_TG_TEMPLATE_MOVIE);
+ }}
+ className={`${btnSecondary} w-full !py-2 !text-[11px]`}>
+ ♻️ Reset to default
+ </button>
+ </div>
+ </div>
+ </div>
+
  {/* Preview */}
  <div className={`${glassCard} p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Eye size={14} className="text-green-400" /> preview
+ <Eye size={14} className="text-green-400" /> Live Preview
+ <span className="ml-auto text-[10px] font-normal px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400">
+ {tgContentKind === "movie" ? "🎬 Movie template" : "📺 Series template"}
+ </span>
  </h3>
  <div className="bg-[#0E1621] rounded-xl p-4 border border-white/5">
  {tgPosterUrl && (
@@ -9028,21 +9275,7 @@ ${tgBulkFooter}
  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
  )}
  <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
-{`♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
-┌──────────────────
-│ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
-│ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
-│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
-│ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
-│ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
-│ ✦ Gᴇɴʀᴇs : ${tgGenres}
-│ ✦ Sᴛᴀᴛᴜs : ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
-└──────────────────
-${TG_DIVIDER}
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-${TG_DIVIDER}`}
-{tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n${TG_DIVIDER}\n${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`}
+ {buildTelegramCaption("plain")}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
@@ -9056,6 +9289,7 @@ ${TG_DIVIDER}`}
  ))}
  </div>
  </div>
+
 
  <button onClick={sendTelegramPost} disabled={tgSending || !tgTitle.trim()}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
