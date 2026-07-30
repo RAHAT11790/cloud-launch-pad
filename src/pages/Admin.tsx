@@ -8903,11 +8903,16 @@ ${tgBulkFooter}
  <div className="overflow-y-auto max-h-[260px]">
  {filtered.map(r => {
  // Build a synthetic release object so existing fillTelegramFromRelease works.
- const matching = releasesData.find(rel => rel.contentId === r.id);
+ // Always take the LATEST release entry for this content (range fix).
+ const matching = releasesData
+   .filter(rel => rel.contentId === r.id)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
  return (
  <div key={`${r.type}_${r.id}`} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
  onClick={async () => {
+ setTgContentKind(r.type === "movie" ? "movie" : "series");
  if (matching) {
+
  fillTelegramFromRelease(matching.id);
  } else {
  // Manual fill from webseries/movies data when no release entry exists
