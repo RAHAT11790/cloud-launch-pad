@@ -9123,10 +9123,76 @@ ${tgBulkFooter}
  </div>
  </div>
 
+ {/* ============= TEMPLATE EDITOR ============= */}
+ <div className={`${glassCard} p-4 mb-4 border border-amber-500/25`}>
+ <div className="flex items-center justify-between mb-3">
+ <h3 className="text-sm font-semibold flex items-center gap-2">
+ <Edit size={14} className="text-amber-400" /> Template Editor
+ </h3>
+ <button type="button" onClick={saveTgTemplates} disabled={tgTemplateSaving}
+ className={`${btnPrimary} !px-3 !py-1.5 !text-[11px] disabled:opacity-50 flex items-center gap-1.5`}>
+ <Save size={12} /> {tgTemplateSaving ? "Saving…" : "Save Templates"}
+ </button>
+ </div>
+ <p className="text-[11px] text-zinc-400 mb-3">
+ Edit every line of the caption. Tokens are replaced automatically when the post is sent.
+ </p>
+
+ <div className="flex gap-2 mb-3">
+ {(["series", "movie"] as const).map(tab => (
+ <button key={tab} type="button" onClick={() => setTgTemplateTab(tab)}
+ className={`flex-1 py-2 rounded-lg text-[12px] font-semibold border transition-all ${tgTemplateTab === tab ? "bg-amber-600 border-amber-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {tab === "series" ? "📺 Series Template" : "🎬 Movie Template"}
+ </button>
+ ))}
+ </div>
+
+ <textarea
+ value={tgTemplateTab === "series" ? tgTemplateSeries : tgTemplateMovie}
+ onChange={e => tgTemplateTab === "series" ? setTgTemplateSeries(e.target.value) : setTgTemplateMovie(e.target.value)}
+ className={`${inputClass} min-h-[280px] font-mono !text-[11px] leading-relaxed resize-y`}
+ spellCheck={false}
+ />
+
+ <div className="flex flex-wrap gap-1.5 mt-2.5">
+ {TG_TEMPLATE_TOKENS.map(tok => (
+ <button key={tok} type="button"
+ onClick={() => {
+ if (tgTemplateTab === "series") setTgTemplateSeries(t => `${t}${t.endsWith("\n") ? "" : "\n"}${tok}`);
+ else setTgTemplateMovie(t => `${t}${t.endsWith("\n") ? "" : "\n"}${tok}`);
+ }}
+ className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] text-amber-300 hover:bg-amber-500/15">
+ {tok}
+ </button>
+ ))}
+ </div>
+
+ <div className="grid grid-cols-2 gap-3 mt-4">
+ <div>
+ <label className="block text-xs text-zinc-400 mb-1.5">Owner username (for {"{owner}"})</label>
+ <input value={tgOwnerUsername} onChange={e => setTgOwnerUsername(e.target.value)} className={inputClass} placeholder="your_username" />
+ </div>
+ <div className="flex items-end">
+ <button type="button"
+ onClick={() => {
+ if (!confirm("Reset this template to the default layout?")) return;
+ if (tgTemplateTab === "series") setTgTemplateSeries(DEFAULT_TG_TEMPLATE_SERIES);
+ else setTgTemplateMovie(DEFAULT_TG_TEMPLATE_MOVIE);
+ }}
+ className={`${btnSecondary} w-full !py-2 !text-[11px]`}>
+ ♻️ Reset to default
+ </button>
+ </div>
+ </div>
+ </div>
+
  {/* Preview */}
  <div className={`${glassCard} p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Eye size={14} className="text-green-400" /> preview
+ <Eye size={14} className="text-green-400" /> Live Preview
+ <span className="ml-auto text-[10px] font-normal px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400">
+ {tgContentKind === "movie" ? "🎬 Movie template" : "📺 Series template"}
+ </span>
  </h3>
  <div className="bg-[#0E1621] rounded-xl p-4 border border-white/5">
  {tgPosterUrl && (
@@ -9134,21 +9200,7 @@ ${tgBulkFooter}
  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
  )}
  <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
-{`♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
-┌──────────────────
-│ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
-│ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
-│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
-│ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
-│ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
-│ ✦ Gᴇɴʀᴇs : ${tgGenres}
-│ ✦ Sᴛᴀᴛᴜs : ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
-└──────────────────
-${TG_DIVIDER}
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-${TG_DIVIDER}`}
-{tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n${TG_DIVIDER}\n${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`}
+ {buildTelegramCaption("plain")}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
@@ -9162,6 +9214,7 @@ ${TG_DIVIDER}`}
  ))}
  </div>
  </div>
+
 
  <button onClick={sendTelegramPost} disabled={tgSending || !tgTitle.trim()}
  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
