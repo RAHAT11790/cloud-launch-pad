@@ -7248,10 +7248,9 @@ ${tgBulkFooter}
    const s = String(capturedEpNumber).padStart(2, "0");
    const e = String(capturedEpNumberEnd).padStart(2, "0");
    setTgNewEpAdded(e !== s ? `${s}-${e}` : s);
- }
- }
-
+  }
  } else if (seriesId) {
+
  // Fallback: fill directly from webseries data
  const ws = webseriesData.find(s => s.id === seriesId);
  if (ws) {
