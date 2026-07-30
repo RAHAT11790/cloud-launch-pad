@@ -5533,10 +5533,20 @@ ${tgBulkFooter}
  setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
  }
  if (release.episodeInfo) {
- if (release.episodeInfo.type === "movie") {
+ const epType = String(release.episodeInfo.type || "");
+ if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
+ // 🎬 Movie auto-detection — never show "Episode" for movies.
+ setTgContentKind("movie");
  setTgSeason("Movie");
- setTgNewEpAdded("Full Movie");
+ const pStart = release.episodeInfo.partStart;
+ const pEnd = release.episodeInfo.partEnd;
+ const movieLabel = pStart
+   ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
+   : "Full Movie";
+ setTgMovieType(movieLabel);
+ setTgNewEpAdded(movieLabel);
  } else {
+ setTgContentKind("series");
  // Extract just the season number (e.g., "01", "02")
  const seasonNum = release.episodeInfo.seasonNumber || '';
  setTgSeason(String(seasonNum).padStart(2, '0'));
@@ -5546,6 +5556,7 @@ ${tgBulkFooter}
  setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
  }
  }
+
  // Get quality info from content
  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
  ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
