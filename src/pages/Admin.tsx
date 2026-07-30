@@ -8836,13 +8836,43 @@ ${tgBulkFooter}
  <div className="pb-52 scroll-mb-52">
  <div className={`${glassCard} relative z-[80] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> Telegram post তৈরি 
+ <Send size={14} className="text-blue-400" /> Create Telegram Post
  </h3>
  <p className="text-[11px] text-zinc-400 mb-4">
- New Release from Select or manually field fill ।
+ Pick a title from your library (or a new release) — fields auto-fill. You can edit anything before sending.
  </p>
+
+ {/* Content kind switch */}
+ <div className="mb-4">
+ <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Content type</label>
+ <div className="flex gap-2">
+ {(["series", "movie"] as const).map(kind => (
+ <button key={kind} type="button" onClick={() => setTgContentKind(kind)}
+ className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgContentKind === kind ? (kind === "movie" ? "bg-pink-600 border-pink-500 text-white" : "bg-blue-600 border-blue-500 text-white") : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {kind === "series" ? "📺 Series" : "🎬 Movie"}
+ </button>
+ ))}
+ </div>
+ </div>
+
+ {tgContentKind === "movie" && (
+ <div className="mb-4">
+ <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Movie type</label>
+ <div className="grid grid-cols-3 gap-2 mb-2">
+ {["Full Movie", "Complete Movie", "Part 1"].map(t => (
+ <button key={t} type="button" onClick={() => setTgMovieType(t)}
+ className={`py-2 rounded-lg text-[11px] font-semibold border transition-all ${tgMovieType === t ? "bg-pink-600 border-pink-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+ {t}
+ </button>
+ ))}
+ </div>
+ <input value={tgMovieType} onChange={e => setTgMovieType(e.target.value)} className={inputClass} placeholder="Full Movie / Part 1-2 / Complete Movie" />
+ </div>
+ )}
+
  <div className="mb-4" ref={tgDropdownRef}>
- <label className="block text-xs text-zinc-400 mb-2 font-medium">anime / movie Select (latest update টপে)</label>
+ <label className="block text-xs text-zinc-400 mb-2 font-medium">Select anime / movie (latest updates first)</label>
+
  <div className="relative z-[130]">
  <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
  className={`${selectClass} w-full text-left flex items-center gap-2`}>
