@@ -2593,6 +2593,41 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
  const [tgHashtags, setTgHashtags] = useState(DEFAULT_TG_HASHTAGS);
 
+ // ===== Content kind + editable templates =====
+ const [tgContentKind, setTgContentKind] = useState<"series" | "movie">("series");
+ const [tgMovieType, setTgMovieType] = useState("Full Movie");
+ const [tgOwnerUsername, setTgOwnerUsername] = useState(DEFAULT_TG_OWNER_USERNAME);
+ const [tgTemplateSeries, setTgTemplateSeries] = useState(DEFAULT_TG_TEMPLATE_SERIES);
+ const [tgTemplateMovie, setTgTemplateMovie] = useState(DEFAULT_TG_TEMPLATE_MOVIE);
+ const [tgTemplateTab, setTgTemplateTab] = useState<"series" | "movie">("series");
+ const [tgTemplateSaving, setTgTemplateSaving] = useState(false);
+
+ useEffect(() => {
+  const unsub = onValue(ref(db, "admin/tgTemplates"), (snap) => {
+   const v = snap.val() || {};
+   if (typeof v.series === "string" && v.series.trim()) setTgTemplateSeries(v.series);
+   if (typeof v.movie === "string" && v.movie.trim()) setTgTemplateMovie(v.movie);
+   if (typeof v.ownerUsername === "string" && v.ownerUsername.trim()) setTgOwnerUsername(v.ownerUsername.trim());
+  });
+  return () => unsub();
+ }, []);
+
+ const saveTgTemplates = async () => {
+  setTgTemplateSaving(true);
+  try {
+   await set(ref(db, "admin/tgTemplates"), {
+    series: tgTemplateSeries,
+    movie: tgTemplateMovie,
+    ownerUsername: (tgOwnerUsername || DEFAULT_TG_OWNER_USERNAME).replace(/^@/, "").trim(),
+    updatedAt: Date.now(),
+   });
+   toast.success("Templates saved");
+  } catch (e: any) { toast.error("Save failed: " + (e?.message || e)); }
+  finally { setTgTemplateSaving(false); }
+ };
+
+
+
  // Auto-derive Ongoing/Complete from total vs latest added episode (live)
  useEffect(() => {
  if (!tgStatusAuto) return;
