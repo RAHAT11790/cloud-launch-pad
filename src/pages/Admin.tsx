@@ -7862,7 +7862,6 @@ ${tgBulkFooter}
  setTgNewEpAdded(capturedMovieType);
  }, 250);
 
- }, 250);
  } catch (err: any) {
  setAdminBusyTask(null);
  toast.error("Error: " + err.message);
