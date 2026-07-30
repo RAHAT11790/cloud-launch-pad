@@ -136,6 +136,62 @@ const TG_DIVIDER = "━━━━━━━━━━━━━━━━━━";
 const DEFAULT_TG_HASHTAGS = "#CARTOONFUNNY03 #ANIME";
 const DEFAULT_TG_BUTTON_TEXT = "📥 WATCH AND DOWNLOAD 📥";
 const getTelegramDubTag = (dubType: "official" | "fandub") => TG_DUB_TAGS[dubType];
+
+// ===== Telegram post template engine =====
+// Every line below is admin-editable (Template Editor) and stored in
+// Firebase at admin/tgTemplates/{series|movie}. Tokens are resolved by
+// renderTelegramTemplate() and shared by both the preview and the sender.
+export const TG_TEMPLATE_TOKENS = [
+  "{title}", "{season}", "{totalEpisodes}", "{episodeLine}", "{movieType}",
+  "{quality}", "{rating}", "{genres}", "{languages}", "{dubTag}", "{status}",
+  "{hashtags}", "{footerLinks}", "{divider}", "{watchUrl}", "{owner}",
+] as const;
+
+const DEFAULT_TG_TEMPLATE_SERIES = `♨️ <b>Tɪᴛʟᴇ :</b> {title}
+┌──────────────────
+│ ✦ <b>Sᴇᴀsᴏɴ :</b> {season}
+│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> {totalEpisodes}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 {languages} {dubTag}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> {quality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ {rating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> {genres}
+│ ✦ <b>Sᴛᴀᴛᴜs :</b> {status}
+└──────────────────
+{divider}
+📌 {episodeLine}
+{divider}
+{footerLinks}
+{divider}
+{hashtags} {dubTag}`;
+
+const DEFAULT_TG_TEMPLATE_MOVIE = `🎬 <b>Tɪᴛʟᴇ :</b> {title}
+┌──────────────────
+│ ✦ <b>Tʏᴘᴇ :</b> {movieType}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 {languages} {dubTag}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> {quality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ {rating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> {genres}
+└──────────────────
+{divider}
+📌 {movieType} Aᴅᴅᴇᴅ
+{divider}
+{footerLinks}
+{divider}
+{hashtags} {dubTag}`;
+
+const DEFAULT_TG_OWNER_USERNAME = "rs_woner";
+
+export type TgTemplateVars = Record<string, string>;
+
+const renderTelegramTemplate = (template: string, vars: TgTemplateVars) =>
+  String(template || "")
+    .replace(/\{(\w+)\}/g, (m, key) => (key in vars ? vars[key] : m))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+const stripTelegramHtml = (value: string) =>
+  String(value || "").replace(/<a href="([^"]*)">([^<]*)<\/a>/g, "$2 → $1").replace(/<[^>]+>/g, "");
+
 const normalizeTelegramBaseHashtags = (tags: string) => {
  const normalized = String(tags || DEFAULT_TG_HASHTAGS)
  .replace(/#ɪᴄғᴀɴɪᴍᴇ/gi, "#CARTOONFUNNY03")
