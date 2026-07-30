@@ -5249,27 +5249,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   setAdminBusyTask("Sending Telegram post…");
   await yieldAdminFrame();
  try {
- // Build footer links HTML
- const footerLinksHtml = tgFooterLinks.map(l =>
- `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`
- ).join("\n");
+ // Caption comes from the admin-editable template (series or movie).
+ const caption = buildTelegramCaption("html");
 
- const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${tgTitle}
-┌──────────────────
-│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
-│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${getTelegramDubTag(tgDubType)}
-│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
-│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
-│ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
-│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
-└──────────────────
-${TG_DIVIDER}
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-${TG_DIVIDER}
-${footerLinksHtml}
-${TG_DIVIDER}
-${sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle)} ${getTelegramDubTag(tgDubType)}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
