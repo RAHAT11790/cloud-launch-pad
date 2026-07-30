@@ -7211,8 +7211,12 @@ ${tgBulkFooter}
  const capturedEpNumber = usingMulti
    ? (firstAuto?.startEp ?? 1)
    : (parseInt(wsNotifyEpisode) + 1);
+ const capturedEpNumberEnd = usingMulti
+   ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
+   : (wsNotifyEpisodeEnd !== "" ? parseInt(wsNotifyEpisodeEnd) + 1 : capturedEpNumber);
  const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
  const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
+
  toast.success("✅ Notification sent — redirecting to Telegram post...");
  setWsSaveNotifyModal(false);
  setWsNotifyStep("release");
