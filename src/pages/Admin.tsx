@@ -2859,6 +2859,39 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  : `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText} Aᴅᴅᴇᴅ`;
  }, []);
 
+ // Shared caption builder — one source of truth for preview + sender.
+ const buildTelegramCaption = useCallback((mode: "html" | "plain") => {
+  const footerLinksHtml = tgFooterLinks
+   .map(l => `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`)
+   .join("\n");
+  const [epStart, epEnd] = String(tgNewEpAdded || "01").split("-").map(v => v.trim());
+  const vars: TgTemplateVars = {
+   title: tgTitle || "{title}",
+   season: tgSeason || "N/A",
+   totalEpisodes: tgTotalEpisodes || "N/A",
+   episodeLine: formatEpisodeRangeLabel(tgSeason, epStart, epEnd),
+   movieType: tgMovieType || "Full Movie",
+   quality: tgQuality || "N/A",
+   rating: tgRating || "N/A",
+   genres: tgGenres || "N/A",
+   languages: tgLanguages || "N/A",
+   dubTag: getTelegramDubTag(tgDubType),
+   status: tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢",
+   hashtags: sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle),
+   footerLinks: footerLinksHtml,
+   divider: TG_DIVIDER,
+   watchUrl: tgButtonLink || SITE_URL,
+   owner: `@${(tgOwnerUsername || DEFAULT_TG_OWNER_USERNAME).replace(/^@/, "")}`,
+  };
+  const template = tgContentKind === "movie" ? tgTemplateMovie : tgTemplateSeries;
+  const out = renderTelegramTemplate(template, vars);
+  return mode === "plain" ? stripTelegramHtml(out) : out;
+ }, [tgFooterLinks, tgNewEpAdded, tgTitle, tgSeason, tgTotalEpisodes, tgMovieType, tgQuality,
+     tgRating, tgGenres, tgLanguages, tgDubType, tgStatus, tgHashtags, tgButtonLink,
+     tgOwnerUsername, tgContentKind, tgTemplateMovie, tgTemplateSeries, formatEpisodeRangeLabel]);
+
+
+
 
  useEffect(() => {
  const connRef = ref(db, ".info/connected");
