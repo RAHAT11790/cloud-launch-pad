@@ -7211,10 +7211,12 @@ ${tgBulkFooter}
  const capturedEpNumber = usingMulti
    ? (firstAuto?.startEp ?? 1)
    : (parseInt(wsNotifyEpisode) + 1);
+ const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
  const capturedEpNumberEnd = usingMulti
    ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
-   : (wsNotifyEpisodeEnd !== "" ? parseInt(wsNotifyEpisodeEnd) + 1 : capturedEpNumber);
- const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
+   : (wsNotifyEpisodeEnd !== ""
+      ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
+      : capturedEpNumber);
  const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
 
  toast.success("✅ Notification sent — redirecting to Telegram post...");
@@ -7228,7 +7230,10 @@ ${tgBulkFooter}
  // Switch section then preselect — find the matching release (most recent for this seriesId)
  setActiveSection("telegram-post");
  setTimeout(async () => {
- const matching = releasesData.find(r => r.contentId === seriesId);
+ const matching = releasesData
+   .filter(r => r.contentId === seriesId)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+ setTgContentKind("series");
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  // Force-override with the captured deep link so it always points at the
@@ -7236,6 +7241,16 @@ ${tgBulkFooter}
  if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
    setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
  }
+ // ✅ Range fix — always restore the exact captured episode range.
+ setTgContentKind("series");
+ setTgSeason(String(capturedSeasonIdx + 1).padStart(2, "0"));
+ {
+   const s = String(capturedEpNumber).padStart(2, "0");
+   const e = String(capturedEpNumberEnd).padStart(2, "0");
+   setTgNewEpAdded(e !== s ? `${s}-${e}` : s);
+ }
+ }
+
  } else if (seriesId) {
  // Fallback: fill directly from webseries data
  const ws = webseriesData.find(s => s.id === seriesId);
