@@ -7830,7 +7830,12 @@ ${tgBulkFooter}
  setMvPartsAutoRange(null);
  setActiveSection("telegram-post");
  setTimeout(async () => {
- const matching = releasesData.find(r => r.contentId === movieIdForRedirect);
+ const capturedMovieType = partsRange
+   ? (partsRange.end !== partsRange.start ? `Part ${partsRange.start}-${partsRange.end}` : `Part ${partsRange.start}`)
+   : "Full Movie";
+ const matching = releasesData
+   .filter(r => r.contentId === movieIdForRedirect)
+   .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
  if (matching) {
  await fillTelegramFromRelease(matching.id);
  } else {
@@ -7850,6 +7855,13 @@ ${tgBulkFooter}
  } catch {}
  }
  }
+ // 🎬 Always force movie mode + captured part range for movie releases.
+ setTgContentKind("movie");
+ setTgSeason("Movie");
+ setTgMovieType(capturedMovieType);
+ setTgNewEpAdded(capturedMovieType);
+ }, 250);
+
  }, 250);
  } catch (err: any) {
  setAdminBusyTask(null);
