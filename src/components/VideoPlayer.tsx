@@ -4654,6 +4654,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       handleBackPress();
     }
   }, [handleBackPress, resetHideTimer, seek, togglePlay]);
+
+  // Android TV: the remote BACK key must always be able to leave fullscreen so the
+  // episode / season / download / suggestion rows below the player come back,
+  // even when focus currently sits on a control inside the player shell.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!document.documentElement.classList.contains("tv-mode")) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" && e.key !== "Backspace" && e.key !== "BrowserBack" && e.key !== "GoBack") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (isFullscreen) {
+        e.preventDefault();
+        e.stopPropagation();
+        void toggleFullscreen();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [isFullscreen, toggleFullscreen]);
+
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1

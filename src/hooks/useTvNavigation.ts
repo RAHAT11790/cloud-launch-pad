@@ -22,14 +22,19 @@ const isEditableTarget = (target: EventTarget | null) => {
 
 const isVisible = (el: HTMLElement) => {
   if (el.offsetParent === null && getComputedStyle(el).position !== "fixed") return false;
+  const style = getComputedStyle(el);
+  if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
   const rect = el.getBoundingClientRect();
-  return rect.width > 2 && rect.height > 2 && rect.bottom >= 0 && rect.right >= 0 && rect.top <= window.innerHeight && rect.left <= window.innerWidth;
+  // NOTE: no viewport-bounds check — off-screen items (episode/season/download
+  // lists below the fold) must stay reachable with the TV remote; we scroll to them.
+  return rect.width > 2 && rect.height > 2;
 };
 
 const getFocusableElements = () => {
   return Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
     .filter((el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true" && isVisible(el));
 };
+
 
 const scoreCandidate = (from: DOMRect, to: DOMRect, key: string) => {
   const fromX = from.left + from.width / 2;
@@ -54,8 +59,11 @@ export const setupTvNavigation = () => {
 
   const focusElement = (el: HTMLElement) => {
     el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const rect = el.getBoundingClientRect();
+    const offscreen = rect.top < 80 || rect.bottom > window.innerHeight - 40;
+    el.scrollIntoView({ block: offscreen ? "center" : "nearest", inline: "nearest" });
   };
+
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (!isTvMode() || isEditableTarget(event.target)) return;
