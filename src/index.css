@@ -1583,6 +1583,73 @@ html.tv-mode .rs-video-player-root .grid.grid-cols-3 button {
   min-height: 0 !important;
 }
 
+/* AnimeSalt / AN player uses a separate shell. On a 16:9 TV its old full-width
+   video was exactly as tall as the viewport, while the fixed root clipped all
+   content below it. Keep the whole workspace scrollable and size the theater
+   from the available height, matching the main RS player. */
+html.tv-mode .rs-salt-player-root[data-player-fs="off"] {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  align-items: center !important;
+  padding: 18px 32px 56px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+html.tv-mode .rs-salt-player-root[data-player-fs="off"] > div:first-of-type {
+  width: min(100%, 1280px) !important;
+  flex: 0 0 auto !important;
+}
+
+html.tv-mode .rs-salt-player-shell {
+  width: min(calc(100vw - 64px), calc((100vh - 240px) * 16 / 9), 1280px) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  min-height: min(48vh, 420px) !important;
+  max-height: calc(100vh - 240px) !important;
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  border-radius: 18px !important;
+  box-shadow: 0 28px 72px -28px hsl(0 0% 0% / 0.9), 0 0 0 1px hsl(var(--border) / 0.55) !important;
+}
+
+html.tv-mode .rs-salt-player-root[data-player-fs="on"] {
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+html.tv-mode .rs-salt-player-root[data-player-fs="on"] .rs-salt-player-shell {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html.tv-mode .rs-salt-player-content {
+  width: min(100%, 1280px) !important;
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  padding: 24px 0 0 !important;
+}
+
+html.tv-mode .rs-salt-player-content .grid.grid-cols-5 {
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+html.tv-mode .rs-salt-player-content .grid.grid-cols-3 {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 18px !important;
+}
+
+html.tv-mode .rs-salt-player-root button,
+html.tv-mode .rs-salt-player-root [role="button"] {
+  min-height: 48px;
+}
+
 /* ============================================================
    Security hardening — anti-copy / anti-drag / anti-save UX
    ============================================================
