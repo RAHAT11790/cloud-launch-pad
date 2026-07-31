@@ -141,39 +141,36 @@ Deno.serve(async (req) => {
   try {
     const mode = body.mode || "backdrop";
     const prompt = mode === "logo" ? logoPrompt(body) : backdropPrompt(body);
-    // Default: gpt-image-2 for BOTH backdrop + logo (ChatGPT quality, prompt-only).
-    // Only route to Gemini when caller explicitly asks for reference-image editing
-    // via model override (gpt-image-2 needs /edits endpoint we don't expose here).
     const model = body.model || DEFAULT_MODEL;
-    const isOpenAi = model.startsWith("openai/");
-    const useRef = !isOpenAi && mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
+    const useRef = mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
 
+    let endpoint = GATEWAY_URL;
     let payload: Record<string, unknown>;
-    if (isOpenAi) {
-      // gpt-image-2 supported sizes: 1024x1024, 1024x1536, 1536x1024, auto
-      const size = mode === "logo" ? "1024x1024" : "1536x1024";
+    if (useRef) {
+      // Reference-image editing uses the chat-completions image shape.
+      endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      const { b64, mime } = await fetchAsBase64(body.referenceImageUrl!);
+      payload = {
+        model: GEMINI_FALLBACK_MODEL,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } },
+          ],
+        }],
+        modalities: ["image", "text"],
+      };
+    } else {
       payload = {
         model,
         prompt,
-        size,
-        quality: body.quality || "low",
+        size: mode === "logo" ? "1024x1024" : "1536x1024",
         n: 1,
-      };
-    } else {
-      // Gemini image chat shape (supports reference image)
-      const content: any[] = [{ type: "text", text: prompt }];
-      if (useRef) {
-        const { b64, mime } = await fetchAsBase64(body.referenceImageUrl!);
-        content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } });
-      }
-      payload = {
-        model,
-        messages: [{ role: "user", content }],
-        modalities: ["image", "text"],
       };
     }
 
-    const upstream = await fetch(GATEWAY_URL, {
+    const upstream = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
       body: JSON.stringify(payload),
@@ -181,11 +178,14 @@ Deno.serve(async (req) => {
 
     const raw = await upstream.text();
     if (!upstream.ok) {
-      return new Response(JSON.stringify({
-        error: `Lovable AI ${upstream.status}: ${raw.slice(0, 300)}`,
-        model,
-      }), { status: upstream.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let error = `Lovable AI ${upstream.status}: ${raw.slice(0, 300)}`;
+      if (upstream.status === 402) error = "Out of Lovable AI credits — add credits in workspace billing to generate images.";
+      else if (upstream.status === 429) error = "Rate limited by Lovable AI — try again in a moment.";
+      return new Response(JSON.stringify({ error, model }), {
+        status: upstream.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
 
     const data = JSON.parse(raw);
     const b64 = data?.data?.[0]?.b64_json;
