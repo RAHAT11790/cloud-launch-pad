@@ -5866,13 +5866,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const movieLabel = String(title || subtitle || "video").trim();
-            const rawMovieUrl = movieQualityLinks[quality] || src;
-            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, Object.values(movieQualityLinks));
-            if (!browserUrl) { toast.error("Download not available"); return; }
+            // Movies follow the exact same flow as episodes: pick the selected
+            // quality first, then any other stored movie link, then the current
+            // playback source as the last resort.
+            const linkPool = [
+              movieQualityLinks[quality],
+              ...Object.values(movieQualityLinks),
+              anime?.movieLink,
+              src,
+            ].map((v) => String(v || "").trim()).filter(Boolean);
+            const rawMovieUrl = linkPool[0] || "";
+            if (!rawMovieUrl) { toast.error("Download not available"); return; }
+            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, linkPool.slice(1));
+            if (!browserUrl) { toast.error("This movie has no downloadable file"); return; }
             const started = triggerBackgroundVideoDownload(browserUrl, buildDownloadFileName(movieLabel, quality));
             if (started) toast.success("Download sent to browser");
+            else toast.error("Could not start the download");
             closePanel();
           };
+
 
           const startSelectedDownloads = async (quality: string) => {
             if (!panelSeason || dlSelectedEpisodes.size === 0) {
