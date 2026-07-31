@@ -436,6 +436,14 @@ export default function AnManager({
     return () => unsub();
   }, []);
 
+  // RS duplicate auto-disable listeners
+  useEffect(() => {
+    const u1 = subscribeAnDedupeEnabled((v) => startTransition(() => setDedupeOn(v)));
+    const u2 = subscribeRsTitleKeys((keys) => startTransition(() => setRsKeys(keys)));
+    return () => { try { u1(); } catch {} u2(); };
+  }, []);
+
+
   const deferredQuery = useDeferredValue(query);
 
   const filtered = useMemo(() => {
