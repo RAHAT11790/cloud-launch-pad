@@ -1307,8 +1307,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
     if (!hasEpisodeTree) {
-      const movieUrl = movieQualityLinks[quality];
-      if (movieUrl && !hasProbedDownloadSize(movieUrl)) urls.push(movieUrl);
+      // Movies: probe EVERY quality so the panel can show a size per quality
+      // (same experience as series) instead of only the selected one.
+      Object.values(movieQualityLinks).forEach((movieUrl) => {
+        const u = String(movieUrl || "").trim();
+        if (u && !hasProbedDownloadSize(u) && !urls.includes(u)) urls.push(u);
+      });
     }
     if (!urls.length) return;
 
