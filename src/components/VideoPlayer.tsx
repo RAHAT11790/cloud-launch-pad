@@ -6066,6 +6066,57 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         </div>
                       );
                     })()}
+
+                    {!hasMultiEpisodes && (() => {
+                      const fmtSize = (bytes: number) => {
+                        if (!bytes || bytes <= 0) return "";
+                        const mb = bytes / (1024 * 1024);
+                        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+                        return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+                      };
+                      return (
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <div className="rounded-[10px] border border-white/10 bg-white/[0.04] p-2">
+                            <h4 className="text-[11px] font-bold text-white/80 uppercase tracking-wider px-1 pb-1.5">Movie file</h4>
+                            <div className="space-y-1">
+                              {qualityChoices.map((label) => {
+                                const url = String(movieQualityLinks[label] || "").trim();
+                                const available = !!url;
+                                const locked = available && !isDownloadAllowedForFree(label);
+                                const sizeBytes = available ? getCachedDownloadSize(url) : 0;
+                                const sizeLabel = fmtSize(sizeBytes);
+                                const isActive = available && label === activeQuality;
+                                return (
+                                  <button
+                                    key={`movie-${label}`}
+                                    disabled={!available || locked}
+                                    onClick={() => { if (available && !locked) setSelectedDownloadQuality(label); }}
+                                    className={`w-full flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left border ${isActive ? 'border-emerald-400/60 bg-emerald-400/10' : 'border-white/8 bg-white/[0.03]'} ${!available ? 'opacity-45' : locked ? 'opacity-60' : ''}`}
+                                  >
+                                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${locked ? 'border-amber-400/50 text-amber-300' : isActive ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                      {locked ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-[13px] font-medium text-white">{label === "Default" ? "Full Movie" : label}</span>
+                                      <span className="block text-[11px] text-white/50 mt-0.5 truncate">
+                                        {available ? (locked ? "Premium required" : "Ready to download") : "This quality is not available"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/90">
+                                      {!available ? <span className="text-white/30 font-normal">—</span>
+                                        : locked ? <span className="text-amber-300/80">LOCK</span>
+                                        : sizeLabel ? sizeLabel
+                                        : hasProbedDownloadSize(url) ? <span className="text-white/40 font-normal">N/A</span>
+                                        : <span className="text-white/45 font-normal">…</span>}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   )}
 
