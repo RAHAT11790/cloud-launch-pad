@@ -188,7 +188,8 @@ Deno.serve(async (req) => {
 
 
     const data = JSON.parse(raw);
-    const b64 = data?.data?.[0]?.b64_json;
+    const chatImg = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url as string | undefined;
+    const b64 = data?.data?.[0]?.b64_json || (chatImg?.includes(",") ? chatImg.split(",")[1] : undefined);
     if (!b64) {
       return new Response(JSON.stringify({ error: "No image returned", raw: data }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
