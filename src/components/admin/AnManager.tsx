@@ -14,7 +14,9 @@ import {
   Loader2,
   Power,
   Film,
+  Layers,
   Tv,
+
 } from "lucide-react";
 import { animeSaltApi, isAnimeSaltAllowedAnime } from "@/lib/animeSaltApi";
 import { AN_DEDUPE_SETTING_PATH, normalizeAnTitleKey, subscribeAnDedupeEnabled, subscribeRsTitleKeys } from "@/lib/anDedupe";
