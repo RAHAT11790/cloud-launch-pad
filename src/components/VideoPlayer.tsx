@@ -5937,16 +5937,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             }
           };
 
-          // Show explicit qualities when present; otherwise fall back to the
-          // "Default" entry (this is the case for AN HLS where a single
-          // master contains every quality).
+          // Always render the standard quality slots so a missing file reads as
+          // "Not available" instead of silently disappearing. "Default" is kept
+          // first when present (AN HLS master carries every quality).
+          const STANDARD_QUALITIES = ["480P", "720P", "1080P", "4K"];
           const explicitChoices = availableDownloadQualities.filter((q) => q !== "Default");
-          const qualityChoices = explicitChoices.length > 0
-            ? explicitChoices
-            : (availableDownloadQualities.includes("Default") ? ["Default"] : []);
-          const activeQuality = selectedDownloadQuality && qualityChoices.includes(selectedDownloadQuality)
+          const extraChoices = explicitChoices.filter((q) => !STANDARD_QUALITIES.includes(q));
+          const qualityChoices = Array.from(new Set([
+            ...(availableDownloadQualities.includes("Default") ? ["Default"] : []),
+            ...STANDARD_QUALITIES,
+            ...extraChoices,
+          ]));
+          const isQualityAvailable = (label: string) => availableDownloadQualities.includes(label);
+          const firstAvailableQuality = qualityChoices.find(isQualityAvailable) || "";
+          const activeQuality = selectedDownloadQuality && isQualityAvailable(selectedDownloadQuality)
             ? selectedDownloadQuality
-            : (qualityChoices[0] || "");
+            : firstAvailableQuality;
+
 
           return (
             <div className="w-full">
