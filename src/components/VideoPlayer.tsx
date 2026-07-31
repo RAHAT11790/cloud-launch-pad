@@ -5913,9 +5913,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             ].map((v) => String(v || "").trim()).filter(Boolean);
             const rawMovieUrl = linkPool[0] || "";
             if (!rawMovieUrl) { toast.error("Download not available"); return; }
-            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, linkPool.slice(1));
-            if (!browserUrl) { toast.error("This movie has no downloadable file"); return; }
-            const started = triggerBackgroundVideoDownload(browserUrl, buildDownloadFileName(movieLabel, quality));
+            const directMovieUrl = unwrapManagedVideoUrl(rawMovieUrl) || rawMovieUrl;
+            if (!isDirectDownloadCandidate(directMovieUrl)) { toast.error("This movie has no downloadable file"); return; }
+            const directFallbacks = linkPool.slice(1)
+              .map((candidate) => unwrapManagedVideoUrl(candidate) || candidate)
+              .filter((candidate) => isDirectDownloadCandidate(candidate));
+            const started = triggerBackgroundVideoDownload(directMovieUrl, buildDownloadFileName(movieLabel, quality), directFallbacks);
             if (started) toast.success("Download sent to browser");
             else toast.error("Could not start the download");
             closePanel();
