@@ -1011,12 +1011,14 @@ export default function AnManager({
               const isSaved = !!saved[it.slug];
               const display = (saved[it.slug] || it) as SavedItem;
               const isSelected = selectedSlugs.has(it.slug);
+              const isRsDup = rsDuplicateSlugs.has(it.slug);
+              const isAutoHidden = dedupeOn && isRsDup;
               return (
                 <div
                   key={it.slug}
                   className={`relative rounded-xl overflow-hidden border bg-white/5 transition ${
-                    isSelected ? "border-purple-400 ring-2 ring-purple-400/50" : isSaved ? "border-emerald-500/50" : "border-white/10"
-                  }`}
+                    isSelected ? "border-purple-400 ring-2 ring-purple-400/50" : isAutoHidden ? "border-amber-400/60" : isSaved ? "border-emerald-500/50" : "border-white/10"
+                  } ${isAutoHidden ? "opacity-60" : ""}`}
                 >
                   <button
                     onClick={() => toggleSelect(it.slug)}
@@ -1028,11 +1030,24 @@ export default function AnManager({
                   <span className="absolute top-1.5 left-8 z-10 text-[9px] px-1.5 py-0.5 rounded bg-purple-600/90 text-white font-black border border-white/20">
                     AN
                   </span>
+                  {isRsDup && (
+                    <span
+                      className={`absolute bottom-1.5 left-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded font-bold border ${
+                        isAutoHidden
+                          ? "bg-amber-400/90 text-black border-amber-200"
+                          : "bg-black/70 text-amber-200 border-amber-400/40"
+                      }`}
+                      title="This title already exists in the RS library"
+                    >
+                      {isAutoHidden ? "IN RS — HIDDEN" : "IN RS"}
+                    </span>
+                  )}
                   {isSaved && (
                     <span className="absolute top-1.5 right-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/90 text-white font-bold">
                       SAVED
                     </span>
                   )}
+
                   <div className="aspect-[2/3] bg-black/40">
                     {display.poster ? (
                       <CachedImg
