@@ -1306,7 +1306,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const u = ep.qualityLinks[quality];
       if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
+    if (!hasEpisodeTree) {
+      const movieUrl = movieQualityLinks[quality];
+      if (movieUrl && !hasProbedDownloadSize(movieUrl)) urls.push(movieUrl);
+    }
     if (!urls.length) return;
+
 
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
