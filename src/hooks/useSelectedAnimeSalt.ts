@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, onValue } from "@/lib/firebase";
+import { normalizeAnTitleKey, subscribeAnDedupeEnabled, subscribeRsTitleKeys } from "@/lib/anDedupe";
+
 import {
   GENERIC_CATEGORIES,
   normalizeCastFrom,
