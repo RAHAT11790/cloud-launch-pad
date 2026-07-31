@@ -14,9 +14,13 @@ import {
   Loader2,
   Power,
   Film,
+  Layers,
   Tv,
+
 } from "lucide-react";
 import { animeSaltApi, isAnimeSaltAllowedAnime } from "@/lib/animeSaltApi";
+import { AN_DEDUPE_SETTING_PATH, normalizeAnTitleKey, subscribeAnDedupeEnabled, subscribeRsTitleKeys } from "@/lib/anDedupe";
+
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE } from "@/lib/siteConfig";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 
@@ -334,6 +338,9 @@ export default function AnManager({
   const [category, setCategory] = useState("");
   const [imgVersion, setImgVersion] = useState(0);
   const [globalEnabled, setGlobalEnabled] = useState(true);
+  const [dedupeOn, setDedupeOn] = useState(false);
+  const [rsKeys, setRsKeys] = useState<Set<string>>(() => new Set());
+
   const [tmdbPicker, setTmdbPicker] = useState<{ item: ApiItem; results: TmdbResult[] } | null>(null);
   const [editing, setEditing] = useState<SavedItem | null>(null);
   const [tmdbKeyInput, setTmdbKeyInput] = useState(() => getTmdbApiKey());
@@ -433,6 +440,14 @@ export default function AnManager({
     return () => unsub();
   }, []);
 
+  // RS duplicate auto-disable listeners
+  useEffect(() => {
+    const u1 = subscribeAnDedupeEnabled((v) => startTransition(() => setDedupeOn(v)));
+    const u2 = subscribeRsTitleKeys((keys) => startTransition(() => setRsKeys(keys)));
+    return () => { try { u1(); } catch {} u2(); };
+  }, []);
+
+
   const deferredQuery = useDeferredValue(query);
 
   const filtered = useMemo(() => {
@@ -469,6 +484,18 @@ export default function AnManager({
   }, [apiItems, saved, filtered]);
 
   const visibleFiltered = useMemo(() => filtered.slice(0, 96), [filtered]);
+
+  // Saved AN slugs whose title already exists in the RS library.
+  const rsDuplicateSlugs = useMemo(() => {
+    const out = new Set<string>();
+    if (rsKeys.size === 0) return out;
+    Object.values(saved).forEach((it) => {
+      if (!it?.slug) return;
+      if (rsKeys.has(normalizeAnTitleKey(it.title))) out.add(it.slug);
+    });
+    return out;
+  }, [saved, rsKeys]);
+
 
   const missingCategoryItems = useMemo(() =>
     Object.values(saved)
@@ -707,6 +734,21 @@ export default function AnManager({
     }
   };
 
+  const toggleDedupe = async () => {
+    const next = !dedupeOn;
+    try {
+      await set(ref(db, AN_DEDUPE_SETTING_PATH), next);
+      toast.success(
+        next
+          ? `Auto-disable ON — ${rsDuplicateSlugs.size} AN card(s) hidden (already in RS)`
+          : "Auto-disable OFF — all AN cards visible again",
+      );
+    } catch (e: any) {
+      toast.error("Toggle failed: " + (e?.message || "unknown"));
+    }
+  };
+
+
   const setManualCategory = async (slug: string, value: string) => {
     const next = String(value || "").trim();
     if (!slug || !next) return;
@@ -845,6 +887,37 @@ export default function AnManager({
         </div>
       </div>
 
+      {/* === RS duplicate auto-disable === */}
+      <div className={`${glassCard} p-4 flex flex-wrap items-center gap-3`}>
+        <button
+          onClick={toggleDedupe}
+          className={`px-3 py-2 rounded-lg flex items-center gap-2 font-semibold text-xs border transition ${
+            dedupeOn
+              ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+              : "bg-white/5 text-[#D1C4E9] border-white/15 hover:bg-white/10"
+          }`}
+        >
+          <Layers size={14} />
+          Auto-disable RS duplicates: {dedupeOn ? "ON" : "OFF"}
+        </button>
+
+        <span
+          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border ${
+            dedupeOn && rsDuplicateSlugs.size
+              ? "bg-amber-400/15 text-amber-200 border-amber-400/40"
+              : "bg-white/5 text-[#D1C4E9] border-white/10"
+          }`}
+        >
+          {rsDuplicateSlugs.size} matched with RS {dedupeOn ? "— hidden now" : "— will hide when ON"}
+        </span>
+
+        <p className="basis-full text-[11px] leading-relaxed text-[#D1C4E9]/80">
+          When ON, every AN card (series or movie) whose title already exists in the RS library is hidden from the user
+          panel automatically — including any new RS title added later. Nothing is deleted; turning it OFF restores all cards.
+        </p>
+      </div>
+
+
       {/* === Bulk actions === */}
       <div className={`${glassCard} p-4 space-y-3`}>
         <div className="flex flex-wrap gap-2 items-center">
@@ -938,12 +1011,14 @@ export default function AnManager({
               const isSaved = !!saved[it.slug];
               const display = (saved[it.slug] || it) as SavedItem;
               const isSelected = selectedSlugs.has(it.slug);
+              const isRsDup = rsDuplicateSlugs.has(it.slug);
+              const isAutoHidden = dedupeOn && isRsDup;
               return (
                 <div
                   key={it.slug}
                   className={`relative rounded-xl overflow-hidden border bg-white/5 transition ${
-                    isSelected ? "border-purple-400 ring-2 ring-purple-400/50" : isSaved ? "border-emerald-500/50" : "border-white/10"
-                  }`}
+                    isSelected ? "border-purple-400 ring-2 ring-purple-400/50" : isAutoHidden ? "border-amber-400/60" : isSaved ? "border-emerald-500/50" : "border-white/10"
+                  } ${isAutoHidden ? "opacity-60" : ""}`}
                 >
                   <button
                     onClick={() => toggleSelect(it.slug)}
@@ -955,11 +1030,24 @@ export default function AnManager({
                   <span className="absolute top-1.5 left-8 z-10 text-[9px] px-1.5 py-0.5 rounded bg-purple-600/90 text-white font-black border border-white/20">
                     AN
                   </span>
+                  {isRsDup && (
+                    <span
+                      className={`absolute bottom-1.5 left-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded font-bold border ${
+                        isAutoHidden
+                          ? "bg-amber-400/90 text-black border-amber-200"
+                          : "bg-black/70 text-amber-200 border-amber-400/40"
+                      }`}
+                      title="This title already exists in the RS library"
+                    >
+                      {isAutoHidden ? "IN RS — HIDDEN" : "IN RS"}
+                    </span>
+                  )}
                   {isSaved && (
                     <span className="absolute top-1.5 right-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/90 text-white font-bold">
                       SAVED
                     </span>
                   )}
+
                   <div className="aspect-[2/3] bg-black/40">
                     {display.poster ? (
                       <CachedImg
