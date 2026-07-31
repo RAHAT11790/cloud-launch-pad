@@ -334,6 +334,9 @@ export default function AnManager({
   const [category, setCategory] = useState("");
   const [imgVersion, setImgVersion] = useState(0);
   const [globalEnabled, setGlobalEnabled] = useState(true);
+  const [dedupeOn, setDedupeOn] = useState(false);
+  const [rsKeys, setRsKeys] = useState<Set<string>>(() => new Set());
+
   const [tmdbPicker, setTmdbPicker] = useState<{ item: ApiItem; results: TmdbResult[] } | null>(null);
   const [editing, setEditing] = useState<SavedItem | null>(null);
   const [tmdbKeyInput, setTmdbKeyInput] = useState(() => getTmdbApiKey());
