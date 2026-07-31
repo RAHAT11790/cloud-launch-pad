@@ -126,6 +126,8 @@ export function useSelectedAnimeSalt() {
   // If cache is present we already have cards on screen — don't flip into
   // "loading" state and cause the grid to flash empty.
   const [loading, setLoading] = useState(initial.length === 0);
+  const [dedupeOn, setDedupeOn] = useState(false);
+  const [rsKeys, setRsKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     try { localStorage.removeItem("rs_cache_animesalt_selected_v1"); } catch {}
@@ -152,5 +154,18 @@ export function useSelectedAnimeSalt() {
     return () => { unsub(); };
   }, []);
 
-  return { items, loading };
+  // Auto-disable AN cards that already exist in the RS library.
+  useEffect(() => {
+    const u1 = subscribeAnDedupeEnabled(setDedupeOn);
+    const u2 = subscribeRsTitleKeys(setRsKeys);
+    return () => { try { u1(); } catch {} u2(); };
+  }, []);
+
+  const visible = useMemo(() => {
+    if (!dedupeOn || rsKeys.size === 0) return items;
+    return items.filter((it) => !rsKeys.has(normalizeAnTitleKey(it.title)));
+  }, [items, dedupeOn, rsKeys]);
+
+  return { items: visible, loading };
 }
+
