@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Telegram publishing workspace — locked Ocean Deep direction. */
+:root {
+  --telegram-canvas: 209 69% 15%;
+  --telegram-surface: 204 62% 27%;
+  --telegram-accent: 188 56% 40%;
+  --telegram-highlight: 178 43% 55%;
+}
+
 /* Hide Lovable badge */
 a[href*="lovable.dev"][target="_blank"],
 div[style*="z-index: 2147483647"],
@@ -176,6 +184,39 @@ div[style*="z-index: 2147483647"],
   .admin-scroll-smooth {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .telegram-workspace {
+    font-family: 'Manrope', sans-serif;
+  }
+
+  .telegram-workspace h3 {
+    font-family: 'Sora', sans-serif;
+    letter-spacing: 0;
+  }
+
+  .telegram-workspace > .telegram-compose,
+  .telegram-workspace > .telegram-preview,
+  .telegram-workspace > .telegram-settings {
+    background: linear-gradient(145deg, hsl(var(--telegram-canvas) / 0.96), hsl(var(--telegram-surface) / 0.34));
+    border: 1px solid hsl(var(--telegram-highlight) / 0.2);
+    border-radius: 8px;
+    box-shadow: 0 18px 42px hsl(var(--telegram-canvas) / 0.28);
+  }
+
+  .telegram-workspace > .telegram-compose {
+    border-top: 3px solid hsl(var(--telegram-highlight));
+  }
+
+  .telegram-workspace > .telegram-preview {
+    border-color: hsl(var(--telegram-accent) / 0.55);
+  }
+
+  .telegram-workspace .telegram-send {
+    min-height: 52px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, hsl(var(--telegram-accent)), hsl(var(--telegram-highlight)));
+    box-shadow: 0 12px 30px hsl(var(--telegram-accent) / 0.28);
   }
 
   .neu-raised {
