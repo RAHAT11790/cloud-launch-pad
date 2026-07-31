@@ -6071,7 +6071,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       const u = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                       return sum + getCachedDownloadSize(u);
                     }, 0);
-                    const totalLabel = hasMultiEpisodes && selectedList.length > 0 ? fmtSize(totalBytes) : "";
+                    const movieBytes = !hasMultiEpisodes && activeQuality ? getCachedDownloadSize(movieQualityLinks[activeQuality] || "") : 0;
+                    const totalLabel = hasMultiEpisodes
+                      ? (selectedList.length > 0 ? fmtSize(totalBytes) : "")
+                      : fmtSize(movieBytes);
+
                     const allowedForActive = panelEpisodes.filter((ep) => !activeQuality || isDownloadAllowedForFree(activeQuality, ep.index));
                     const allAllowedSelected = allowedForActive.length > 0 && allowedForActive.every((ep) => dlSelectedEpisodes.has(ep.index));
                     return (
