@@ -1441,8 +1441,17 @@ html.tv-mode [role="button"] {
 }
 
 /* Hide swipe-only / mobile-only hints on TV */
+html.tv-mode button,
+html.tv-mode a,
+html.tv-mode [role="button"],
+html.tv-mode [tabindex] {
+  scroll-margin-top: 120px;
+  scroll-margin-bottom: 120px;
+}
+
 html.tv-mode .mobile-only,
 html.tv-mode [data-mobile-only="true"] { display: none !important; }
+
 
 /* Make grid cards focusable look uniform */
 html.tv-mode .anime-card,
