@@ -1146,13 +1146,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       || "";
   }, [availableDownloadQualities, isPremium, selectedSeasonHas480p]);
 
+  const hasEpisodeTree = useMemo(
+    () => !!(seasons && seasons.some((s: any) => (s?.episodes?.length || 0) > 0)),
+    [seasons],
+  );
+
   const isDownloadAllowedForFree = useCallback((quality: string, episodeIndex?: number) => {
     if (isPremium) return true;
     const key = normalizeDownloadQualityKey(quality);
     if (key === "480p") return true;
+    // Movies have no episode list: allow the only available quality when the
+    // title simply has no 480P file (same spirit as the Episode 1–2 rule).
+    if (!hasEpisodeTree) return !selectedSeasonHas480p;
     if (typeof episodeIndex !== "number") return false;
     return !selectedSeasonHas480p && episodeIndex < 2;
-  }, [isPremium, selectedSeasonHas480p]);
+  }, [hasEpisodeTree, isPremium, selectedSeasonHas480p]);
+
 
   const shareSeason = useMemo(() => {
     return seasons?.[sharePanelSeasonIdx] || null;
@@ -1297,7 +1306,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const u = ep.qualityLinks[quality];
       if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
+    if (!hasEpisodeTree) {
+      const movieUrl = movieQualityLinks[quality];
+      if (movieUrl && !hasProbedDownloadSize(movieUrl)) urls.push(movieUrl);
+    }
     if (!urls.length) return;
+
 
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
@@ -1361,7 +1375,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize, hasEpisodeTree, movieQualityLinks]);
 
 
 
@@ -5852,13 +5866,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const movieLabel = String(title || subtitle || "video").trim();
-            const rawMovieUrl = movieQualityLinks[quality] || src;
-            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, Object.values(movieQualityLinks));
-            if (!browserUrl) { toast.error("Download not available"); return; }
+            // Movies follow the exact same flow as episodes: pick the selected
+            // quality first, then any other stored movie link, then the current
+            // playback source as the last resort.
+            const linkPool = [
+              movieQualityLinks[quality],
+              ...Object.values(movieQualityLinks),
+              anime?.movieLink,
+              src,
+            ].map((v) => String(v || "").trim()).filter(Boolean);
+            const rawMovieUrl = linkPool[0] || "";
+            if (!rawMovieUrl) { toast.error("Download not available"); return; }
+            const browserUrl = getDownloadUrl(rawMovieUrl, quality, movieLabel, linkPool.slice(1));
+            if (!browserUrl) { toast.error("This movie has no downloadable file"); return; }
             const started = triggerBackgroundVideoDownload(browserUrl, buildDownloadFileName(movieLabel, quality));
             if (started) toast.success("Download sent to browser");
+            else toast.error("Could not start the download");
             closePanel();
           };
+
 
           const startSelectedDownloads = async (quality: string) => {
             if (!panelSeason || dlSelectedEpisodes.size === 0) {
@@ -5964,7 +5990,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           {qualityChoices.map((label) => {
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
-                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && (selectedSeasonHas480p || !hasMultiEpisodes);
+                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && selectedSeasonHas480p;
                             const lockedQuality = locked4K || lockedByFreeRule;
                             const isActive = label === activeQuality;
                             return (
@@ -6045,7 +6071,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       const u = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                       return sum + getCachedDownloadSize(u);
                     }, 0);
-                    const totalLabel = hasMultiEpisodes && selectedList.length > 0 ? fmtSize(totalBytes) : "";
+                    const movieBytes = !hasMultiEpisodes && activeQuality ? getCachedDownloadSize(movieQualityLinks[activeQuality] || "") : 0;
+                    const totalLabel = hasMultiEpisodes
+                      ? (selectedList.length > 0 ? fmtSize(totalBytes) : "")
+                      : fmtSize(movieBytes);
+
                     const allowedForActive = panelEpisodes.filter((ep) => !activeQuality || isDownloadAllowedForFree(activeQuality, ep.index));
                     const allAllowedSelected = allowedForActive.length > 0 && allowedForActive.every((ep) => dlSelectedEpisodes.has(ep.index));
                     return (
