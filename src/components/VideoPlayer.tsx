@@ -5978,7 +5978,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           {qualityChoices.map((label) => {
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
-                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && (selectedSeasonHas480p || !hasMultiEpisodes);
+                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && selectedSeasonHas480p;
                             const lockedQuality = locked4K || lockedByFreeRule;
                             const isActive = label === activeQuality;
                             return (
