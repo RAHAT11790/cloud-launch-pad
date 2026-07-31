@@ -4170,7 +4170,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // ==================== NEW RELEASES ====================
  const handleReleaseContentChange = async (value: string) => {
  setReleaseContent(value);
- setReleaseSeason(""); setReleaseEpisode(""); setReleaseSeasons([]); setReleaseEpisodes([]);
+ setReleaseSeason(""); setReleaseEpisode(""); setReleaseEpisodeEnd(""); setReleaseSeasons([]); setReleaseEpisodes([]);
  if (!value) { setShowSeasonEpisode(false); return; }
  const [contentId, contentType] = value.split("|");
  if (contentType === "webseries") {
@@ -4188,7 +4188,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  const handleReleaseSeasonChange = async (value: string) => {
- setReleaseSeason(value); setReleaseEpisode(""); setReleaseEpisodes([]);
+ setReleaseSeason(value); setReleaseEpisode(""); setReleaseEpisodeEnd(""); setReleaseEpisodes([]);
  if (!releaseContent || value === "") return;
  const [contentId, contentType] = releaseContent.split("|");
  if (contentType === "animesalt") {
@@ -4219,10 +4219,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  content = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  if (content?.seasons?.[parseInt(releaseSeason)]) {
  const season = content.seasons[parseInt(releaseSeason)];
- const episode = season.episodes?.[parseInt(releaseEpisode)];
+  const episode = season.episodes?.[parseInt(releaseEpisode)];
+  const episodeEnd = releaseEpisodeEnd !== "" ? season.episodes?.[parseInt(releaseEpisodeEnd)] : episode;
+  const episodeNumber = episode?.episodeNumber || parseInt(releaseEpisode) + 1;
+  const episodeNumberEnd = episodeEnd?.episodeNumber || episodeNumber;
  episodeInfo = {
  seasonNumber: parseInt(releaseSeason) + 1,
- episodeNumber: episode?.episodeNumber || parseInt(releaseEpisode) + 1,
+ episodeNumber,
+ episodeNumberEnd: Math.max(episodeNumber, episodeNumberEnd),
  seasonName: season.name || `Season ${parseInt(releaseSeason) + 1}`
  };
  }
@@ -4244,14 +4248,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
  const releaseNotifTitle = buildBrowserPushTitle(content.title);
- const releaseEpisodeText = contentType === "webseries" ? `Episode ${episodeInfo.episodeNumber}` : "Movie release";
+ const releaseEpisodeText = contentType === "webseries"
+  ? `Episode ${episodeInfo.episodeNumberEnd > episodeInfo.episodeNumber ? `${episodeInfo.episodeNumber}-${episodeInfo.episodeNumberEnd}` : episodeInfo.episodeNumber}`
+  : "Movie release";
  const releaseNotifMsg = contentType === "webseries"
  ? buildBrowserPushBody(content.title, episodeInfo.seasonName, releaseEpisodeText)
  : `${content.title} • Movie release`;
  const releaseDeepLink = contentType === "webseries"
  ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
  : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
-  startTransition(() => { setReleaseContent(""); setShowSeasonEpisode(false); });
+   startTransition(() => { setReleaseContent(""); setReleaseSeason(""); setReleaseEpisode(""); setReleaseEpisodeEnd(""); setShowSeasonEpisode(false); });
   adminIdle(async () => {
   try {
   const pushMod = await import("@/lib/pushNotifications");
@@ -7272,7 +7278,9 @@ ${tgBulkFooter}
   if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
    setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
    setTgSeason(String(capturedSeasonIdx + 1).padStart(2, '0'));
-   setTgNewEpAdded(String(capturedEpNumber).padStart(2, '0'));
+    const rangeStart = String(capturedEpNumber).padStart(2, "0");
+    const rangeEnd = String(capturedEpNumberEnd).padStart(2, "0");
+    setTgNewEpAdded(rangeEnd !== rangeStart ? `${rangeStart}-${rangeEnd}` : rangeStart);
   } else {
    setTgButtonLink(buildEpisodeShareUrl(seriesId));
   }
@@ -7451,7 +7459,7 @@ ${tgBulkFooter}
  </div>
  </div>
  ))}
- <div className="grid grid-cols-2 gap-3">
+  <div className={`grid gap-3 ${releaseContent.endsWith("|movie") ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
  <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Year</label>
  <input value={movieForm.year || ""} onChange={e => setMovieForm({ ...movieForm, year: e.target.value })} className={inputClass} placeholder="Year" />
@@ -8123,12 +8131,21 @@ ${tgBulkFooter}
  </select>
  </div>
  <div className="mb-4">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode</label>
+  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode start</label>
  <select value={releaseEpisode} onChange={e => setReleaseEpisode(e.target.value)} className={selectClass}>
  <option value="">Select Episode</option>
  {releaseEpisodes.map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
  </select>
  </div>
+  {!releaseContent.endsWith("|movie") && (
+  <div className="mb-4">
+  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode end</label>
+  <select value={releaseEpisodeEnd} onChange={e => setReleaseEpisodeEnd(e.target.value)} className={selectClass} disabled={releaseEpisode === ""}>
+  <option value="">Same as start</option>
+  {releaseEpisodes.filter(ep => releaseEpisode === "" || ep.index >= parseInt(releaseEpisode)).map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
+  </select>
+  </div>
+  )}
  </div>
  <button onClick={addNewRelease} className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 mt-2.5`}>
  <Plus size={18} /> Add as New Episode Release
@@ -8873,18 +8890,18 @@ ${tgBulkFooter}
 
  {/* ==================== TELEGRAM POST ==================== */}
  {activeSection === "telegram-post" && (
- <div className="pb-52 scroll-mb-52">
- <div className={`${glassCard} relative z-[80] overflow-visible p-4 mb-4`}>
+ <div className="telegram-workspace flex flex-col gap-4 pb-52 scroll-mb-52">
+ <div className={`${glassCard} telegram-compose relative z-[80] order-1 overflow-visible p-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> Create Telegram Post
+ <Send size={14} /> Telegram Publishing Workspace
  </h3>
  <p className="text-[11px] text-zinc-400 mb-4">
- Pick a title from your library (or a new release) — fields auto-fill. You can edit anything before sending.
+ Select content, review every field, then publish when the live preview is ready.
  </p>
 
  {/* Content kind switch */}
  <div className="mb-4">
- <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Content type</label>
+ <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Post format</label>
  <div className="flex gap-2">
  {(["series", "movie"] as const).map(kind => (
  <button key={kind} type="button" onClick={() => setTgContentKind(kind)}
@@ -8911,7 +8928,7 @@ ${tgBulkFooter}
  )}
 
  <div className="mb-4" ref={tgDropdownRef}>
- <label className="block text-xs text-zinc-400 mb-2 font-medium">Select anime / movie (latest updates first)</label>
+ <label className="block text-xs text-zinc-400 mb-2 font-medium">Content source</label>
 
  <div className="relative z-[130]">
  <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
@@ -8923,7 +8940,7 @@ ${tgBulkFooter}
  || releasesData.find(r => r.id === tgSelectedRelease)?.title
  || "Selected"
  }</span>
- ) : <span className="text-zinc-500">anime Select...</span>}
+ ) : <span className="text-zinc-500">Select from library...</span>}
  <ChevronDown size={14} className="ml-auto flex-shrink-0" />
  </button>
  {tgDropdownOpen && (() => {
@@ -8938,7 +8955,7 @@ ${tgBulkFooter}
  <div className="p-2 border-b border-white/10 flex-shrink-0">
  <input value={tgContentSearch} onChange={e => setTgContentSearch(e.target.value)}
  className="w-full px-3 py-2 bg-[#141422] border border-white/10 rounded-lg text-white text-[12px] focus:border-blue-500 focus:outline-none placeholder:text-zinc-500"
- placeholder="🔍 search ..." autoFocus onClick={e => e.stopPropagation()} />
+ placeholder="Search your library..." autoFocus onClick={e => e.stopPropagation()} />
  </div>
  <div className="overflow-y-auto max-h-[260px]">
  {filtered.map(r => {
@@ -9014,7 +9031,7 @@ ${tgBulkFooter}
  </div>
  <div className="space-y-3">
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">Channel ID (at least া with multiple)</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Destination channels</label>
  <textarea value={tgChannelId} onChange={e => setTgChannelId(e.target.value)} onBlur={e => { try { set(ref(db, "admin/telegramChannel"), e.target.value.trim()); } catch {} }} className={`${inputClass} min-h-[60px] resize-y`} placeholder={`${TELEGRAM_CHANNEL}, @channel2, -1001234567890`} rows={2} />
  </div>
  <div>
@@ -9023,7 +9040,7 @@ ${tgBulkFooter}
  </div>
  {/* IMDB/TMDB ID for auto genres */}
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">IMDB/TMDB ID (auto Genres and Rating)</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">TMDB / IMDb ID</label>
  <div className="flex gap-2">
  <input value={tgImdbId} onChange={e => setTgImdbId(e.target.value)} className={`${inputClass} flex-1`} placeholder="tt12345678 or 12345" />
  <button type="button" onClick={() => fetchTmdbGenres(tgImdbId)} disabled={tgImdbLoading || !tgImdbId.trim()}
@@ -9038,7 +9055,7 @@ ${tgBulkFooter}
  <input value={tgSeason} onChange={e => setTgSeason(e.target.value)} className={inputClass} placeholder="Season 01" />
  </div>
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">Total episode</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Total episodes</label>
  <input value={tgTotalEpisodes} onChange={e => setTgTotalEpisodes(e.target.value)} className={inputClass} placeholder="12" />
  </div>
  </div>
@@ -9057,21 +9074,21 @@ ${tgBulkFooter}
  <input value={tgGenres} onChange={e => setTgGenres(e.target.value)} className={inputClass} placeholder="Animation, Action & Adventure" />
  </div>
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">audio Language 🎧</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Audio languages</label>
  <input value={tgLanguages} onChange={e => setTgLanguages(e.target.value)} className={inputClass} placeholder="Bengali,English,Hindi,Japanese" />
  </div>
  <div className="grid grid-cols-2 gap-3">
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">Season number</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Release season</label>
  <input value={tgSeason} onChange={e => setTgSeason(e.target.value)} className={inputClass} placeholder="01" />
  </div>
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">new episode number</label>
- <input value={tgNewEpAdded} onChange={e => setTgNewEpAdded(e.target.value)} className={inputClass} placeholder="03" />
+ <label className="block text-xs text-zinc-400 mb-1.5">New episode or range</label>
+ <input value={tgNewEpAdded} onChange={e => setTgNewEpAdded(e.target.value)} className={inputClass} placeholder="03 or 01-12" />
  </div>
  </div>
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">audio type</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Dub type</label>
  <div className="flex gap-2">
  <button type="button" onClick={() => setTgDubType("official")}
  className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
@@ -9085,7 +9102,7 @@ ${tgBulkFooter}
  </div>
  <div>
  <div className="flex items-center justify-between mb-1.5">
- <label className="block text-xs text-zinc-400">Status</label>
+ <label className="block text-xs text-zinc-400">Release status</label>
  <label className="flex items-center gap-1.5 text-[10px] text-zinc-500 cursor-pointer">
  <input type="checkbox" checked={tgStatusAuto} onChange={e => setTgStatusAuto(e.target.checked)} className="accent-emerald-500" />
  Auto (IMDb match)
@@ -9119,24 +9136,24 @@ ${tgBulkFooter}
  </div>
  {tgButtonLink && (
  <div>
- <label className="block text-xs text-zinc-400 mb-1.5">default button name</label>
+ <label className="block text-xs text-zinc-400 mb-1.5">Primary button label</label>
  <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} onBlur={() => setTgDefaultButtonName(normalizeTelegramButtonText(tgDefaultButtonName))} className={inputClass} placeholder={DEFAULT_TG_BUTTON_TEXT} />
  </div>
  )}
  {/* Extra buttons */}
  <div>
  <div className="flex items-center justify-between mb-1.5">
- <label className="block text-xs text-zinc-400 font-medium">extra button (optional)</label>
+ <label className="block text-xs text-zinc-400 font-medium">Additional buttons</label>
  <button type="button" onClick={() => setTgButtons([...tgButtons, { name: "", url: "" }])}
  className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
- <Plus size={12} /> button add 
+ <Plus size={12} /> Add button
  </button>
  </div>
  {tgButtons.map((btn, i) => (
  <div key={i} className="flex gap-2 mb-2 items-start">
  <div className="flex-1 space-y-1.5">
  <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }} onBlur={() => { const nb = [...tgButtons]; nb[i].name = normalizeTelegramButtonText(nb[i].name); setTgButtons(nb); }}
- className={inputClass} placeholder="button name" />
+ className={inputClass} placeholder="Button label" />
  <input value={btn.url} onChange={e => { const nb = [...tgButtons]; nb[i].url = e.target.value; setTgButtons(nb); }}
  className={inputClass} placeholder="https://..." />
  </div>
@@ -9149,17 +9166,17 @@ ${tgBulkFooter}
  </div>
 
  {/* Footer Links Management */}
- <div className={`${glassCard} p-4 mb-4`}>
+ <div className={`${glassCard} telegram-settings order-4 p-4`}>
  <div className="flex items-center justify-between mb-3">
  <h3 className="text-sm font-semibold flex items-center gap-2">
- <Link size={14} className="text-purple-400" /> footer link (TG postে shows)
+ <Link size={14} /> Footer Links
  </h3>
  <button type="button" onClick={() => {
  const newLinks = [...tgFooterLinks, { label: "New Link", url: "https://t.me/", emoji: "🔰" }];
  setTgFooterLinks(newLinks);
  set(ref(db, "admin/tgFooterLinks"), newLinks);
  }} className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
- <Plus size={12} /> link add
+ <Plus size={12} /> Add link
  </button>
  </div>
  <div className="space-y-2.5">
@@ -9173,7 +9190,7 @@ ${tgBulkFooter}
  }} className={`${inputClass} !text-center`} />
  </div>
  <div>
- <label className="block text-[9px] text-zinc-500 mb-1">label</label>
+ <label className="block text-[9px] text-zinc-500 mb-1">Label</label>
  <input value={link.label} onChange={e => {
  const nl = [...tgFooterLinks]; nl[i].label = e.target.value; setTgFooterLinks(nl);
  }} className={inputClass} placeholder="Link Label" />
@@ -9193,13 +9210,13 @@ ${tgBulkFooter}
  ))}
  <button type="button" onClick={() => set(ref(db, "admin/tgFooterLinks"), tgFooterLinks)}
  className={`${btnSecondary} w-full !py-2 !text-[11px] flex items-center justify-center gap-1.5`}>
- <Save size={12} /> footer link save 
+ <Save size={12} /> Save footer links
  </button>
  </div>
  </div>
 
  {/* ============= TEMPLATE EDITOR ============= */}
- <div className={`${glassCard} p-4 mb-4 border border-amber-500/25`}>
+ <div className={`${glassCard} telegram-settings order-5 p-4`}>
  <div className="flex items-center justify-between mb-3">
  <h3 className="text-sm font-semibold flex items-center gap-2">
  <Edit size={14} className="text-amber-400" /> Template Editor
@@ -9262,7 +9279,7 @@ ${tgBulkFooter}
  </div>
 
  {/* Preview */}
- <div className={`${glassCard} p-4 mb-4`}>
+ <div className={`${glassCard} telegram-preview order-2 p-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
  <Eye size={14} className="text-green-400" /> Live Preview
  <span className="ml-auto text-[10px] font-normal px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400">
@@ -9292,7 +9309,7 @@ ${tgBulkFooter}
 
 
  <button onClick={sendTelegramPost} disabled={tgSending || !tgTitle.trim()}
- className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
+ className={`${btnPrimary} telegram-send order-3 w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
   {tgSending ? (
   <>
   <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -9311,12 +9328,12 @@ ${tgBulkFooter}
  const sentCount = Object.keys(tgBulkSentIds).length;
  const remaining = Math.max(0, totalPool - sentCount);
  return (
- <div className={`${glassCard} p-4 mt-5 border border-purple-500/30`}>
+  <div className={`${glassCard} telegram-settings order-6 p-4`}>
  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
  <Send size={14} className="text-purple-400" /> Bulk Catalog Broadcast
  </h3>
  <p className="text-[11px] text-zinc-400 mb-3">
- Send a random batch from all anime to Telegram with one click। any anime duplicate will be No — প্রতি different postে will go।
+  Send a random, duplicate-safe batch from your catalog to the selected channels.
  </p>
 
  <div className="grid grid-cols-3 gap-2 mb-3">
@@ -9376,7 +9393,7 @@ ${tgBulkFooter}
  {tgBulkSending ? (
  <>
  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
- send in progress...
+  Sending batch...
  </>
  ) : (
  <>
@@ -9385,7 +9402,7 @@ ${tgBulkFooter}
  )}
  </button>
  <p className="text-[10px] text-zinc-500 mt-2 text-center">
- Upper "Channel ID" field all channelে send will be। প্রতি title clickable link হিসেবে will go।
+  Uses the destination channels above. Every title is sent as a clickable link.
  </p>
  </div>
  );
