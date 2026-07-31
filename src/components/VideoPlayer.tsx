@@ -1375,7 +1375,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize, hasEpisodeTree, movieQualityLinks]);
 
 
 
