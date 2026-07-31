@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
-const DEFAULT_MODEL = "openai/gpt-image-2";
+const DEFAULT_MODEL = "google/gemini-3.1-flash-image";
 const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image";
 const IMGBB_KEY = "d5c0bce7c98c54d813bf285ffe453689";
 
