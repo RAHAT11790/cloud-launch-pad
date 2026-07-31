@@ -1,5 +1,5 @@
 // Lovable AI Gateway-backed backdrop/logo generator.
-// Default model: openai/gpt-image-2 (ChatGPT-quality). Falls back to Gemini
+// Default model: google/gemini-3.1-flash-image (supported Lovable AI image model).
 // only when a reference image is attached (gpt-image-2 has different edit shape).
 
 const corsHeaders = {
@@ -119,7 +119,6 @@ Deno.serve(async (req) => {
           model: DEFAULT_MODEL,
           prompt: "ping",
           size: "1024x1024",
-          quality: "low",
           n: 1,
         }),
       });
