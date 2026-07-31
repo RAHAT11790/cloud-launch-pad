@@ -5999,27 +5999,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <div className="mt-2.5 border-t border-white/10 pt-2.5">
                         <div className="grid grid-cols-4 gap-2">
                           {qualityChoices.map((label) => {
+                            const available = isQualityAvailable(label);
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
                             const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && selectedSeasonHas480p;
-                            const lockedQuality = locked4K || lockedByFreeRule;
-                            const isActive = label === activeQuality;
+                            const lockedQuality = available && (locked4K || lockedByFreeRule);
+                            const isActive = available && label === activeQuality;
                             return (
                               <button
                                 key={label}
-                                disabled={lockedQuality}
+                                disabled={!available || lockedQuality}
                                 onClick={() => {
-                                  if (lockedQuality) return;
+                                  if (!available || lockedQuality) return;
                                   setSelectedDownloadQuality(label);
                                   setDlSelectedEpisodes(new Set());
                                 }}
-                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${lockedQuality ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                className={`h-9 rounded-[8px] text-[11px] font-semibold border transition-all ${!available ? 'bg-white/[0.02] text-white/20 border-white/5 line-through' : lockedQuality ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                title={available ? label : `${label} not available`}
                               >
-                                <span className="inline-flex items-center justify-center gap-1">{lockedQuality && <Lock className="w-3 h-3" />}{label}</span>
+                                <span className="inline-flex items-center justify-center gap-1">{available && lockedQuality && <Lock className="w-3 h-3" />}{label}</span>
                               </button>
                             );
-                          }).slice(0, 4)}
+                          })}
                         </div>
+
                         {!isPremium && (
                           <p className="mt-2 text-[10px] leading-snug text-white/45">
                             Free: all 480P episodes. If 480P is missing, only Episode 1–2 can be downloaded in higher quality.
