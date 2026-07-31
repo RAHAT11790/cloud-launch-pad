@@ -885,6 +885,37 @@ export default function AnManager({
         </div>
       </div>
 
+      {/* === RS duplicate auto-disable === */}
+      <div className={`${glassCard} p-4 flex flex-wrap items-center gap-3`}>
+        <button
+          onClick={toggleDedupe}
+          className={`px-3 py-2 rounded-lg flex items-center gap-2 font-semibold text-xs border transition ${
+            dedupeOn
+              ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
+              : "bg-white/5 text-[#D1C4E9] border-white/15 hover:bg-white/10"
+          }`}
+        >
+          <Layers size={14} />
+          Auto-disable RS duplicates: {dedupeOn ? "ON" : "OFF"}
+        </button>
+
+        <span
+          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border ${
+            dedupeOn && rsDuplicateSlugs.size
+              ? "bg-amber-400/15 text-amber-200 border-amber-400/40"
+              : "bg-white/5 text-[#D1C4E9] border-white/10"
+          }`}
+        >
+          {rsDuplicateSlugs.size} matched with RS {dedupeOn ? "— hidden now" : "— will hide when ON"}
+        </span>
+
+        <p className="basis-full text-[11px] leading-relaxed text-[#D1C4E9]/80">
+          When ON, every AN card (series or movie) whose title already exists in the RS library is hidden from the user
+          panel automatically — including any new RS title added later. Nothing is deleted; turning it OFF restores all cards.
+        </p>
+      </div>
+
+
       {/* === Bulk actions === */}
       <div className={`${glassCard} p-4 space-y-3`}>
         <div className="flex flex-wrap gap-2 items-center">
