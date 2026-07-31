@@ -1472,6 +1472,10 @@ html.tv-mode .rs-video-player-root {
   scroll-behavior: auto !important;
   display: flex !important;
   flex-direction: column !important;
+  height: 100dvh !important;
+  min-height: 100vh !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y !important;
 }
 
 html.tv-mode .rs-video-player-root[data-player-fs="on"] {
@@ -1497,11 +1501,11 @@ html.tv-mode .rs-video-player-root[data-player-fs="off"] > div:first-of-type > d
 
 
 html.tv-mode .rs-video-player-shell {
-  width: min(calc(100vw - 64px), calc((100vh - 240px) * 16 / 9), 1280px) !important;
+  width: min(calc(100vw - 64px), calc((100dvh - 280px) * 16 / 9), 1280px) !important;
   height: auto !important;
   aspect-ratio: 16 / 9 !important;
-  max-height: calc(100vh - 240px) !important;
-  min-height: min(48vh, 420px) !important;
+  max-height: calc(100dvh - 280px) !important;
+  min-height: min(42vh, 360px) !important;
   margin-left: auto !important;
   margin-right: auto !important;
   border-radius: 18px !important;
@@ -1603,6 +1607,9 @@ html.tv-mode .rs-salt-player-root[data-player-fs="off"] {
   padding: 18px 32px 56px !important;
   display: flex !important;
   flex-direction: column !important;
+  height: 100dvh !important;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y !important;
 }
 
 html.tv-mode .rs-salt-player-root[data-player-fs="off"] > div:first-of-type {
@@ -1611,11 +1618,11 @@ html.tv-mode .rs-salt-player-root[data-player-fs="off"] > div:first-of-type {
 }
 
 html.tv-mode .rs-salt-player-shell {
-  width: min(calc(100vw - 64px), calc((100vh - 240px) * 16 / 9), 1280px) !important;
+  width: min(calc(100vw - 64px), calc((100dvh - 280px) * 16 / 9), 1280px) !important;
   height: auto !important;
   aspect-ratio: 16 / 9 !important;
-  min-height: min(48vh, 420px) !important;
-  max-height: calc(100vh - 240px) !important;
+  min-height: min(42vh, 360px) !important;
+  max-height: calc(100dvh - 280px) !important;
   flex: 0 0 auto !important;
   margin-left: auto !important;
   margin-right: auto !important;
@@ -1657,6 +1664,16 @@ html.tv-mode .rs-salt-player-content .grid.grid-cols-3 {
 html.tv-mode .rs-salt-player-root button,
 html.tv-mode .rs-salt-player-root [role="button"] {
   min-height: 48px;
+}
+
+html.tv-mode [data-no-swipe="true"] {
+  cursor: grab;
+  scroll-behavior: auto !important;
+  overscroll-behavior-inline: contain;
+}
+
+html.tv-mode [data-no-swipe="true"]:active {
+  cursor: grabbing;
 }
 
 /* ============================================================

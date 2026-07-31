@@ -12,8 +12,19 @@ const isManagedVideoDownloadUrl = (value: string) => {
   if (/\/functions\/v1\/video-download(?:[/?#]|$)/i.test(raw)) return true;
   try {
     const parsed = new URL(raw);
-    return /(^|[.-])video-download([.-]|$)/i.test(parsed.hostname)
-      && (parsed.searchParams.has("url") || parsed.searchParams.has("src"));
+    const hasTarget = parsed.searchParams.has("url") || parsed.searchParams.has("src");
+    if (!hasTarget) return false;
+    if (/(^|[.-])video-download([.-]|$)/i.test(parsed.hostname)) return true;
+    const configuredBases = [overrideBaseUrl, buildSelfHostedFunctionUrl("video-download", routerBaseUrl)]
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean);
+    return configuredBases.some((entry) => {
+      try {
+        const base = new URL(entry);
+        return parsed.origin === base.origin
+          && parsed.pathname.replace(/\/+$/, "") === base.pathname.replace(/\/+$/, "");
+      } catch { return false; }
+    });
   } catch {
     return false;
   }
@@ -345,7 +356,9 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
-  const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName, fallbackUrls);
+  const proxiedUrls = isManagedVideoDownloadUrl(trimmedUrl)
+    ? [trimmedUrl]
+    : buildVideoDownloadUrlCandidates(trimmedUrl, fileName, fallbackUrls);
   const finalUrl = proxiedUrls[0] || null;
   if (!finalUrl) {
     toast.error("Download service is unavailable");

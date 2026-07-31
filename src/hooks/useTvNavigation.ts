@@ -109,6 +109,66 @@ export const setupTvNavigation = () => {
     }
   };
 
+  let dragRow: HTMLElement | null = null;
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragged = false;
+
+  const horizontalRowFrom = (target: EventTarget | null) => {
+    const el = target instanceof Element ? target.closest<HTMLElement>("[data-no-swipe='true']") : null;
+    return el && el.scrollWidth > el.clientWidth + 2 ? el : null;
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (!isTvMode() || event.button !== 0) return;
+    const row = horizontalRowFrom(event.target);
+    if (!row) return;
+    dragRow = row;
+    dragStartX = event.clientX;
+    dragStartScroll = row.scrollLeft;
+    dragged = false;
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!dragRow) return;
+    const delta = event.clientX - dragStartX;
+    if (Math.abs(delta) < 5 && !dragged) return;
+    dragged = true;
+    dragRow.scrollLeft = dragStartScroll - delta;
+    event.preventDefault();
+  };
+
+  const endPointerDrag = () => { dragRow = null; };
+  const stopClickAfterDrag = (event: MouseEvent) => {
+    if (!dragged) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragged = false;
+  };
+
+  const onWheel = (event: WheelEvent) => {
+    if (!isTvMode()) return;
+    const row = horizontalRowFrom(event.target);
+    if (row && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      row.scrollLeft += event.deltaY;
+      event.preventDefault();
+    }
+  };
+
   document.addEventListener("keydown", handleKeyDown, true);
-  return () => document.removeEventListener("keydown", handleKeyDown, true);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
+  document.addEventListener("pointerup", endPointerDrag, true);
+  document.addEventListener("pointercancel", endPointerDrag, true);
+  document.addEventListener("click", stopClickAfterDrag, true);
+  document.addEventListener("wheel", onWheel, { capture: true, passive: false });
+  return () => {
+    document.removeEventListener("keydown", handleKeyDown, true);
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    document.removeEventListener("pointermove", onPointerMove, true);
+    document.removeEventListener("pointerup", endPointerDrag, true);
+    document.removeEventListener("pointercancel", endPointerDrag, true);
+    document.removeEventListener("click", stopClickAfterDrag, true);
+    document.removeEventListener("wheel", onWheel, true);
+  };
 };
