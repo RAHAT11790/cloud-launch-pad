@@ -17,6 +17,8 @@ import {
   Tv,
 } from "lucide-react";
 import { animeSaltApi, isAnimeSaltAllowedAnime } from "@/lib/animeSaltApi";
+import { AN_DEDUPE_SETTING_PATH, normalizeAnTitleKey, subscribeAnDedupeEnabled, subscribeRsTitleKeys } from "@/lib/anDedupe";
+
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE } from "@/lib/siteConfig";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 
