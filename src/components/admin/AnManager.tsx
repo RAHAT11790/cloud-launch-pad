@@ -483,6 +483,18 @@ export default function AnManager({
 
   const visibleFiltered = useMemo(() => filtered.slice(0, 96), [filtered]);
 
+  // Saved AN slugs whose title already exists in the RS library.
+  const rsDuplicateSlugs = useMemo(() => {
+    const out = new Set<string>();
+    if (rsKeys.size === 0) return out;
+    Object.values(saved).forEach((it) => {
+      if (!it?.slug) return;
+      if (rsKeys.has(normalizeAnTitleKey(it.title))) out.add(it.slug);
+    });
+    return out;
+  }, [saved, rsKeys]);
+
+
   const missingCategoryItems = useMemo(() =>
     Object.values(saved)
       .filter((item) => !hasRealCategory(item))
