@@ -1146,13 +1146,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       || "";
   }, [availableDownloadQualities, isPremium, selectedSeasonHas480p]);
 
+  const hasEpisodeTree = useMemo(
+    () => !!(seasons && seasons.some((s: any) => (s?.episodes?.length || 0) > 0)),
+    [seasons],
+  );
+
   const isDownloadAllowedForFree = useCallback((quality: string, episodeIndex?: number) => {
     if (isPremium) return true;
     const key = normalizeDownloadQualityKey(quality);
     if (key === "480p") return true;
+    // Movies have no episode list: allow the only available quality when the
+    // title simply has no 480P file (same spirit as the Episode 1–2 rule).
+    if (!hasEpisodeTree) return !selectedSeasonHas480p;
     if (typeof episodeIndex !== "number") return false;
     return !selectedSeasonHas480p && episodeIndex < 2;
-  }, [isPremium, selectedSeasonHas480p]);
+  }, [hasEpisodeTree, isPremium, selectedSeasonHas480p]);
+
 
   const shareSeason = useMemo(() => {
     return seasons?.[sharePanelSeasonIdx] || null;
