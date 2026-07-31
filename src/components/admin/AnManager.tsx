@@ -732,6 +732,21 @@ export default function AnManager({
     }
   };
 
+  const toggleDedupe = async () => {
+    const next = !dedupeOn;
+    try {
+      await set(ref(db, AN_DEDUPE_SETTING_PATH), next);
+      toast.success(
+        next
+          ? `Auto-disable ON — ${rsDuplicateSlugs.size} AN card(s) hidden (already in RS)`
+          : "Auto-disable OFF — all AN cards visible again",
+      );
+    } catch (e: any) {
+      toast.error("Toggle failed: " + (e?.message || "unknown"));
+    }
+  };
+
+
   const setManualCategory = async (slug: string, value: string) => {
     const next = String(value || "").trim();
     if (!slug || !next) return;
