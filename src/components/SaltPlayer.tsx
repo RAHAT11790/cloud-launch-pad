@@ -60,6 +60,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customW, setCustomW] = useState("");
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isTvMode = useCallback(() => document.documentElement.classList.contains("tv-mode"), []);
   const [showControls, setShowControls] = useState(true);
   // Native HLS playback (no iframe). Auto-cycles servers on failure.
   const [nativeFailed, setNativeFailed] = useState(false);
@@ -150,7 +151,18 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   // Listen fullscreen changes
   useEffect(() => {
     const onFs = () => {
-      const fs = !!document.fullscreenElement;
+      const fullscreenElement = document.fullscreenElement;
+      const nativeVideoFullscreen = isTvMode()
+        && fullscreenElement instanceof HTMLVideoElement;
+      if (nativeVideoFullscreen) {
+        // Some Android TV WebViews force the media element into their native
+        // player. Exit that surface so the app's episodes and suggestions stay
+        // available in the theater workspace.
+        try { document.exitFullscreen?.().catch(() => {}); } catch {}
+        setIsFullscreen(false);
+        return;
+      }
+      const fs = !!fullscreenElement;
       setIsFullscreen(fs);
       if (fs) {
         setShowControls(true);
@@ -170,7 +182,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       document.removeEventListener("webkitfullscreenchange", onFs);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-  }, []);
+  }, [isTvMode]);
 
   // Keep crop panel open = keep controls visible
   useEffect(() => {
@@ -352,7 +364,11 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   }, [isFullscreen, setSaltPlayerState]);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden">
+    <div
+      ref={containerRef}
+      data-player-fs={isFullscreen ? "on" : "off"}
+      className="rs-salt-player-root fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden"
+    >
       {/* Close button - auto-hides with controls in fullscreen */}
       <button
         onPointerDown={(e) => { e.preventDefault(); handleClose(); }}
@@ -490,7 +506,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
 
       {/* Video container - tap to toggle controls */}
       <div
-        className={`relative bg-black overflow-hidden ${isFullscreen ? 'flex-1' : 'flex-shrink-0 border-b-2 border-primary/20'}`}
+        className={`rs-salt-player-shell relative bg-black overflow-hidden ${isFullscreen ? 'flex-1' : 'flex-shrink-0 border-b-2 border-primary/20'}`}
         onClick={handleVideoAreaClick}
       >
         <div className={isFullscreen ? 'w-full h-full overflow-hidden' : 'overflow-hidden'} style={isFullscreen ? {} : { paddingBottom: getAspectPadding(), position: 'relative' }}>
@@ -579,7 +595,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
 
       {/* Season selector + Episode list + Suggested (only when not fullscreen) */}
       {!isFullscreen && (
-        <div className="flex-1 overflow-y-auto px-3 py-3 scroll-smooth">
+        <div className="rs-salt-player-content flex-1 overflow-y-auto px-3 py-3 scroll-smooth">
           {/* Season selector + episodes (only for series) */}
           {saltPlayerState.anime?.seasons && (
             <>
@@ -673,10 +689,11 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               </h3>
               <div className="grid grid-cols-3 gap-2.5">
                 {suggestedAnime.map((anime) => (
-                  <div
+                  <button
+                    type="button"
                     key={anime.id}
                     onClick={() => onSuggestedClick(anime)}
-                    className="w-full cursor-pointer group"
+                    className="w-full cursor-pointer group text-left"
                   >
                     <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
                       <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
@@ -693,7 +710,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                         <p className="text-[9px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

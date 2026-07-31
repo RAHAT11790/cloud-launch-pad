@@ -4091,7 +4091,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     const onFs = () => {
-      const fs = !!document.fullscreenElement;
+      const fullscreenElement = document.fullscreenElement;
+      const nativeVideoFullscreen = document.documentElement.classList.contains("tv-mode")
+        && fullscreenElement instanceof HTMLVideoElement;
+      if (nativeVideoFullscreen) {
+        // Keep Android TV inside the app's theater workspace instead of its
+        // native video-only surface, which hides episodes and suggestions.
+        try { document.exitFullscreen?.().catch(() => {}); } catch {}
+        setIsFullscreen(false);
+        return;
+      }
+      const fs = !!fullscreenElement;
       setIsFullscreen(fs);
       // Unlock orientation when exiting fullscreen externally (e.g. swipe gesture)
       if (!fs) { try { (screen.orientation as any).unlock?.(); } catch {} }
@@ -4714,6 +4724,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none", filter: brightness === 1 ? undefined : `brightness(${brightness})` }}
               playsInline
+              controls={false}
               preload={adGateActive ? "none" : "auto"}
               autoPlay={!adGateActive}
               controlsList="nodownload noplaybackrate noremoteplayback"
