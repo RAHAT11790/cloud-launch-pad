@@ -1307,8 +1307,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (u && !hasProbedDownloadSize(u)) urls.push(u);
     });
     if (!hasEpisodeTree) {
-      const movieUrl = movieQualityLinks[quality];
-      if (movieUrl && !hasProbedDownloadSize(movieUrl)) urls.push(movieUrl);
+      // Movies: probe EVERY quality so the panel can show a size per quality
+      // (same experience as series) instead of only the selected one.
+      Object.values(movieQualityLinks).forEach((movieUrl) => {
+        const u = String(movieUrl || "").trim();
+        if (u && !hasProbedDownloadSize(u) && !urls.includes(u)) urls.push(u);
+      });
     }
     if (!urls.length) return;
 
@@ -5933,16 +5937,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             }
           };
 
-          // Show explicit qualities when present; otherwise fall back to the
-          // "Default" entry (this is the case for AN HLS where a single
-          // master contains every quality).
+          // Always render the standard quality slots so a missing file reads as
+          // "Not available" instead of silently disappearing. "Default" is kept
+          // first when present (AN HLS master carries every quality).
+          const STANDARD_QUALITIES = ["480P", "720P", "1080P", "4K"];
           const explicitChoices = availableDownloadQualities.filter((q) => q !== "Default");
-          const qualityChoices = explicitChoices.length > 0
-            ? explicitChoices
-            : (availableDownloadQualities.includes("Default") ? ["Default"] : []);
-          const activeQuality = selectedDownloadQuality && qualityChoices.includes(selectedDownloadQuality)
+          const extraChoices = explicitChoices.filter((q) => !STANDARD_QUALITIES.includes(q));
+          const qualityChoices = Array.from(new Set([
+            ...(availableDownloadQualities.includes("Default") ? ["Default"] : []),
+            ...STANDARD_QUALITIES,
+            ...extraChoices,
+          ]));
+          const isQualityAvailable = (label: string) => availableDownloadQualities.includes(label);
+          const firstAvailableQuality = qualityChoices.find(isQualityAvailable) || "";
+          const activeQuality = selectedDownloadQuality && isQualityAvailable(selectedDownloadQuality)
             ? selectedDownloadQuality
-            : (qualityChoices[0] || "");
+            : firstAvailableQuality;
+
 
           return (
             <div className="w-full">
@@ -5988,27 +5999,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <div className="mt-2.5 border-t border-white/10 pt-2.5">
                         <div className="grid grid-cols-4 gap-2">
                           {qualityChoices.map((label) => {
+                            const available = isQualityAvailable(label);
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
                             const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && selectedSeasonHas480p;
-                            const lockedQuality = locked4K || lockedByFreeRule;
-                            const isActive = label === activeQuality;
+                            const lockedQuality = available && (locked4K || lockedByFreeRule);
+                            const isActive = available && label === activeQuality;
                             return (
                               <button
                                 key={label}
-                                disabled={lockedQuality}
+                                disabled={!available || lockedQuality}
                                 onClick={() => {
-                                  if (lockedQuality) return;
+                                  if (!available || lockedQuality) return;
                                   setSelectedDownloadQuality(label);
                                   setDlSelectedEpisodes(new Set());
                                 }}
-                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${lockedQuality ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                className={`h-9 rounded-[8px] text-[11px] font-semibold border transition-all ${!available ? 'bg-white/[0.02] text-white/20 border-white/5 line-through' : lockedQuality ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                title={available ? label : `${label} not available`}
                               >
-                                <span className="inline-flex items-center justify-center gap-1">{lockedQuality && <Lock className="w-3 h-3" />}{label}</span>
+                                <span className="inline-flex items-center justify-center gap-1">{available && lockedQuality && <Lock className="w-3 h-3" />}{label}</span>
                               </button>
                             );
-                          }).slice(0, 4)}
+                          })}
                         </div>
+
                         {!isPremium && (
                           <p className="mt-2 text-[10px] leading-snug text-white/45">
                             Free: all 480P episodes. If 480P is missing, only Episode 1–2 can be downloaded in higher quality.
@@ -6043,11 +6057,62 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-emerald-300/90 font-semibold">MP4</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-white/40 font-normal">N/A</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">Not available</span>}
                                   </span>
                                 </button>
                               );
                             })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {!hasMultiEpisodes && (() => {
+                      const fmtSize = (bytes: number) => {
+                        if (!bytes || bytes <= 0) return "";
+                        const mb = bytes / (1024 * 1024);
+                        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+                        return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+                      };
+                      return (
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <div className="rounded-[10px] border border-white/10 bg-white/[0.04] p-2">
+                            <h4 className="text-[11px] font-bold text-white/80 uppercase tracking-wider px-1 pb-1.5">Movie file</h4>
+                            <div className="space-y-1">
+                              {qualityChoices.map((label) => {
+                                const url = String(movieQualityLinks[label] || "").trim();
+                                const available = !!url;
+                                const locked = available && !isDownloadAllowedForFree(label);
+                                const sizeBytes = available ? getCachedDownloadSize(url) : 0;
+                                const sizeLabel = fmtSize(sizeBytes);
+                                const isActive = available && label === activeQuality;
+                                return (
+                                  <button
+                                    key={`movie-${label}`}
+                                    disabled={!available || locked}
+                                    onClick={() => { if (available && !locked) setSelectedDownloadQuality(label); }}
+                                    className={`w-full flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-left border ${isActive ? 'border-emerald-400/60 bg-emerald-400/10' : 'border-white/8 bg-white/[0.03]'} ${!available ? 'opacity-45' : locked ? 'opacity-60' : ''}`}
+                                  >
+                                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${locked ? 'border-amber-400/50 text-amber-300' : isActive ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                      {locked ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-[13px] font-medium text-white">{label === "Default" ? "Full Movie" : label}</span>
+                                      <span className="block text-[11px] text-white/50 mt-0.5 truncate">
+                                        {available ? (locked ? "Premium required" : "Ready to download") : "This quality is not available"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/90">
+                                      {!available ? <span className="text-white/30 font-normal">—</span>
+                                        : locked ? <span className="text-amber-300/80">LOCK</span>
+                                        : sizeLabel ? sizeLabel
+                                        : hasProbedDownloadSize(url) ? <span className="text-white/40 font-normal">N/A</span>
+                                        : <span className="text-white/45 font-normal">…</span>}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       );
