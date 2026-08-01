@@ -372,7 +372,7 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
           cursor = firstRange.end + 1;
         }
         while (cursor < firstRange.total) {
-          const chunkEnd = Math.min(cursor + MEDIA_CHUNK_BYTES - 1, firstRange.total - 1);
+          const chunkEnd = Math.min(cursor + WINDOW_STEADY_BYTES - 1, firstRange.total - 1);
           const nextHeaders = { ...headers, range: `bytes=${cursor}-${chunkEnd}` };
           const res = await fetch(target.toString(), { method: "GET", headers: nextHeaders, redirect: "follow", signal });
           if (!(res.ok || res.status === 206)) {
