@@ -26,14 +26,35 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-// v8: 16MB range window. Halves the number of range round-trips per MP4 vs
-// the previous 8MB, which was the last visible cause of micro-stalls on RS
-// HTTPS mirrors during long playback sessions. Still bounded enough that
-// seek/skip returns quickly.
-const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
+// v9 (Supabase/Deno edge): ADAPTIVE range windows instead of one fixed 16MB block.
+// A 16MB window on a slow HTTP mirror means the browser waits for a huge upstream
+// response before the first frame can decode → "video never loads". Small first
+// window = instant start; bigger later windows = fewer round-trips while playing.
+const WINDOW_START_BYTES = 1 * 1024 * 1024;   // first bytes / seek → decode ASAP
+const WINDOW_STEADY_BYTES = 6 * 1024 * 1024;  // steady playback
+const WINDOW_HTTPS_BYTES = 12 * 1024 * 1024;  // https mirrors are faster, fewer hops
+// Hard timeouts: without these, a dead mirror keeps the edge socket open until the
+// platform kills the invocation, which is exactly why the proxy looked "down".
+const HEADER_TIMEOUT_MS = 7000;
 const FASTSTART_WINDOW_BYTES = 8 * 1024 * 1024;
 const FASTSTART_HEAD_BYTES = 2 * 1024 * 1024;
 const FASTSTART_TAIL_BYTES = 16 * 1024 * 1024;
+
+// Fetch that gives up on *headers* quickly but never truncates a healthy body:
+// the timeout is cleared as soon as the response head arrives.
+async function fetchHead(url: string, init: RequestInit, outerSignal: AbortSignal) {
+  const ac = new AbortController();
+  const onAbort = () => ac.abort();
+  outerSignal.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => ac.abort(), HEADER_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } finally {
+    clearTimeout(timer);
+    outerSignal.removeEventListener("abort", onAbort);
+  }
+}
+
 
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
