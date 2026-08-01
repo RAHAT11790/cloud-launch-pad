@@ -129,14 +129,20 @@ function buildUpstreamCandidates(target: URL): URL[] {
 }
 
 
+function pickWindowBytes(start: number, upstreamUrl: URL) {
+  if (start === 0) return WINDOW_START_BYTES;
+  return upstreamUrl.protocol === "https:" ? WINDOW_HTTPS_BYTES : WINDOW_STEADY_BYTES;
+}
+
 function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
   if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
   const m = range.trim().match(/^bytes=(\d+)-$/i);
   if (!m) return { range, windowStart: null };
   const start = Number(m[1]);
   if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  return { range: `bytes=${start}-${start + MEDIA_CHUNK_BYTES - 1}`, windowStart: start };
+  return { range: `bytes=${start}-${start + pickWindowBytes(start, upstreamUrl) - 1}`, windowStart: start };
 }
+
 
 function requestedOpenEndedRange(range: string | null) {
   return /^bytes=\d+-$/i.test(String(range || "").trim());
