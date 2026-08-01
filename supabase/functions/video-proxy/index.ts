@@ -505,19 +505,18 @@ Deno.serve(async (req) => {
     const origin = `${candidate.protocol}//${candidate.host}`;
     const candidateBaseHeaders = { ...baseHeaders };
     if (rawRange) candidateBaseHeaders.range = alignMediaRange(rawRange, candidate).range || rawRange;
-    // IMPORTANT: never forward the browser's own Referer (rsanime03.lovable.app)
-    // to upstream — some HTTP mirrors (bot-hosting/render/etc.) reject requests
-    // whose Referer is a public site domain, which is what broke Server 2 / the
-    // HTTP proxy path. We only synthesize a Referer/Origin that matches the
-    // upstream host so it looks like a same-origin fetch.
+    // v9: SAME-ORIGIN REFERER FIRST. Most RS/HTTP mirrors only answer requests
+    // that look same-origin; starting bare meant every single segment paid one
+    // failed round-trip before succeeding — that is what felt like "the proxy
+    // is down". We never forward the browser's own Referer (public site host).
     const attempts: Record<string, string>[] = [
-      candidateBaseHeaders,
       { ...candidateBaseHeaders, Referer: `${origin}/` },
       { ...candidateBaseHeaders, Referer: `${origin}/`, Origin: origin },
+      candidateBaseHeaders,
     ];
     for (const headers of attempts) {
       try {
-        up = await fetch(candidate.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
+        up = await fetchHead(candidate.toString(), { method: req.method, headers, redirect: "follow" }, ac.signal);
         if (up.ok || up.status === 206 || up.status === 304) {
           effectiveUrl = candidate;
           effectiveHeaders = headers;
@@ -525,6 +524,10 @@ Deno.serve(async (req) => {
         }
         lastError = `HTTP ${up.status}`;
         try { await up.body?.cancel(); } catch {}
+        // 4xx from the mirror is a definitive answer; retrying header variants
+        // only burns time. Only auth-ish/5xx codes are worth another attempt.
+        if (up.status < 500 && up.status !== 403 && up.status !== 401 && up.status !== 429) { up = null; break; }
+        up = null;
       } catch (e) {
         lastError = (e as Error).message;
         up = null;
@@ -532,6 +535,8 @@ Deno.serve(async (req) => {
     }
     if (up && (up.ok || up.status === 206 || up.status === 304)) break;
   }
+
+
 
   if (!up) return fallbackResponse("Upstream failed", lastError || "network error");
   if (!(up.ok || up.status === 206 || up.status === 304)) {
