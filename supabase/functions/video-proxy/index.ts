@@ -26,14 +26,35 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
-// v8: 16MB range window. Halves the number of range round-trips per MP4 vs
-// the previous 8MB, which was the last visible cause of micro-stalls on RS
-// HTTPS mirrors during long playback sessions. Still bounded enough that
-// seek/skip returns quickly.
-const MEDIA_CHUNK_BYTES = 16 * 1024 * 1024;
+// v9 (Supabase/Deno edge): ADAPTIVE range windows instead of one fixed 16MB block.
+// A 16MB window on a slow HTTP mirror means the browser waits for a huge upstream
+// response before the first frame can decode → "video never loads". Small first
+// window = instant start; bigger later windows = fewer round-trips while playing.
+const WINDOW_START_BYTES = 1 * 1024 * 1024;   // first bytes / seek → decode ASAP
+const WINDOW_STEADY_BYTES = 6 * 1024 * 1024;  // steady playback
+const WINDOW_HTTPS_BYTES = 12 * 1024 * 1024;  // https mirrors are faster, fewer hops
+// Hard timeouts: without these, a dead mirror keeps the edge socket open until the
+// platform kills the invocation, which is exactly why the proxy looked "down".
+const HEADER_TIMEOUT_MS = 7000;
 const FASTSTART_WINDOW_BYTES = 8 * 1024 * 1024;
 const FASTSTART_HEAD_BYTES = 2 * 1024 * 1024;
 const FASTSTART_TAIL_BYTES = 16 * 1024 * 1024;
+
+// Fetch that gives up on *headers* quickly but never truncates a healthy body:
+// the timeout is cleared as soon as the response head arrives.
+async function fetchHead(url: string, init: RequestInit, outerSignal: AbortSignal) {
+  const ac = new AbortController();
+  const onAbort = () => ac.abort();
+  outerSignal.addEventListener("abort", onAbort, { once: true });
+  const timer = setTimeout(() => ac.abort(), HEADER_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } finally {
+    clearTimeout(timer);
+    outerSignal.removeEventListener("abort", onAbort);
+  }
+}
+
 
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
@@ -108,14 +129,20 @@ function buildUpstreamCandidates(target: URL): URL[] {
 }
 
 
+function pickWindowBytes(start: number, upstreamUrl: URL) {
+  if (start === 0) return WINDOW_START_BYTES;
+  return upstreamUrl.protocol === "https:" ? WINDOW_HTTPS_BYTES : WINDOW_STEADY_BYTES;
+}
+
 function alignMediaRange(range: string | null, upstreamUrl: URL): { range: string | null; windowStart: number | null } {
   if (!range || !isDirectMp4Like(upstreamUrl)) return { range, windowStart: null };
   const m = range.trim().match(/^bytes=(\d+)-$/i);
   if (!m) return { range, windowStart: null };
   const start = Number(m[1]);
   if (!Number.isFinite(start) || start < 0) return { range, windowStart: null };
-  return { range: `bytes=${start}-${start + MEDIA_CHUNK_BYTES - 1}`, windowStart: start };
+  return { range: `bytes=${start}-${start + pickWindowBytes(start, upstreamUrl) - 1}`, windowStart: start };
 }
+
 
 function requestedOpenEndedRange(range: string | null) {
   return /^bytes=\d+-$/i.test(String(range || "").trim());
@@ -345,7 +372,7 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
           cursor = firstRange.end + 1;
         }
         while (cursor < firstRange.total) {
-          const chunkEnd = Math.min(cursor + MEDIA_CHUNK_BYTES - 1, firstRange.total - 1);
+          const chunkEnd = Math.min(cursor + WINDOW_STEADY_BYTES - 1, firstRange.total - 1);
           const nextHeaders = { ...headers, range: `bytes=${cursor}-${chunkEnd}` };
           const res = await fetch(target.toString(), { method: "GET", headers: nextHeaders, redirect: "follow", signal });
           if (!(res.ok || res.status === 206)) {
@@ -370,9 +397,16 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
-  const base = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}`;
+  // v9 MIXED-CONTENT FIX: inside the edge runtime the incoming URL is often
+  // http://<host>/video-proxy (gateway-internal). Emitting that inside an HLS
+  // playlist made the browser block every segment on an https page — the page
+  // then showed "video not loading" even though the proxy was healthy.
+  // Always emit https + the public /functions/v1/<name> path.
+  const path = reqUrl.pathname.startsWith("/functions/v1/") ? reqUrl.pathname : `/functions/v1${reqUrl.pathname}`;
+  const base = `https://${reqUrl.host}${path}`;
   return `${base}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 }
+
 
 function resolveHttpUrl(value: string, baseUrl: string) {
   const raw = String(value || "").trim();
@@ -478,19 +512,18 @@ Deno.serve(async (req) => {
     const origin = `${candidate.protocol}//${candidate.host}`;
     const candidateBaseHeaders = { ...baseHeaders };
     if (rawRange) candidateBaseHeaders.range = alignMediaRange(rawRange, candidate).range || rawRange;
-    // IMPORTANT: never forward the browser's own Referer (rsanime03.lovable.app)
-    // to upstream — some HTTP mirrors (bot-hosting/render/etc.) reject requests
-    // whose Referer is a public site domain, which is what broke Server 2 / the
-    // HTTP proxy path. We only synthesize a Referer/Origin that matches the
-    // upstream host so it looks like a same-origin fetch.
+    // v9: SAME-ORIGIN REFERER FIRST. Most RS/HTTP mirrors only answer requests
+    // that look same-origin; starting bare meant every single segment paid one
+    // failed round-trip before succeeding — that is what felt like "the proxy
+    // is down". We never forward the browser's own Referer (public site host).
     const attempts: Record<string, string>[] = [
-      candidateBaseHeaders,
       { ...candidateBaseHeaders, Referer: `${origin}/` },
       { ...candidateBaseHeaders, Referer: `${origin}/`, Origin: origin },
+      candidateBaseHeaders,
     ];
     for (const headers of attempts) {
       try {
-        up = await fetch(candidate.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
+        up = await fetchHead(candidate.toString(), { method: req.method, headers, redirect: "follow" }, ac.signal);
         if (up.ok || up.status === 206 || up.status === 304) {
           effectiveUrl = candidate;
           effectiveHeaders = headers;
@@ -498,6 +531,10 @@ Deno.serve(async (req) => {
         }
         lastError = `HTTP ${up.status}`;
         try { await up.body?.cancel(); } catch {}
+        // 4xx from the mirror is a definitive answer; retrying header variants
+        // only burns time. Only auth-ish/5xx codes are worth another attempt.
+        if (up.status < 500 && up.status !== 403 && up.status !== 401 && up.status !== 429) { up = null; break; }
+        up = null;
       } catch (e) {
         lastError = (e as Error).message;
         up = null;
@@ -505,6 +542,8 @@ Deno.serve(async (req) => {
     }
     if (up && (up.ok || up.status === 206 || up.status === 304)) break;
   }
+
+
 
   if (!up) return fallbackResponse("Upstream failed", lastError || "network error");
   if (!(up.ok || up.status === 206 || up.status === 304)) {
