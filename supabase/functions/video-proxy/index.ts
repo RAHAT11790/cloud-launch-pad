@@ -397,9 +397,16 @@ function streamOpenEndedRange(target: URL, method: string, firstResponse: Respon
 }
 
 function proxyUrl(reqUrl: URL, target: string) {
-  const base = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}`;
+  // v9 MIXED-CONTENT FIX: inside the edge runtime the incoming URL is often
+  // http://<host>/video-proxy (gateway-internal). Emitting that inside an HLS
+  // playlist made the browser block every segment on an https page — the page
+  // then showed "video not loading" even though the proxy was healthy.
+  // Always emit https + the public /functions/v1/<name> path.
+  const path = reqUrl.pathname.startsWith("/functions/v1/") ? reqUrl.pathname : `/functions/v1${reqUrl.pathname}`;
+  const base = `https://${reqUrl.host}${path}`;
   return `${base}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 }
+
 
 function resolveHttpUrl(value: string, baseUrl: string) {
   const raw = String(value || "").trim();
