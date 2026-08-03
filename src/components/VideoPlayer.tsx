@@ -5348,6 +5348,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
             {animeId && <VideoReactionsBar animeId={animeId} className="mt-3" />}
 
+            <SocialBarAdSlot isPremium={isPremium} className="mt-3" />
+
+
             <div className={`grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3`}>
               <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <Bookmark className={`w-3 h-3 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
