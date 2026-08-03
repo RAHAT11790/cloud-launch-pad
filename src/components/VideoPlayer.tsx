@@ -15,7 +15,6 @@ import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurren
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import VideoReactionsBar from "@/components/VideoReactionsBar";
-import SocialBarAdSlot from "@/components/SocialBarAdSlot";
 import { runAdGate, explainAdGate } from "@/lib/adEngagement";
 
 import { guestStore, isGuest } from "@/lib/guestStore";
@@ -5348,7 +5347,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
             {animeId && <VideoReactionsBar animeId={animeId} className="mt-3" />}
 
-            <SocialBarAdSlot isPremium={isPremium} className="mt-3" />
 
 
             <div className={`grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3`}>

@@ -436,7 +436,12 @@ async function injectOnce(cfg: AdsterraConfig) {
   prewarmPopunderForNextGesture(cfg);
 
   const pending: Promise<void>[] = [];
-  pending.push(...injectSnippet(cfg.streamLink, container));
+  // Social bar is a persistent placement — inject it once per session only.
+  // Re-injecting it on every cycle is what made it fire "second by second".
+  if (!(window as any).__adsterraSocialDone) {
+    (window as any).__adsterraSocialDone = true;
+    pending.push(...injectSnippet(cfg.streamLink, container));
+  }
   pending.push(...injectSnippet(cfg.popunder, container));
   if (pending.length) {
     await Promise.allSettled(pending);
@@ -506,6 +511,11 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraPendingPopunderSnippet = undefined;
 }
 
+/**
+ * Release ONE ad cycle. Pacing (how often this may be called) is owned by
+ * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
+ * so the ad script is never hammered into a permanent network cool-down.
+ */
 export async function loadAdsterraSlots(): Promise<void> {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -516,19 +526,10 @@ export async function loadAdsterraSlots(): Promise<void> {
 
   if (!window.__adsterraConfigUnsub) {
     window.__adsterraConfigUnsub = subscribeAdsterraConfig((nextCfg) => {
-      const nextJson = JSON.stringify(nextCfg);
-      if (nextJson === window.__adsterraLastConfigJson) return;
-      window.__adsterraLastConfigJson = nextJson;
-      mountAdCycle(nextCfg).catch(() => {
-        scheduleRefresh(nextCfg, Date.now());
-      });
+      window.__adsterraLastConfigJson = JSON.stringify(nextCfg);
+      window.__adsterraActiveConfig = nextCfg;
     });
   }
-
-  // Admin-configured cool-down between player ad calls.
-  const cooldownMs = Math.max(0, (cfg.refreshIntervalSec || 0) * 1000);
-  const last = window.__adsterraLastLoadAt || 0;
-  if (cooldownMs > 0 && last && Date.now() - last < cooldownMs) return;
 
   if (window.__adsterraMountPromise) {
     return window.__adsterraMountPromise;
@@ -537,6 +538,18 @@ export async function loadAdsterraSlots(): Promise<void> {
   window.__adsterraLastConfigJson = json;
   await mountAdCycle(cfg);
 }
+
+/**
+ * Rip the current ad window out of the DOM after an ad has been consumed, so
+ * leftover scripts/iframes cannot keep firing on their own schedule.
+ */
+export function clearAdsterraWindow() {
+  if (typeof window === "undefined") return;
+  dismissVisibleAds(false);
+  removeKnownAdResidue();
+  window.setTimeout(removeKnownAdResidue, 400);
+}
+
 
 /**
  * Fire a standalone Adsterra pop-under ad (no player scope needed).
