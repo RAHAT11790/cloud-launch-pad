@@ -1423,6 +1423,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setSheetOrigin(origin);
   }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
 
+  // Download is sponsor-gated: one pop-under, 5s dwell, clear feedback.
+  // Premium users and repeat opens inside the same session skip the gate.
+  const openDownloadWithAd = useCallback(async () => {
+    if (adGateBusy) return;
+    if (isPremium || downloadAdPassedRef.current) { openInlineSheet("download", "download"); return; }
+    setAdGateBusy(true);
+    try {
+      const result = await runAdGate({ minSeconds: 5, reason: "download", isPremium });
+      explainAdGate(result, 5);
+      if (result === "counted" || result === "disabled" || result === "premium") {
+        downloadAdPassedRef.current = true;
+        openInlineSheet("download", "download");
+      }
+    } finally {
+      setAdGateBusy(false);
+    }
+  }, [adGateBusy, isPremium, openInlineSheet]);
+
+
+
   const handleInlineSheetClose = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
