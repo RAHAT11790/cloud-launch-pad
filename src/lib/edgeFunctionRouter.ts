@@ -89,6 +89,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "video-download",
   "live-tv-proxy",
   "telegram-post",
+  "comment-bridge",
   "apk-download",
   "link-share-bot",
   "shorten-arolinks",
