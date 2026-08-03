@@ -354,6 +354,28 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     [list, filter],
   );
 
+  // Auto-track env var names from the code currently in the editor:
+  // `env.XXX` with a `|| "fallback"` / `?? "fallback"` is optional, others required.
+  const detectedEnv = useMemo(() => {
+    const required = new Set<string>();
+    const optional = new Set<string>();
+    const re = /env\.([A-Z0-9_]{2,})\s*(\|\||\?\?)?\s*(["'`][^"'`\n]*["'`])?/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(code)) !== null) {
+      const name = m[1];
+      const hasFallback = !!(m[2] && m[3]);
+      if (hasFallback) { if (!required.has(name)) optional.add(name); }
+      else { required.add(name); optional.delete(name); }
+    }
+    return {
+      required: Array.from(required).sort(),
+      optional: Array.from(optional).sort(),
+    };
+  }, [code]);
+
+  const setSecretNames = useMemo(() => new Set(secrets.map((s) => s.name)), [secrets]);
+
+
   // ═══════════════════════════════════════════
   // SETUP SCREEN
   // ═══════════════════════════════════════════
