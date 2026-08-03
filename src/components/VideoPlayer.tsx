@@ -5352,8 +5352,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </button>
               {!isAnimeSaltContent && (
                 <button onClick={() => { openDownloadWithAd(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                  {adGateBusy ? <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin" /> : <Download className="w-3 h-3 flex-shrink-0" />}
-                  <span className="truncate">{adGateBusy ? 'Verifying…' : 'Download'}</span>
+                  <Download className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate">Download</span>
                 </button>
 
               )}
