@@ -10,14 +10,14 @@ import {
 } from "lucide-react";
 
 type Row = {
-  date?: string; placement?: number; country?: string; os?: string; device_format?: string;
+  date?: string; placement?: number; country?: string; domain?: number;
   impression?: number; clicks?: number; ctr?: number; cpm?: number; revenue?: number;
 };
 type Placement = { id: number; domain_id: number; title: string; alias?: string };
 type DomainRow = { id: number; title: string };
 
 type Overview = {
-  byDate: Row[]; byPlacement: Row[]; byCountry: Row[]; byOs: Row[]; byDevice: Row[];
+  byDate: Row[]; byPlacement: Row[]; byCountry: Row[]; byDomain: Row[];
   domains: DomainRow[]; placements: Placement[]; lastUpdate: string | null;
 };
 
@@ -132,8 +132,9 @@ const AdsterraAnalytics = () => {
       .sort((a, b) => b.impression - a.impression);
   }, [data]);
 
-  const osRows = useMemo(() => (data?.byOs ?? []).map((r) => ({
-    name: r.os || "Unknown", impression: Number(r.impression) || 0,
+  const domainRows = useMemo(() => (data?.byDomain ?? []).map((r) => ({
+    name: data?.domains.find((d) => d.id === r.domain)?.title || `#${r.domain}`,
+    impression: Number(r.impression) || 0,
     clicks: Number(r.clicks) || 0, revenue: Number(r.revenue) || 0,
   })).sort((a, b) => b.impression - a.impression), [data]);
 
@@ -479,13 +480,13 @@ const AdsterraAnalytics = () => {
 
         <div className={`${card} p-4`}>
           <h4 className="text-[12px] font-bold text-white mb-3 flex items-center gap-2">
-            <Smartphone className="w-3.5 h-3.5 text-fuchsia-300" /> Traffic by OS
+            <Smartphone className="w-3.5 h-3.5 text-fuchsia-300" /> Impressions by site
           </h4>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={osRows} dataKey="impression" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={3} stroke="none">
-                  {osRows.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                <Pie data={domainRows} dataKey="impression" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={3} stroke="none">
+                  {domainRows.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip {...tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }} />
