@@ -31,13 +31,13 @@ const LS_SLOTS = "rs_ad_slots_v2";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 /** Absolute floor between two ads (seconds). 150s → max 24 ads/hour. */
-export const HARD_MIN_GAP_SEC = 150;
+export const HARD_MIN_GAP_SEC = 30;
 /** Ceiling for a single gap (seconds). */
-export const MAX_GAP_SEC = 480;
+export const MAX_GAP_SEC = 120;
 /** Rolling 60-minute cap. */
-export const HOURLY_CAP = 22;
+export const HOURLY_CAP = 55;
 /** Rolling 24-hour cap (safety net for all-day users). */
-export const DAILY_CAP = 90;
+export const DAILY_CAP = 400;
 
 type Profile = {
   firstSeen: number;
@@ -190,26 +190,18 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min);
 function baseGapSeconds() {
   const ageDays = accountAgeDays();
   const avgMin = avgDailySeconds() / 60;
-  const sessionMin = S.activeMs / 60_000;
 
-  // Brand-new users: keep it very light for the first days.
-  if (ageDays < 4) return rand(300, 420);
-
-  if (avgMin >= 120) return rand(270, 360);   // heavy watcher → fewest ads
-  if (avgMin >= 60) return rand(210, 300);    // medium
-  if (avgMin >= 25) return rand(180, 270);    // casual
-
-  // Short-session users: a little faster, but never spammy.
-  return sessionMin < 5 ? rand(180, 240) : rand(150, 240);
+  // Window is always 30s–120s. Only the position inside that window changes.
+  if (ageDays < 4) return rand(75, 120);      // new user → lightest load
+  if (avgMin >= 120) return rand(60, 120);    // heavy watcher
+  if (avgMin >= 60) return rand(50, 110);     // medium
+  if (avgMin >= 25) return rand(40, 100);     // casual
+  return rand(30, 90);                        // short sessions
 }
 
-/**
- * Session cap curve — tracks ~20 ads/hour of *active* watch time.
- * 24 min episode → 5 ads, 30 min → 6, 60 min → 13, 180 min → 40.
- */
 function sessionCap() {
   const min = S.activeMs / 60_000;
-  return Math.min(45, 1 + Math.floor(min / 4.5));
+  return Math.min(120, 2 + Math.floor(min * 1.1));
 }
 
 function scheduleNext(from = Date.now()) {
@@ -232,7 +224,7 @@ export function adSlotReady() {
   // Warm-up window for the very first ad of a session (persisted, so a
   // page refresh cannot be used to skip it).
   if (!slots.nextAt) {
-    slots.nextAt = now + rand(60, 120) * 1000;
+    slots.nextAt = now + rand(20, 45) * 1000;
     writeSlots(slots);
     return false;
   }
@@ -264,8 +256,8 @@ export function noteAdShown() {
  * Long dwell = reward with a longer ad-free window.
  */
 export function noteAdDwell(seconds: number) {
-  if (seconds >= 10) S.engagementBonus = Math.min(2.2, S.engagementBonus * 1.35);
-  else if (seconds >= 5) S.engagementBonus = Math.min(2.2, S.engagementBonus * 1.1);
+  if (seconds >= 10) S.engagementBonus = Math.min(1.6, S.engagementBonus * 1.2);
+  else if (seconds >= 5) S.engagementBonus = Math.min(1.6, S.engagementBonus * 1.05);
   else S.engagementBonus = Math.max(0.85, S.engagementBonus * 0.9);
   scheduleNext(S.lastAdAt || Date.now());
   try {

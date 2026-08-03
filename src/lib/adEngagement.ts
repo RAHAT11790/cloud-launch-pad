@@ -198,3 +198,20 @@ export function explainAdGate(result: AdGateResult, minSeconds = 5) {
       return;
   }
 }
+
+/**
+ * Fire-and-forget sponsor: opens one pop-under inside the current gesture and
+ * silently measures dwell time. Never blocks the user's action (downloads stay
+ * instant), never shows a blocking loader.
+ */
+export function fireAdOnly(reason = "download", isPremium?: boolean | null) {
+  if (isPremium) return;
+  void (async () => {
+    let cfg: Awaited<ReturnType<typeof getAdsterraConfig>> | null = null;
+    try { cfg = await getAdsterraConfig(); } catch {}
+    if (!cfg?.enabled || !String(cfg.popunder || "").trim()) return;
+    logAdEvent(reason, "fired");
+    void firePopunderAd();
+    void trackPopunderDwell(10, true);
+  })();
+}
