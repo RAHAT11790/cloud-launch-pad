@@ -6358,7 +6358,15 @@ ${tgBulkFooter}
  </label>
  <select
  value={seriesForm.selectedAdminLanguage || seriesForm.language || "Hindi"}
- onChange={e => ensureSeriesLanguageTab(e.target.value)}
+ onChange={e => {
+   const v = e.target.value;
+   if (v === "__custom__") {
+     const typed = window.prompt("Type custom language / dubber name (e.g. Atomic Dubber Hindi):", "")?.trim();
+     if (typed) ensureSeriesLanguageTab(typed);
+     return;
+   }
+   ensureSeriesLanguageTab(v);
+ }}
  className={selectClass}
  >
  {Array.from(new Set([
@@ -6366,10 +6374,14 @@ ${tgBulkFooter}
  ...(seriesForm.availableLanguages || []),
  seriesForm.baseLanguage,
  seriesForm.language,
+ seriesForm.selectedAdminLanguage,
  ])).filter(Boolean).map((lang: string) => (
  <option key={lang} value={lang}>{lang}</option>
  ))}
+ <option value="__custom__">✏️ Custom language (Type your own)…</option>
  </select>
+ <p className="text-[9px] text-cyan-300/60 mt-1">Custom names (fandub / dubber names) are supported — each language keeps its own episode links and shows in the player language button.</p>
+
  </div>
   <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Category</label>
