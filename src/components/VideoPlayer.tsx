@@ -5361,10 +5361,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <span>Share</span>
               </button>
               {!isAnimeSaltContent && (
-                <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                  <Download className="w-3 h-3 flex-shrink-0" />
-                  <span className="truncate">Download</span>
+                <button onClick={() => { void openDownloadWithAd(); }} disabled={adGateBusy} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                  {adGateBusy ? <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin" /> : <Download className="w-3 h-3 flex-shrink-0" />}
+                  <span className="truncate">{adGateBusy ? 'Verifying…' : 'Download'}</span>
                 </button>
+
               )}
               <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <FolderDown className="w-3 h-3 flex-shrink-0" />
