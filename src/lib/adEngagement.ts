@@ -44,6 +44,62 @@ export function logAdEvent(kind: string, result: string) {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Measure how long the user stayed away (i.e. on the sponsor tab) after a
+ * pop-under fired, then nudge them with a tiny benefit/penalty message.
+ * Resolves with the measured dwell time in seconds.
+ */
+export function trackPopunderDwell(goalSeconds = 10, notify = true): Promise<number> {
+  return new Promise((resolve) => {
+    let awayAt = 0;
+    let awayMs = 0;
+    const startedAt = Date.now();
+
+    const enterAway = () => { if (!awayAt) awayAt = Date.now(); };
+    const leaveAway = () => { if (awayAt) { awayMs += Date.now() - awayAt; awayAt = 0; } };
+    const onVis = () => (document.visibilityState === "hidden" ? enterAway() : leaveAway());
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", enterAway);
+    window.addEventListener("focus", leaveAway);
+
+    const finish = () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", enterAway);
+      window.removeEventListener("focus", leaveAway);
+      window.clearInterval(poll);
+      const total = (awayMs + (awayAt ? Date.now() - awayAt : 0)) / 1000;
+      if (notify && total > 0.8) {
+        if (total >= goalSeconds) {
+          toast.success("Thanks — fewer ads for you", {
+            description: "Sponsor counted. Your next ad is delayed and video will load faster.",
+            duration: 4000,
+          });
+          logAdEvent("player", "counted");
+        } else {
+          toast.warning("Ad closed too fast", {
+            description: `Stay ${goalSeconds}s on the sponsor next time — otherwise more ads appear and playback can slow down.`,
+            duration: 4500,
+          });
+          logAdEvent("player", "too-fast");
+        }
+      }
+      resolve(total);
+    };
+
+    // Resolve once the user is back and settled, or after a hard timeout.
+    const poll = window.setInterval(() => {
+      const away = awayMs + (awayAt ? Date.now() - awayAt : 0);
+      if (!awayAt && away > 0 && Date.now() - startedAt > 1500) finish();
+      else if (Date.now() - startedAt > 90_000) finish();
+    }, 400);
+
+    // No ad ever opened → give up quietly.
+    window.setTimeout(() => { if (!awayAt && !awayMs) finish(); }, 6000);
+  });
+}
+
+
+/**
  * Fire a pop-under inside the current user gesture and measure engagement.
  * Resolves once we know whether the ad realistically counted.
  */
