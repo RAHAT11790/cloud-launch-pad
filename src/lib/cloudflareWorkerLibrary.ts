@@ -69,7 +69,7 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   entry("verify-admin-pin","Verify Admin PIN","Server-side admin PIN verifier. Set ADMIN_PIN secret in this Worker to control the admin panel PIN privately.", verifyAdminPinSrc, ["ADMIN_PIN"]),
   entry("apk-download",    "APK Download",    "Serves the user APK from a private origin with correct MIME + range support. Requires APK_URL secret.", apkDownloadSrc, ["APK_URL"]),
   entry("shorten-arolinks","Shorten Arolinks","Arolinks shortener proxy. Requires AROLINKS_API_KEY secret.", shortenArolinksSrc, ["AROLINKS_API_KEY"]),
-  entry("telegram-post",   "Telegram Post",   "Posts new episodes / notifications to your Telegram channel via Bot API.", telegramPostSrc, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]),
+  entry("telegram-post",   "Telegram Post + Comment Bridge",   "📮 v3 — Channel posts, group link share, AND website→Telegram comment bridge. Comments land in your group; reply to the bot message with `/rs your answer` (admin ID only) and it lands in the site's comment thread + push notification. Open the worker URL once in a browser to auto-register the webhook. Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_COMMENT_GROUP_ID, TELEGRAM_ADMIN_USER_ID, FIREBASE_DB_URL (optional: FIREBASE_DB_SECRET, SEND_FCM_URL, ADMIN_DISPLAY_NAME).", telegramPostSrc, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_COMMENT_GROUP_ID", "TELEGRAM_ADMIN_USER_ID", "FIREBASE_DB_URL"], { isNew: true, badgeText: "v3 · COMMENTS", badgeTone: "emerald" }),
 ];
 
 
