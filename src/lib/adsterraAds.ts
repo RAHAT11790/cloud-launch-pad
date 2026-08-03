@@ -436,7 +436,12 @@ async function injectOnce(cfg: AdsterraConfig) {
   prewarmPopunderForNextGesture(cfg);
 
   const pending: Promise<void>[] = [];
-  pending.push(...injectSnippet(cfg.streamLink, container));
+  // Social bar is a persistent placement — inject it once per session only.
+  // Re-injecting it on every cycle is what made it fire "second by second".
+  if (!(window as any).__adsterraSocialDone) {
+    (window as any).__adsterraSocialDone = true;
+    pending.push(...injectSnippet(cfg.streamLink, container));
+  }
   pending.push(...injectSnippet(cfg.popunder, container));
   if (pending.length) {
     await Promise.allSettled(pending);
