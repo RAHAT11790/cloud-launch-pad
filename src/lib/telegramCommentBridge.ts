@@ -1,5 +1,5 @@
 // Fire-and-forget bridge: website comment → admin Telegram group.
-// The `telegram-post` worker forwards it and lets the admin answer with /rs.
+// The standalone `comment-bridge` worker forwards it and lets the admin answer with /rs.
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 export interface TelegramCommentPayload {
@@ -15,7 +15,7 @@ export interface TelegramCommentPayload {
 
 export async function forwardCommentToTelegram(p: TelegramCommentPayload): Promise<void> {
   try {
-    const url = await getEdgeFunctionUrl("telegram-post");
+    const url = await getEdgeFunctionUrl("comment-bridge");
     if (!url) return;
     const pageUrl =
       typeof window !== "undefined"
@@ -24,7 +24,7 @@ export async function forwardCommentToTelegram(p: TelegramCommentPayload): Promi
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "comment", ...p, pageUrl }),
+      body: JSON.stringify({ ...p, pageUrl }),
     });
   } catch {
     // silent — comment is already saved
