@@ -41,6 +41,7 @@ import EgdManager from "@/components/admin/EgdManager";
 import CloudflareManager from "@/components/admin/CloudflareManager";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 import AdsterraConfig from "@/components/admin/AdsterraConfig";
+import AdsterraAnalytics from "@/components/admin/AdsterraAnalytics";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
@@ -9839,7 +9840,10 @@ ${tgBulkFooter}
 
  {/* ==================== ADSTERRA ADS ==================== */}
  {activeSection === "adsterra" && (
- <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ <div className="space-y-5">
+   <AdsterraAnalytics />
+   <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ </div>
  )}
 
  {/* ==================== BACKDROP AI ==================== */}
