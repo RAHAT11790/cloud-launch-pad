@@ -7484,9 +7484,19 @@ ${tgBulkFooter}
  </div>
  <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
- <select value={movieForm.language || "Hindi"} onChange={e => setMovieForm({ ...movieForm, language: e.target.value })} className={selectClass}>
- {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
+ <select value={movieForm.language || "Hindi"} onChange={e => {
+   const v = e.target.value;
+   if (v === "__custom__") {
+     const typed = window.prompt("Type custom language / dubber name (e.g. Atomic Dubber Hindi):", "")?.trim();
+     if (typed) setMovieForm({ ...movieForm, language: typed });
+     return;
+   }
+   setMovieForm({ ...movieForm, language: v });
+ }} className={selectClass}>
+ {Array.from(new Set([...languageOptions, movieForm.language].filter(Boolean))).map((l: string) => <option key={l} value={l}>{l}</option>)}
+ <option value="__custom__">✏️ Custom language (Type your own)…</option>
  </select>
+
  </div>
  {(() => { const isAnMovie = !!(movieForm.anSlug || movieForm.animeSaltSlug || /animesalt/i.test(String(movieForm.sourceName || ""))); return (
  <div className={`mb-4 rounded-xl border p-3 ${isAnMovie ? "border-amber-500/20 bg-amber-500/5" : "border-cyan-500/20 bg-cyan-500/5"}`}>
