@@ -9839,7 +9839,10 @@ ${tgBulkFooter}
 
  {/* ==================== ADSTERRA ADS ==================== */}
  {activeSection === "adsterra" && (
- <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ <div className="space-y-5">
+   <AdsterraAnalytics />
+   <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ </div>
  )}
 
  {/* ==================== BACKDROP AI ==================== */}
