@@ -726,6 +726,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
+  const [adGateBusy, setAdGateBusy] = useState(false);
+  const downloadAdPassedRef = useRef(false);
+
   const [adGateActive, setAdGateActive] = useState(false);
   const adGateActiveRef = useRef(false);
   useEffect(() => { adGateActiveRef.current = adGateActive; }, [adGateActive]);
