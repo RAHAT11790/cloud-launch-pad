@@ -1,34 +1,51 @@
 // ============================================
-// Master Ad Pacing Engine
+// Master Ad Pacing Engine (v2 — hard-capped)
 // --------------------------------------------
-// Goal: never burn the Adsterra script quota in the first minutes of a
-// session (that is what pushed the network into a permanent cool-down and
-// killed every later ad call). Instead, ads are released on a slow, random,
-// activity-aware timer:
+// Owner targets (must never be exceeded):
+//   • 20–25 pop-unders per HOUR maximum
+//   • ~5–6 ads inside a 24-minute episode
+//   • never below a 2.5 minute gap between two ads
+//   • the Adsterra script must survive a full 3h session (no burst → no
+//     network-side cool-down that kills every later call)
 //
-//   • New users (first 4 days)      → slowest pacing (5–6 min gap)
-//   • Heavy watchers (2h+/day)      → slow pacing (4.5–6 min gap)
-//   • Medium watchers (1h+/day)     → 3.5–5 min gap
-//   • Light / short sessions        → 1–3 min gap (never below 30s)
-//   • Watched a pop-under 10s+      → next gap multiplied (reward = fewer ads)
-//   • Closed the ad too fast        → gap shortened a little (soft penalty)
+// How it is enforced (three independent brakes, all must pass):
+//   1. HARD_MIN_GAP_SEC  — absolute floor between two ads (150s)
+//   2. Rolling 60-minute window cap (HOURLY_CAP = 22) — survives reloads
+//      because ad timestamps are persisted in localStorage
+//   3. Adaptive gap based on the user's watch profile + engagement:
+//        new user (<4d)     → 5–7 min
+//        heavy (2h+/day)    → 4.5–6 min
+//        medium (1h+/day)   → 3.5–5 min
+//        casual (25m+/day)  → 3–4.5 min
+//        light / short      → 2.5–4 min
+//      Long dwell on a sponsor (10s+) rewards the user with a longer gap,
+//      instantly bouncing back shortens it slightly (never below the floor).
 //
-// Session caps mirror the owner's targets:
-//   ~15–20 ads in the first 30 minutes, ~40–60 ads across a 3-hour session.
-//
-// All activity is persisted to localStorage (instant) and mirrored to
-// Firebase (analytics/userActivity/<device>/<date>) so the profile survives
-// across devices/sessions. Nothing of this is shown in the UI.
+// Activity is persisted to localStorage and mirrored to Firebase
+// (analytics/userActivity/<device>/<date>). Nothing of this is shown in UI.
 // ============================================
 import { db, ref, update, runTransaction } from "@/lib/firebase";
 
 const LS_KEY = "rs_ad_profile_v1";
+const LS_SLOTS = "rs_ad_slots_v2";
 const todayKey = () => new Date().toISOString().slice(0, 10);
+
+/** Absolute floor between two ads (seconds). 150s → max 24 ads/hour. */
+export const HARD_MIN_GAP_SEC = 150;
+/** Ceiling for a single gap (seconds). */
+export const MAX_GAP_SEC = 480;
+/** Rolling 60-minute cap. */
+export const HOURLY_CAP = 22;
+/** Rolling 24-hour cap (safety net for all-day users). */
+export const DAILY_CAP = 90;
 
 type Profile = {
   firstSeen: number;
   days: Record<string, number>; // date -> watched seconds
 };
+
+/** Ad timestamps persisted across reloads so a refresh can't reset the cap. */
+type Slots = { ts: number[]; nextAt: number };
 
 function deviceId() {
   try {
@@ -59,6 +76,28 @@ function writeProfile(p: Profile) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch {}
 }
 
+function readSlots(): Slots {
+  let s: Slots = { ts: [], nextAt: 0 };
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_SLOTS) || "null");
+    if (raw && Array.isArray(raw.ts)) {
+      s = { ts: raw.ts.map(Number).filter(Number.isFinite), nextAt: Number(raw.nextAt) || 0 };
+    }
+  } catch {}
+  const cutoff = Date.now() - 86_400_000;
+  s.ts = s.ts.filter((t) => t > cutoff).sort((a, b) => a - b);
+  return s;
+}
+
+function writeSlots(s: Slots) {
+  try { localStorage.setItem(LS_SLOTS, JSON.stringify(s)); } catch {}
+}
+
+const countWithin = (ts: number[], ms: number) => {
+  const from = Date.now() - ms;
+  return ts.reduce((n, t) => (t >= from ? n + 1 : n), 0);
+};
+
 // ---------- session state ----------
 type SessionState = {
   startedAt: number;
@@ -66,9 +105,7 @@ type SessionState = {
   lastTick: number;
   adsShown: number;
   lastAdAt: number;
-  nextAdAt: number;
   engagementBonus: number; // >1 = slower ads (reward), <1 = faster (penalty)
-  timer?: number;
 };
 
 const S: SessionState = {
@@ -77,7 +114,6 @@ const S: SessionState = {
   lastTick: Date.now(),
   adsShown: 0,
   lastAdAt: 0,
-  nextAdAt: 0,
   engagementBonus: 1,
 };
 
@@ -89,7 +125,7 @@ function tick() {
   const delta = now - S.lastTick;
   S.lastTick = now;
   if (delta <= 0 || delta > 90_000) return; // tab was asleep
-  if (document.visibilityState !== "visible") return;
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
   S.activeMs += delta;
 }
 
@@ -117,6 +153,7 @@ export function startAdSession() {
   started = true;
   S.startedAt = Date.now();
   S.lastTick = Date.now();
+  S.adsShown = 0;
   document.addEventListener("visibilitychange", tick);
   flushTimer = window.setInterval(flush, 30_000);
   readProfile(); // make sure firstSeen is stamped
@@ -156,44 +193,67 @@ function baseGapSeconds() {
   const sessionMin = S.activeMs / 60_000;
 
   // Brand-new users: keep it very light for the first days.
-  if (ageDays < 4) return rand(300, 380);
+  if (ageDays < 4) return rand(300, 420);
 
   if (avgMin >= 120) return rand(270, 360);   // heavy watcher → fewest ads
   if (avgMin >= 60) return rand(210, 300);    // medium
-  if (avgMin >= 25) return rand(150, 240);    // casual
+  if (avgMin >= 25) return rand(180, 270);    // casual
 
   // Short-session users: a little faster, but never spammy.
-  return sessionMin < 5 ? rand(90, 150) : rand(75, 180);
+  return sessionMin < 5 ? rand(180, 240) : rand(150, 240);
 }
 
-/** Session cap curve: ~20 ads in 30 min, ~55 across 3 hours. */
+/**
+ * Session cap curve — tracks ~20 ads/hour of *active* watch time.
+ * 24 min episode → 5 ads, 30 min → 6, 60 min → 13, 180 min → 40.
+ */
 function sessionCap() {
   const min = S.activeMs / 60_000;
-  if (min <= 30) return Math.min(20, 4 + Math.floor(min / 2));
-  return Math.min(60, 20 + Math.floor((min - 30) / 30) * 8);
+  return Math.min(45, 1 + Math.floor(min / 4.5));
 }
 
-function scheduleNext() {
-  const gap = Math.max(30, Math.min(420, baseGapSeconds() * S.engagementBonus));
-  S.nextAdAt = Date.now() + gap * 1000;
+function scheduleNext(from = Date.now()) {
+  const gap = Math.max(
+    HARD_MIN_GAP_SEC,
+    Math.min(MAX_GAP_SEC, baseGapSeconds() * S.engagementBonus),
+  );
+  const slots = readSlots();
+  slots.nextAt = from + gap * 1000;
+  writeSlots(slots);
+  return gap;
 }
 
-/** Should we release an ad right now? */
+/** Should we release an ad right now? Every brake must agree. */
 export function adSlotReady() {
   tick();
-  if (!S.nextAdAt) {
-    // First ad of the session — give the user a calm warm-up window.
-    S.nextAdAt = S.startedAt + rand(45, 90) * 1000;
+  const slots = readSlots();
+  const now = Date.now();
+
+  // Warm-up window for the very first ad of a session (persisted, so a
+  // page refresh cannot be used to skip it).
+  if (!slots.nextAt) {
+    slots.nextAt = now + rand(60, 120) * 1000;
+    writeSlots(slots);
+    return false;
   }
-  if (Date.now() < S.nextAdAt) return false;
-  if (S.adsShown >= sessionCap()) return false;
+
+  if (now < slots.nextAt) return false;                                   // adaptive gap
+  const last = slots.ts.length ? slots.ts[slots.ts.length - 1] : 0;
+  if (last && now - last < HARD_MIN_GAP_SEC * 1000) return false;         // hard floor
+  if (countWithin(slots.ts, 3_600_000) >= HOURLY_CAP) return false;       // rolling hour
+  if (countWithin(slots.ts, 86_400_000) >= DAILY_CAP) return false;       // rolling day
+  if (S.adsShown >= sessionCap()) return false;                           // session curve
   return true;
 }
 
 export function noteAdShown() {
+  const now = Date.now();
   S.adsShown += 1;
-  S.lastAdAt = Date.now();
-  scheduleNext();
+  S.lastAdAt = now;
+  const slots = readSlots();
+  slots.ts.push(now);
+  writeSlots(slots);
+  scheduleNext(now);
   try {
     void runTransaction(ref(db, `analytics/ads/${todayKey()}/player/shown`), (v) => (Number(v) || 0) + 1);
   } catch {}
@@ -206,8 +266,8 @@ export function noteAdShown() {
 export function noteAdDwell(seconds: number) {
   if (seconds >= 10) S.engagementBonus = Math.min(2.2, S.engagementBonus * 1.35);
   else if (seconds >= 5) S.engagementBonus = Math.min(2.2, S.engagementBonus * 1.1);
-  else S.engagementBonus = Math.max(0.7, S.engagementBonus * 0.85);
-  scheduleNext();
+  else S.engagementBonus = Math.max(0.85, S.engagementBonus * 0.9);
+  scheduleNext(S.lastAdAt || Date.now());
   try {
     const bucket = seconds >= 10 ? "full" : seconds >= 5 ? "partial" : "quick";
     void runTransaction(ref(db, `analytics/ads/${todayKey()}/dwell/${bucket}`), (v) => (Number(v) || 0) + 1);
@@ -217,11 +277,14 @@ export function noteAdDwell(seconds: number) {
 
 export function adPacingSnapshot() {
   tick();
+  const slots = readSlots();
   return {
     sessionMinutes: S.activeMs / 60_000,
     adsShown: S.adsShown,
     cap: sessionCap(),
-    nextAdInSec: Math.max(0, Math.round((S.nextAdAt - Date.now()) / 1000)),
+    lastHour: countWithin(slots.ts, 3_600_000),
+    hourlyCap: HOURLY_CAP,
+    nextAdInSec: Math.max(0, Math.round((slots.nextAt - Date.now()) / 1000)),
     engagementBonus: S.engagementBonus,
     newUser: accountAgeDays() < 4,
   };
