@@ -244,6 +244,20 @@ const VideoEngagement = ({ animeId, title }: Props) => {
       setReplyingTo(null);
       setExpandedReplies((prev) => ({ ...prev, [parent.id]: true }));
 
+      import("@/lib/telegramCommentBridge").then((m) =>
+        m.forwardCommentToTelegram({
+          animeId,
+          commentId: node.key || "",
+          userId: user!.id,
+          userName: user!.name,
+          isGuest: /^guest/i.test(user!.id) || /^guest/i.test(user!.name),
+          text,
+          title,
+          parentId: parent.id,
+        }),
+      ).catch(() => {});
+
+
       // Notify parent-comment owner (skip self-reply)
       if (parent.uid && parent.uid !== user!.id) {
         notifyReplyOwner({
