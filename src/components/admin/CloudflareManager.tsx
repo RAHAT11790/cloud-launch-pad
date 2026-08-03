@@ -570,8 +570,42 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
           </span>
         </div>
 
+        {(detectedEnv.required.length > 0 || detectedEnv.optional.length > 0) && (
+          <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-3 space-y-2">
+            <div className="text-[11px] font-semibold text-orange-200">
+              Detected in code — tap a name to fill the key field
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {detectedEnv.required.map((n) => {
+                const done = setSecretNames.has(n);
+                return (
+                  <button key={n} onClick={() => setSecretDraftKey(n)}
+                    className={`font-mono text-[10px] px-2 py-1 rounded-lg border transition ${
+                      done
+                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                        : "bg-rose-500/10 text-rose-200 border-rose-500/30 hover:bg-rose-500/20"
+                    }`}>
+                    {done ? "✔" : "•"} {n}
+                  </button>
+                );
+              })}
+              {detectedEnv.optional.map((n) => (
+                <button key={n} onClick={() => setSecretDraftKey(n)}
+                  className={`font-mono text-[10px] px-2 py-1 rounded-lg border transition ${
+                    setSecretNames.has(n)
+                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                      : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10"
+                  }`}>
+                  {setSecretNames.has(n) ? "✔" : "○"} {n} <span className="opacity-60">opt</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {selected ? (
           <>
+
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
               <input value={secretDraftKey} onChange={(e) => setSecretDraftKey(e.target.value.toUpperCase())}
                 placeholder="KEY_NAME" className={inputClass + " font-mono text-[12px]"} />
