@@ -15,6 +15,9 @@ import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurren
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import VideoReactionsBar from "@/components/VideoReactionsBar";
+import SocialBarAdSlot from "@/components/SocialBarAdSlot";
+import { runAdGate, explainAdGate } from "@/lib/adEngagement";
+
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 import { optimizedImageUrl } from "@/lib/imageCache";
