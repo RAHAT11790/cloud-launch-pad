@@ -22,7 +22,7 @@ async function call(path: string, key: string, qs = "") {
 }
 
 const isDate = (s: unknown) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
-const ALLOWED_GROUPS = new Set(["date", "placement", "country", "os", "device", "device_format"]);
+const ALLOWED_GROUPS = new Set(["date", "placement", "country", "domain"]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -65,12 +65,11 @@ Deno.serve(async (req) => {
         groups.forEach((g) => qs.append("group_by[]", g));
         return call("stats.json", key, qs.toString());
       };
-      const [byDate, byPlacement, byCountry, byOs, byDevice, meta, placements] = await Promise.all([
+      const [byDate, byPlacement, byCountry, byDomain, meta, placements] = await Promise.all([
         build(["date", "placement"]),
         build(["placement"]),
         build(["country", "placement"]),
-        build(["os"]),
-        build(["device_format"]).catch(() => ({ items: [] })),
+        build(["domain"]),
         call("domains.json", key),
         call("placements.json", key),
       ]);
@@ -78,8 +77,7 @@ Deno.serve(async (req) => {
         byDate: byDate.items ?? [],
         byPlacement: byPlacement.items ?? [],
         byCountry: byCountry.items ?? [],
-        byOs: byOs.items ?? [],
-        byDevice: byDevice.items ?? [],
+        byDomain: byDomain.items ?? [],
         domains: meta.items ?? [],
         placements: placements.items ?? [],
         lastUpdate: byDate.dbLastUpdateTime ?? null,
