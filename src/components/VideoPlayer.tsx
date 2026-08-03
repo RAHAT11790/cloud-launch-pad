@@ -15,7 +15,7 @@ import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurren
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import VideoReactionsBar from "@/components/VideoReactionsBar";
-import { runAdGate, explainAdGate } from "@/lib/adEngagement";
+import { fireAdOnly } from "@/lib/adEngagement";
 
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
@@ -1428,23 +1428,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setSheetOrigin(origin);
   }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
 
-  // Download is sponsor-gated: one pop-under, 5s dwell, clear feedback.
-  // Premium users and repeat opens inside the same session skip the gate.
-  const openDownloadWithAd = useCallback(async () => {
-    if (adGateBusy) return;
-    if (isPremium || downloadAdPassedRef.current) { openInlineSheet("download", "download"); return; }
-    setAdGateBusy(true);
-    try {
-      const result = await runAdGate({ minSeconds: 5, reason: "download", isPremium });
-      explainAdGate(result, 5);
-      if (result === "counted" || result === "disabled" || result === "premium") {
-        downloadAdPassedRef.current = true;
-        openInlineSheet("download", "download");
-      }
-    } finally {
-      setAdGateBusy(false);
+  // Download opens instantly. A single pop-under fires alongside it (optional,
+  // never blocking) so the sponsor still gets a chance to count.
+  const openDownloadWithAd = useCallback(() => {
+    if (!isPremium && !downloadAdPassedRef.current) {
+      downloadAdPassedRef.current = true;
+      fireAdOnly("download", isPremium);
     }
-  }, [adGateBusy, isPremium, openInlineSheet]);
+    openInlineSheet("download", "download");
+  }, [isPremium, openInlineSheet]);
 
 
 
@@ -5359,7 +5351,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <span>Share</span>
               </button>
               {!isAnimeSaltContent && (
-                <button onClick={() => { void openDownloadWithAd(); }} disabled={adGateBusy} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <button onClick={() => { openDownloadWithAd(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                   {adGateBusy ? <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin" /> : <Download className="w-3 h-3 flex-shrink-0" />}
                   <span className="truncate">{adGateBusy ? 'Verifying…' : 'Download'}</span>
                 </button>
@@ -6217,6 +6209,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             onClick={() => {
                               const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
                               if (!preferred) return;
+                              fireAdOnly("download-start", isPremium);
                               if (hasMultiEpisodes) startSelectedDownloads(preferred);
                               else startMovieDownload(preferred);
                             }}
