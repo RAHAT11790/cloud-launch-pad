@@ -2,15 +2,14 @@
 // Master Ad Pacing Engine (v2 — hard-capped)
 // --------------------------------------------
 // Owner targets (must never be exceeded):
-//   • 20–25 pop-unders per HOUR maximum
-//   • ~5–6 ads inside a 24-minute episode
-//   • never below a 2.5 minute gap between two ads
+//   • never more than 50 pop-unders per rolling hour
+//   • never below a 1 minute gap between two ads
 //   • the Adsterra script must survive a full 3h session (no burst → no
 //     network-side cool-down that kills every later call)
 //
 // How it is enforced (three independent brakes, all must pass):
-//   1. HARD_MIN_GAP_SEC  — absolute floor between two ads (150s)
-//   2. Rolling 60-minute window cap (HOURLY_CAP = 22) — survives reloads
+//   1. HARD_MIN_GAP_SEC  — absolute floor between two ads (60s)
+//   2. Rolling 60-minute window cap (HOURLY_CAP = 50) — survives reloads
 //      because ad timestamps are persisted in localStorage
 //   3. Adaptive gap based on the user's watch profile + engagement:
 //        new user (<4d)     → 5–7 min
@@ -192,7 +191,7 @@ function baseGapSeconds() {
   const avgMin = avgDailySeconds() / 60;
 
   // Window is always 60s–120s. Only the position inside that window changes.
-  if (ageDays < 4) return rand(75, 120);      // new user → lightest load
+  if (ageDays < 4) return rand(90, 120);      // new user → lightest load
   if (avgMin >= 120) return rand(60, 120);    // heavy watcher
   if (avgMin >= 60) return rand(50, 110);     // medium
   if (avgMin >= 25) return rand(40, 100);     // casual

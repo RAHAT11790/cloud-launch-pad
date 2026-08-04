@@ -41,10 +41,6 @@ declare global {
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
     __adsterraOpenOriginal?: Window["open"];
-    __adsterraPendingPopunderUrl?: string;
-    __adsterraPendingPopunderSnippet?: string;
-    __adsterraGestureBridgeInstalled?: boolean;
-
   }
 }
 
@@ -402,41 +398,6 @@ function clearContainer() {
   }
 }
 
-function extractDirectUrl(snippet: string) {
-  const trimmed = String(snippet || "").trim();
-  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) return trimmed;
-  const match = trimmed.match(/https?:\/\/[^'"\s<>]+/i);
-  return match?.[0] || "";
-}
-
-function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
-  if (typeof window === "undefined") return;
-  if (!cfg.popunder.trim()) return;
-  window.__adsterraPendingPopunderUrl = extractDirectUrl(cfg.popunder);
-  window.__adsterraPendingPopunderSnippet = cfg.popunder;
-}
-
-function installPopunderGestureBridge() {
-  if (typeof window === "undefined") return;
-  if (window.__adsterraGestureBridgeInstalled) return;
-  window.__adsterraGestureBridgeInstalled = true;
-  const handler = () => {
-    const url = window.__adsterraPendingPopunderUrl;
-    const snippet = window.__adsterraPendingPopunderSnippet;
-    if (!url && !snippet) return;
-    window.__adsterraPendingPopunderUrl = undefined;
-    window.__adsterraPendingPopunderSnippet = undefined;
-    if (snippet && !/^https?:\/\//i.test(snippet.trim())) {
-      try { injectSnippet(snippet, ensureContainer()); } catch {}
-      return;
-    }
-    if (url) triggerPopunderUrl(url);
-  };
-  window.addEventListener("pointerup", handler, { capture: true, passive: true });
-  window.addEventListener("touchend", handler, { capture: true, passive: true });
-  window.addEventListener("click", handler, { capture: true, passive: true });
-}
-
 async function injectOnce(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -523,8 +484,6 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastLoadAt = undefined;
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
-  window.__adsterraPendingPopunderUrl = undefined;
-  window.__adsterraPendingPopunderSnippet = undefined;
 }
 
 /**
