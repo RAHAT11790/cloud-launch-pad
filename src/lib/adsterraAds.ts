@@ -12,14 +12,14 @@
 // New strategy:
 //   • Parse the admin-saved <script> snippet, recreate real <script>
 //     elements, and append them to a normal <div> inside <body>.
-//   • Player clicks inject both configured placements: Stream/Social/Push link
-//     and One-Click Popunder. No app-level cooldown is applied.
+//   • Player clicks inject the configured One-Click Popunder at most once per
+//     minute. The lock is persisted so focus/return/reload cannot bypass it.
 //   • A MutationObserver tracks every node Adsterra adds to <body> while
 //     the player is open, so when the player closes we can rip every
 //     ad-injected node out (kills leftover social bars, popunder hooks).
 //   • Live config subscription: changes to settings/adsterra in Firebase
 //     are picked up immediately and re-mounted.
-//   • No timer cooldown: every player tap can request a fresh ad call.
+//   • The app never closes an opened sponsor tab or tears down a live cycle.
 // ============================================
 import { db, ref, get, onValue } from "@/lib/firebase";
 
@@ -63,6 +63,26 @@ const DEFAULT: AdsterraConfig = {
   pushNotification: "",
   refreshIntervalSec: 50,
 };
+
+const AD_FIRE_LOCK_KEY = "rs_adsterra_last_fire_v3";
+export const AD_FIRE_MIN_GAP_MS = 60_000;
+
+function reserveAdFire(): boolean {
+  if (typeof window === "undefined") return false;
+  const now = Date.now();
+  try {
+    const last = Number(localStorage.getItem(AD_FIRE_LOCK_KEY)) || 0;
+    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+    // Reserve before loading any remote script. This makes rapid touch/click,
+    // focus return, duplicate React handlers, and reloads share one hard lock.
+    localStorage.setItem(AD_FIRE_LOCK_KEY, String(now));
+  } catch {
+    const last = window.__adsterraLastPopAt || 0;
+    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+  }
+  window.__adsterraLastPopAt = now;
+  return true;
+}
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
@@ -433,8 +453,6 @@ async function injectOnce(cfg: AdsterraConfig) {
   const container = ensureContainer();
   startObserver();
 
-  prewarmPopunderForNextGesture(cfg);
-
   const pending: Promise<void>[] = [];
   // Social bar is a persistent placement — inject it once per session only.
   // Re-injecting it on every cycle is what made it fire "second by second".
@@ -483,8 +501,6 @@ export function enterAdsterraPlayerScope() {
   removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
-  installPopunderGestureBridge();
-
 }
 
 export function exitAdsterraPlayerScope() {
@@ -516,12 +532,14 @@ export function exitAdsterraPlayerScope() {
  * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
  * so the ad script is never hammered into a permanent network cool-down.
  */
-export async function loadAdsterraSlots(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive) return;
-  if (window.__adsterraPremium) return;
+export async function loadAdsterraSlots(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (!window.__adsterraPlayerScopeActive) return false;
+  if (window.__adsterraPremium) return false;
 
   const cfg = await getAdsterraConfig();
+  if (!cfg.enabled || !cfg.popunder.trim()) return false;
+  if (!reserveAdFire()) return false;
   const json = JSON.stringify(cfg);
 
   if (!window.__adsterraConfigUnsub) {
@@ -532,11 +550,13 @@ export async function loadAdsterraSlots(): Promise<void> {
   }
 
   if (window.__adsterraMountPromise) {
-    return window.__adsterraMountPromise;
+    await window.__adsterraMountPromise;
+    return false;
   }
 
   window.__adsterraLastConfigJson = json;
   await mountAdCycle(cfg);
+  return true;
 }
 
 /**
@@ -559,18 +579,18 @@ export function clearAdsterraWindow() {
  *     attaches to this gesture.
  * Never calls window.open() with a non-URL string.
  */
-export async function firePopunderAd(): Promise<void> {
-  if (typeof window === "undefined") return;
+export async function firePopunderAd(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
   try {
     const cfg = await getAdsterraConfig();
-    if (!cfg.enabled) return;
+    if (!cfg.enabled) return false;
     const snippet = (cfg.popunder || "").trim();
-    if (!snippet) return;
+    if (!snippet) return false;
+    if (!reserveAdFire()) return false;
 
     if (/^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<")) {
       window.open(snippet, "_blank", "noopener,noreferrer");
-      try { window.focus(); } catch {}
-      return;
+      return true;
     }
 
     const tmp = document.createElement("div");
@@ -587,5 +607,8 @@ export async function firePopunderAd(): Promise<void> {
         document.body.appendChild(node);
       }
     });
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }

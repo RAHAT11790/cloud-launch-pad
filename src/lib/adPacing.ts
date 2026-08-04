@@ -30,12 +30,12 @@ const LS_KEY = "rs_ad_profile_v1";
 const LS_SLOTS = "rs_ad_slots_v2";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-/** Absolute floor between two ads (seconds). 150s → max 24 ads/hour. */
-export const HARD_MIN_GAP_SEC = 30;
+/** Absolute persisted floor: never more than one player ad per minute. */
+export const HARD_MIN_GAP_SEC = 60;
 /** Ceiling for a single gap (seconds). */
 export const MAX_GAP_SEC = 120;
 /** Rolling 60-minute cap. */
-export const HOURLY_CAP = 55;
+export const HOURLY_CAP = 50;
 /** Rolling 24-hour cap (safety net for all-day users). */
 export const DAILY_CAP = 400;
 
@@ -191,12 +191,12 @@ function baseGapSeconds() {
   const ageDays = accountAgeDays();
   const avgMin = avgDailySeconds() / 60;
 
-  // Window is always 30s–120s. Only the position inside that window changes.
+  // Window is always 60s–120s. Only the position inside that window changes.
   if (ageDays < 4) return rand(75, 120);      // new user → lightest load
   if (avgMin >= 120) return rand(60, 120);    // heavy watcher
   if (avgMin >= 60) return rand(50, 110);     // medium
   if (avgMin >= 25) return rand(40, 100);     // casual
-  return rand(30, 90);                        // short sessions
+  return rand(60, 90);                        // short sessions
 }
 
 function sessionCap() {
