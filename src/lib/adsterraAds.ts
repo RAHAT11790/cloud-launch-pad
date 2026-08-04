@@ -41,6 +41,7 @@ declare global {
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
     __adsterraOpenOriginal?: Window["open"];
+    __adsterraPopunderMounted?: boolean;
   }
 }
 
@@ -407,10 +408,6 @@ async function injectOnce(cfg: AdsterraConfig) {
     return;
   }
 
-  // Full teardown of previous cycle (both our container AND anything ad
-  // scripts injected into body during the last cycle).
-  dismissVisibleAds(false);
-
   const container = ensureContainer();
   startObserver();
 
@@ -421,7 +418,14 @@ async function injectOnce(cfg: AdsterraConfig) {
     (window as any).__adsterraSocialDone = true;
     pending.push(...injectSnippet(cfg.streamLink, container));
   }
-  pending.push(...injectSnippet(cfg.popunder, container));
+  // A popunder tag registers document-level click listeners. Re-injecting the
+  // same tag every cycle stacks those listeners and makes one tap open many
+  // ads. Mount it exactly once per page session and let the network's own tag
+  // handle subsequent eligible clicks/frequency capping.
+  if (!window.__adsterraPopunderMounted) {
+    window.__adsterraPopunderMounted = true;
+    pending.push(...injectSnippet(cfg.popunder, container));
+  }
   if (pending.length) {
     await Promise.allSettled(pending);
   }
@@ -498,6 +502,7 @@ export async function loadAdsterraSlots(): Promise<boolean> {
 
   const cfg = await getAdsterraConfig();
   if (!cfg.enabled || !cfg.popunder.trim()) return false;
+  if (window.__adsterraPopunderMounted) return false;
   if (!reserveAdFire()) return false;
   const json = JSON.stringify(cfg);
 
@@ -545,13 +550,16 @@ export async function firePopunderAd(): Promise<boolean> {
     if (!cfg.enabled) return false;
     const snippet = (cfg.popunder || "").trim();
     if (!snippet) return false;
+    const isDirectUrl = /^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<");
+    if (!isDirectUrl && window.__adsterraPopunderMounted) return false;
     if (!reserveAdFire()) return false;
 
-    if (/^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<")) {
+    if (isDirectUrl) {
       window.open(snippet, "_blank", "noopener,noreferrer");
       return true;
     }
 
+    window.__adsterraPopunderMounted = true;
     const tmp = document.createElement("div");
     tmp.innerHTML = snippet;
     Array.from(tmp.childNodes).forEach((node) => {
