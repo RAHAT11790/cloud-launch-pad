@@ -241,7 +241,9 @@ function installPopunderThrottle() {
         urlStr.startsWith("mailto:") ||
         urlStr.startsWith("tel:") ||
         urlStr.startsWith(location.origin);
-      if (!isAppUrl) window.__adsterraLastPopAt = Date.now();
+      if (!isAppUrl && window.__adsterraPlayerScopeActive) {
+        if (!reserveAdFire()) return null;
+      }
     } catch {}
     return origOpen(url as any, target as any, features as any);
   } as typeof window.open;
@@ -503,7 +505,6 @@ export async function loadAdsterraSlots(): Promise<boolean> {
   const cfg = await getAdsterraConfig();
   if (!cfg.enabled || !cfg.popunder.trim()) return false;
   if (window.__adsterraPopunderMounted) return false;
-  if (!reserveAdFire()) return false;
   const json = JSON.stringify(cfg);
 
   if (!window.__adsterraConfigUnsub) {
@@ -555,7 +556,8 @@ export async function firePopunderAd(): Promise<boolean> {
     if (!reserveAdFire()) return false;
 
     if (isDirectUrl) {
-      window.open(snippet, "_blank", "noopener,noreferrer");
+      const opener = window.__adsterraOpenOriginal || window.open;
+      opener?.(snippet, "_blank", "noopener,noreferrer");
       return true;
     }
 
