@@ -52,7 +52,7 @@ describe("ad pacing engine", () => {
     }
   });
 
-  it("shows roughly 12-24 ads during a 24 minute episode (returning user)", async () => {
+  it("keeps a 24 minute episode below one ad per minute", async () => {
     // Returning user profile: 90 min/day average, account older than 4 days.
     localStorage.setItem(
       "rs_ad_profile_v1",
@@ -62,18 +62,18 @@ describe("ad pacing engine", () => {
       }),
     );
     const { stamps } = await simulate(24, 5, 3);
-    expect(stamps.length).toBeGreaterThanOrEqual(8);
-    expect(stamps.length).toBeLessThanOrEqual(26);
+    expect(stamps.length).toBeGreaterThanOrEqual(5);
+    expect(stamps.length).toBeLessThanOrEqual(24);
   });
 
   it("gives brand-new users the lightest load", async () => {
     const { stamps } = await simulate(60, 5, 3);
-    expect(stamps.length).toBeLessThanOrEqual(50);
+    expect(stamps.length).toBeLessThanOrEqual(40);
   });
 
-  it("keeps a 3 hour session under 60 ads/hour on average", async () => {
+  it("keeps a 3 hour session under 50 ads/hour on average", async () => {
     const { stamps } = await simulate(180, 5, 3);
-    expect(stamps.length / 3).toBeLessThanOrEqual(60);
+    expect(stamps.length / 3).toBeLessThanOrEqual(50);
     expect(stamps.length).toBeGreaterThan(5); // engine must not die mid-session
   });
 
@@ -83,6 +83,6 @@ describe("ad pacing engine", () => {
     // "reload": fresh module instance, same localStorage
     const second = await simulate(10, 5, 3);
     const total = before + second.stamps.length;
-    expect(total).toBeLessThanOrEqual(56); // still inside the rolling hour cap
+    expect(total).toBeLessThanOrEqual(50); // still inside the rolling hour cap
   });
 });

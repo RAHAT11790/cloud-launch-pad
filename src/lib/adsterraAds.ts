@@ -12,14 +12,14 @@
 // New strategy:
 //   • Parse the admin-saved <script> snippet, recreate real <script>
 //     elements, and append them to a normal <div> inside <body>.
-//   • Player clicks inject both configured placements: Stream/Social/Push link
-//     and One-Click Popunder. No app-level cooldown is applied.
+//   • Player clicks inject the configured One-Click Popunder at most once per
+//     minute. The lock is persisted so focus/return/reload cannot bypass it.
 //   • A MutationObserver tracks every node Adsterra adds to <body> while
 //     the player is open, so when the player closes we can rip every
 //     ad-injected node out (kills leftover social bars, popunder hooks).
 //   • Live config subscription: changes to settings/adsterra in Firebase
 //     are picked up immediately and re-mounted.
-//   • No timer cooldown: every player tap can request a fresh ad call.
+//   • The app never closes an opened sponsor tab or tears down a live cycle.
 // ============================================
 import { db, ref, get, onValue } from "@/lib/firebase";
 
@@ -41,10 +41,7 @@ declare global {
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
     __adsterraOpenOriginal?: Window["open"];
-    __adsterraPendingPopunderUrl?: string;
-    __adsterraPendingPopunderSnippet?: string;
-    __adsterraGestureBridgeInstalled?: boolean;
-
+    __adsterraPopunderMounted?: boolean;
   }
 }
 
@@ -63,6 +60,26 @@ const DEFAULT: AdsterraConfig = {
   pushNotification: "",
   refreshIntervalSec: 50,
 };
+
+const AD_FIRE_LOCK_KEY = "rs_adsterra_last_fire_v3";
+export const AD_FIRE_MIN_GAP_MS = 60_000;
+
+function reserveAdFire(): boolean {
+  if (typeof window === "undefined") return false;
+  const now = Date.now();
+  try {
+    const last = Number(localStorage.getItem(AD_FIRE_LOCK_KEY)) || 0;
+    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+    // Reserve before loading any remote script. This makes rapid touch/click,
+    // focus return, duplicate React handlers, and reloads share one hard lock.
+    localStorage.setItem(AD_FIRE_LOCK_KEY, String(now));
+  } catch {
+    const last = window.__adsterraLastPopAt || 0;
+    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+  }
+  window.__adsterraLastPopAt = now;
+  return true;
+}
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
@@ -224,7 +241,9 @@ function installPopunderThrottle() {
         urlStr.startsWith("mailto:") ||
         urlStr.startsWith("tel:") ||
         urlStr.startsWith(location.origin);
-      if (!isAppUrl) window.__adsterraLastPopAt = Date.now();
+      if (!isAppUrl && window.__adsterraPlayerScopeActive) {
+        if (!reserveAdFire()) return null;
+      }
     } catch {}
     return origOpen(url as any, target as any, features as any);
   } as typeof window.open;
@@ -382,41 +401,6 @@ function clearContainer() {
   }
 }
 
-function extractDirectUrl(snippet: string) {
-  const trimmed = String(snippet || "").trim();
-  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) return trimmed;
-  const match = trimmed.match(/https?:\/\/[^'"\s<>]+/i);
-  return match?.[0] || "";
-}
-
-function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
-  if (typeof window === "undefined") return;
-  if (!cfg.popunder.trim()) return;
-  window.__adsterraPendingPopunderUrl = extractDirectUrl(cfg.popunder);
-  window.__adsterraPendingPopunderSnippet = cfg.popunder;
-}
-
-function installPopunderGestureBridge() {
-  if (typeof window === "undefined") return;
-  if (window.__adsterraGestureBridgeInstalled) return;
-  window.__adsterraGestureBridgeInstalled = true;
-  const handler = () => {
-    const url = window.__adsterraPendingPopunderUrl;
-    const snippet = window.__adsterraPendingPopunderSnippet;
-    if (!url && !snippet) return;
-    window.__adsterraPendingPopunderUrl = undefined;
-    window.__adsterraPendingPopunderSnippet = undefined;
-    if (snippet && !/^https?:\/\//i.test(snippet.trim())) {
-      try { injectSnippet(snippet, ensureContainer()); } catch {}
-      return;
-    }
-    if (url) triggerPopunderUrl(url);
-  };
-  window.addEventListener("pointerup", handler, { capture: true, passive: true });
-  window.addEventListener("touchend", handler, { capture: true, passive: true });
-  window.addEventListener("click", handler, { capture: true, passive: true });
-}
-
 async function injectOnce(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -426,14 +410,8 @@ async function injectOnce(cfg: AdsterraConfig) {
     return;
   }
 
-  // Full teardown of previous cycle (both our container AND anything ad
-  // scripts injected into body during the last cycle).
-  dismissVisibleAds(false);
-
   const container = ensureContainer();
   startObserver();
-
-  prewarmPopunderForNextGesture(cfg);
 
   const pending: Promise<void>[] = [];
   // Social bar is a persistent placement — inject it once per session only.
@@ -442,7 +420,14 @@ async function injectOnce(cfg: AdsterraConfig) {
     (window as any).__adsterraSocialDone = true;
     pending.push(...injectSnippet(cfg.streamLink, container));
   }
-  pending.push(...injectSnippet(cfg.popunder, container));
+  // A popunder tag registers document-level click listeners. Re-injecting the
+  // same tag every cycle stacks those listeners and makes one tap open many
+  // ads. Mount it exactly once per page session and let the network's own tag
+  // handle subsequent eligible clicks/frequency capping.
+  if (!window.__adsterraPopunderMounted) {
+    window.__adsterraPopunderMounted = true;
+    pending.push(...injectSnippet(cfg.popunder, container));
+  }
   if (pending.length) {
     await Promise.allSettled(pending);
   }
@@ -483,8 +468,6 @@ export function enterAdsterraPlayerScope() {
   removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
-  installPopunderGestureBridge();
-
 }
 
 export function exitAdsterraPlayerScope() {
@@ -507,8 +490,6 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastLoadAt = undefined;
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
-  window.__adsterraPendingPopunderUrl = undefined;
-  window.__adsterraPendingPopunderSnippet = undefined;
 }
 
 /**
@@ -516,12 +497,14 @@ export function exitAdsterraPlayerScope() {
  * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
  * so the ad script is never hammered into a permanent network cool-down.
  */
-export async function loadAdsterraSlots(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive) return;
-  if (window.__adsterraPremium) return;
+export async function loadAdsterraSlots(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (!window.__adsterraPlayerScopeActive) return false;
+  if (window.__adsterraPremium) return false;
 
   const cfg = await getAdsterraConfig();
+  if (!cfg.enabled || !cfg.popunder.trim()) return false;
+  if (window.__adsterraPopunderMounted) return false;
   const json = JSON.stringify(cfg);
 
   if (!window.__adsterraConfigUnsub) {
@@ -532,11 +515,13 @@ export async function loadAdsterraSlots(): Promise<void> {
   }
 
   if (window.__adsterraMountPromise) {
-    return window.__adsterraMountPromise;
+    await window.__adsterraMountPromise;
+    return false;
   }
 
   window.__adsterraLastConfigJson = json;
   await mountAdCycle(cfg);
+  return true;
 }
 
 /**
@@ -559,20 +544,24 @@ export function clearAdsterraWindow() {
  *     attaches to this gesture.
  * Never calls window.open() with a non-URL string.
  */
-export async function firePopunderAd(): Promise<void> {
-  if (typeof window === "undefined") return;
+export async function firePopunderAd(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
   try {
     const cfg = await getAdsterraConfig();
-    if (!cfg.enabled) return;
+    if (!cfg.enabled) return false;
     const snippet = (cfg.popunder || "").trim();
-    if (!snippet) return;
+    if (!snippet) return false;
+    const isDirectUrl = /^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<");
+    if (!isDirectUrl && window.__adsterraPopunderMounted) return false;
+    if (!reserveAdFire()) return false;
 
-    if (/^https?:\/\/\S+$/i.test(snippet) && !snippet.includes("<")) {
-      window.open(snippet, "_blank", "noopener,noreferrer");
-      try { window.focus(); } catch {}
-      return;
+    if (isDirectUrl) {
+      const opener = window.__adsterraOpenOriginal || window.open;
+      opener?.(snippet, "_blank", "noopener,noreferrer");
+      return true;
     }
 
+    window.__adsterraPopunderMounted = true;
     const tmp = document.createElement("div");
     tmp.innerHTML = snippet;
     Array.from(tmp.childNodes).forEach((node) => {
@@ -587,5 +576,8 @@ export async function firePopunderAd(): Promise<void> {
         document.body.appendChild(node);
       }
     });
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
