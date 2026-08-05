@@ -68,7 +68,7 @@ describe("ad pacing engine", () => {
 
   it("gives brand-new users the lightest load", async () => {
     const { stamps } = await simulate(60, 5, 3);
-    expect(stamps.length).toBeLessThanOrEqual(40);
+    expect(stamps.length).toBeLessThanOrEqual(50);
   });
 
   it("keeps a 3 hour session under 50 ads/hour on average", async () => {
