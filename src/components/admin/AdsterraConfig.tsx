@@ -32,7 +32,7 @@ const FREE_PREMIUM_SLOTS: SlotDef[] = [
 // Warm-start cache — paints Adsterra config instantly on re-open.
 const CACHE_KEY = "rs_admin_adsterra_cache_v1";
 type CacheShape = {
-  vpEnabled: boolean; popunder: string; socialLink: string; cooldownSec: number;
+  vpEnabled: boolean; popunder: string; directLink: string; socialLink: string; cooldownSec: number;
 };
 let adsterraCache: CacheShape | null = (() => {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
@@ -45,6 +45,7 @@ const writeCache = (c: CacheShape) => {
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [vpEnabled, setVpEnabled] = useState<boolean>(adsterraCache?.vpEnabled ?? true);
   const [popunder, setPopunder] = useState<string>(adsterraCache?.popunder ?? "");
+  const [directLink, setDirectLink] = useState<string>(adsterraCache?.directLink ?? "");
   const [socialLink, setSocialLink] = useState<string>(adsterraCache?.socialLink ?? "");
   const [cooldownSec, setCooldownSec] = useState<number>(adsterraCache?.cooldownSec ?? 50);
   const [savingVp, setSavingVp] = useState(false);
@@ -64,7 +65,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       const p = pendingRef.current;
       if (p) {
         pendingRef.current = null;
-        setVpEnabled(p.vpEnabled); setPopunder(p.popunder);
+        setVpEnabled(p.vpEnabled); setPopunder(p.popunder); setDirectLink(p.directLink);
         setSocialLink(p.socialLink); setCooldownSec(p.cooldownSec);
       }
     }, 4000);
@@ -77,6 +78,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       const snapshot: CacheShape = {
         vpEnabled: v.enabled !== false,
         popunder: v.popunder || "",
+        directLink: v.directLink || "",
         socialLink: v.streamLink || v.socialLink || v.pushNotification || "",
         cooldownSec: Number.isFinite(cd) && cd >= 0 ? cd : 50,
       };
@@ -86,6 +88,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       } else {
         setVpEnabled(snapshot.vpEnabled);
         setPopunder(snapshot.popunder);
+        setDirectLink(snapshot.directLink);
         setSocialLink(snapshot.socialLink);
         setCooldownSec(snapshot.cooldownSec);
       }
@@ -109,10 +112,11 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const saveVideoPlayer = async () => {
     setSavingVp(true);
     try {
-      const cd = Math.max(0, Math.min(3600, Number(cooldownSec) || 0));
+      const cd = Math.max(10, Math.min(3600, Number(cooldownSec) || 60));
       await set(ref(db, "settings/adsterra"), {
         enabled: vpEnabled,
         popunder: popunder.trim(),
+        directLink: directLink.trim(),
         streamLink: socialLink.trim(),
         socialLink: socialLink.trim(),
         pushNotification: socialLink.trim(),
@@ -188,6 +192,17 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
 
         <div className="space-y-1.5 min-w-0">
           <div className="flex items-center gap-2">
+            <Link2 className="w-3.5 h-3.5 text-pink-300" />
+            <span className="text-[11px] font-semibold text-white/85">Direct Link (Anti-AdBlock backup)</span>
+          </div>
+          <textarea value={directLink} onChange={(e) => { markTyping(); setDirectLink(e.target.value); }} rows={2}
+            className={codeArea}
+            placeholder="https://valuationappeared.com/xxxxx?key=..." />
+          <p className="text-[10px] text-white/45">Used when the popunder script is blocked or already capped — keeps ads running all session.</p>
+        </div>
+
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2">
             <Radio className="w-3.5 h-3.5 text-fuchsia-300" />
             <span className="text-[11px] font-semibold text-white/85">Social Bar / In-Page Push</span>
           </div>
@@ -197,11 +212,16 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           <p className="text-[10px] text-white/45">Adsterra push notifications ship from the Social Bar placement.</p>
         </div>
 
-        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-2">
-          <p className="text-[11px] font-semibold text-emerald-200">Smart Pacing is ON</p>
-          <p className="text-[10px] text-white/55 mt-0.5">
-            Ad frequency is now automatic — based on each user's watch history, session length and how long they stay on the sponsor
-            (30s–6min gaps, ~20 ads / 30min, ~50 ads / 3h, new users get the lightest load). No manual cool-down needed.
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-emerald-300" />
+            <span className="text-[11px] font-semibold text-white/85">Ad Cool-down (seconds)</span>
+          </div>
+          <input type="number" min={10} max={3600} value={cooldownSec}
+            onChange={(e) => { markTyping(); setCooldownSec(Number(e.target.value)); }}
+            className={inputClass} />
+          <p className="text-[10px] text-white/45">
+            Minimum gap between two player ads. 60 = one ad per minute, all session long (new users get 1.5× this gap).
           </p>
         </div>
 

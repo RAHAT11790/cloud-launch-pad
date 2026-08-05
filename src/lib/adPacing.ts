@@ -24,6 +24,10 @@
 // (analytics/userActivity/<device>/<date>). Nothing of this is shown in UI.
 // ============================================
 import { db, ref, update, runTransaction } from "@/lib/firebase";
+import { getAdGapMs } from "@/lib/adsterraAds";
+
+/** Admin-panel cool-down (seconds) — falls back to the hard floor. */
+const adminGapSec = () => Math.max(10, Math.round(getAdGapMs() / 1000));
 
 const LS_KEY = "rs_ad_profile_v1";
 const LS_SLOTS = "rs_ad_slots_v2";
@@ -187,27 +191,19 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 /** Base gap (seconds) before the next pop-under may fire. */
 function baseGapSeconds() {
-  const ageDays = accountAgeDays();
-  const avgMin = avgDailySeconds() / 60;
-
-  // Window is always 60s–120s. Only the position inside that window changes.
-  if (ageDays < 4) return rand(90, 120);      // new user → lightest load
-  if (avgMin >= 120) return rand(60, 120);    // heavy watcher
-  if (avgMin >= 60) return rand(50, 110);     // medium
-  if (avgMin >= 25) return rand(40, 100);     // casual
-  return rand(60, 90);                        // short sessions
+  // The admin-panel cool-down is authoritative; new users just get a slightly
+  // lighter load on top of it.
+  const gap = adminGapSec();
+  return accountAgeDays() < 4 ? gap * 1.5 : gap;
 }
 
 function sessionCap() {
   const min = S.activeMs / 60_000;
-  return Math.min(120, 2 + Math.floor(min * 1.1));
+  return Math.min(400, 3 + Math.floor(min * 2));
 }
 
 function scheduleNext(from = Date.now()) {
-  const gap = Math.max(
-    HARD_MIN_GAP_SEC,
-    Math.min(MAX_GAP_SEC, baseGapSeconds() * S.engagementBonus),
-  );
+  const gap = Math.max(adminGapSec(), baseGapSeconds() * S.engagementBonus);
   const slots = readSlots();
   slots.nextAt = from + gap * 1000;
   writeSlots(slots);
@@ -223,14 +219,14 @@ export function adSlotReady() {
   // Warm-up window for the very first ad of a session (persisted, so a
   // page refresh cannot be used to skip it).
   if (!slots.nextAt) {
-    slots.nextAt = now + rand(20, 45) * 1000;
+    slots.nextAt = now + Math.min(20_000, adminGapSec() * 1000);
     writeSlots(slots);
     return false;
   }
 
   if (now < slots.nextAt) return false;                                   // adaptive gap
   const last = slots.ts.length ? slots.ts[slots.ts.length - 1] : 0;
-  if (last && now - last < HARD_MIN_GAP_SEC * 1000) return false;         // hard floor
+  if (last && now - last < adminGapSec() * 1000) return false;         // hard floor
   if (countWithin(slots.ts, 3_600_000) >= HOURLY_CAP) return false;       // rolling hour
   if (countWithin(slots.ts, 86_400_000) >= DAILY_CAP) return false;       // rolling day
   if (S.adsShown >= sessionCap()) return false;                           // session curve

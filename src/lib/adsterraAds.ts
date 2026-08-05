@@ -42,12 +42,16 @@ declare global {
     __adsterraOpenWrapped?: boolean;
     __adsterraOpenOriginal?: Window["open"];
     __adsterraPopunderMounted?: boolean;
+    __adsterraScriptOk?: boolean;
+    __adsterraPopFiredAt?: number;
+    __adsterraCycleCount?: number;
   }
 }
 
 export type AdsterraConfig = {
   enabled: boolean;
   popunder: string;
+  directLink: string;
   streamLink: string;
   pushNotification: string;
   refreshIntervalSec: number; // legacy only; player no longer uses cooldown timers
@@ -56,26 +60,40 @@ export type AdsterraConfig = {
 const DEFAULT: AdsterraConfig = {
   enabled: true,
   popunder: "",
+  directLink: "",
   streamLink: "",
   pushNotification: "",
   refreshIntervalSec: 50,
 };
 
 const AD_FIRE_LOCK_KEY = "rs_adsterra_last_fire_v3";
+const AD_GAP_KEY = "rs_adsterra_gap_sec";
 export const AD_FIRE_MIN_GAP_MS = 60_000;
+
+/** Admin-controlled cool-down (seconds) between two player ads. */
+export function getAdGapMs(): number {
+  try {
+    const v = Number(localStorage.getItem(AD_GAP_KEY));
+    if (Number.isFinite(v) && v >= 10) return Math.min(v, 3600) * 1000;
+  } catch {}
+  return AD_FIRE_MIN_GAP_MS;
+}
+function rememberAdGap(sec: number) {
+  try { if (Number.isFinite(sec) && sec >= 10) localStorage.setItem(AD_GAP_KEY, String(Math.min(sec, 3600))); } catch {}
+}
 
 function reserveAdFire(): boolean {
   if (typeof window === "undefined") return false;
   const now = Date.now();
   try {
     const last = Number(localStorage.getItem(AD_FIRE_LOCK_KEY)) || 0;
-    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+    if (now - last < getAdGapMs()) return false;
     // Reserve before loading any remote script. This makes rapid touch/click,
     // focus return, duplicate React handlers, and reloads share one hard lock.
     localStorage.setItem(AD_FIRE_LOCK_KEY, String(now));
   } catch {
     const last = window.__adsterraLastPopAt || 0;
-    if (now - last < AD_FIRE_MIN_GAP_MS) return false;
+    if (now - last < getAdGapMs()) return false;
   }
   window.__adsterraLastPopAt = now;
   return true;
@@ -89,10 +107,15 @@ function normalize(v: any): AdsterraConfig {
   return {
     enabled: v?.enabled !== false,
     popunder: typeof v?.popunder === "string" ? v.popunder : "",
+    directLink: typeof v?.directLink === "string" ? v.directLink : "",
     streamLink: typeof v?.streamLink === "string" ? v.streamLink : "",
     pushNotification: typeof v?.pushNotification === "string" ? v.pushNotification : "",
     refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 50,
   };
+}
+
+function noteConfigGap(cfg: AdsterraConfig) {
+  rememberAdGap(cfg.refreshIntervalSec || 60);
 }
 
 
@@ -106,6 +129,7 @@ export async function getAdsterraConfig(): Promise<AdsterraConfig> {
     } catch {
       cached = { ...DEFAULT };
     }
+    noteConfigGap(cached!);
     cachedPromise = null;
     return cached!;
   })();
@@ -115,6 +139,7 @@ export async function getAdsterraConfig(): Promise<AdsterraConfig> {
 export function subscribeAdsterraConfig(cb: (c: AdsterraConfig) => void) {
   return onValue(ref(db, "settings/adsterra"), (snap) => {
     cached = normalize(snap.val());
+    noteConfigGap(cached);
     cb(cached);
   });
 }
@@ -124,7 +149,7 @@ export function setAdsterraPremium(p: boolean) {
 }
 
 function hasSnippets(cfg: AdsterraConfig) {
-  return !!(cfg.popunder.trim() || cfg.streamLink.trim());
+  return !!(cfg.popunder.trim() || cfg.streamLink.trim() || cfg.directLink.trim());
 }
 
 function isOwnedNode(node: Node) {
@@ -243,6 +268,7 @@ function installPopunderThrottle() {
         urlStr.startsWith(location.origin);
       if (!isAppUrl && window.__adsterraPlayerScopeActive) {
         if (!reserveAdFire()) return null;
+        window.__adsterraPopFiredAt = Date.now();
       }
     } catch {}
     return origOpen(url as any, target as any, features as any);
@@ -380,8 +406,8 @@ function injectSnippet(snippet: string, container: HTMLElement) {
         resolve();
       };
       if (s.src) {
-        s.addEventListener("load", finish, { once: true });
-        s.addEventListener("error", finish, { once: true });
+        s.addEventListener("load", () => { window.__adsterraScriptOk = true; finish(); }, { once: true });
+        s.addEventListener("error", () => { window.__adsterraScriptOk = false; finish(); }, { once: true });
         window.setTimeout(finish, 8000);
       } else {
         queueMicrotask(finish);
@@ -580,4 +606,57 @@ export async function firePopunderAd(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+
+/**
+ * Anti-adblock release cycle.
+ *
+ * 1. The Adsterra anti-adblock popunder tag is mounted exactly once per page
+ *    session (re-injecting stacks click handlers → ad storms).
+ * 2. Every eligible click after the admin cool-down releases ONE ad:
+ *      • odd cycles → let the mounted popunder tag handle the click
+ *      • even cycles, or whenever the tag is blocked / did not fire →
+ *        open the Direct Link (smartlink) synchronously inside the gesture.
+ *    That way the user keeps seeing ads for hours even when the script is
+ *    blocked by an adblocker or throttled by the network's own frequency cap.
+ */
+export async function releaseAd(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (window.__adsterraPremium) return false;
+
+  const cfg = cached || (await getAdsterraConfig());
+  if (!cfg.enabled) return false;
+
+  const direct = (cfg.directLink || "").trim();
+  const script = (cfg.popunder || "").trim();
+  if (!direct && !script) return false;
+
+  const now = Date.now();
+  const lastPop = window.__adsterraPopFiredAt || 0;
+  if (now - lastPop < getAdGapMs()) return false;
+
+  const mounted = !!window.__adsterraPopunderMounted;
+  const scriptBlocked = window.__adsterraScriptOk === false;
+  const cycle = (window.__adsterraCycleCount ?? 0) + 1;
+
+  // Direct-link path — must run synchronously inside the user gesture.
+  const useDirect = !!direct && (scriptBlocked || !script || (mounted && cycle % 2 === 0));
+  if (useDirect) {
+    if (!reserveAdFire()) return false;
+    window.__adsterraCycleCount = cycle;
+    window.__adsterraPopFiredAt = Date.now();
+    const opener = window.__adsterraOpenOriginal || window.open;
+    try { opener?.(direct, "_blank", "noopener,noreferrer"); } catch { return false; }
+    return true;
+  }
+
+  if (!script) return false;
+  window.__adsterraCycleCount = cycle;
+  if (mounted) {
+    // Tag already handles this click itself.
+    window.__adsterraPopFiredAt = Date.now();
+    return true;
+  }
+  return loadAdsterraSlots();
 }
