@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import {
   enterAdsterraPlayerScope,
   exitAdsterraPlayerScope,
-  loadAdsterraSlots,
+  releaseAd,
   setAdsterraPremium,
+  subscribeAdsterraConfig,
 } from "@/lib/adsterraAds";
 import { stopAdGuard } from "@/lib/adGuard";
 import { adSlotReady, noteAdShown, startAdSession, stopAdSession } from "@/lib/adPacing";
@@ -28,6 +29,9 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
 
   useEffect(() => () => { stopAdSession(); }, []);
 
+  // Keep the admin cool-down mirrored locally so pacing follows the panel.
+  useEffect(() => subscribeAdsterraConfig(() => {}), []);
+
   useEffect(() => {
     if (isPremium === null || isPremium === undefined) return;
     setAdsterraPremium(!!isPremium);
@@ -39,7 +43,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
       if (!adSlotReady()) return;
       busy.current = true;
       try {
-        const fired = await loadAdsterraSlots();
+        const fired = await releaseAd();
         if (fired) noteAdShown();
       } catch {
         /* ignore */
