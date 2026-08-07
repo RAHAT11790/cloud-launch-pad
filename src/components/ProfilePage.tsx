@@ -1043,6 +1043,38 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     }
   };
 
+  const languages = ["Hindi", "English", "Bengali", "Tamil", "Telugu", "Malayalam", "Japanese"];
+  
+  const [allManualLanguages, setAllManualLanguages] = useState<string[]>([]);
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/languages"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        setAllManualLanguages(Object.values(data).map((v: any) => v.name || v).filter(Boolean));
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const availableLanguages = useMemo(() => {
+    const combined = [...new Set([...languages, ...allManualLanguages])];
+    return combined.sort();
+  }, [allManualLanguages]);
+
+  const qualities = ["Auto", "480p", "720p", "1080p", "4k"];
+
+  const saveLanguage = (lang: string) => {
+    setSelectedLanguage(lang);
+    localStorage.setItem("rs_language", lang);
+    toast.success(`Default language set to ${lang}`);
+  };
+
+  const saveQuality = (q: string) => {
+    setSelectedQuality(q);
+    localStorage.setItem("rs_quality", q);
+    toast.success(`Default quality set to ${q}`);
+  };
+
   // Settings Panel
   if (activePanel === "settings") {
     return (
