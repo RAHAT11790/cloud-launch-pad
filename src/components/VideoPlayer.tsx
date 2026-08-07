@@ -1893,16 +1893,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
 
       if (cur > 0 && dur > 0) {
-        // Build full episode context for database
-        const episodeInfo = (isAnimeSaltContent && seasons?.length) ? {
+        // Build full episode context for database to prevent "Season 1 Ep 3" fallback
+        const episodeInfo = {
           seasonIdx: currentSeasonIdx ?? 0,
-          epIdx: activeEpisodeIdx,
-          audioTrack: currentAudioTrack,
-          language: selectedLanguageLabel
-        } : {
-          seasonIdx: currentSeasonIdx ?? 0,
-          epIdx: activeEpisodeIdx,
-          language: selectedLanguageLabel
+          epIdx: currentEpisodeIdx ?? activeEpisodeIdx,
+          episodeNumber: episodeList?.[currentEpisodeIdx ?? activeEpisodeIdx]?.number || ((currentEpisodeIdx ?? activeEpisodeIdx) + 1),
+          audioTrack: currentLangLabel,
+          selectedLanguage: currentLangLabel
         };
 
         const progressData = {
@@ -1919,7 +1916,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         };
 
         if (uid) {
-          update(ref(db, `users/${uid}/continueWatching/${animeId}`), progressData);
+          // Sync with unified watchHistory path used by Index.tsx
+          update(ref(db, `users/${uid}/watchHistory/${animeId}`), progressData);
         } else {
           guestStore.continue.upsert({
             animeId: animeId,
@@ -1927,10 +1925,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             poster,
             position: cur,
             duration: dur,
-            seasonIdx: episodeInfo.seasonIdx,
-            epIdx: episodeInfo.epIdx,
-            updatedAt: now
-          } as any);
+            episodeInfo: {
+              seasonIdx: episodeInfo.seasonIdx,
+              epIdx: episodeInfo.epIdx,
+              episodeNumber: episodeInfo.episodeNumber,
+              audioTrack: currentLangLabel,
+              selectedLanguage: currentLangLabel
+            },
+            audioTrack: currentLangLabel,
+            selectedLanguage: currentLangLabel,
+            updatedAt: now,
+            source: isAnimeSaltContent ? 'animesalt' : 'rs'
+          });
         }
         onSaveProgress(cur, dur);
       }

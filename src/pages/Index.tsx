@@ -1515,7 +1515,7 @@ const Index = () => {
           // to prevent "Season 1 Ep 3" fallback when returning to a specific track.
           if (entryNewer) {
             // Merge metadata: keep latest watchedAt but ensure we don't lose the specific episode/audio info
-            merged.set(key, {
+            const mergedItem = {
               ...current,
               ...entry,
               watchedAt: entry.watchedAt || current.watchedAt,
@@ -1524,7 +1524,22 @@ const Index = () => {
               selectedLanguage: entry.selectedLanguage || current.selectedLanguage,
               currentTime: entryHasProgress ? entry.currentTime : current.currentTime,
               duration: entryHasProgress ? entry.duration : current.duration
-            });
+            };
+            
+            // Fix: if episodeInfo exists but is nested differently in some legacy entries
+            if (entry.episodeInfo) {
+              mergedItem.episodeInfo = entry.episodeInfo;
+            } else if (entry.seasonIdx !== undefined && entry.epIdx !== undefined) {
+              mergedItem.episodeInfo = {
+                seasonIdx: entry.seasonIdx,
+                epIdx: entry.epIdx,
+                episodeNumber: (entry.epIdx + 1),
+                audioTrack: entry.audioTrack,
+                selectedLanguage: entry.selectedLanguage
+              };
+            }
+            
+            merged.set(key, mergedItem);
             return;
           }
           if (entryHasProgress && !currentHasProgress) {
@@ -2381,11 +2396,12 @@ const Index = () => {
       }
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
-      if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
-      if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
-      if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
-      if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
+      
+      // Ensure quality options are populated correctly for all types
+      qualityOptions = getEpisodeQualityOptions(episode);
+      
       if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
+      
       if (isAnimeSaltContent) {
         const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
         if (directFromFirebase?.src) {
@@ -2394,7 +2410,7 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
-      } else if (hasMovieParts(anime)) {
+    } else if (hasMovieParts(anime)) {
         // Movie split into parts — pick the requested part (fallback to first)
         const partIdx = Math.max(0, resolvedEpIdx ?? 0);
         const part = (anime.parts as any[])[partIdx] || (anime.parts as any[])[0];

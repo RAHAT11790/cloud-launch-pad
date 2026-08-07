@@ -50,6 +50,16 @@ export interface GuestContinueItem {
   title?: string;
   poster?: string;
   updatedAt: number;
+  episodeInfo?: {
+    seasonIdx: number;
+    epIdx: number;
+    episodeNumber: number;
+    audioTrack?: string;
+    selectedLanguage?: string;
+  };
+  audioTrack?: string;
+  selectedLanguage?: string;
+  source?: string;
 }
 
 export const guestStore = {
