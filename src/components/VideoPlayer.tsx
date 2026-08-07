@@ -1921,7 +1921,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (uid) {
           update(ref(db, `users/${uid}/continueWatching/${animeId}`), progressData);
         } else {
-          guestStore.history.add(progressData);
+          guestStore.continue.upsert({
+            animeId: animeId,
+            title,
+            poster,
+            position: cur,
+            duration: dur,
+            seasonIdx: episodeInfo.seasonIdx,
+            epIdx: episodeInfo.epIdx,
+            updatedAt: now
+          } as any);
         }
         onSaveProgress(cur, dur);
       }
