@@ -338,11 +338,24 @@ const LANGUAGE_NAME_MAP: Record<string, string> = {
 export const normalizeLanguageName = (raw: string | undefined | null): string => {
   const s = String(raw || "").trim();
   if (!s) return "";
-  const key = s.toLowerCase().replace(/[^a-z]/g, "");
-  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+  const lower = s.toLowerCase();
   
-  // Custom / dubber names (e.g. "Atomic Dubber Hindi")
-  // If it's a multi-word string, ensure it's not just a broken code.
+  // Hard matches for common codes
+  const key = lower.replace(/[^a-z]/g, "");
+  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+
+  // Specific check for Atomic variants to prevent "Hindi atomic" -> "Hindi Atomic"
+  // and ensure consistent label matching
+  if (lower.includes("atomic")) {
+    const isHindi = lower.includes("hindi");
+    const isEnglish = lower.includes("english");
+    if (isHindi) return "Hindi Atomic";
+    if (isEnglish) return "English Atomic";
+    // General case: Atomic [Language]
+    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
+  
+  // Custom / dubber names
   if (/\s/.test(s)) {
     return s
       .split(/\s+/)
@@ -353,7 +366,7 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
       })
       .join(" ");
   }
-  
+
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
@@ -1243,11 +1256,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (isAnimeSaltContent && propAudioTracks?.length) {
       setSelectedLanguageLabel((existing) => {
         const prefLang = localStorage.getItem("rs_language") || "Hindi";
+        const normalizedPref = normalizeLanguageName(prefLang).toLowerCase();
         
-        // Try to match preferred language
+        // Try to match preferred language (using normalized names for robustness)
         const match = propAudioTracks.find(t => {
-          const label = (t.label || t.language || "").toLowerCase();
-          return label.includes(prefLang.toLowerCase());
+          const label = normalizeLanguageName(t.label || t.language || "").toLowerCase();
+          return label === normalizedPref || label.includes(normalizedPref);
         });
         
         if (match) {
@@ -1257,13 +1271,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         // If preferred not found, try common fallbacks
         const fallbacks = ["Hindi", "English"];
         for (const f of fallbacks) {
-          const fbMatch = propAudioTracks.find(t => 
-            (t.label || t.language || "").toLowerCase().includes(f.toLowerCase())
-          );
+          const fbMatch = propAudioTracks.find(t => {
+            const label = normalizeLanguageName(t.label || t.language || "").toLowerCase();
+            return label.includes(f.toLowerCase());
+          });
           if (fbMatch) {
             const fbLabel = fbMatch.label || fbMatch.language || "";
             // Notify user about fallback once per session or anime change
-            // Using a ref to prevent spamming toasts
             if (!window.sessionStorage.getItem(`rs_lang_fallback_${animeId}`)) {
               toast.info(`Default language (${prefLang}) not found, switched to ${fbLabel}`, { 
                 duration: 2000,
@@ -1284,8 +1298,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // RS / non-AN logic
     const prefLang = localStorage.getItem("rs_language") || "Hindi";
     setSelectedLanguageLabel(prev => prev || prefLang);
-
-  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage]);
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, animeId]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
@@ -5394,8 +5407,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
         </div>
+      </div>
 
-        {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+      {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+
+
           <div className="w-full px-5 pt-4 pb-2">
             <button
               type="button"
@@ -6118,7 +6134,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
 
                   {/* Picker body */}
-                  {(
+
 
                   <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
                     <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
@@ -6259,7 +6275,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       );
                     })()}
                   </div>
-                  )}
+
+
 
 
 
@@ -6319,7 +6336,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-      </div>
 
       {/* ============ Share Fallback Menu ============ */}
       {shareFallback && (() => {
@@ -6436,3 +6452,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 };
 
 export default memo(VideoPlayer);
+
+
+
+
