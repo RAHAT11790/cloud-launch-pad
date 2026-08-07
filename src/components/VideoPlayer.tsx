@@ -6448,11 +6448,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         </div>
       )}
     </div>
-    </div>
   );
 };
 
 export default memo(VideoPlayer);
+
 
 
 
