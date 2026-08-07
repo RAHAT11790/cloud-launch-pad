@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
+import MemoizedAdminCard from "@/components/admin/MemoizedAdminCard";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
@@ -9008,16 +9009,32 @@ ${tgBulkFooter}
   // Genres from TMDB only — never from local category.
   if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
   setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
-   const latestRelease = releasesData.find(rel => rel.contentId === r.id);
-   if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
+  const latestRelease = releasesData
+    .filter(rel => rel.contentId === r.id)
+    .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+
+  if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
     const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
-    const eIdx = getEpisodeIndexForShare((fullData as any).seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
+    const seasons = (fullData as any).seasons || [];
+    const eIdx = getEpisodeIndexForShare(seasons[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
     const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
     if (relLang) setTgLanguages(relLang);
-   } else {
+    if (latestRelease.episodeInfo.seasonNumber) setTgSeason(String(latestRelease.episodeInfo.seasonNumber).padStart(2, '0'));
+    if (latestRelease.episodeInfo.episodeNumber) setTgNewEpAdded(String(latestRelease.episodeInfo.episodeNumber).padStart(2, '0'));
+  } else if (fullData && (fullData as any).type !== "movie") {
+    // Manual fallback for series: look for last available episode
+    const seasons = (fullData as any).seasons || [];
+    const sIdx = Math.max(0, seasons.length - 1);
+    const episodes = seasons[sIdx]?.episodes || [];
+    const eIdx = Math.max(0, episodes.length - 1);
+    const lastEp = episodes[eIdx];
+    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx));
+    setTgSeason(String(sIdx + 1).padStart(2, '0'));
+    if (lastEp) setTgNewEpAdded(String(lastEp.episodeNumber || eIdx + 1).padStart(2, '0'));
+  } else {
     setTgButtonLink(buildEpisodeShareUrl(r.id));
-   }
+  }
   setTgSelectedAnimeId(String(r.id));
   try {
   const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
