@@ -101,17 +101,7 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
   const [audios, setAudios]   = useState<Audio[]>(() => initialData?.audio || []);
   const [qIdx, setQIdx]       = useState(() => initialData?.preferredQualityIdx ?? pickQualityIdx(initialData?.streams || []));
-  const [aIdx, setAIdx]       = useState(() => {
-    if (initialData?.audio?.length) {
-      const prefLang = localStorage.getItem("rs_language") || "Hindi";
-      const matchIdx = initialData.audio.findIndex(t => 
-        (t.name || t.language || "").toLowerCase().includes(prefLang.toLowerCase())
-      );
-      if (matchIdx >= 0) return matchIdx;
-      return initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio);
-    }
-    return 0;
-  });
+  const [aIdx, setAIdx]       = useState(() => initialData?.defaultAudioIdx ?? pickHindiAudioIdx(initialData?.audio || []));
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
   const [showA, setShowA]     = useState(false);

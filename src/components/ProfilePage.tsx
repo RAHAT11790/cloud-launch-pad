@@ -494,7 +494,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Settings state
   const [selectedLanguage, setSelectedLanguage] = useState(() => {
-    try { return localStorage.getItem("rs_language") || "Hindi"; } catch { return "Hindi"; }
+    try { return localStorage.getItem("rs_language") || "English"; } catch { return "English"; }
   });
   const [selectedQuality, setSelectedQuality] = useState(() => {
     try { return localStorage.getItem("rs_quality") || "Auto"; } catch { return "Auto"; }
@@ -856,9 +856,20 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     setActivePanel("main");
   };
 
+  const saveLanguage = (lang: string) => {
+    setSelectedLanguage(lang);
+    localStorage.setItem("rs_language", lang);
+  };
+
+  const saveQuality = (q: string) => {
+    setSelectedQuality(q);
+    localStorage.setItem("rs_quality", q);
+  };
 
   const initial = displayName.charAt(0).toUpperCase();
 
+  const languages = ["English", "Bangla", "Hindi", "Japanese", "Korean", "Arabic"];
+  const qualities = ["Auto", "1080p", "720p", "480p", "360p"];
 
   const handleAnimeClick = (item: any) => {
     // Watch-history items resume from saved position via continue-watching flow.
@@ -1032,38 +1043,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     }
   };
 
-  const languages = ["Hindi", "English", "Bengali", "Tamil", "Telugu", "Malayalam", "Japanese", "Japanese (Sub)"];
-  
-  const [allManualLanguages, setAllManualLanguages] = useState<string[]>([]);
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/languages"), (snap) => {
-      const data = snap.val();
-      if (data) {
-        setAllManualLanguages(Object.values(data).map((v: any) => v.name || v).filter(Boolean));
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const availableLanguages = useMemo(() => {
-    const combined = [...new Set([...languages, ...allManualLanguages])];
-    return combined.sort();
-  }, [allManualLanguages]);
-
-  const qualities = ["Auto", "480p", "720p", "1080p", "4k"];
-
-  const saveLanguage = (lang: string) => {
-    setSelectedLanguage(lang);
-    localStorage.setItem("rs_language", lang);
-    toast.success(`Default language set to ${lang}`);
-  };
-
-  const saveQuality = (q: string) => {
-    setSelectedQuality(q);
-    localStorage.setItem("rs_quality", q);
-    toast.success(`Default quality set to ${q}`);
-  };
-
   // Settings Panel
   if (activePanel === "settings") {
     return (
@@ -1080,14 +1059,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <Monitor className="w-5 h-5 text-primary" />
             <div className="flex-1">
               <p className="text-sm font-medium">Video Quality</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Current: {selectedQuality === "4k" ? "4K (Premium)" : selectedQuality}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Current: {selectedQuality}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
           <div onClick={() => setActivePanel("language")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Globe className="w-5 h-5 text-primary" />
             <div className="flex-1">
-              <p className="text-sm font-medium">Video Language</p>
+              <p className="text-sm font-medium">Language</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Current: {selectedLanguage}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -1226,10 +1205,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Video Language</span>
+          <span className="font-medium">Language</span>
         </button>
         <div className="space-y-2">
-          {availableLanguages.map((lang) => (
+          {languages.map((lang) => (
             <div key={lang} onClick={() => saveLanguage(lang)}
               className={`glass-card px-4 py-4 rounded-xl cursor-pointer transition-all flex items-center justify-between ${selectedLanguage === lang ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}>
               <span className="text-sm font-medium">{lang}</span>
@@ -1253,26 +1232,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         </button>
         <p className="text-xs text-muted-foreground mb-4">Select default streaming quality. Higher quality uses more data.</p>
         <div className="space-y-2">
-          {["Auto", "480p", "720p", "1080p", "4k"].map((q) => {
-            const isLocked = q === "4k" && !isPremium;
-            return (
-              <div key={q} 
-                onClick={() => isLocked ? toast.error("4K is a premium feature!") : saveQuality(q)}
-                className={`glass-card px-4 py-4 rounded-xl cursor-pointer transition-all flex items-center justify-between ${selectedQuality === q ? "border-primary bg-primary/10" : "hover:border-primary/50"} ${isLocked ? "opacity-60" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <div>
-                    <span className="text-sm font-medium uppercase">{q}</span>
-                    {q === "Auto" && <p className="text-[10px] text-muted-foreground">Adjusts based on your connection</p>}
-                    {isLocked && <p className="text-[10px] text-amber-500 font-semibold">Premium Feature</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isLocked && <Lock className="w-3.5 h-3.5 text-amber-500" />}
-                  {selectedQuality === q && <span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-primary-foreground" /></span>}
-                </div>
+          {qualities.map((q) => (
+            <div key={q} onClick={() => saveQuality(q)}
+              className={`glass-card px-4 py-4 rounded-xl cursor-pointer transition-all flex items-center justify-between ${selectedQuality === q ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}>
+              <div>
+                <span className="text-sm font-medium">{q}</span>
+                {q === "Auto" && <p className="text-[10px] text-muted-foreground">Adjusts based on your connection</p>}
               </div>
-            );
-          })}
+              {selectedQuality === q && <span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-primary-foreground" /></span>}
+            </div>
+          ))}
         </div>
       </motion.div>
     );

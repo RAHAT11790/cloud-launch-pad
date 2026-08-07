@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
-import MemoizedAdminCard from "@/components/admin/MemoizedAdminCard";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
@@ -5518,53 +5517,53 @@ ${tgBulkFooter}
 
 
  // Fill telegram fields from release
-  const fillTelegramFromRelease = useCallback(async (releaseId: string) => {
-  const release = releasesData.find(r => r.id === releaseId);
-  if (!release) return;
-  
-  setFetchingOverlay(true);
-  try {
-    startTransition(() => {
-      setTgSelectedRelease(releaseId);
-      setTgTitle(release.title || "");
-    });
-    
-    // Try to get backdrop from content data for 16:9 image
-    const [cId, cType] = [release.contentId, release.contentType || "webseries"];
-    const fullData = await getFullAdminContentItem(cType === "movie" ? "movies" : "webseries", cId);
-    let backdropUrl = fullData?.backdrop || "";
-    const posterUrl = release.poster || "";
-
-    startTransition(() => {
-      if (backdropUrl) {
-        setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
-      } else {
-        setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
-      }
-
-      if (release.episodeInfo) {
-        const epType = String(release.episodeInfo.type || "");
-        if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
-          setTgContentKind("movie");
-          setTgSeason("Movie");
-          const pStart = release.episodeInfo.partStart;
-          const pEnd = release.episodeInfo.partEnd;
-          const movieLabel = pStart
-            ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
-            : "Full Movie";
-          setTgMovieType(movieLabel);
-          setTgNewEpAdded(movieLabel);
-        } else {
-          setTgContentKind("series");
-          const seasonNum = release.episodeInfo.seasonNumber || '';
-          setTgSeason(String(seasonNum).padStart(2, '0'));
-          const startEp = String(release.episodeInfo.episodeNumber || '').padStart(2, '0');
-          const endEpRaw = release.episodeInfo.episodeNumberEnd;
-          const endEp = endEpRaw ? String(endEpRaw).padStart(2, '0') : '';
-          setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
-        }
-      }
-    });
+ const fillTelegramFromRelease = async (releaseId: string) => {
+ const release = releasesData.find(r => r.id === releaseId);
+ if (!release) return;
+ setTgSelectedRelease(releaseId);
+ setTgTitle(release.title || "");
+ // Use backdrop (landscape 16:9) instead of poster for Telegram
+ const posterUrl = release.poster || "";
+ // Try to get backdrop from content data for 16:9 image
+ const [cId, cType] = [release.contentId, release.contentType || "webseries"];
+ let backdropUrl = "";
+ if (cType === "webseries") {
+ const ws = (await getFullAdminContentItem("webseries", cId)) || webseriesData.find(s => s.id === cId);
+ if (ws?.backdrop) backdropUrl = ws.backdrop;
+ } else if (cType === "movie") {
+ const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
+ if (mv?.backdrop) backdropUrl = mv.backdrop;
+ }
+ // Use backdrop if available (16:9), else fallback to poster with w500
+ if (backdropUrl) {
+ setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+ } else {
+ setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
+ }
+ if (release.episodeInfo) {
+ const epType = String(release.episodeInfo.type || "");
+ if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
+ // 🎬 Movie auto-detection — never show "Episode" for movies.
+ setTgContentKind("movie");
+ setTgSeason("Movie");
+ const pStart = release.episodeInfo.partStart;
+ const pEnd = release.episodeInfo.partEnd;
+ const movieLabel = pStart
+   ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
+   : "Full Movie";
+ setTgMovieType(movieLabel);
+ setTgNewEpAdded(movieLabel);
+ } else {
+ setTgContentKind("series");
+ // Extract just the season number (e.g., "01", "02")
+ const seasonNum = release.episodeInfo.seasonNumber || '';
+ setTgSeason(String(seasonNum).padStart(2, '0'));
+ const startEp = String(release.episodeInfo.episodeNumber || '').padStart(2, '0');
+ const endEpRaw = release.episodeInfo.episodeNumberEnd;
+ const endEp = endEpRaw ? String(endEpRaw).padStart(2, '0') : '';
+ setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
+ }
+ }
 
  // Get quality info from content
  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
@@ -5678,15 +5677,10 @@ ${tgBulkFooter}
   if (rating) setTgRating(rating);
   else if (mv?.rating) setTgRating(String(mv.rating));
   }
-  } else if (cType === "animesalt") {
-    setTgDubType("official");
-  }
-} catch (err) {
-  console.error("Telegram fill leak error:", err);
-} finally {
-  setFetchingOverlay(false);
-}
-}, [releasesData]);
+ } else if (cType === "animesalt") {
+ setTgDubType("official");
+ }
+ };
 
  // ==================== RENDER HELPERS ====================
  const inputClass = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/8 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors placeholder:text-zinc-500";
@@ -6224,46 +6218,54 @@ ${tgBulkFooter}
  className={`${inputClass} pl-9`} placeholder="Search series" />
  </div>
  </div>
-  {(() => {
-    const q = deferredWsListSearch.trim().toLowerCase();
-    const filtered = filteredWebseriesAdminList;
-    const visible = useDeferredValue(filtered.slice(0, wsListLimit));
-
-    return filtered.length === 0 ? (
-      adminContentLoading.webseries && !q ? (
-        <div className="space-y-3 py-2">
-          {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
-        </div>
-      ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
-    ) : (
-      <>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {visible.map((item: any) => (
-            <MemoizedAdminCard
-              key={item.id}
-              item={item}
-              glassCard={glassCard}
-              onEdit={() => editSeries(item.id)}
-              onDelete={() => deleteSeries(item.id)}
-              onToggleVisibility={(id, current) => updateSeriesVisibility(id, current ? "public" : "private")}
-              isVisibilityBusy={null}
-            />
-          ))}
-        </div>
-        {filtered.length > visible.length && (
-          <div className="py-3 flex flex-col items-center gap-1.5">
-            <button
-              onClick={() => setWsListLimit(v => v + ADMIN_LIST_PAGE)}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
-            >
-              Load More ({filtered.length - visible.length} left)
-            </button>
-            <span className="text-[10px] text-[#957DAD]">Showing {visible.length} of {filtered.length}</span>
-          </div>
-        )}
-      </>
-    );
-  })()}
+ {(() => {
+  const q = deferredWsListSearch.trim().toLowerCase();
+ const filtered = filteredWebseriesAdminList;
+  const visible = filtered.slice(0, wsListLimit);
+  return filtered.length === 0 ? (
+ adminContentLoading.webseries && !q ? (
+ <div className="space-y-3 py-2">
+ {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+ </div>
+ ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
+  ) : <>
+  {visible.map(item => (
+ <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
+ <div className="flex gap-3.5">
+  <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-[#141422]"
+ loading="eager" decoding="async" fetchPriority="high"
+ onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
+ <div className="flex-1 min-w-0">
+ <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
+ <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
+ <div className="flex items-center gap-2 flex-wrap">
+ <p className="text-[11px] text-[#D1C4E9]">{item.seasonCount ?? item.seasons?.length ?? 0} Seasons • {item.episodeCount ? `${item.episodeCount} Episodes • ` : ""}{item.category || "Uncategorized"}</p>
+ </div>
+ <div className="flex flex-wrap gap-2 mt-2.5">
+ <button onClick={() => editSeries(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
+ <Edit size={12} /> Edit
+ </button>
+ <button onClick={() => deleteSeries(item.id)} className="bg-red-500/20 border border-red-500/30 text-pink-500 px-3.5 py-2 rounded-xl text-[11px] font-semibold flex items-center gap-1.5">
+ <Trash2 size={12} /> Delete
+ </button>
+ </div>
+ </div>
+ </div>
+ </div>
+  ))}
+  {filtered.length > visible.length && (
+   <div className="py-3 flex flex-col items-center gap-1.5">
+    <button
+     onClick={() => setWsListLimit(v => v + ADMIN_LIST_PAGE)}
+     className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+    >
+     Load More ({filtered.length - visible.length} left)
+    </button>
+    <span className="text-[10px] text-[#957DAD]">Showing {visible.length} of {filtered.length}</span>
+   </div>
+  )}
+  </>;
+ })()}
  </div>
  )}
 
@@ -7349,44 +7351,53 @@ ${tgBulkFooter}
  className={`${inputClass} pl-9`} placeholder="Search movies..." />
  </div>
  </div>
-  {(() => {
-    const filtered = filteredMoviesAdminList;
-    const visible = useDeferredValue(filtered.slice(0, mvListLimit));
-    return filtered.length === 0 ? (
-      adminContentLoading.movies && !deferredMvListSearch.trim() ? (
-        <div className="space-y-3 py-2">
-          {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
-        </div>
-      ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
-    ) : (
-      <>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {visible.map((item: any) => (
-            <MemoizedAdminCard
-              key={item.id}
-              item={item}
-              glassCard={glassCard}
-              onEdit={() => editMovie(item.id)}
-              onDelete={() => deleteMovie(item.id)}
-              onToggleVisibility={(id, current) => updateMovieVisibility(id, current ? "public" : "private")}
-              isVisibilityBusy={null}
-            />
-          ))}
-        </div>
-        {filtered.length > visible.length && (
-          <div className="py-3 flex flex-col items-center gap-1.5">
-            <button
-              onClick={() => setMvListLimit(v => v + ADMIN_LIST_PAGE)}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
-            >
-              Load More ({filtered.length - visible.length} left)
-            </button>
-            <span className="text-[10px] text-[#957DAD]">Showing {visible.length} of {filtered.length}</span>
-          </div>
-        )}
-      </>
-    );
-  })()}
+ {(() => {
+  const filtered = filteredMoviesAdminList;
+   const visible = filtered.slice(0, mvListLimit);
+   return filtered.length === 0 ? (
+   adminContentLoading.movies && !deferredMvListSearch.trim() ? (
+   <div className="space-y-3 py-2">
+   {[0, 1, 2, 3].map(i => <div key={i} className="h-[145px] rounded-[14px] border border-white/5 bg-[#1A1A2E] animate-pulse" />)}
+   </div>
+   ) : <p className="text-[#957DAD] text-[13px] text-center py-8">{deferredMvListSearch.trim() ? "No matching movies" : "No movies yet"}</p>
+   ) : <>
+   {visible.map(item => (
+  <div key={item.id} className="admin-content-card bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-colors">
+  <div className="flex gap-3.5">
+   <CachedImg src={item.poster || ""} className="admin-content-list-img w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-[#141422]"
+  loading="eager" decoding="async" fetchPriority="high"
+  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
+  <div className="flex-1 min-w-0">
+  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
+  <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
+  <div className="flex items-center gap-2 flex-wrap">
+  <p className="text-[11px] text-[#D1C4E9]">{item.category || "Uncategorized"}</p>
+  </div>
+  <div className="flex flex-wrap gap-2 mt-2.5">
+  <button onClick={() => editMovie(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
+  <Edit size={12} /> Edit
+  </button>
+  <button onClick={() => deleteMovie(item.id)} className="bg-red-500/20 border border-red-500/30 text-pink-500 px-3.5 py-2 rounded-xl text-[11px] font-semibold flex items-center gap-1.5">
+  <Trash2 size={12} /> Delete
+  </button>
+  </div>
+  </div>
+  </div>
+  </div>
+   ))}
+   {filtered.length > visible.length && (
+    <div className="py-3 flex flex-col items-center gap-1.5">
+     <button
+      onClick={() => setMvListLimit(v => v + ADMIN_LIST_PAGE)}
+      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-[12px] font-semibold shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+     >
+      Load More ({filtered.length - visible.length} left)
+     </button>
+     <span className="text-[10px] text-[#957DAD]">Showing {visible.length} of {filtered.length}</span>
+    </div>
+   )}
+  </>;
+ })()}
  </div>
  )}
 
@@ -8997,34 +9008,17 @@ ${tgBulkFooter}
   // Genres from TMDB only — never from local category.
   if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
   setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
-  const latestRelease = releasesData
-    .filter(rel => rel.contentId === r.id)
-    .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))[0];
-
-  if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
+   const latestRelease = releasesData.find(rel => rel.contentId === r.id);
+   if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
     const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
-    const seasons = (fullData as any).seasons || [];
-    const eIdx = getEpisodeIndexForShare(seasons[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
-     const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language || (fullData as any).selectedAdminLanguage || (fullData as any).baseLanguage;
-     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
-     if (relLang) setTgLanguages(relLang);
-     if (latestRelease.episodeInfo.seasonNumber) setTgSeason(String(latestRelease.episodeInfo.seasonNumber).padStart(2, '0'));
-     if (latestRelease.episodeInfo.episodeNumber) setTgNewEpAdded(String(latestRelease.episodeInfo.episodeNumber).padStart(2, '0'));
-   } else if (fullData && (fullData as any).type !== "movie") {
-     const seasons = (fullData as any).seasons || [];
-     const sIdx = Math.max(0, seasons.length - 1);
-     const episodes = seasons[sIdx]?.episodes || [];
-     const eIdx = Math.max(0, episodes.length - 1);
-     const lastEp = episodes[eIdx];
-     const manualLang = (fullData as any).selectedAdminLanguage || (fullData as any).baseLanguage || (fullData as any).language;
-     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, manualLang));
-     setTgSeason(String(sIdx + 1).padStart(2, '0'));
-     if (lastEp) setTgNewEpAdded(String(lastEp.episodeNumber || eIdx + 1).padStart(2, '0'));
-     if (manualLang) setTgLanguages(manualLang);
+    const eIdx = getEpisodeIndexForShare((fullData as any).seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
+    const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
+    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
+    if (relLang) setTgLanguages(relLang);
    } else {
-     setTgButtonLink(buildEpisodeShareUrl(r.id));
+    setTgButtonLink(buildEpisodeShareUrl(r.id));
    }
-   setTgSelectedAnimeId(String(r.id));
+  setTgSelectedAnimeId(String(r.id));
   try {
   const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
   const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));

@@ -338,43 +338,22 @@ const LANGUAGE_NAME_MAP: Record<string, string> = {
 export const normalizeLanguageName = (raw: string | undefined | null): string => {
   const s = String(raw || "").trim();
   if (!s) return "";
-  const lower = s.toLowerCase();
-  
-  // Hard matches for common codes
-  const key = lower.replace(/[^a-z0-9]/g, "");
+  const key = s.toLowerCase().replace(/[^a-z]/g, "");
   if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
-
-  // Specific check for Atomic variants to prevent "Hindi atomic" -> "Hindi Atomic"
-  // and ensure consistent label matching
-  if (lower.includes("atomic")) {
-    const isHindi = lower.includes("hindi");
-    const isEnglish = lower.includes("english");
-    if (isHindi) return "Hindi Atomic";
-    if (isEnglish) return "English Atomic";
-    
-    // Title Case for other Atomic variants
-    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-  }
-
-  // Handle common Bengali/Hindi/English variants directly
-  if (lower === "hindi" || lower === "hin") return "Hindi";
-  if (lower === "english" || lower === "eng") return "English";
-  if (lower === "japanese" || lower === "jap" || lower === "jp") return "Japanese";
-  if (lower === "bengali" || lower === "bangla" || lower === "bn") return "Bengali";
   
-  // Custom / dubber names
+  // Custom / dubber names (e.g. "Atomic Dubber Hindi")
+  // If it's a multi-word string, ensure it's not just a broken code.
   if (/\s/.test(s)) {
     return s
       .split(/\s+/)
       .map((w) => {
         // Keep acronyms like "AI", "AN", "RS" as is, otherwise Title Case
-        const upper = w.toUpperCase();
-        if (w.length <= 3 && (w === upper || ["AI", "AN", "RS", "4K", "HD"].includes(upper))) return upper;
+        if (w.length <= 3 && w === w.toUpperCase()) return w;
         return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
       })
       .join(" ");
   }
-
+  
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
@@ -486,11 +465,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
   const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
-  const [currentQuality, setCurrentQuality] = useState<string>(() => {
-    return localStorage.getItem("rs_quality") || "Auto";
-  });
-  const currentQualityRef = useRef(localStorage.getItem("rs_quality") || "Auto");
-  const manualQualitySelectedRef = useRef((localStorage.getItem("rs_quality") || "Auto").toLowerCase() !== "auto");
+  const [currentQuality, setCurrentQuality] = useState<string>("Auto");
+  const currentQualityRef = useRef("Auto");
+  const manualQualitySelectedRef = useRef(false);
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
@@ -813,13 +790,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(t);
   }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
-  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>(() => {
-    return selectedLanguage || localStorage.getItem("rs_language") || "Hindi";
-  });
-  useEffect(() => {
-    const exact = String(selectedLanguage || "").trim();
-    if (exact) setSelectedLanguageLabel(exact);
-  }, [animeId, currentSeasonIdx, currentEpisodeIdx, selectedLanguage]);
+  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
@@ -936,20 +907,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isAnimeSaltContent]);
 
   const currentLangLabel = useMemo(() => {
-    // Keep the exact active track label. Collapsing "Hindi Atomic" to "Hindi"
-    // made playback correct while the Resources UI displayed the wrong value.
+    // AnimeSalt: lock to Hindi as the visible label whenever AN content is
+    // playing. AN's default audio policy is Hindi-first (Index.tsx forces it
+    // via pickAnDefaultAudioIdx), so showing anything else would just flash
+    // before the player swaps back. Only honor an explicit user override.
     if (isAnimeSaltContent) {
       if (selectedLanguageLabel && propAudioTracks?.length) {
         const match = propAudioTracks.find((t) => {
-          const lbl = normalizeLanguageName(t.label || t.language || "");
-          return lbl.toLowerCase() === normalizeLanguageName(selectedLanguageLabel).toLowerCase();
+          const lbl = getPrimaryLanguageToken(t.label || t.language || "") || "";
+          return lbl.toLowerCase() === selectedLanguageLabel.trim().toLowerCase();
         });
-        if (match) return normalizeLanguageName(match.label || match.language || "") || selectedLanguageLabel;
+        if (match) return getPrimaryLanguageToken(match.label || match.language || "") || selectedLanguageLabel;
       }
-      if (selectedLanguage) return normalizeLanguageName(selectedLanguage) || selectedLanguage;
-      const active = propAudioTracks?.[0];
-      if (active) return normalizeLanguageName(active.label || active.language || "") || "Hindi";
-      return selectedLanguageLabel || "Hindi";
+      return "Hindi";
     }
     if (selectedLanguageLabel) return selectedLanguageLabel;
     if (selectedLanguage) return getPrimaryLanguageToken(selectedLanguage) || selectedLanguage;
@@ -1268,50 +1238,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (isAnimeSaltContent && propAudioTracks?.length) {
       setSelectedLanguageLabel((existing) => {
-        const prefLang = localStorage.getItem("rs_language") || "Hindi";
-        const normalizedPref = normalizeLanguageName(prefLang).toLowerCase();
-        
-        // Try to match preferred language (using normalized names for robustness)
-        const match = propAudioTracks.find(t => {
-          const label = normalizeLanguageName(t.label || t.language || "").toLowerCase();
-          return label === normalizedPref || label.includes(normalizedPref);
-        });
-        
-        if (match) {
-          return match.label || match.language || "";
-        }
-        
-        // If preferred not found, try common fallbacks
-        const fallbacks = ["Hindi", "English"];
-        for (const f of fallbacks) {
-          const fbMatch = propAudioTracks.find(t => {
-            const label = normalizeLanguageName(t.label || t.language || "").toLowerCase();
-            return label.includes(f.toLowerCase());
-          });
-          if (fbMatch) {
-            const fbLabel = fbMatch.label || fbMatch.language || "";
-            // Notify user about fallback once per session or anime change
-            if (!window.sessionStorage.getItem(`rs_lang_fallback_${animeId}`)) {
-              toast.info(`Default language (${prefLang}) not found, switched to ${fbLabel}`, { 
-                duration: 2000,
-                position: "bottom-center"
-              });
-              window.sessionStorage.setItem(`rs_lang_fallback_${animeId}`, "true");
-            }
-            return fbLabel;
-          }
-        }
-        
-        // Final fallback: first track
-        return propAudioTracks[0].label || propAudioTracks[0].language || "";
+        const existingToken = getPrimaryLanguageToken(existing);
+        if (existingToken && propAudioTracks.some((t) => {
+          const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+          return label.toLowerCase() === existingToken.toLowerCase();
+        })) return existing;
+        const preferred = getPrimaryLanguageToken(selectedLanguage);
+        const preferredMatch = preferred
+          ? propAudioTracks.find((t) => {
+              const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+              return label.toLowerCase() === preferred.toLowerCase();
+            })
+          : null;
+        const pick = preferredMatch || propAudioTracks.find((t: any) => t?.isDefault) || propAudioTracks[0];
+        const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
+        return nextLabel || existing;
       });
       return;
     }
-    
-    // RS / non-AN logic
-    const prefLang = localStorage.getItem("rs_language") || "Hindi";
-    setSelectedLanguageLabel(prev => prev || prefLang);
-  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, animeId]);
+    // RS / non-AN: trust the parent-supplied selectedLanguage prop.
+    // Use functional setState so this effect does NOT depend on
+    // selectedLanguageLabel — that dep used to create a self-firing loop
+    // (set label → re-run effect → set label again → flash Hindi/English).
+    const nextLabel =
+      getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) ||
+      propAudioTracks?.[0]?.label ||
+      propAudioTracks?.[0]?.language ||
+      "";
+    if (!nextLabel) return;
+    setSelectedLanguageLabel((prev) => (prev === nextLabel ? prev : nextLabel));
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
@@ -1901,70 +1857,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Save progress for both native video and embed playback.
   useEffect(() => {
-    if (!onSaveProgress || !animeId) return;
-    const uid = getLocalUserId();
-    const now = Date.now();
+    if (!onSaveProgress) return;
     const v = videoRef.current;
-
     const saveNow = () => {
-      let cur = 0;
-      let dur = 0;
-
       if (isEmbedPlayback) {
-        cur = embedTimeRef.current.currentTime || 0;
-        dur = embedTimeRef.current.duration || 0;
-      } else if (v && v.currentTime > 0 && v.duration > 0) {
-        cur = v.currentTime;
-        dur = v.duration;
+        const cur = embedTimeRef.current.currentTime || 0;
+        const dur = embedTimeRef.current.duration || 0;
+        if (cur > 0 && dur > 0) onSaveProgress(cur, dur);
+        return;
       }
-
-      if (cur > 0 && dur > 0) {
-        // Build full episode context for database to prevent "Season 1 Ep 3" fallback
-        const episodeInfo = {
-          seasonIdx: currentSeasonIdx ?? 0,
-          epIdx: currentEpisodeIdx ?? activeEpisodeIdx,
-          episodeNumber: episodeList?.[currentEpisodeIdx ?? activeEpisodeIdx]?.number || ((currentEpisodeIdx ?? activeEpisodeIdx) + 1),
-          audioTrack: currentLangLabel,
-          selectedLanguage: currentLangLabel
-        };
-
-        const progressData = {
-          id: animeId,
-          title,
-          subtitle,
-          poster,
-          currentTime: cur,
-          duration: dur,
-          watchedAt: now,
-          episodeInfo,
-          type: anime?.type || 'series',
-          source: isAnimeSaltContent ? 'animesalt' : 'rs'
-        };
-
-        if (uid) {
-          // Sync with unified watchHistory path used by Index.tsx
-          update(ref(db, `users/${uid}/watchHistory/${animeId}`), progressData);
-        } else {
-          guestStore.continue.upsert({
-            animeId: animeId,
-            title,
-            poster,
-            position: cur,
-            duration: dur,
-            episodeInfo: {
-              seasonIdx: episodeInfo.seasonIdx,
-              epIdx: episodeInfo.epIdx,
-              episodeNumber: episodeInfo.episodeNumber,
-              audioTrack: currentLangLabel,
-              selectedLanguage: currentLangLabel
-            },
-            audioTrack: currentLangLabel,
-            selectedLanguage: currentLangLabel,
-            updatedAt: now,
-            source: isAnimeSaltContent ? 'animesalt' : 'rs'
-          });
-        }
-        onSaveProgress(cur, dur);
+      if (v && v.currentTime > 0 && v.duration > 0) {
+        onSaveProgress(v.currentTime, v.duration);
       }
     };
 
@@ -1978,7 +1881,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.removeEventListener("pagehide", saveNow);
       saveNow();
     };
-  }, [animeId, title, subtitle, poster, currentSeasonIdx, activeEpisodeIdx, currentAudioTrack, selectedLanguageLabel, isAnimeSaltContent, seasons, anime?.type, isEmbedPlayback, onSaveProgress]);
+  }, [currentSrc, isEmbedPlayback, onSaveProgress]);
 
   // Screen Wake Lock — keeps mobile screen awake while the player is mounted.
   // Re-acquired automatically when the tab returns to the foreground.
@@ -2042,10 +1945,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (prevAnimeIdRef.current === animeId) return;
     prevAnimeIdRef.current = animeId;
-    const preferredQuality = localStorage.getItem("rs_quality") || "Auto";
-    manualQualitySelectedRef.current = preferredQuality.toLowerCase() !== "auto";
-    currentQualityRef.current = preferredQuality;
-    setCurrentQuality(preferredQuality);
+    manualQualitySelectedRef.current = false;
+    currentQualityRef.current = "Auto";
+    setCurrentQuality("Auto");
     manualServerSelectedRef.current = false;
     setManualServerSelected(false);
     preferredServerIndexRef.current = null;
@@ -3330,11 +3232,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     lastEpisodeKeyRef.current = episodeKey;
     instantSwitchRef.current = true;
     const nextQualityOptions: QualityOption[] = [{ label: "Auto", src }, ...(qualityOptions || []).filter((q) => q.src)];
-    // Apply Profile's global default quality on every title. Match labels
-    // case-insensitively ("720p" vs "720P") and retain the 4K premium gate.
-    const preferredLabel = localStorage.getItem("rs_quality") || currentQuality || "Auto";
-    const preservedQuality = preferredLabel.toLowerCase() !== "auto"
-      ? nextQualityOptions.find((q) => q.label.toLowerCase() === preferredLabel.toLowerCase() && (!is4KLabel(q.label) || isPremium))
+    // Per-anime quality memory only: preserve the user's manual pick within
+    // the same series/anime (episode switches). On a brand-new anime the
+    // per-anime reset effect (animeId change) has already cleared this ref,
+    // so we always fall back to Auto — no global localStorage carry-over,
+    // no forced low-quality auto-start.
+    const preservedQuality = manualQualitySelectedRef.current && currentQuality !== "Auto"
+      ? nextQualityOptions.find((q) => q.label === currentQuality && (!is4KLabel(q.label) || isPremium))
       : null;
     const autoStartQuality = null as QualityOption | null;
     const baseRawSrc = preservedQuality?.src || src;
@@ -5132,15 +5036,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-1.5 min-w-0">
-                  <div className="flex flex-col min-w-0 max-w-[60%]">
-                    <div className="flex items-center gap-1">
-                      <span
-                        ref={timeDisplayRef}
-                        className="text-[10px] font-bold whitespace-nowrap tabular-nums leading-none text-white/90"
-                      >{formatTime(currentTime)} / {formatTime(duration)}</span>
-                    </div>
-                  </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <span
+                      ref={timeDisplayRef}
+                      className="text-[11px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
+                      style={{ textShadow: "0 1px 3px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)" }}
+                    >{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
@@ -5422,11 +5323,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
         </div>
-      </div>
 
-      {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
-
-
+        {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="w-full px-5 pt-4 pb-2">
             <button
               type="button"
@@ -6149,7 +6047,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
 
                   {/* Picker body */}
-
+                  {(
 
                   <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
                     <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
@@ -6290,8 +6188,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       );
                     })()}
                   </div>
-
-
+                  )}
 
 
 
@@ -6351,6 +6248,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
+      </div>
 
       {/* ============ Share Fallback Menu ============ */}
       {shareFallback && (() => {
@@ -6467,7 +6365,3 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 };
 
 export default memo(VideoPlayer);
-
-
-
-

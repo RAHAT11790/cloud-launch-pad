@@ -401,7 +401,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     .map((track: any, index: number) => {
       const uri = getAnAudioUrlFromTrack(track);
       if (!isAnPlayableHlsUrl(uri)) return null;
-      const label = normalizeLanguageName(String(track?.label || track?.language || `Audio ${index + 1}`));
+      const label = String(track?.label || track?.language || `Audio ${index + 1}`).trim();
       return {
         language: String(track?.language || label).trim(),
         name: label,
@@ -409,7 +409,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
         isDefault: track?.isDefault === true,
       };
     })
-    .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>;
+    .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string }>;
 
   const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
   const qualityOptions = streams.map((stream) => ({
@@ -417,6 +417,8 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     height: stream.height,
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
+  // Start AN on 720p when available. 1080p remains selectable, but opening on
+  // 720p fills buffer much faster on preview/mobile networks and avoids stalls.
   const preferred = qualityOptions.find((option) => Number(option.height) === 720)
     || qualityOptions.find((option) => Number(option.height) === 1080)
     || qualityOptions[0];
@@ -469,28 +471,25 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     const entries = Object.entries(byLanguage);
     
     // 1. Exact match for variant (e.g., "Hindi Atomic")
-    // Use a normalized comparison to handle case/spacing mismatches
-    const reqNormalized = normalizeLanguageName(requested).toLowerCase();
-    const exact = entries.find(([lang]) => {
-      const langName = normalizeLanguageName(lang).toLowerCase();
-      return langName === reqNormalized;
-    })?.[1];
-    
+    const exact = requested
+      ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
+      : undefined;
     if (hasEpisodes(exact)) return exact as Season[];
 
-    // 2. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
-    if (reqNormalized.includes("hindi")) {
-      const baseHindi = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === "hindi")?.[1];
+    // 2. Admin fallback (baseLanguage/language) - If user explicitly set a default in Admin, respect it
+    const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
+    const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
+    if (hasEpisodes(fallback)) return fallback as Season[];
+
+    // 3. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
+    // This allows custom names like "Atomic Hindi" to work using the "Hindi" season data.
+    if (requested.includes("hindi")) {
+      const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
       if (hasEpisodes(baseHindi)) return baseHindi as Season[];
-    } else if (reqNormalized.includes("english")) {
-      const baseEnglish = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === "english")?.[1];
+    } else if (requested.includes("english")) {
+      const baseEnglish = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "english")?.[1];
       if (hasEpisodes(baseEnglish)) return baseEnglish as Season[];
     }
-
-    // 3. Admin fallback (baseLanguage/language)
-    const fallbackLanguage = normalizeLanguageName(anime.baseLanguage || anime.language || "").toLowerCase();
-    const fallback = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === fallbackLanguage)?.[1];
-    if (hasEpisodes(fallback)) return fallback as Season[];
 
     // 4. Any track matching Hindi keywords
     const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
@@ -1511,39 +1510,13 @@ const Index = () => {
           const entryHasProgress = Number(entry?.currentTime) > 0 && Number(entry?.duration) > 0;
           const currentHasProgress = Number(current?.currentTime) > 0 && Number(current?.duration) > 0;
           const entryNewer = Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0);
-          
-          // CRITICAL: When syncing, prioritize specific episode/track data 
-          // to prevent "Season 1 Ep 3" fallback when returning to a specific track.
-          if (entryNewer) {
-            // Merge metadata: keep latest watchedAt but ensure we don't lose the specific episode/audio info
-            const mergedItem = {
-              ...current,
-              ...entry,
-              watchedAt: entry.watchedAt || current.watchedAt,
-              episodeInfo: entry.episodeInfo || current.episodeInfo,
-              audioTrack: entry.audioTrack !== undefined ? entry.audioTrack : current.audioTrack,
-              selectedLanguage: entry.selectedLanguage || current.selectedLanguage,
-              currentTime: entryHasProgress ? entry.currentTime : current.currentTime,
-              duration: entryHasProgress ? entry.duration : current.duration
-            };
-            
-            // Fix: if episodeInfo exists but is nested differently in some legacy entries
-            if (entry.episodeInfo) {
-              mergedItem.episodeInfo = entry.episodeInfo;
-            } else if (entry.seasonIdx !== undefined && entry.epIdx !== undefined) {
-              mergedItem.episodeInfo = {
-                seasonIdx: entry.seasonIdx,
-                epIdx: entry.epIdx,
-                episodeNumber: (entry.epIdx + 1),
-                audioTrack: entry.audioTrack,
-                selectedLanguage: entry.selectedLanguage
-              };
-            }
-            
-            merged.set(key, mergedItem);
+          if (entryNewer && entryHasProgress) { merged.set(key, entry); return; }
+          if (entryNewer && !entryHasProgress && currentHasProgress) {
+            // Keep older progress data but bump the watchedAt timestamp
+            merged.set(key, { ...current, watchedAt: entry.watchedAt || current.watchedAt });
             return;
           }
-          if (entryHasProgress && !currentHasProgress) {
+          if (!entryNewer && entryHasProgress && !currentHasProgress) {
             merged.set(key, { ...entry, watchedAt: current.watchedAt || entry.watchedAt });
           }
         });
@@ -2397,12 +2370,11 @@ const Index = () => {
       }
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
-      
-      // Ensure quality options are populated correctly for all types
-      qualityOptions = getEpisodeQualityOptions(episode);
-      
+      if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
+      if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
+      if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
+      if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
       if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
-      
       if (isAnimeSaltContent) {
         const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
         if (directFromFirebase?.src) {
@@ -2411,7 +2383,7 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
-    } else if (hasMovieParts(anime)) {
+      } else if (hasMovieParts(anime)) {
         // Movie split into parts — pick the requested part (fallback to first)
         const partIdx = Math.max(0, resolvedEpIdx ?? 0);
         const part = (anime.parts as any[])[partIdx] || (anime.parts as any[])[0];
@@ -2600,11 +2572,9 @@ const Index = () => {
       const cacheRaw = localStorage.getItem("rs_continueCache");
       const cached = cacheRaw ? JSON.parse(cacheRaw) : [];
       const cachedMatch = Array.isArray(cached)
-        ? cached.find((item: any) => item?.id === anime.id)
+        ? cached.find((item: any) => item?.id === anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (seasonIdx ?? item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (epIdx ?? item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode)))
         : null;
-      // MATCH BY ID ONLY - DO NOT FILTER BY SEASON/EPISODE HERE
-      // We want to update the entry for this series, not create a new one.
-      const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id);
+      const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id && item.seasonIdx === seasonIdx && item.epIdx === epIdx);
 
       const historyItem: any = {
         id: anime.id,
@@ -2617,29 +2587,19 @@ const Index = () => {
         watchedAt: Date.now(),
       };
 
-      // Always persist the exact language bucket currently loaded in the player.
-      // A custom dub can contain only "Season 2" at array index 0, so index + 1
-      // is not a reliable display season number.
-      const activeLang = (playerStateRef.current?.anime?.id === anime.id)
-        ? playerStateRef.current?.selectedLanguage
-        : (anime as any)?.selectedLanguage || anime.baseLanguage || anime.language || "";
-      const historySeasons = resolveAnimeSeasonsForLanguage(anime, activeLang);
-
-      if (seasonIdx !== undefined && epIdx !== undefined && historySeasons) {
-        const season = historySeasons[seasonIdx];
-        const episode = season.episodes[epIdx] as Episode;
-        const seasonNumber = Number(String(season.name || "").match(/\d+/)?.[0]) || seasonIdx + 1;
+      if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
+        const season = anime.seasons[seasonIdx];
         historyItem.episodeInfo = {
-          season: seasonNumber,
-          episode: episode?.episodeNumber || (epIdx + 1),
+          season: seasonIdx + 1,
+          episode: epIdx + 1,
           seasonName: season.name,
-          episodeNumber: episode?.episodeNumber || (epIdx + 1),
+          episodeNumber: season.episodes[epIdx].episodeNumber,
           seasonIdx,
           epIdx,
         };
       }
-      
-      historyItem.language = activeLang || "";
+      const activeLang = (anime as any)?.selectedLanguage || (playerStateRef.current?.anime.id === anime.id ? playerStateRef.current?.selectedLanguage : null) || anime.baseLanguage || anime.language || "";
+      historyItem.language = getPrimaryLanguageToken(activeLang) || activeLang || "";
 
       try {
         guestStore.continue.upsert({
@@ -2651,16 +2611,6 @@ const Index = () => {
           title: anime.title,
           poster: anime.poster,
           updatedAt: Date.now(),
-          episodeInfo: historyItem.episodeInfo ? {
-            seasonIdx,
-            epIdx,
-            episodeNumber: historyItem.episodeInfo.episodeNumber,
-            audioTrack: activeLang || undefined,
-            selectedLanguage: activeLang || undefined,
-          } : undefined,
-          audioTrack: activeLang || undefined,
-          selectedLanguage: activeLang || undefined,
-          source: anime.source || "firebase",
         });
 
         // One cache entry per series — replace any prior episode of the same series.
@@ -2708,9 +2658,8 @@ const Index = () => {
         const season = playerState.anime.seasons[playerState.seasonIdx];
         const episode = season?.episodes?.[playerState.epIdx];
         if (season && episode) {
-          const seasonNumber = Number(String(season.name || "").match(/\d+/)?.[0]) || playerState.seasonIdx + 1;
           updates.episodeInfo = {
-            season: seasonNumber,
+            season: playerState.seasonIdx + 1,
             episode: playerState.epIdx + 1,
             seasonName: season.name,
             episodeNumber: episode.episodeNumber,
@@ -2737,7 +2686,7 @@ const Index = () => {
           year: playerState.anime.year,
           rating: playerState.anime.rating,
           type: playerState.anime.type,
-          language: playerState.selectedLanguage || playerState.anime.baseLanguage || playerState.anime.language || "",
+          language: playerState.selectedLanguage || getPrimaryLanguageToken(playerState.anime.baseLanguage || playerState.anime.language) || playerState.anime.language || "",
           watchedAt: Date.now(),
           currentTime,
           duration,
@@ -2759,16 +2708,6 @@ const Index = () => {
           title: playerState.anime.title,
           poster: playerState.anime.poster,
           updatedAt: Date.now(),
-          episodeInfo: updates.episodeInfo ? {
-            seasonIdx: playerState.seasonIdx,
-            epIdx: playerState.epIdx,
-            episodeNumber: updates.episodeInfo.episodeNumber,
-            audioTrack: playerState.selectedLanguage || undefined,
-            selectedLanguage: playerState.selectedLanguage || undefined,
-          } : undefined,
-          audioTrack: playerState.selectedLanguage || undefined,
-          selectedLanguage: playerState.selectedLanguage || undefined,
-          source: playerState.anime.source || "firebase",
         });
         // Live-update the home rail so the card appears immediately (esp. for guests).
         setContinueWatching((prev) => {
@@ -3039,6 +2978,7 @@ const Index = () => {
         return;
       }
 
+      addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       const nextState = {
         ...playerState!,
         src: nextSrc,
@@ -3053,7 +2993,6 @@ const Index = () => {
       };
       playerStateRef.current = nextState; // sync ref BEFORE navigate fires the route effect
       setPlayerState(nextState);
-      addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
       navigate(buildWatchRoute(playerState!.anime.id, playerState!.seasonIdx, i), { replace: true });
     },
   }));
@@ -3088,6 +3027,7 @@ const Index = () => {
       return;
     }
 
+    addToWatchHistory(playerState.anime, newSeasonIdx, 0);
     const nextState = {
       ...playerState,
       src: nextSrc,
@@ -3103,7 +3043,6 @@ const Index = () => {
     };
     playerStateRef.current = nextState;
     setPlayerState(nextState);
-    addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
     navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
   }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
@@ -3434,7 +3373,7 @@ const Index = () => {
                   const pct = (item.currentTime && item.duration) ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
                   const sn = item.episodeInfo?.season;
                   const ep = item.episodeInfo?.episodeNumber || item.episodeInfo?.episode;
-                  const languageLabel = item.language || "";
+                  const languageLabel = getPrimaryLanguageToken(item.language) || "";
                   const wt = item.watchedAt || item.updatedAt;
                   let agoLabel = "";
                   if (wt) {
@@ -3469,8 +3408,7 @@ const Index = () => {
                           <div className="flex items-center justify-between mt-0.5">
                             {(sn || ep) ? (
                               <p className="text-[8px] text-primary font-bold">
-                                {sn ? `S${sn} ` : ""}{ep ? `EP ${String(ep).padStart(2, '0')}` : ""}
-                                {item.language && <span className="ml-1 text-white/50">({item.language})</span>}
+                                {sn ? `S${sn} ` : ""}{ep ? `EP ${ep}` : ""}
                               </p>
                             ) : <span className="text-[8px] text-white/60">Resume</span>}
                             {pct > 0 && <span className="text-[8px] text-white/70 font-semibold">{pct}%</span>}
@@ -3560,6 +3498,7 @@ const Index = () => {
                     return;
                   }
 
+                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   const nextState = {
                     ...playerState,
                     src: nextSrc,
@@ -3573,7 +3512,6 @@ const Index = () => {
                   };
                   playerStateRef.current = nextState;
                   setPlayerState(nextState);
-                  addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
                   navigate(buildWatchRoute(playerState.anime.id, playerState.seasonIdx, nextIdx), { replace: true });
                 }
               : undefined
@@ -3629,7 +3567,6 @@ const Index = () => {
             } as any;
             playerStateRef.current = nextState;
             setPlayerState(nextState);
-            addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
           }}
           onSuggestedClick={(anime) => {
             // In-place suggestion switch: keep VideoPlayer mounted so the new
