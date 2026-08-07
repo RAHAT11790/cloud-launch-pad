@@ -2396,11 +2396,12 @@ const Index = () => {
       }
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
-      if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
-      if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
-      if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
-      if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
+      
+      // Ensure quality options are populated correctly for all types
+      qualityOptions = getEpisodeQualityOptions(episode);
+      
       if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
+      
       if (isAnimeSaltContent) {
         const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
         if (directFromFirebase?.src) {
@@ -2409,7 +2410,7 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
-      } else if (hasMovieParts(anime)) {
+    } else if (hasMovieParts(anime)) {
         // Movie split into parts — pick the requested part (fallback to first)
         const partIdx = Math.max(0, resolvedEpIdx ?? 0);
         const part = (anime.parts as any[])[partIdx] || (anime.parts as any[])[0];
