@@ -856,20 +856,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     setActivePanel("main");
   };
 
-  const saveLanguage = (lang: string) => {
-    setSelectedLanguage(lang);
-    localStorage.setItem("rs_language", lang);
-  };
-
-  const saveQuality = (q: string) => {
-    setSelectedQuality(q);
-    localStorage.setItem("rs_quality", q);
-  };
 
   const initial = displayName.charAt(0).toUpperCase();
 
-  const languages = ["English", "Bangla", "Hindi", "Japanese", "Korean", "Arabic"];
-  const qualities = ["Auto", "1080p", "720p", "480p", "360p"];
 
   const handleAnimeClick = (item: any) => {
     // Watch-history items resume from saved position via continue-watching flow.
