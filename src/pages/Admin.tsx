@@ -5518,53 +5518,53 @@ ${tgBulkFooter}
 
 
  // Fill telegram fields from release
- const fillTelegramFromRelease = async (releaseId: string) => {
- const release = releasesData.find(r => r.id === releaseId);
- if (!release) return;
- setTgSelectedRelease(releaseId);
- setTgTitle(release.title || "");
- // Use backdrop (landscape 16:9) instead of poster for Telegram
- const posterUrl = release.poster || "";
- // Try to get backdrop from content data for 16:9 image
- const [cId, cType] = [release.contentId, release.contentType || "webseries"];
- let backdropUrl = "";
- if (cType === "webseries") {
- const ws = (await getFullAdminContentItem("webseries", cId)) || webseriesData.find(s => s.id === cId);
- if (ws?.backdrop) backdropUrl = ws.backdrop;
- } else if (cType === "movie") {
- const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
- if (mv?.backdrop) backdropUrl = mv.backdrop;
- }
- // Use backdrop if available (16:9), else fallback to poster with w500
- if (backdropUrl) {
- setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
- } else {
- setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
- }
- if (release.episodeInfo) {
- const epType = String(release.episodeInfo.type || "");
- if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
- // 🎬 Movie auto-detection — never show "Episode" for movies.
- setTgContentKind("movie");
- setTgSeason("Movie");
- const pStart = release.episodeInfo.partStart;
- const pEnd = release.episodeInfo.partEnd;
- const movieLabel = pStart
-   ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
-   : "Full Movie";
- setTgMovieType(movieLabel);
- setTgNewEpAdded(movieLabel);
- } else {
- setTgContentKind("series");
- // Extract just the season number (e.g., "01", "02")
- const seasonNum = release.episodeInfo.seasonNumber || '';
- setTgSeason(String(seasonNum).padStart(2, '0'));
- const startEp = String(release.episodeInfo.episodeNumber || '').padStart(2, '0');
- const endEpRaw = release.episodeInfo.episodeNumberEnd;
- const endEp = endEpRaw ? String(endEpRaw).padStart(2, '0') : '';
- setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
- }
- }
+  const fillTelegramFromRelease = useCallback(async (releaseId: string) => {
+  const release = releasesData.find(r => r.id === releaseId);
+  if (!release) return;
+  
+  setFetchingOverlay(true);
+  try {
+    startTransition(() => {
+      setTgSelectedRelease(releaseId);
+      setTgTitle(release.title || "");
+    });
+    
+    // Try to get backdrop from content data for 16:9 image
+    const [cId, cType] = [release.contentId, release.contentType || "webseries"];
+    const fullData = await getFullAdminContentItem(cType === "movie" ? "movies" : "webseries", cId);
+    let backdropUrl = fullData?.backdrop || "";
+    const posterUrl = release.poster || "";
+
+    startTransition(() => {
+      if (backdropUrl) {
+        setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+      } else {
+        setTgPosterUrl(posterUrl.replace('/original/', '/w500/').replace('/w780/', '/w500/'));
+      }
+
+      if (release.episodeInfo) {
+        const epType = String(release.episodeInfo.type || "");
+        if (epType === "movie" || epType === "movie-parts" || release.contentType === "movie") {
+          setTgContentKind("movie");
+          setTgSeason("Movie");
+          const pStart = release.episodeInfo.partStart;
+          const pEnd = release.episodeInfo.partEnd;
+          const movieLabel = pStart
+            ? (pEnd && pEnd !== pStart ? `Part ${pStart}-${pEnd}` : `Part ${pStart}`)
+            : "Full Movie";
+          setTgMovieType(movieLabel);
+          setTgNewEpAdded(movieLabel);
+        } else {
+          setTgContentKind("series");
+          const seasonNum = release.episodeInfo.seasonNumber || '';
+          setTgSeason(String(seasonNum).padStart(2, '0'));
+          const startEp = String(release.episodeInfo.episodeNumber || '').padStart(2, '0');
+          const endEpRaw = release.episodeInfo.episodeNumberEnd;
+          const endEp = endEpRaw ? String(endEpRaw).padStart(2, '0') : '';
+          setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
+        }
+      }
+    });
 
  // Get quality info from content
  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
