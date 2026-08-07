@@ -486,6 +486,9 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     if (requested.includes("hindi")) {
       const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
       if (hasEpisodes(baseHindi)) return baseHindi as Season[];
+    } else if (requested.includes("english")) {
+      const baseEnglish = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "english")?.[1];
+      if (hasEpisodes(baseEnglish)) return baseEnglish as Season[];
     }
 
     // 4. Any track matching Hindi keywords
@@ -522,6 +525,9 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
     if (normalizedPreferred.toLowerCase().includes("hindi")) {
       const baseHindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
       if (baseHindi) return baseHindi.label;
+    } else if (normalizedPreferred.toLowerCase().includes("english")) {
+      const baseEnglish = normalizedEntries.find((entry) => entry.label.toLowerCase() === "english" && hasPlayableEpisodes(entry.seasons));
+      if (baseEnglish) return baseEnglish.label;
     }
 
     const hindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
@@ -2592,7 +2598,8 @@ const Index = () => {
           epIdx,
         };
       }
-      historyItem.language = getPrimaryLanguageToken((anime as any)?.selectedLanguage || anime.baseLanguage || anime.language) || anime.language || "";
+      const activeLang = (anime as any)?.selectedLanguage || (playerStateRef.current?.anime.id === anime.id ? playerStateRef.current?.selectedLanguage : null) || anime.baseLanguage || anime.language || "";
+      historyItem.language = getPrimaryLanguageToken(activeLang) || activeLang || "";
 
       try {
         guestStore.continue.upsert({
@@ -2742,9 +2749,15 @@ const Index = () => {
 
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
-      if (item.episodeInfo) {
+    if (item.episodeInfo) {
       const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
       const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
+      
+      // Critical: Use the language saved in history (if any) to ensure "Continue Watching" 
+      // returns the user to the exact dub/variant they were watching.
+      const savedLang = item.language || item.selectedLanguage;
+      if (savedLang) (anime as any).selectedLanguage = savedLang;
+
       let src = "";
       let subtitle = "";
       let episode: Episode | undefined;

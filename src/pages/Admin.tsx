@@ -61,10 +61,11 @@ const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisode
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
 const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"));
 
-const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
+const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number, language?: string) => {
  const params = new URLSearchParams();
  if (seasonIdx !== undefined) params.set("s", String(Math.max(0, seasonIdx) + 1));
  if (epIdx !== undefined) params.set("e", String(Math.max(0, epIdx) + 1));
+ if (language) params.set("lang", language);
  const qs = params.toString();
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
