@@ -494,7 +494,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Settings state
   const [selectedLanguage, setSelectedLanguage] = useState(() => {
-    try { return localStorage.getItem("rs_language") || "English"; } catch { return "English"; }
+    try { return localStorage.getItem("rs_language") || "Hindi"; } catch { return "Hindi"; }
   });
   const [selectedQuality, setSelectedQuality] = useState(() => {
     try { return localStorage.getItem("rs_quality") || "Auto"; } catch { return "Auto"; }

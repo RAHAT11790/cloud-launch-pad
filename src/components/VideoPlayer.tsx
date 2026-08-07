@@ -792,9 +792,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(t);
   }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
-  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>(() => {
-    return localStorage.getItem("rs_language") || "Hindi";
-  });
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
