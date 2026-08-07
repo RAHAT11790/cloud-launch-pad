@@ -507,6 +507,13 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
       ? normalizedEntries.find((entry) => entry.label.toLowerCase() === normalizedPreferred.toLowerCase() && hasPlayableEpisodes(entry.seasons))
       : undefined;
     if (exact) return exact.label;
+
+    // Fallback: If "Hindi Atomic" preferred but not playable, try base "Hindi"
+    if (normalizedPreferred.toLowerCase().includes("hindi")) {
+      const baseHindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
+      if (baseHindi) return baseHindi.label;
+    }
+
     const hindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
     if (hindi) return hindi.label;
     const firstPlayable = normalizedEntries.find((entry) => hasPlayableEpisodes(entry.seasons));
