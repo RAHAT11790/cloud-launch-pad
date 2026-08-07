@@ -2600,9 +2600,9 @@ const Index = () => {
       const cacheRaw = localStorage.getItem("rs_continueCache");
       const cached = cacheRaw ? JSON.parse(cacheRaw) : [];
       const cachedMatch = Array.isArray(cached)
-        ? cached.find((item: any) => item?.id === anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (seasonIdx ?? item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (epIdx ?? item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode)))
+        ? cached.find((item: any) => item?.id === anime.id)
         : null;
-      const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id && item.seasonIdx === seasonIdx && item.epIdx === epIdx);
+      const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id);
 
       const historyItem: any = {
         id: anime.id,
@@ -3437,6 +3437,7 @@ const Index = () => {
                             {(sn || ep) ? (
                               <p className="text-[8px] text-primary font-bold">
                                 {sn ? `S${sn} ` : ""}{ep ? `EP ${String(ep).padStart(2, '0')}` : ""}
+                                {item.language && <span className="ml-1 text-white/50">({item.language})</span>}
                               </p>
                             ) : <span className="text-[8px] text-white/60">Resume</span>}
                             {pct > 0 && <span className="text-[8px] text-white/70 font-semibold">{pct}%</span>}
