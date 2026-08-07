@@ -7259,7 +7259,7 @@ ${tgBulkFooter}
  // Force-override with the captured deep link so it always points at the
  // freshly-added episode (releasesData may hold an older episodeInfo).
  if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
-   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
+    setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx, capturedLanguage));
  }
  // ✅ Range fix — always restore the exact captured episode range.
  setTgContentKind("series");
@@ -7285,12 +7285,13 @@ ${tgBulkFooter}
     if (genres.length > 0) setTgGenres(genres.join(", "));
     if (rating) setTgRating(rating);
   } catch {} })();
- if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
+  if (capturedLanguage) setTgLanguages(capturedLanguage);
+  else if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
   // Use the captured season/episode from the modal so the Watch button
   // always deep-links to the newly-added episode (not just seriesId).
   if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
-   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx, capturedLanguage));
    setTgSeason(String(capturedSeasonIdx + 1).padStart(2, '0'));
     const rangeStart = String(capturedEpNumber).padStart(2, "0");
     const rangeEnd = String(capturedEpNumberEnd).padStart(2, "0");
@@ -9013,7 +9014,9 @@ ${tgBulkFooter}
    if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
     const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
     const eIdx = getEpisodeIndexForShare((fullData as any).seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
-    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx));
+    const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
+    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
+    if (relLang) setTgLanguages(relLang);
    } else {
     setTgButtonLink(buildEpisodeShareUrl(r.id));
    }
