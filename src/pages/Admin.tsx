@@ -7218,26 +7218,24 @@ ${tgBulkFooter}
  <button onClick={async () => {
  // Step 1: Send the in-app notification first (existing flow already added the release entry)
  // Step 2: Auto-redirect to Telegram Post section with anime preselected
- const ctx = wsNotifyContextRef.current;
- const seriesId = ctx?.seriesId || "";
- // 🎯 Capture season/episode BEFORE state is cleared so we can build the
- // exact deep link (/watch/<id>?s=<season>&e=<episode>) even when the
- // releasesData snapshot from Firebase hasn't propagated yet.
- const usingMulti = wsAutoRanges.length > 0;
- const firstAuto = wsAutoRanges[0];
- const capturedSeasonIdx = usingMulti
-   ? (firstAuto?.seasonIdx ?? 0)
-   : parseInt(wsNotifySeason);
- const capturedEpNumber = usingMulti
-   ? (firstAuto?.startEp ?? 1)
-   : (parseInt(wsNotifyEpisode) + 1);
- const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
- const capturedEpNumberEnd = usingMulti
-   ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
-   : (wsNotifyEpisodeEnd !== ""
-      ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
-      : capturedEpNumber);
- const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
+  const ctx = wsNotifyContextRef.current;
+  const seriesId = ctx?.seriesId || "";
+  const usingMulti = wsAutoRanges.length > 0;
+  const firstAuto = wsAutoRanges[0];
+  const capturedSeasonIdx = usingMulti
+    ? (firstAuto?.seasonIdx ?? 0)
+    : parseInt(wsNotifySeason);
+  const capturedEpNumber = usingMulti
+    ? (firstAuto?.startEp ?? 1)
+    : (parseInt(wsNotifyEpisode) + 1);
+  const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
+  const capturedEpNumberEnd = usingMulti
+    ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
+    : (wsNotifyEpisodeEnd !== ""
+       ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
+       : capturedEpNumber);
+  const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
+  const capturedLanguage = ctx?.form?.selectedAdminLanguage || ctx?.form?.language || "";
 
  toast.success("✅ Notification sent — redirecting to Telegram post...");
  setWsSaveNotifyModal(false);
