@@ -401,7 +401,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     .map((track: any, index: number) => {
       const uri = getAnAudioUrlFromTrack(track);
       if (!isAnPlayableHlsUrl(uri)) return null;
-      const label = String(track?.label || track?.language || `Audio ${index + 1}`).trim();
+      const label = normalizeLanguageName(String(track?.label || track?.language || `Audio ${index + 1}`));
       return {
         language: String(track?.language || label).trim(),
         name: label,
@@ -409,7 +409,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
         isDefault: track?.isDefault === true,
       };
     })
-    .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string }>;
+    .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>;
 
   const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
   const qualityOptions = streams.map((stream) => ({
@@ -417,8 +417,6 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     height: stream.height,
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
-  // Start AN on 720p when available. 1080p remains selectable, but opening on
-  // 720p fills buffer much faster on preview/mobile networks and avoids stalls.
   const preferred = qualityOptions.find((option) => Number(option.height) === 720)
     || qualityOptions.find((option) => Number(option.height) === 1080)
     || qualityOptions[0];
@@ -471,25 +469,28 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     const entries = Object.entries(byLanguage);
     
     // 1. Exact match for variant (e.g., "Hindi Atomic")
-    const exact = requested
-      ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
-      : undefined;
+    // Use a normalized comparison to handle case/spacing mismatches
+    const reqNormalized = normalizeLanguageName(requested).toLowerCase();
+    const exact = entries.find(([lang]) => {
+      const langName = normalizeLanguageName(lang).toLowerCase();
+      return langName === reqNormalized;
+    })?.[1];
+    
     if (hasEpisodes(exact)) return exact as Season[];
 
-    // 2. Admin fallback (baseLanguage/language) - If user explicitly set a default in Admin, respect it
-    const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
-    const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
-    if (hasEpisodes(fallback)) return fallback as Season[];
-
-    // 3. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
-    // This allows custom names like "Atomic Hindi" to work using the "Hindi" season data.
-    if (requested.includes("hindi")) {
-      const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
+    // 2. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
+    if (reqNormalized.includes("hindi")) {
+      const baseHindi = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === "hindi")?.[1];
       if (hasEpisodes(baseHindi)) return baseHindi as Season[];
-    } else if (requested.includes("english")) {
-      const baseEnglish = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "english")?.[1];
+    } else if (reqNormalized.includes("english")) {
+      const baseEnglish = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === "english")?.[1];
       if (hasEpisodes(baseEnglish)) return baseEnglish as Season[];
     }
+
+    // 3. Admin fallback (baseLanguage/language)
+    const fallbackLanguage = normalizeLanguageName(anime.baseLanguage || anime.language || "").toLowerCase();
+    const fallback = entries.find(([lang]) => normalizeLanguageName(lang).toLowerCase() === fallbackLanguage)?.[1];
+    if (hasEpisodes(fallback)) return fallback as Season[];
 
     // 4. Any track matching Hindi keywords
     const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
