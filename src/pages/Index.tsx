@@ -2617,11 +2617,20 @@ const Index = () => {
         watchedAt: Date.now(),
       };
 
-      if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
-        const season = anime.seasons[seasonIdx];
+      // Always persist the exact language bucket currently loaded in the player.
+      // A custom dub can contain only "Season 2" at array index 0, so index + 1
+      // is not a reliable display season number.
+      const activeLang = (playerStateRef.current?.anime?.id === anime.id)
+        ? playerStateRef.current?.selectedLanguage
+        : (anime as any)?.selectedLanguage || anime.baseLanguage || anime.language || "";
+      const historySeasons = resolveAnimeSeasonsForLanguage(anime, activeLang);
+
+      if (seasonIdx !== undefined && epIdx !== undefined && historySeasons) {
+        const season = historySeasons[seasonIdx];
         const episode = season.episodes[epIdx] as Episode;
+        const seasonNumber = Number(String(season.name || "").match(/\d+/)?.[0]) || seasonIdx + 1;
         historyItem.episodeInfo = {
-          season: seasonIdx + 1,
+          season: seasonNumber,
           episode: episode?.episodeNumber || (epIdx + 1),
           seasonName: season.name,
           episodeNumber: episode?.episodeNumber || (epIdx + 1),
@@ -2630,12 +2639,6 @@ const Index = () => {
         };
       }
       
-      // CRITICAL: Force the saved language to be exactly what's in the player right now
-      // This fixes the "Hindi" vs "Hindi Atomic" display mismatch in Continue Watching
-      const activeLang = (playerStateRef.current?.anime?.id === anime.id) 
-        ? playerStateRef.current?.selectedLanguage 
-        : (anime as any)?.selectedLanguage || anime.baseLanguage || anime.language || "";
-        
       historyItem.language = activeLang || "";
 
       try {
@@ -2648,6 +2651,16 @@ const Index = () => {
           title: anime.title,
           poster: anime.poster,
           updatedAt: Date.now(),
+          episodeInfo: historyItem.episodeInfo ? {
+            seasonIdx,
+            epIdx,
+            episodeNumber: historyItem.episodeInfo.episodeNumber,
+            audioTrack: activeLang || undefined,
+            selectedLanguage: activeLang || undefined,
+          } : undefined,
+          audioTrack: activeLang || undefined,
+          selectedLanguage: activeLang || undefined,
+          source: anime.source || "firebase",
         });
 
         // One cache entry per series — replace any prior episode of the same series.
@@ -2695,8 +2708,9 @@ const Index = () => {
         const season = playerState.anime.seasons[playerState.seasonIdx];
         const episode = season?.episodes?.[playerState.epIdx];
         if (season && episode) {
+          const seasonNumber = Number(String(season.name || "").match(/\d+/)?.[0]) || playerState.seasonIdx + 1;
           updates.episodeInfo = {
-            season: playerState.seasonIdx + 1,
+            season: seasonNumber,
             episode: playerState.epIdx + 1,
             seasonName: season.name,
             episodeNumber: episode.episodeNumber,
@@ -2745,6 +2759,16 @@ const Index = () => {
           title: playerState.anime.title,
           poster: playerState.anime.poster,
           updatedAt: Date.now(),
+          episodeInfo: updates.episodeInfo ? {
+            seasonIdx: playerState.seasonIdx,
+            epIdx: playerState.epIdx,
+            episodeNumber: updates.episodeInfo.episodeNumber,
+            audioTrack: playerState.selectedLanguage || undefined,
+            selectedLanguage: playerState.selectedLanguage || undefined,
+          } : undefined,
+          audioTrack: playerState.selectedLanguage || undefined,
+          selectedLanguage: playerState.selectedLanguage || undefined,
+          source: playerState.anime.source || "firebase",
         });
         // Live-update the home rail so the card appears immediately (esp. for guests).
         setContinueWatching((prev) => {
@@ -3015,7 +3039,6 @@ const Index = () => {
         return;
       }
 
-      addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       const nextState = {
         ...playerState!,
         src: nextSrc,
@@ -3030,6 +3053,7 @@ const Index = () => {
       };
       playerStateRef.current = nextState; // sync ref BEFORE navigate fires the route effect
       setPlayerState(nextState);
+      addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
       navigate(buildWatchRoute(playerState!.anime.id, playerState!.seasonIdx, i), { replace: true });
     },
   }));
@@ -3064,7 +3088,6 @@ const Index = () => {
       return;
     }
 
-    addToWatchHistory(playerState.anime, newSeasonIdx, 0);
     const nextState = {
       ...playerState,
       src: nextSrc,
@@ -3080,6 +3103,7 @@ const Index = () => {
     };
     playerStateRef.current = nextState;
     setPlayerState(nextState);
+    addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
     navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
   }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
@@ -3536,7 +3560,6 @@ const Index = () => {
                     return;
                   }
 
-                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   const nextState = {
                     ...playerState,
                     src: nextSrc,
@@ -3550,6 +3573,7 @@ const Index = () => {
                   };
                   playerStateRef.current = nextState;
                   setPlayerState(nextState);
+                  addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
                   navigate(buildWatchRoute(playerState.anime.id, playerState.seasonIdx, nextIdx), { replace: true });
                 }
               : undefined
@@ -3605,6 +3629,7 @@ const Index = () => {
             } as any;
             playerStateRef.current = nextState;
             setPlayerState(nextState);
+            addToWatchHistory(nextState.anime, nextState.seasonIdx, nextState.epIdx);
           }}
           onSuggestedClick={(anime) => {
             // In-place suggestion switch: keep VideoPlayer mounted so the new

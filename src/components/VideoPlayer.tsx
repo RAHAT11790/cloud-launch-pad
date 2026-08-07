@@ -490,7 +490,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return localStorage.getItem("rs_quality") || "Auto";
   });
   const currentQualityRef = useRef(localStorage.getItem("rs_quality") || "Auto");
-  const manualQualitySelectedRef = useRef(false);
+  const manualQualitySelectedRef = useRef((localStorage.getItem("rs_quality") || "Auto").toLowerCase() !== "auto");
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>("");
@@ -814,8 +814,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>(() => {
-    return localStorage.getItem("rs_language") || "Hindi";
+    return selectedLanguage || localStorage.getItem("rs_language") || "Hindi";
   });
+  useEffect(() => {
+    const exact = String(selectedLanguage || "").trim();
+    if (exact) setSelectedLanguageLabel(exact);
+  }, [animeId, currentSeasonIdx, currentEpisodeIdx, selectedLanguage]);
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
@@ -932,19 +936,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isAnimeSaltContent]);
 
   const currentLangLabel = useMemo(() => {
-    // AnimeSalt: lock to Hindi as the visible label whenever AN content is
-    // playing. AN's default audio policy is Hindi-first (Index.tsx forces it
-    // via pickAnDefaultAudioIdx), so showing anything else would just flash
-    // before the player swaps back. Only honor an explicit user override.
+    // Keep the exact active track label. Collapsing "Hindi Atomic" to "Hindi"
+    // made playback correct while the Resources UI displayed the wrong value.
     if (isAnimeSaltContent) {
       if (selectedLanguageLabel && propAudioTracks?.length) {
         const match = propAudioTracks.find((t) => {
-          const lbl = getPrimaryLanguageToken(t.label || t.language || "") || "";
-          return lbl.toLowerCase() === selectedLanguageLabel.trim().toLowerCase();
+          const lbl = normalizeLanguageName(t.label || t.language || "");
+          return lbl.toLowerCase() === normalizeLanguageName(selectedLanguageLabel).toLowerCase();
         });
-        if (match) return getPrimaryLanguageToken(match.label || match.language || "") || selectedLanguageLabel;
+        if (match) return normalizeLanguageName(match.label || match.language || "") || selectedLanguageLabel;
       }
-      return "Hindi";
+      if (selectedLanguage) return normalizeLanguageName(selectedLanguage) || selectedLanguage;
+      const active = propAudioTracks?.[0];
+      if (active) return normalizeLanguageName(active.label || active.language || "") || "Hindi";
+      return selectedLanguageLabel || "Hindi";
     }
     if (selectedLanguageLabel) return selectedLanguageLabel;
     if (selectedLanguage) return getPrimaryLanguageToken(selectedLanguage) || selectedLanguage;
@@ -2037,9 +2042,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (prevAnimeIdRef.current === animeId) return;
     prevAnimeIdRef.current = animeId;
-    manualQualitySelectedRef.current = false;
-    currentQualityRef.current = "Auto";
-    setCurrentQuality("Auto");
+    const preferredQuality = localStorage.getItem("rs_quality") || "Auto";
+    manualQualitySelectedRef.current = preferredQuality.toLowerCase() !== "auto";
+    currentQualityRef.current = preferredQuality;
+    setCurrentQuality(preferredQuality);
     manualServerSelectedRef.current = false;
     setManualServerSelected(false);
     preferredServerIndexRef.current = null;
@@ -3324,13 +3330,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     lastEpisodeKeyRef.current = episodeKey;
     instantSwitchRef.current = true;
     const nextQualityOptions: QualityOption[] = [{ label: "Auto", src }, ...(qualityOptions || []).filter((q) => q.src)];
-    // Per-anime quality memory only: preserve the user's manual pick within
-    // the same series/anime (episode switches). On a brand-new anime the
-    // per-anime reset effect (animeId change) has already cleared this ref,
-    // so we always fall back to Auto — no global localStorage carry-over,
-    // no forced low-quality auto-start.
-    const preservedQuality = manualQualitySelectedRef.current && currentQuality !== "Auto"
-      ? nextQualityOptions.find((q) => q.label === currentQuality && (!is4KLabel(q.label) || isPremium))
+    // Apply Profile's global default quality on every title. Match labels
+    // case-insensitively ("720p" vs "720P") and retain the 4K premium gate.
+    const preferredLabel = localStorage.getItem("rs_quality") || currentQuality || "Auto";
+    const preservedQuality = preferredLabel.toLowerCase() !== "auto"
+      ? nextQualityOptions.find((q) => q.label.toLowerCase() === preferredLabel.toLowerCase() && (!is4KLabel(q.label) || isPremium))
       : null;
     const autoStartQuality = null as QualityOption | null;
     const baseRawSrc = preservedQuality?.src || src;
