@@ -2619,9 +2619,9 @@ const Index = () => {
         const season = anime.seasons[seasonIdx];
         historyItem.episodeInfo = {
           season: seasonIdx + 1,
-          episode: epIdx + 1,
+          episode: (season.episodes[epIdx] as any)?.episodeNumber || (epIdx + 1),
           seasonName: season.name,
-          episodeNumber: season.episodes[epIdx].episodeNumber,
+          episodeNumber: (season.episodes[epIdx] as any)?.episodeNumber || (epIdx + 1),
           seasonIdx,
           epIdx,
         };
@@ -3436,7 +3436,7 @@ const Index = () => {
                           <div className="flex items-center justify-between mt-0.5">
                             {(sn || ep) ? (
                               <p className="text-[8px] text-primary font-bold">
-                                {sn ? `S${sn} ` : ""}{ep ? `EP ${ep}` : ""}
+                                {sn ? `S${sn} ` : ""}{ep ? `EP ${String(ep).padStart(2, '0')}` : ""}
                               </p>
                             ) : <span className="text-[8px] text-white/60">Resume</span>}
                             {pct > 0 && <span className="text-[8px] text-white/70 font-semibold">{pct}%</span>}
