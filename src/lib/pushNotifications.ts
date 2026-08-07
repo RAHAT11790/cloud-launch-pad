@@ -358,9 +358,7 @@ export async function unregisterPushNotifications() {
 // ============================================================
 
 function sendFcmUrl(): string {
-  const envUrl = String(import.meta.env.VITE_FCM_ENDPOINT || "").trim();
-  if (envUrl) return envUrl;
-  const base = String(import.meta.env.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const base = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (!base) return "";
   return `${base}/functions/v1/send-fcm`;
 }
@@ -379,7 +377,7 @@ async function resolveSendFcmEndpoint(): Promise<{ url: string; provider: "cloud
 
 function sendHeaders(url: string, provider: "cloudflare" | "supabase") {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (provider === "supabase" || /\/functions\/v1\/send-fcm/i.test(url) || url.includes(".supabase.co")) {
+  if (provider === "supabase" || /\/functions\/v1\/send-fcm/i.test(url)) {
     if (SUPABASE_ANON_KEY) {
       headers.apikey = SUPABASE_ANON_KEY;
       headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;

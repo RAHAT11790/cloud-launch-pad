@@ -61,11 +61,10 @@ const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisode
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
 const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"));
 
-const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number, language?: string) => {
+const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
  if (seasonIdx !== undefined) params.set("s", String(Math.max(0, seasonIdx) + 1));
  if (epIdx !== undefined) params.set("e", String(Math.max(0, epIdx) + 1));
- if (language) params.set("lang", language);
  const qs = params.toString();
  return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
@@ -223,7 +222,7 @@ const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/সেভ ব্যর্থ/g, "Save failed"], [/টাইটেল enter/g, "Enter a title"], [/ছবি enter \(URL বা আপলোড\)/g, "Add an image URL or upload an image"], [/হিরো স্লাইডারে পোস্ট করা হয়েছে/g, "posted to the hero slider"], [/পোস্ট করা ব্যর্থ/g, "Post failed"], [/পোস্ট ডিলিট হয়েছে/g, "Post deleted"], [/ডিলিট ব্যর্থ/g, "Delete failed"],
  [/কাস্টম হিরো পোস্ট তৈরি করুন/g, "Create Custom Hero Post"], [/ছবি আপলোড করুন বা লিংক enter, টাইটেল ও বিবরণ লিখুন। কালার ও ফন্ট কাস্টমাইজ করুন।/g, "Upload an image or paste a link, then add title, description, colors, and font."], [/ব্যাNoর ছবি/g, "Banner Image"], [/ছবির URL enter/g, "Enter image URL"], [/টাইটেল কালার/g, "Title Color"], [/টাইটেল ফন্ট/g, "Title Font"], [/বিবরণ \/ ডেসক্রিপশন/g, "Description"], [/পোস্টের টাইটেল/g, "Post title"], [/বিস্তারিত বিবরণ লিখুন\.\.\. \(click করলে ডিটেইল পেজে এটা খাবে\)/g, "Write the full description shown on the detail page"], [/পোস্ট করুন/g, "Post"], [/পোস্ট করা item/g, "Posted Items"], [/no পোস্ট নেই/g, "No posts yet"],
  [/all এনিমে category অ্যাসাইন/g, "Bulk Anime Category Assignment"], [/এmultiple এনিমে সিলেক্ট করে together category সেট করুন।/g, "Select multiple anime and set their category together."], [/এনিমে সার্চ/g, "Search anime"], [/category/g, "Category"], [/টি সিলেক্টেড/g, "selected"], [/সেট করুন/g, "Set"], [/all সিলেকশন বাতিল/g, "Clear all selections"], [/no এনিমে নেই/g, "No anime found"], [/category সেট হয়েছে/g, "category set"],
- [/টেলিগ্রামে পোস্ট করুন/g, "Post to Telegram"], [/চ্যানেল আইডি/g, "Channel ID"], [/সিজন/g, "Season"], [/নতুন EP/g, "New EP"], [/পোস্টার URL/g, "Poster URL"], [/বাদ enter/g, "Cancel"], [/পোস্টে যান/g, "Go to Post"], [/চ্যানেলে পোস্ট sendো হয়েছে/g, "channel posts sent"], [/চ্যানেলে sendো হয়েছে/g, "channels sent"], [/all চ্যানেলে পোস্ট ব্যর্থ হয়েছে/g, "Posting failed for all channels"], [/all চ্যানেলে ব্যর্থ/g, "All channels failed"], [/চ্যানেলে সফল/g, "channels succeeded"], [/language matching failed/g, "ল্যাঙ্গুয়েজ ম্যাচিং ব্যর্থ হয়েছে"],
+ [/টেলিগ্রামে পোস্ট করুন/g, "Post to Telegram"], [/চ্যানেল আইডি/g, "Channel ID"], [/সিজন/g, "Season"], [/নতুন EP/g, "New EP"], [/পোস্টার URL/g, "Poster URL"], [/বাদ enter/g, "Cancel"], [/পোস্টে যান/g, "Go to Post"], [/চ্যানেলে পোস্ট sendো হয়েছে/g, "channel posts sent"], [/চ্যানেলে sendো হয়েছে/g, "channels sent"], [/all চ্যানেলে পোস্ট ব্যর্থ হয়েছে/g, "Posting failed for all channels"], [/all চ্যানেলে ব্যর্থ/g, "All channels failed"], [/চ্যানেলে সফল/g, "channels succeeded"],
  [/Send Money করুন নিচের Noম্বারে এবং Transaction ID সাবমিট করুন।/g, "Send Money to the number below and submit the Transaction ID."], [/Anime-specific genres ও rating লোড হয়েছে/g, "Anime-specific genres and rating loaded"], [/এthis ID থেকে genre data পাওয়া যায়নি/g, "No genre data found for this ID"],
  [/all active free access cancel করতে want\?/g, "Cancel all active free access?"], [/all free access বাতিল করা হয়েছে/g, "All free access has been canceled"], [/এর free access বাতিল করতে want\?/g, "free access should be canceled?"], [/নির্দিষ্ট user's free access বাতিল করা হয়েছে/g, "Selected user's free access has been canceled"],
  [/এপিসোড Noম TMDB থেকে লোড হয়েছে/g, "episode names loaded from TMDB"], [/অটো category/g, "Auto category"], [/আগে থেকেthis আছে/g, "already exists"], [/AnimeSalt contেন্ট New Release এ সাপোর্ট করা হয় No/g, "AnimeSalt content is not supported in New Releases"],
@@ -7218,24 +7217,26 @@ ${tgBulkFooter}
  <button onClick={async () => {
  // Step 1: Send the in-app notification first (existing flow already added the release entry)
  // Step 2: Auto-redirect to Telegram Post section with anime preselected
-  const ctx = wsNotifyContextRef.current;
-  const seriesId = ctx?.seriesId || "";
-  const usingMulti = wsAutoRanges.length > 0;
-  const firstAuto = wsAutoRanges[0];
-  const capturedSeasonIdx = usingMulti
-    ? (firstAuto?.seasonIdx ?? 0)
-    : parseInt(wsNotifySeason);
-  const capturedEpNumber = usingMulti
-    ? (firstAuto?.startEp ?? 1)
-    : (parseInt(wsNotifyEpisode) + 1);
-  const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
-  const capturedEpNumberEnd = usingMulti
-    ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
-    : (wsNotifyEpisodeEnd !== ""
-       ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
-       : capturedEpNumber);
-  const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
-  const capturedLanguage = ctx?.form?.selectedAdminLanguage || ctx?.form?.language || "";
+ const ctx = wsNotifyContextRef.current;
+ const seriesId = ctx?.seriesId || "";
+ // 🎯 Capture season/episode BEFORE state is cleared so we can build the
+ // exact deep link (/watch/<id>?s=<season>&e=<episode>) even when the
+ // releasesData snapshot from Firebase hasn't propagated yet.
+ const usingMulti = wsAutoRanges.length > 0;
+ const firstAuto = wsAutoRanges[0];
+ const capturedSeasonIdx = usingMulti
+   ? (firstAuto?.seasonIdx ?? 0)
+   : parseInt(wsNotifySeason);
+ const capturedEpNumber = usingMulti
+   ? (firstAuto?.startEp ?? 1)
+   : (parseInt(wsNotifyEpisode) + 1);
+ const capturedSeason = ctx?.seasons?.[capturedSeasonIdx];
+ const capturedEpNumberEnd = usingMulti
+   ? (firstAuto?.endEp ?? firstAuto?.startEp ?? capturedEpNumber)
+   : (wsNotifyEpisodeEnd !== ""
+      ? (capturedSeason?.episodes?.[parseInt(wsNotifyEpisodeEnd)]?.episodeNumber ?? parseInt(wsNotifyEpisodeEnd) + 1)
+      : capturedEpNumber);
+ const capturedEpIdx = getEpisodeIndexForShare(capturedSeason, capturedEpNumber, Math.max(0, capturedEpNumber - 1));
 
  toast.success("✅ Notification sent — redirecting to Telegram post...");
  setWsSaveNotifyModal(false);
@@ -7257,7 +7258,7 @@ ${tgBulkFooter}
  // Force-override with the captured deep link so it always points at the
  // freshly-added episode (releasesData may hold an older episodeInfo).
  if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
-    setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx, capturedLanguage));
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
  }
  // ✅ Range fix — always restore the exact captured episode range.
  setTgContentKind("series");
@@ -7283,13 +7284,12 @@ ${tgBulkFooter}
     if (genres.length > 0) setTgGenres(genres.join(", "));
     if (rating) setTgRating(rating);
   } catch {} })();
-  if (capturedLanguage) setTgLanguages(capturedLanguage);
-  else if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
+ if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
   // Use the captured season/episode from the modal so the Watch button
   // always deep-links to the newly-added episode (not just seriesId).
   if (Number.isFinite(capturedSeasonIdx) && capturedSeasonIdx >= 0) {
-   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx, capturedLanguage));
+   setTgButtonLink(buildEpisodeShareUrl(seriesId, capturedSeasonIdx, capturedEpIdx));
    setTgSeason(String(capturedSeasonIdx + 1).padStart(2, '0'));
     const rangeStart = String(capturedEpNumber).padStart(2, "0");
     const rangeEnd = String(capturedEpNumberEnd).padStart(2, "0");
@@ -9012,9 +9012,7 @@ ${tgBulkFooter}
    if (latestRelease?.episodeInfo?.type !== "movie" && latestRelease?.episodeInfo?.seasonNumber && latestRelease?.episodeInfo?.episodeNumber) {
     const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
     const eIdx = getEpisodeIndexForShare((fullData as any).seasons?.[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
-    const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
-    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
-    if (relLang) setTgLanguages(relLang);
+    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx));
    } else {
     setTgButtonLink(buildEpisodeShareUrl(r.id));
    }
