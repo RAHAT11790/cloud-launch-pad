@@ -5404,11 +5404,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   })}
                 </div>
               )}
+            </div>
+          )}
         </div>
       </div>
-    )}
 
-    {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+      {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+
 
           <div className="w-full px-5 pt-4 pb-2">
             <button
