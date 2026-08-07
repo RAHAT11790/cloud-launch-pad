@@ -517,7 +517,8 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
       : undefined;
     if (exact) return exact.label;
 
-    // Fallback: If "Hindi Atomic" preferred but not playable, try base "Hindi"
+    // Smart Base Fallback: If "Hindi Atomic" is preferred but that specific bucket isn't playable,
+    // look for the base "Hindi" bucket to keep the UI active.
     if (normalizedPreferred.toLowerCase().includes("hindi")) {
       const baseHindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
       if (baseHindi) return baseHindi.label;
