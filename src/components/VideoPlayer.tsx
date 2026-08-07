@@ -1920,15 +1920,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           update(ref(db, `users/${uid}/watchHistory/${animeId}`), progressData);
         } else {
           guestStore.continue.upsert({
-            id: animeId,
+            animeId: animeId,
             title,
             poster,
-            currentTime: cur,
+            position: cur,
             duration: dur,
-            episodeInfo,
+            episodeInfo: {
+              seasonIdx: episodeInfo.seasonIdx,
+              epIdx: episodeInfo.epIdx,
+              episodeNumber: episodeInfo.episodeNumber,
+              audioTrack: currentLangLabel,
+              selectedLanguage: currentLangLabel
+            },
             audioTrack: currentLangLabel,
             selectedLanguage: currentLangLabel,
-            watchedAt: now,
+            updatedAt: now,
             source: isAnimeSaltContent ? 'animesalt' : 'rs'
           });
         }
