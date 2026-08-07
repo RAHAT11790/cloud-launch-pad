@@ -1875,17 +1875,64 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Save progress for both native video and embed playback.
   useEffect(() => {
-    if (!onSaveProgress) return;
+    if (!onSaveProgress || !animeId) return;
+    const uid = getLocalUserId();
+    const now = Date.now();
     const v = videoRef.current;
+
     const saveNow = () => {
+      let cur = 0;
+      let dur = 0;
+
       if (isEmbedPlayback) {
-        const cur = embedTimeRef.current.currentTime || 0;
-        const dur = embedTimeRef.current.duration || 0;
-        if (cur > 0 && dur > 0) onSaveProgress(cur, dur);
-        return;
+        cur = embedTimeRef.current.currentTime || 0;
+        dur = embedTimeRef.current.duration || 0;
+      } else if (v && v.currentTime > 0 && v.duration > 0) {
+        cur = v.currentTime;
+        dur = v.duration;
       }
-      if (v && v.currentTime > 0 && v.duration > 0) {
-        onSaveProgress(v.currentTime, v.duration);
+
+      if (cur > 0 && dur > 0) {
+        // Build full episode context for database
+        const episodeInfo = (isAnimeSaltContent && seasons?.length) ? {
+          seasonIdx: currentSeasonIdx ?? 0,
+          epIdx: activeEpisodeIdx,
+          audioTrack: currentAudioTrack,
+          language: selectedLanguageLabel
+        } : {
+          seasonIdx: currentSeasonIdx ?? 0,
+          epIdx: activeEpisodeIdx,
+          language: selectedLanguageLabel
+        };
+
+        const progressData = {
+          id: animeId,
+          title,
+          subtitle,
+          poster,
+          currentTime: cur,
+          duration: dur,
+          watchedAt: now,
+          episodeInfo,
+          type: anime?.type || 'series',
+          source: isAnimeSaltContent ? 'animesalt' : 'rs'
+        };
+
+        if (uid) {
+          update(ref(db, `users/${uid}/continueWatching/${animeId}`), progressData);
+        } else {
+          guestStore.continue.upsert({
+            animeId: animeId,
+            title,
+            poster,
+            position: cur,
+            duration: dur,
+            seasonIdx: episodeInfo.seasonIdx,
+            epIdx: episodeInfo.epIdx,
+            updatedAt: now
+          } as any);
+        }
+        onSaveProgress(cur, dur);
       }
     };
 
@@ -1899,7 +1946,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.removeEventListener("pagehide", saveNow);
       saveNow();
     };
-  }, [currentSrc, isEmbedPlayback, onSaveProgress]);
+  }, [animeId, title, subtitle, poster, currentSeasonIdx, activeEpisodeIdx, currentAudioTrack, selectedLanguageLabel, isAnimeSaltContent, seasons, anime?.type, isEmbedPlayback, onSaveProgress]);
 
   // Screen Wake Lock — keeps mobile screen awake while the player is mounted.
   // Re-acquired automatically when the tab returns to the foreground.
