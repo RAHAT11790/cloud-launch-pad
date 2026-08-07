@@ -341,7 +341,7 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
   const lower = s.toLowerCase();
   
   // Hard matches for common codes
-  const key = lower.replace(/[^a-z]/g, "");
+  const key = lower.replace(/[^a-z0-9]/g, "");
   if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
 
   // Specific check for Atomic variants to prevent "Hindi atomic" -> "Hindi Atomic"
@@ -351,9 +351,16 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
     const isEnglish = lower.includes("english");
     if (isHindi) return "Hindi Atomic";
     if (isEnglish) return "English Atomic";
-    // General case: Atomic [Language]
+    
+    // Title Case for other Atomic variants
     return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
   }
+
+  // Handle common Bengali/Hindi/English variants directly
+  if (lower === "hindi" || lower === "hin") return "Hindi";
+  if (lower === "english" || lower === "eng") return "English";
+  if (lower === "japanese" || lower === "jap" || lower === "jp") return "Japanese";
+  if (lower === "bengali" || lower === "bangla" || lower === "bn") return "Bengali";
   
   // Custom / dubber names
   if (/\s/.test(s)) {
@@ -361,7 +368,8 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
       .split(/\s+/)
       .map((w) => {
         // Keep acronyms like "AI", "AN", "RS" as is, otherwise Title Case
-        if (w.length <= 3 && w === w.toUpperCase()) return w;
+        const upper = w.toUpperCase();
+        if (w.length <= 3 && (w === upper || ["AI", "AN", "RS", "4K", "HD"].includes(upper))) return upper;
         return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
       })
       .join(" ");

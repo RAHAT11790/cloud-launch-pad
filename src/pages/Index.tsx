@@ -2617,16 +2617,23 @@ const Index = () => {
 
       if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
         const season = anime.seasons[seasonIdx];
+        const episode = season.episodes[epIdx] as Episode;
         historyItem.episodeInfo = {
           season: seasonIdx + 1,
-          episode: (season.episodes[epIdx] as any)?.episodeNumber || (epIdx + 1),
+          episode: episode?.episodeNumber || (epIdx + 1),
           seasonName: season.name,
-          episodeNumber: (season.episodes[epIdx] as any)?.episodeNumber || (epIdx + 1),
+          episodeNumber: episode?.episodeNumber || (epIdx + 1),
           seasonIdx,
           epIdx,
         };
       }
-      const activeLang = (anime as any)?.selectedLanguage || (playerStateRef.current?.anime.id === anime.id ? playerStateRef.current?.selectedLanguage : null) || anime.baseLanguage || anime.language || "";
+      
+      // CRITICAL: Use the player's currently selected language if this is the active anime,
+      // otherwise fallback to the anime's base language or default.
+      const activeLang = (playerStateRef.current?.anime?.id === anime.id) 
+        ? playerStateRef.current?.selectedLanguage 
+        : (anime as any)?.selectedLanguage || anime.baseLanguage || anime.language || "";
+        
       historyItem.language = getPrimaryLanguageToken(activeLang) || activeLang || "";
 
       try {
