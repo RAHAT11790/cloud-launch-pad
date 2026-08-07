@@ -338,11 +338,24 @@ const LANGUAGE_NAME_MAP: Record<string, string> = {
 export const normalizeLanguageName = (raw: string | undefined | null): string => {
   const s = String(raw || "").trim();
   if (!s) return "";
-  const key = s.toLowerCase().replace(/[^a-z]/g, "");
-  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+  const lower = s.toLowerCase();
   
-  // Custom / dubber names (e.g. "Atomic Dubber Hindi")
-  // If it's a multi-word string, ensure it's not just a broken code.
+  // Hard matches for common codes
+  const key = lower.replace(/[^a-z]/g, "");
+  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+
+  // Specific check for Atomic variants to prevent "Hindi atomic" -> "Hindi Atomic"
+  // and ensure consistent label matching
+  if (lower.includes("atomic")) {
+    const isHindi = lower.includes("hindi");
+    const isEnglish = lower.includes("english");
+    if (isHindi) return "Hindi Atomic";
+    if (isEnglish) return "English Atomic";
+    // General case: Atomic [Language]
+    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
+  
+  // Custom / dubber names
   if (/\s/.test(s)) {
     return s
       .split(/\s+/)
@@ -353,11 +366,10 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
       })
       .join(" ");
   }
-  
-export const normalizeLanguageName = (raw: string | undefined | null): string => {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  const lower = s.toLowerCase();
+
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
   
   // Hard matches for common codes
   const key = lower.replace(/[^a-z]/g, "");
