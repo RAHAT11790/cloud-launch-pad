@@ -5120,12 +5120,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex flex-col min-w-0 max-w-[60%]">
+                    <h1 className="text-[11px] font-bold text-white line-clamp-1 leading-tight">{title}</h1>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span
+                        ref={timeDisplayRef}
+                        className="text-[10px] font-bold whitespace-nowrap tabular-nums leading-none text-white/90"
+                      >{formatTime(currentTime)} / {formatTime(duration)}</span>
+                      {selectedLanguageLabel && (
+                        <>
+                          <span className="text-white/20 text-[9px]">|</span>
+                          <span className="text-[10px] font-bold text-primary">{selectedLanguageLabel}</span>
+                        </>
+                      )}
+                      {subtitle && (
+                        <>
+                          <span className="text-white/20 text-[9px]">|</span>
+                          <span className="text-[10px] font-medium text-white/60 truncate">{subtitle}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span
-                      ref={timeDisplayRef}
-                      className="text-[11px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
-                      style={{ textShadow: "0 1px 3px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)" }}
-                    >{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
