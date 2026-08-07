@@ -370,35 +370,6 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
-  
-  // Hard matches for common codes
-  const key = lower.replace(/[^a-z]/g, "");
-  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
-
-  // Specific check for Atomic variants to prevent "Hindi atomic" -> "Hindi Atomic"
-  // and ensure consistent label matching
-  if (lower.includes("atomic")) {
-    const isHindi = lower.includes("hindi");
-    const isEnglish = lower.includes("english");
-    if (isHindi) return "Hindi Atomic";
-    if (isEnglish) return "English Atomic";
-    // General case: Atomic [Language]
-    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-  }
-  
-  // Custom / dubber names
-  if (/\s/.test(s)) {
-    return s
-      .split(/\s+/)
-      .map((w) => {
-        if (w.length <= 3 && w === w.toUpperCase()) return w;
-        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-      })
-      .join(" ");
-  }
-  
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-};
 
 const splitLanguageTokens = (value: string | undefined | null) => {
   const seen = new Set<string>();
