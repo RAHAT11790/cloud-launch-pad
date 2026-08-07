@@ -1515,7 +1515,7 @@ const Index = () => {
           // to prevent "Season 1 Ep 3" fallback when returning to a specific track.
           if (entryNewer) {
             // Merge metadata: keep latest watchedAt but ensure we don't lose the specific episode/audio info
-            merged.set(key, {
+            const mergedItem = {
               ...current,
               ...entry,
               watchedAt: entry.watchedAt || current.watchedAt,
@@ -1524,7 +1524,22 @@ const Index = () => {
               selectedLanguage: entry.selectedLanguage || current.selectedLanguage,
               currentTime: entryHasProgress ? entry.currentTime : current.currentTime,
               duration: entryHasProgress ? entry.duration : current.duration
-            });
+            };
+            
+            // Fix: if episodeInfo exists but is nested differently in some legacy entries
+            if (entry.episodeInfo) {
+              mergedItem.episodeInfo = entry.episodeInfo;
+            } else if (entry.seasonIdx !== undefined && entry.epIdx !== undefined) {
+              mergedItem.episodeInfo = {
+                seasonIdx: entry.seasonIdx,
+                epIdx: entry.epIdx,
+                episodeNumber: (entry.epIdx + 1),
+                audioTrack: entry.audioTrack,
+                selectedLanguage: entry.selectedLanguage
+              };
+            }
+            
+            merged.set(key, mergedItem);
             return;
           }
           if (entryHasProgress && !currentHasProgress) {
