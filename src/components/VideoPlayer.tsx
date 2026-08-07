@@ -465,8 +465,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
   const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
-  const [currentQuality, setCurrentQuality] = useState<string>("Auto");
-  const currentQualityRef = useRef("Auto");
+  const [currentQuality, setCurrentQuality] = useState<string>(() => {
+    return localStorage.getItem("rs_quality") || "Auto";
+  });
+  const currentQualityRef = useRef(localStorage.getItem("rs_quality") || "Auto");
   const manualQualitySelectedRef = useRef(false);
   useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
@@ -790,7 +792,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(t);
   }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
-  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
+  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>(() => {
+    return localStorage.getItem("rs_language") || "Hindi";
+  });
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
@@ -1238,35 +1242,49 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (isAnimeSaltContent && propAudioTracks?.length) {
       setSelectedLanguageLabel((existing) => {
-        const existingToken = getPrimaryLanguageToken(existing);
-        if (existingToken && propAudioTracks.some((t) => {
-          const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
-          return label.toLowerCase() === existingToken.toLowerCase();
-        })) return existing;
-        const preferred = getPrimaryLanguageToken(selectedLanguage);
-        const preferredMatch = preferred
-          ? propAudioTracks.find((t) => {
-              const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
-              return label.toLowerCase() === preferred.toLowerCase();
-            })
-          : null;
-        const pick = preferredMatch || propAudioTracks.find((t: any) => t?.isDefault) || propAudioTracks[0];
-        const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
-        return nextLabel || existing;
+        const prefLang = localStorage.getItem("rs_language") || "Hindi";
+        
+        // Try to match preferred language
+        const match = propAudioTracks.find(t => {
+          const label = (t.label || t.language || "").toLowerCase();
+          return label.includes(prefLang.toLowerCase());
+        });
+        
+        if (match) {
+          return match.label || match.language || "";
+        }
+        
+        // If preferred not found, try common fallbacks
+        const fallbacks = ["Hindi", "English"];
+        for (const f of fallbacks) {
+          const fbMatch = propAudioTracks.find(t => 
+            (t.label || t.language || "").toLowerCase().includes(f.toLowerCase())
+          );
+          if (fbMatch) {
+            const fbLabel = fbMatch.label || fbMatch.language || "";
+            // Notify user about fallback once per session or anime change
+            // Using a ref to prevent spamming toasts
+            if (!window.sessionStorage.getItem(`rs_lang_fallback_${animeId}`)) {
+              toast.info(`Default language (${prefLang}) not found, switched to ${fbLabel}`, { 
+                duration: 2000,
+                position: "bottom-center"
+              });
+              window.sessionStorage.setItem(`rs_lang_fallback_${animeId}`, "true");
+            }
+            return fbLabel;
+          }
+        }
+        
+        // Final fallback: first track
+        return propAudioTracks[0].label || propAudioTracks[0].language || "";
       });
       return;
     }
-    // RS / non-AN: trust the parent-supplied selectedLanguage prop.
-    // Use functional setState so this effect does NOT depend on
-    // selectedLanguageLabel — that dep used to create a self-firing loop
-    // (set label → re-run effect → set label again → flash Hindi/English).
-    const nextLabel =
-      getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) ||
-      propAudioTracks?.[0]?.label ||
-      propAudioTracks?.[0]?.language ||
-      "";
-    if (!nextLabel) return;
-    setSelectedLanguageLabel((prev) => (prev === nextLabel ? prev : nextLabel));
+    
+    // RS / non-AN logic
+    const prefLang = localStorage.getItem("rs_language") || "Hindi";
+    setSelectedLanguageLabel(prev => prev || prefLang);
+
   }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage]);
 
   useEffect(() => {
