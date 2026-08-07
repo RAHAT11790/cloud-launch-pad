@@ -2602,6 +2602,8 @@ const Index = () => {
       const cachedMatch = Array.isArray(cached)
         ? cached.find((item: any) => item?.id === anime.id)
         : null;
+      // MATCH BY ID ONLY - DO NOT FILTER BY SEASON/EPISODE HERE
+      // We want to update the entry for this series, not create a new one.
       const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id);
 
       const historyItem: any = {
@@ -2628,13 +2630,13 @@ const Index = () => {
         };
       }
       
-      // CRITICAL: Use the player's currently selected language if this is the active anime,
-      // otherwise fallback to the anime's base language or default.
+      // CRITICAL: Force the saved language to be exactly what's in the player right now
+      // This fixes the "Hindi" vs "Hindi Atomic" display mismatch in Continue Watching
       const activeLang = (playerStateRef.current?.anime?.id === anime.id) 
         ? playerStateRef.current?.selectedLanguage 
         : (anime as any)?.selectedLanguage || anime.baseLanguage || anime.language || "";
         
-      historyItem.language = getPrimaryLanguageToken(activeLang) || activeLang || "";
+      historyItem.language = activeLang || "";
 
       try {
         guestStore.continue.upsert({
@@ -2721,7 +2723,7 @@ const Index = () => {
           year: playerState.anime.year,
           rating: playerState.anime.rating,
           type: playerState.anime.type,
-          language: playerState.selectedLanguage || getPrimaryLanguageToken(playerState.anime.baseLanguage || playerState.anime.language) || playerState.anime.language || "",
+          language: playerState.selectedLanguage || playerState.anime.baseLanguage || playerState.anime.language || "",
           watchedAt: Date.now(),
           currentTime,
           duration,
@@ -3408,7 +3410,7 @@ const Index = () => {
                   const pct = (item.currentTime && item.duration) ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
                   const sn = item.episodeInfo?.season;
                   const ep = item.episodeInfo?.episodeNumber || item.episodeInfo?.episode;
-                  const languageLabel = getPrimaryLanguageToken(item.language) || "";
+                  const languageLabel = item.language || "";
                   const wt = item.watchedAt || item.updatedAt;
                   let agoLabel = "";
                   if (wt) {
