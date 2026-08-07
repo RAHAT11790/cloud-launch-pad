@@ -9005,8 +9005,6 @@ ${tgBulkFooter}
     const sIdx = Math.max(0, Number(latestRelease.episodeInfo.seasonNumber) - 1);
     const seasons = (fullData as any).seasons || [];
     const eIdx = getEpisodeIndexForShare(seasons[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
-    const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
-    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
      const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language || (fullData as any).selectedAdminLanguage || (fullData as any).baseLanguage;
      setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
      if (relLang) setTgLanguages(relLang);
