@@ -5678,10 +5678,15 @@ ${tgBulkFooter}
   if (rating) setTgRating(rating);
   else if (mv?.rating) setTgRating(String(mv.rating));
   }
- } else if (cType === "animesalt") {
- setTgDubType("official");
- }
- };
+  } else if (cType === "animesalt") {
+    setTgDubType("official");
+  }
+} catch (err) {
+  console.error("Telegram fill leak error:", err);
+} finally {
+  setFetchingOverlay(false);
+}
+}, [releasesData]);
 
  // ==================== RENDER HELPERS ====================
  const inputClass = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/8 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors placeholder:text-zinc-500";
