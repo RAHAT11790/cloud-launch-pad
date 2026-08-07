@@ -1510,13 +1510,24 @@ const Index = () => {
           const entryHasProgress = Number(entry?.currentTime) > 0 && Number(entry?.duration) > 0;
           const currentHasProgress = Number(current?.currentTime) > 0 && Number(current?.duration) > 0;
           const entryNewer = Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0);
-          if (entryNewer && entryHasProgress) { merged.set(key, entry); return; }
-          if (entryNewer && !entryHasProgress && currentHasProgress) {
-            // Keep older progress data but bump the watchedAt timestamp
-            merged.set(key, { ...current, watchedAt: entry.watchedAt || current.watchedAt });
+          
+          // CRITICAL: When syncing, prioritize specific episode/track data 
+          // to prevent "Season 1 Ep 3" fallback when returning to a specific track.
+          if (entryNewer) {
+            // Merge metadata: keep latest watchedAt but ensure we don't lose the specific episode/audio info
+            merged.set(key, {
+              ...current,
+              ...entry,
+              watchedAt: entry.watchedAt || current.watchedAt,
+              episodeInfo: entry.episodeInfo || current.episodeInfo,
+              audioTrack: entry.audioTrack !== undefined ? entry.audioTrack : current.audioTrack,
+              selectedLanguage: entry.selectedLanguage || current.selectedLanguage,
+              currentTime: entryHasProgress ? entry.currentTime : current.currentTime,
+              duration: entryHasProgress ? entry.duration : current.duration
+            });
             return;
           }
-          if (!entryNewer && entryHasProgress && !currentHasProgress) {
+          if (entryHasProgress && !currentHasProgress) {
             merged.set(key, { ...entry, watchedAt: current.watchedAt || entry.watchedAt });
           }
         });

@@ -1032,7 +1032,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     }
   };
 
-  const languages = ["Hindi", "English", "Bengali", "Tamil", "Telugu", "Malayalam", "Japanese"];
+  const languages = ["Hindi", "English", "Bengali", "Tamil", "Telugu", "Malayalam", "Japanese", "Japanese (Sub)"];
   
   const [allManualLanguages, setAllManualLanguages] = useState<string[]>([]);
   useEffect(() => {
