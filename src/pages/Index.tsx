@@ -2602,6 +2602,8 @@ const Index = () => {
       const cachedMatch = Array.isArray(cached)
         ? cached.find((item: any) => item?.id === anime.id)
         : null;
+      // MATCH BY ID ONLY - DO NOT FILTER BY SEASON/EPISODE HERE
+      // We want to update the entry for this series, not create a new one.
       const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id);
 
       const historyItem: any = {
