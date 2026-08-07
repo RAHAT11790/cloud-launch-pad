@@ -466,24 +466,33 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
   const requested = String(language || "").trim().toLowerCase();
   const byLanguage = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object" ? anime.seasonsByLanguage : undefined;
   const hasEpisodes = (seasons: any) => Array.isArray(seasons) && seasons.some((season: any) => Array.isArray(season?.episodes) && season.episodes.length > 0);
+  
   if (byLanguage) {
     const entries = Object.entries(byLanguage);
+    
+    // 1. Exact match for variant (e.g., "Hindi Atomic")
     const exact = requested
       ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
       : undefined;
     if (hasEpisodes(exact)) return exact as Season[];
 
-    // Fallback: If requested variant like "Hindi Atomic" has no seasons group, try base "Hindi"
+    // 2. Admin fallback (baseLanguage/language) - If user explicitly set a default in Admin, respect it
+    const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
+    const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
+    if (hasEpisodes(fallback)) return fallback as Season[];
+
+    // 3. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
+    // This allows custom names like "Atomic Hindi" to work using the "Hindi" season data.
     if (requested.includes("hindi")) {
       const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
       if (hasEpisodes(baseHindi)) return baseHindi as Season[];
     }
 
-    const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
-    const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
-    if (hasEpisodes(fallback)) return fallback as Season[];
+    // 4. Any track matching Hindi keywords
     const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
     if (hasEpisodes(hindi)) return hindi as Season[];
+
+    // 5. First group with episodes
     const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
     if (firstPlayable) return firstPlayable as Season[];
   }
@@ -508,7 +517,8 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
       : undefined;
     if (exact) return exact.label;
 
-    // Fallback: If "Hindi Atomic" preferred but not playable, try base "Hindi"
+    // Smart Base Fallback: If "Hindi Atomic" is preferred but that specific bucket isn't playable,
+    // look for the base "Hindi" bucket to keep the UI active.
     if (normalizedPreferred.toLowerCase().includes("hindi")) {
       const baseHindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
       if (baseHindi) return baseHindi.label;
