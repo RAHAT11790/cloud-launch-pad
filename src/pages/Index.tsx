@@ -94,11 +94,19 @@ const buildAnAudioHlsPlaybackUrl = (url: string) => {
 // available track only when no Hindi track exists.
 const isHindiAnTrack = (t: any) =>
   /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t?.language || ""} ${t?.name || ""} ${t?.label || ""}`);
+
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>) => {
+  if (!audio || audio.length === 0) return 0;
+  
+  // 1. Try to find any track that contains "Hindi" (e.g. "Hindi", "Atomic Hindi", "Hindi AI")
   const hindi = audio.findIndex(isHindiAnTrack);
   if (hindi >= 0) return hindi;
+  
+  // 2. Fallback to explicit default marked in metadata
   const explicit = audio.findIndex((t) => t?.isDefault === true);
   if (explicit >= 0) return explicit;
+  
+  // 3. Last resort: first available track
   return 0;
 };
 
@@ -174,10 +182,15 @@ const normalizeAnAudioTracks = (
     })
     .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
   if (list.length) {
-    // Always force Hindi as the default when present.
-    const hindi = list.findIndex((t) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language} ${t.label}`));
+    // 1. Check if any track is considered "Hindi" (includes "Atomic Hindi", etc.)
+    const hindi = list.findIndex((t) => isHindiAnTrack(t));
+    
+    // 2. Select target: Hindi wins, then explicit default, then first item.
     const targetIdx = hindi >= 0 ? hindi : Math.max(0, list.findIndex((t) => t.isDefault));
-    list.forEach((t, i) => { t.isDefault = i === targetIdx; });
+    
+    list.forEach((t, i) => { 
+      t.isDefault = i === targetIdx; 
+    });
   }
   return list;
 };
@@ -258,7 +271,9 @@ const buildAnMoviePlayback = (anime: AnimeItem) => {
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   if (getMovieSrc(anime)) return true;
   if (hasMovieParts(anime) && anime.parts?.some((part) => !!getMoviePartSrc(part))) return true;
-  const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
+  // Use base language or default to "Hindi" if available in tracks, 
+  // but this check is for legacy RS episodes which don't have the new multi-audio metadata.
+  const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language || "Hindi");
   return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
@@ -451,17 +466,36 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
   const requested = String(language || "").trim().toLowerCase();
   const byLanguage = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object" ? anime.seasonsByLanguage : undefined;
   const hasEpisodes = (seasons: any) => Array.isArray(seasons) && seasons.some((season: any) => Array.isArray(season?.episodes) && season.episodes.length > 0);
+  
   if (byLanguage) {
     const entries = Object.entries(byLanguage);
+    
+    // 1. Exact match for variant (e.g., "Hindi Atomic")
     const exact = requested
       ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
       : undefined;
-    if (hasEpisodes(exact)) return exact;
+    if (hasEpisodes(exact)) return exact as Season[];
+
+    // 2. Admin fallback (baseLanguage/language) - If user explicitly set a default in Admin, respect it
     const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
     const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
-    if (hasEpisodes(fallback)) return fallback;
+    if (hasEpisodes(fallback)) return fallback as Season[];
+
+    // 3. Smart Base Fallback: If "Hindi Atomic" has no seasons group, but "Hindi" does, use "Hindi".
+    // This allows custom names like "Atomic Hindi" to work using the "Hindi" season data.
+    if (requested.includes("hindi")) {
+      const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
+      if (hasEpisodes(baseHindi)) return baseHindi as Season[];
+    } else if (requested.includes("english")) {
+      const baseEnglish = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "english")?.[1];
+      if (hasEpisodes(baseEnglish)) return baseEnglish as Season[];
+    }
+
+    // 4. Any track matching Hindi keywords
     const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
-    if (hasEpisodes(hindi)) return hindi;
+    if (hasEpisodes(hindi)) return hindi as Season[];
+
+    // 5. First group with episodes
     const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
     if (firstPlayable) return firstPlayable as Season[];
   }
@@ -485,6 +519,17 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
       ? normalizedEntries.find((entry) => entry.label.toLowerCase() === normalizedPreferred.toLowerCase() && hasPlayableEpisodes(entry.seasons))
       : undefined;
     if (exact) return exact.label;
+
+    // Smart Base Fallback: If "Hindi Atomic" is preferred but that specific bucket isn't playable,
+    // look for the base "Hindi" bucket to keep the UI active.
+    if (normalizedPreferred.toLowerCase().includes("hindi")) {
+      const baseHindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
+      if (baseHindi) return baseHindi.label;
+    } else if (normalizedPreferred.toLowerCase().includes("english")) {
+      const baseEnglish = normalizedEntries.find((entry) => entry.label.toLowerCase() === "english" && hasPlayableEpisodes(entry.seasons));
+      if (baseEnglish) return baseEnglish.label;
+    }
+
     const hindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
     if (hindi) return hindi.label;
     const firstPlayable = normalizedEntries.find((entry) => hasPlayableEpisodes(entry.seasons));
@@ -2553,7 +2598,8 @@ const Index = () => {
           epIdx,
         };
       }
-      historyItem.language = getPrimaryLanguageToken((anime as any)?.selectedLanguage || anime.baseLanguage || anime.language) || anime.language || "";
+      const activeLang = (anime as any)?.selectedLanguage || (playerStateRef.current?.anime.id === anime.id ? playerStateRef.current?.selectedLanguage : null) || anime.baseLanguage || anime.language || "";
+      historyItem.language = getPrimaryLanguageToken(activeLang) || activeLang || "";
 
       try {
         guestStore.continue.upsert({
@@ -2703,9 +2749,15 @@ const Index = () => {
 
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
-      if (item.episodeInfo) {
+    if (item.episodeInfo) {
       const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
       const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
+      
+      // Critical: Use the language saved in history (if any) to ensure "Continue Watching" 
+      // returns the user to the exact dub/variant they were watching.
+      const savedLang = item.language || item.selectedLanguage;
+      if (savedLang) (anime as any).selectedLanguage = savedLang;
+
       let src = "";
       let subtitle = "";
       let episode: Episode | undefined;

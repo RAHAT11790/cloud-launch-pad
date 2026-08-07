@@ -340,13 +340,20 @@ export const normalizeLanguageName = (raw: string | undefined | null): string =>
   if (!s) return "";
   const key = s.toLowerCase().replace(/[^a-z]/g, "");
   if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
-  // Custom / dubber names (e.g. "Atomic Dubber Hindi") — keep every word, title-cased
+  
+  // Custom / dubber names (e.g. "Atomic Dubber Hindi")
+  // If it's a multi-word string, ensure it's not just a broken code.
   if (/\s/.test(s)) {
     return s
       .split(/\s+/)
-      .map((w) => (w.length > 3 && w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+      .map((w) => {
+        // Keep acronyms like "AI", "AN", "RS" as is, otherwise Title Case
+        if (w.length <= 3 && w === w.toUpperCase()) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
       .join(" ");
   }
+  
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
