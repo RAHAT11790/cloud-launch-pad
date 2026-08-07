@@ -471,12 +471,19 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     const exact = requested
       ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
       : undefined;
-    if (hasEpisodes(exact)) return exact;
+    if (hasEpisodes(exact)) return exact as Season[];
+
+    // Fallback: If requested variant like "Hindi Atomic" has no seasons group, try base "Hindi"
+    if (requested.includes("hindi")) {
+      const baseHindi = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === "hindi")?.[1];
+      if (hasEpisodes(baseHindi)) return baseHindi as Season[];
+    }
+
     const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
     const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
-    if (hasEpisodes(fallback)) return fallback;
+    if (hasEpisodes(fallback)) return fallback as Season[];
     const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
-    if (hasEpisodes(hindi)) return hindi;
+    if (hasEpisodes(hindi)) return hindi as Season[];
     const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
     if (firstPlayable) return firstPlayable as Season[];
   }
