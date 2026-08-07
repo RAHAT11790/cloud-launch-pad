@@ -94,11 +94,19 @@ const buildAnAudioHlsPlaybackUrl = (url: string) => {
 // available track only when no Hindi track exists.
 const isHindiAnTrack = (t: any) =>
   /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t?.language || ""} ${t?.name || ""} ${t?.label || ""}`);
+
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>) => {
+  if (!audio || audio.length === 0) return 0;
+  
+  // 1. Try to find any track that contains "Hindi" (e.g. "Hindi", "Atomic Hindi", "Hindi AI")
   const hindi = audio.findIndex(isHindiAnTrack);
   if (hindi >= 0) return hindi;
+  
+  // 2. Fallback to explicit default marked in metadata
   const explicit = audio.findIndex((t) => t?.isDefault === true);
   if (explicit >= 0) return explicit;
+  
+  // 3. Last resort: first available track
   return 0;
 };
 
@@ -174,10 +182,15 @@ const normalizeAnAudioTracks = (
     })
     .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
   if (list.length) {
-    // Always force Hindi as the default when present.
-    const hindi = list.findIndex((t) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language} ${t.label}`));
+    // 1. Check if any track is considered "Hindi" (includes "Atomic Hindi", etc.)
+    const hindi = list.findIndex((t) => isHindiAnTrack(t));
+    
+    // 2. Select target: Hindi wins, then explicit default, then first item.
     const targetIdx = hindi >= 0 ? hindi : Math.max(0, list.findIndex((t) => t.isDefault));
-    list.forEach((t, i) => { t.isDefault = i === targetIdx; });
+    
+    list.forEach((t, i) => { 
+      t.isDefault = i === targetIdx; 
+    });
   }
   return list;
 };
@@ -258,7 +271,9 @@ const buildAnMoviePlayback = (anime: AnimeItem) => {
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   if (getMovieSrc(anime)) return true;
   if (hasMovieParts(anime) && anime.parts?.some((part) => !!getMoviePartSrc(part))) return true;
-  const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
+  // Use base language or default to "Hindi" if available in tracks, 
+  // but this check is for legacy RS episodes which don't have the new multi-audio metadata.
+  const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language || "Hindi");
   return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
