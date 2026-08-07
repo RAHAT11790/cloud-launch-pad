@@ -9007,23 +9007,26 @@ ${tgBulkFooter}
     const eIdx = getEpisodeIndexForShare(seasons[sIdx], latestRelease.episodeInfo.episodeNumber, 0);
     const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language;
     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
-    if (relLang) setTgLanguages(relLang);
-    if (latestRelease.episodeInfo.seasonNumber) setTgSeason(String(latestRelease.episodeInfo.seasonNumber).padStart(2, '0'));
-    if (latestRelease.episodeInfo.episodeNumber) setTgNewEpAdded(String(latestRelease.episodeInfo.episodeNumber).padStart(2, '0'));
-  } else if (fullData && (fullData as any).type !== "movie") {
-    // Manual fallback for series: look for last available episode
-    const seasons = (fullData as any).seasons || [];
-    const sIdx = Math.max(0, seasons.length - 1);
-    const episodes = seasons[sIdx]?.episodes || [];
-    const eIdx = Math.max(0, episodes.length - 1);
-    const lastEp = episodes[eIdx];
-    setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx));
-    setTgSeason(String(sIdx + 1).padStart(2, '0'));
-    if (lastEp) setTgNewEpAdded(String(lastEp.episodeNumber || eIdx + 1).padStart(2, '0'));
-  } else {
-    setTgButtonLink(buildEpisodeShareUrl(r.id));
-  }
-  setTgSelectedAnimeId(String(r.id));
+     const relLang = latestRelease?.episodeInfo?.language || latestRelease?.language || (fullData as any).selectedAdminLanguage || (fullData as any).baseLanguage;
+     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, relLang));
+     if (relLang) setTgLanguages(relLang);
+     if (latestRelease.episodeInfo.seasonNumber) setTgSeason(String(latestRelease.episodeInfo.seasonNumber).padStart(2, '0'));
+     if (latestRelease.episodeInfo.episodeNumber) setTgNewEpAdded(String(latestRelease.episodeInfo.episodeNumber).padStart(2, '0'));
+   } else if (fullData && (fullData as any).type !== "movie") {
+     const seasons = (fullData as any).seasons || [];
+     const sIdx = Math.max(0, seasons.length - 1);
+     const episodes = seasons[sIdx]?.episodes || [];
+     const eIdx = Math.max(0, episodes.length - 1);
+     const lastEp = episodes[eIdx];
+     const manualLang = (fullData as any).selectedAdminLanguage || (fullData as any).baseLanguage || (fullData as any).language;
+     setTgButtonLink(buildEpisodeShareUrl(r.id, sIdx, eIdx, manualLang));
+     setTgSeason(String(sIdx + 1).padStart(2, '0'));
+     if (lastEp) setTgNewEpAdded(String(lastEp.episodeNumber || eIdx + 1).padStart(2, '0'));
+     if (manualLang) setTgLanguages(manualLang);
+   } else {
+     setTgButtonLink(buildEpisodeShareUrl(r.id));
+   }
+   setTgSelectedAnimeId(String(r.id));
   try {
   const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
   const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
