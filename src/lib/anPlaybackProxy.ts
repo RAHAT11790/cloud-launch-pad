@@ -32,9 +32,12 @@ const writeCachedRoute = (value: string) => {
 
 export const getCachedAnPlaybackHlsPrefix = () => {
   const base = readCachedRoute();
-  if (base) return `${base}/hls`;
+  if (base) {
+    // Ensure the prefix always ends with /hls
+    const normalized = base.replace(/\/+$/, "");
+    return normalized.endsWith("/hls") ? normalized : `${normalized}/hls`;
+  }
   const envBase = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  // Ensure the fallback also uses /hls endpoint for structured routing
   if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
   return "";
 };

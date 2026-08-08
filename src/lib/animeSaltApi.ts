@@ -324,10 +324,11 @@ const fetchPage = async (url: string): Promise<string> => {
       const isEpisode = url.includes('/episode/');
 
       let endpoint = proxyUrl;
-      if (isSearch) endpoint += '/search';
-      else if (isEpisode) endpoint += '/episode';
-      else if (isMovie) endpoint += '/movie';
-      else if (isSeries) endpoint += '/anime';
+      const cleanProxyUrl = proxyUrl.replace(/\/+$/, "");
+      if (isSearch) endpoint = `${cleanProxyUrl}/search`;
+      else if (isEpisode) endpoint = `${cleanProxyUrl}/episode`;
+      else if (isMovie) endpoint = `${cleanProxyUrl}/movie`;
+      else if (isSeries) endpoint = `${cleanProxyUrl}/anime`;
 
       console.log(`[AN-API] Requesting ${url} via ${endpoint}`);
 

@@ -217,6 +217,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
 
   if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
 
+  // For internal Lovable functions, ensure we use the correct fallback if not overridden
   const fallback = supabaseFallbackUrl(fnName);
   if (fallback) return fallback;
 
