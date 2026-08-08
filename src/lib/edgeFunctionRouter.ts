@@ -215,10 +215,10 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   const built = buildFunctionUrl(fnName, config);
   if (built) return normalizeFunctionEndpointUrl(fnName, built);
 
+  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
+
   const fallback = supabaseFallbackUrl(fnName);
   if (fallback) return fallback;
-
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
 
   return "";
 }
