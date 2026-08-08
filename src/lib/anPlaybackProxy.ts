@@ -32,9 +32,12 @@ const writeCachedRoute = (value: string) => {
 
 export const getCachedAnPlaybackHlsPrefix = () => {
   const base = readCachedRoute();
-  if (base) return `${base}/hls`;
+  if (base) {
+    // Ensure the prefix always ends with /hls
+    const normalized = base.replace(/\/+$/, "");
+    return normalized.endsWith("/hls") ? normalized : `${normalized}/hls`;
+  }
   const envBase = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  // Ensure the fallback also uses /hls endpoint for structured routing
   if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
   return "";
 };
@@ -59,8 +62,10 @@ export const ensureAnPlaybackRouteWatcher = () => {
   void refreshAnPlaybackRoute();
 };
 
-const isAnPlaybackProxyPath = (pathname: string) => /\/(?:functions\/v1\/)?(?:an-playback|an-api|hls)(?:\/hls)?$/i.test(pathname)
-  || /\/(?:functions\/v1\/)?(?:an-playback|an-api)\/hls$/i.test(pathname);
+const isAnPlaybackProxyPath = (pathname: string) => {
+  const p = pathname.toLowerCase();
+  return p.includes("/an-playback") || p.includes("/an-api") || p.endsWith("/hls");
+};
 
 export const wrapAnHlsPlaybackUrl = (value: string, explicitPrefix?: string): string => {
   ensureAnPlaybackRouteWatcher();
@@ -70,8 +75,9 @@ export const wrapAnHlsPlaybackUrl = (value: string, explicitPrefix?: string): st
 
   try {
     const parsed = new URL(raw);
+    const srcParam = parsed.searchParams.get("src") || parsed.searchParams.get("url");
     const wrapped = isAnPlaybackProxyPath(parsed.pathname)
-      ? (parsed.searchParams.get("url") || fromOpaqueUrlToken(parsed.searchParams.get("src") || ""))
+      ? (srcParam?.startsWith("http") ? srcParam : fromOpaqueUrlToken(srcParam || ""))
       : "";
     if (wrapped && prefix) {
       const params = new URLSearchParams({ src: toOpaqueUrlToken(wrapped) });
