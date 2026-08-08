@@ -349,8 +349,6 @@ const fetchPage = async (url: string): Promise<string> => {
   }
   throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
 };
-  throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
-};
 
 const parseMaxPage = (html: string, type: 'series' | 'movies'): number => {
   const nums = [1];
