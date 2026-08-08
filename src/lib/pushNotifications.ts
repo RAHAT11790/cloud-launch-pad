@@ -12,6 +12,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, deleteToken, isSupported } from "firebase/messaging";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
@@ -357,22 +358,10 @@ export async function unregisterPushNotifications() {
 // SEND
 // ============================================================
 
-function sendFcmUrl(): string {
-  const base = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  if (!base) return "";
-  return `${base}/functions/v1/send-fcm`;
-}
-
 async function resolveSendFcmEndpoint(): Promise<{ url: string; provider: "cloudflare" | "supabase" }> {
-  const fallback = sendFcmUrl();
-  try {
-    const snap = await get(ref(db, "settings/fcmProvider"));
-    const val = snap.val() || {};
-    const provider = val.active === "cloudflare" ? "cloudflare" : "supabase";
-    const configured = String(val.url || (provider === "cloudflare" ? val.cloudflareUrl : val.supabaseUrl) || "").trim();
-    if (configured) return { url: configured, provider };
-  } catch {}
-  return { url: fallback, provider: "supabase" };
+  const url = await getEdgeFunctionUrl("send-fcm").catch(() => "");
+  const provider = /\/functions\/v1\/send-fcm/i.test(url) ? "supabase" : "cloudflare";
+  return { url, provider };
 }
 
 function sendHeaders(url: string, provider: "cloudflare" | "supabase") {

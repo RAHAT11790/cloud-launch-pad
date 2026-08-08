@@ -65,8 +65,7 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
-const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
-const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url, AN_PLAYBACK_HLS_PREFIX);
+const buildAnHlsPlaybackUrl = (url: string) => wrapAnHlsPlaybackUrl(url);
 
 const isAnPlayableHlsUrl = (url?: string | null) => {
   const raw = String(url || "").trim();

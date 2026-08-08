@@ -139,7 +139,6 @@ const isHlsLikeUrl = (url: string): boolean => {
 };
 
 const isAnApiHlsProxyUrl = (url: string): boolean => /\/(?:an-api|an-playback)\/hls\?/i.test(String(url || ""));
-const AN_PLAYBACK_HLS_PREFIX = `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "")}/functions/v1/an-playback/hls`;
 
 const sanitizeAnimeDownloadTitle = (value: string): string => {
   return String(value || "")
@@ -886,9 +885,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   const trimmed = line.trim();
                   if (!trimmed) return line;
                   if (trimmed.startsWith("#")) {
-                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri, AN_PLAYBACK_HLS_PREFIX)}"`);
+                    return line.replace(/URI="([^"]+)"/gi, (_m, uri) => `URI="${wrapAnHlsPlaybackUrl(uri)}"`);
                   }
-                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed, AN_PLAYBACK_HLS_PREFIX) : line;
+                  return /^https?:\/\//i.test(trimmed) ? wrapAnHlsPlaybackUrl(trimmed) : line;
                 })
                 .join("\n")
             : decoded;

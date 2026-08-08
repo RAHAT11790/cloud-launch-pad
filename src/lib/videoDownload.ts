@@ -3,7 +3,6 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
-import { SUPABASE_URL } from "@/lib/siteConfig";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -50,16 +49,11 @@ let routerBaseUrl = "";
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
 
-const DL_ROUTE_CACHE_KEY = "rs_video_download_route_v2";
+const DL_ROUTE_CACHE_KEY = "rs_video_download_route_v3";
 const DL_ROUTE_ADMIN_FLAG = "rs_video_download_route_admin_v2";
-const PROXY_ROUTE_CACHE_KEY = "rs_video_proxy_route_v2";
+const PROXY_ROUTE_CACHE_KEY = "rs_video_proxy_route_v3";
 const PROXY_ROUTE_ADMIN_FLAG = "rs_video_proxy_route_admin_v2";
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
-
-const backendFunctionUrl = (fnName: string) => {
-  const base = String(SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  return base ? `${base}/functions/v1/${fnName}` : "";
-};
 
 try {
   if (typeof window !== "undefined") {
@@ -78,24 +72,12 @@ try {
   }
 } catch {}
 
-if (!overrideBaseUrl) {
-  overrideBaseUrl = backendFunctionUrl("video-download");
-  overrideEnabled = Boolean(overrideBaseUrl);
-  overrideIsAdmin = false;
-}
-if (!playbackProxyBaseUrl) {
-  playbackProxyBaseUrl = backendFunctionUrl("video-proxy");
-  playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
-  playbackProxyIsAdmin = false;
-}
-
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
-  const backendHosted = backendFunctionUrl("video-download");
   const adminEnabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
-  overrideBaseUrl = adminUrl || backendHosted;
+  overrideBaseUrl = adminUrl;
   overrideEnabled = Boolean(overrideBaseUrl);
   overrideIsAdmin = Boolean(adminUrl);
   try {
@@ -107,10 +89,9 @@ const applyDownloadRoute = () => {
 const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
   const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
-  const backendHosted = backendFunctionUrl("video-proxy");
   const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
-  playbackProxyBaseUrl = adminUrl || backendHosted;
+  playbackProxyBaseUrl = adminUrl;
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
   playbackProxyIsAdmin = Boolean(adminUrl);
   try {
@@ -258,12 +239,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  // Admin-configured Cloudflare/self-hosted proxy is ALWAYS the primary route.
-  // Supabase backend stays only as a last-resort fallback candidate (slower).
-  const bases = unique([
-    overrideBaseUrl,
-    backendFunctionUrl("video-download"),
-  ].filter(Boolean) as string[]);
+  const bases = unique([overrideBaseUrl].filter(Boolean) as string[]);
   const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
 
