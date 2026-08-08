@@ -1,4 +1,5 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
+import { db, ref, get } from '@/lib/firebase';
 
 const ANIMESALT_BASE = 'https://animesalt.link';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
@@ -252,15 +253,22 @@ const parseMeta = (html: string) => {
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
   const proxyUrl = (await getAnimeSaltProxyUrls())[0] || '';
   const normalized = normalizeAnApiBaseUrl(proxyUrl);
-  if (!normalized) throw new Error('AN API URL is not saved/enabled in EGD Router.');
-  return normalized;
+  return normalized || '';
 };
 
 const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
+  // 1. Check direct override from settings (Easy Router / an-api override)
+  try {
+    const overrideSnap = await get(ref(db, 'settings/functionOverrides/an-api'));
+    const override = overrideSnap.val();
+    if (override?.enabled !== false) {
+      const customUrl = String(override?.customUrl || override?.url || '').trim();
+      if (customUrl) return [ensureAnApiFunctionUrl(customUrl)];
+    }
+  } catch {}
+
+  // 2. Fallback to general edgeRouter config
   const configured = await getEdgeFunctionUrl('an-api').catch(() => '');
-  // EGD Router is the source of truth. Never silently fall back to the bundled
-  // backend here; if admin saved a Cloudflare AN Fetch URL, every AN request
-  // must use that URL so network logs do not show the default backend path.
   return Array.from(new Set([configured].map(ensureAnApiFunctionUrl).filter(Boolean)));
 };
 
@@ -304,17 +312,12 @@ const fetchPage = async (url: string): Promise<string> => {
   const proxyUrls = await getAnimeSaltProxyUrls();
   let lastError: any = null;
 
-  // Important: do NOT call `/raw?url=...` from the app. The AN API contract
-  // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
-  // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
-  // which produced the reported invalid runtime path:
-  //   supabase/functions/raw?url=https://animesalt.link/episode/.../index.ts
-  // Keep the raw HTML fallback only through the backwards-compatible POST
-  // shape supported by our deployable `an-api` source, never as a GET path.
+  if (proxyUrls.length === 0) {
+    throw new Error('No AN API Proxy URL configured. Please set one in Admin > Easy Router.');
+  }
+
   for (const proxyUrl of proxyUrls) {
     try {
-      // Prioritize structured API paths (/search, /anime, /episode, /movie)
-      // and only use the legacy body-based HTML scraper as a global fallback.
       const isSearch = url.includes('/search/') || url.includes('?s=');
       const isMovie = url.includes('/movies/');
       const isSeries = url.includes('/series/');
@@ -325,6 +328,8 @@ const fetchPage = async (url: string): Promise<string> => {
       else if (isEpisode) endpoint += '/episode';
       else if (isMovie) endpoint += '/movie';
       else if (isSeries) endpoint += '/anime';
+
+      console.log(`[AN-API] Requesting ${url} via ${endpoint}`);
 
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
@@ -338,6 +343,7 @@ const fetchPage = async (url: string): Promise<string> => {
       if (data.html) return data.html;
       lastError = new Error('No HTML returned from AnimeSalt proxy');
     } catch (err) {
+      console.error(`[AN-API] Proxy ${proxyUrl} failed:`, err);
       lastError = err;
     }
   }
