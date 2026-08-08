@@ -37,8 +37,9 @@ export const getCachedAnPlaybackHlsPrefix = () => {
     const normalized = base.replace(/\/+$/, "");
     return normalized.endsWith("/hls") ? normalized : `${normalized}/hls`;
   }
-  const envBase = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
-  if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
+  
+  // Hard enforcement: If no custom route is set, we return empty to prevent Supabase fallback.
+  // The user explicitly requested to remove any "Supabase" traces when custom URL is missing.
   return "";
 };
 

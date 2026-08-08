@@ -152,6 +152,10 @@ export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): st
 
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
 function supabaseFallbackUrl(fnName: string): string {
+  // We strictly avoid falling back to Supabase for AN playback and API
+  // as per the user's requirement to have zero Supabase traces in playback.
+  if (fnName === "an-playback" || fnName === "an-api") return "";
+
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
   if (!base) return "";
   const ENABLED = new Set([
