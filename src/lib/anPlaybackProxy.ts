@@ -31,10 +31,11 @@ const writeCachedRoute = (value: string) => {
 };
 
 export const getCachedAnPlaybackHlsPrefix = () => {
+  const base = readCachedRoute();
+  if (base) return `${base}/hls`;
   const envBase = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "");
   if (envBase) return `${envBase}/functions/v1/an-playback/hls`;
-  const base = readCachedRoute();
-  return base ? `${base}/hls` : "";
+  return "";
 };
 
 export const refreshAnPlaybackRoute = async (): Promise<string> => {
