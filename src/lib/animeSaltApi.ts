@@ -313,7 +313,20 @@ const fetchPage = async (url: string): Promise<string> => {
   // shape supported by our deployable `an-api` source, never as a GET path.
   for (const proxyUrl of proxyUrls) {
     try {
-      const res = await fetchWithTimeout(proxyUrl, {
+      // Prioritize structured API paths (/search, /anime, /episode, /movie)
+      // and only use the legacy body-based HTML scraper as a global fallback.
+      const isSearch = url.includes('/search/') || url.includes('?s=');
+      const isMovie = url.includes('/movies/');
+      const isSeries = url.includes('/series/');
+      const isEpisode = url.includes('/episode/');
+
+      let endpoint = proxyUrl;
+      if (isSearch) endpoint += '/search';
+      else if (isEpisode) endpoint += '/episode';
+      else if (isMovie) endpoint += '/movie';
+      else if (isSeries) endpoint += '/anime';
+
+      const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -322,6 +335,7 @@ const fetchPage = async (url: string): Promise<string> => {
       if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
       const data = await res.json();
       if (data.success && data.html) return data.html;
+      if (data.html) return data.html;
       lastError = new Error('No HTML returned from AnimeSalt proxy');
     } catch (err) {
       lastError = err;
