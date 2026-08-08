@@ -312,17 +312,12 @@ const fetchPage = async (url: string): Promise<string> => {
   const proxyUrls = await getAnimeSaltProxyUrls();
   let lastError: any = null;
 
-  // Important: do NOT call `/raw?url=...` from the app. The AN API contract
-  // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
-  // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
-  // which produced the reported invalid runtime path:
-  //   supabase/functions/raw?url=https://animesalt.link/episode/.../index.ts
-  // Keep the raw HTML fallback only through the backwards-compatible POST
-  // shape supported by our deployable `an-api` source, never as a GET path.
+  if (proxyUrls.length === 0) {
+    throw new Error('No AN API Proxy URL configured. Please set one in Admin > Easy Router.');
+  }
+
   for (const proxyUrl of proxyUrls) {
     try {
-      // Prioritize structured API paths (/search, /anime, /episode, /movie)
-      // and only use the legacy body-based HTML scraper as a global fallback.
       const isSearch = url.includes('/search/') || url.includes('?s=');
       const isMovie = url.includes('/movies/');
       const isSeries = url.includes('/series/');
@@ -333,6 +328,8 @@ const fetchPage = async (url: string): Promise<string> => {
       else if (isEpisode) endpoint += '/episode';
       else if (isMovie) endpoint += '/movie';
       else if (isSeries) endpoint += '/anime';
+
+      console.log(`[AN-API] Requesting ${url} via ${endpoint}`);
 
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
@@ -346,9 +343,12 @@ const fetchPage = async (url: string): Promise<string> => {
       if (data.html) return data.html;
       lastError = new Error('No HTML returned from AnimeSalt proxy');
     } catch (err) {
+      console.error(`[AN-API] Proxy ${proxyUrl} failed:`, err);
       lastError = err;
     }
   }
+  throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
+};
   throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
 };
 
