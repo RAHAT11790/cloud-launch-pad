@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
-import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -14,7 +14,7 @@ const isManagedVideoDownloadUrl = (value: string) => {
     const hasTarget = parsed.searchParams.has("url") || parsed.searchParams.has("src");
     if (!hasTarget) return false;
     if (/(^|[.-])video-download([.-]|$)/i.test(parsed.hostname)) return true;
-    const configuredBases = [overrideBaseUrl, buildSelfHostedFunctionUrl("video-download", routerBaseUrl)]
+    const configuredBases = [overrideBaseUrl]
       .map((entry) => String(entry || "").trim())
       .filter(Boolean);
     return configuredBases.some((entry) => {
@@ -45,7 +45,6 @@ let overrideIsAdmin = false; // true only when a Cloudflare/self-hosted admin ov
 let playbackProxyBaseUrl = "";
 let playbackProxyEnabled = false;
 let playbackProxyIsAdmin = false;
-let routerBaseUrl = "";
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
 
@@ -74,9 +73,8 @@ try {
 
 const applyDownloadRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-download", String(downloadOverrideRaw?.customUrl || downloadOverrideRaw?.url || "").trim());
-  const selfHosted = buildSelfHostedFunctionUrl("video-download", routerBaseUrl);
   const adminEnabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
-  const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
+  const adminUrl = adminEnabled ? overrideUrl : "";
   overrideBaseUrl = adminUrl;
   overrideEnabled = Boolean(overrideBaseUrl);
   overrideIsAdmin = Boolean(adminUrl);
@@ -88,9 +86,8 @@ const applyDownloadRoute = () => {
 
 const applyProxyRoute = () => {
   const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(proxyOverrideRaw?.customUrl || proxyOverrideRaw?.url || "").trim());
-  const selfHosted = buildSelfHostedFunctionUrl("video-proxy", routerBaseUrl);
   const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
-  const adminUrl = adminEnabled ? overrideUrl : (selfHosted || "");
+  const adminUrl = adminEnabled ? overrideUrl : "";
   playbackProxyBaseUrl = adminUrl;
   playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
   playbackProxyIsAdmin = Boolean(adminUrl);
@@ -107,12 +104,6 @@ try {
     });
     onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       proxyOverrideRaw = snap.val() || {};
-      applyProxyRoute();
-    });
-    onValue(ref(db, "settings/edgeRouter"), (snap) => {
-      const v = snap.val() || {};
-      routerBaseUrl = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
-      applyDownloadRoute();
       applyProxyRoute();
     });
   }

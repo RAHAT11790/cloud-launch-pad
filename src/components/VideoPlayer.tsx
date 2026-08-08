@@ -46,7 +46,7 @@ interface VideoServerOption {
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
-import { buildSelfHostedFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -686,20 +686,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
   useEffect(() => {
     let cancelled = false;
-    let routerBase = "";
     let overrideRaw: any = null;
     const applyProxyRoute = () => {
       if (cancelled) return;
       if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
       const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
-      const selfHostedUrl = buildSelfHostedFunctionUrl("video-proxy", routerBase);
-      const backendProxyUrl = String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")
-        ? `${String((supabase as any)?.supabaseUrl || (import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim().replace(/\/+$/, "")}/functions/v1/video-proxy`
-        : "";
       const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      // Admin override wins. Otherwise keep a backend video-proxy ready for HTTP
-      // sources and last-resort fallback without forcing HTTPS RS through it.
-      const finalUrl = enabled ? overrideUrl : (selfHostedUrl || backendProxyUrl);
+      const finalUrl = enabled ? overrideUrl : "";
       setProxyUrl(finalUrl);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
@@ -723,13 +716,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyProxyRoute();
     });
 
-    const unsub3 = onValue(ref(db, "settings/edgeRouter"), (snap) => {
-      const v = snap.val() || {};
-      routerBase = String(v.cloudflareBaseUrl || v.denoBaseUrl || "").trim();
-      applyProxyRoute();
-    });
-
-    return () => { cancelled = true; unsub1(); unsub2(); unsub3(); };
+    return () => { cancelled = true; unsub1(); unsub2(); };
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateBusy, setAdGateBusy] = useState(false);
