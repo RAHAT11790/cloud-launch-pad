@@ -1639,7 +1639,7 @@ async function loadAnCatalog(): Promise<CatalogItem[]> {
 
 async function searchAnimeSalt(query: string): Promise<CatalogItem[]> {
   try {
-    const url = `https://animesalt.ac/?s=${encodeURIComponent(query)}`;
+    const url = `https://animesalt.link/?s=${encodeURIComponent(query)}`;
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
     if (!r.ok) return [];
     const html = await r.text();
