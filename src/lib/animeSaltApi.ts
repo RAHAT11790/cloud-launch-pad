@@ -1,6 +1,6 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
 
-const ANIMESALT_BASE = 'https://animesalt.ac';
+const ANIMESALT_BASE = 'https://animesalt.link';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -308,7 +308,7 @@ const fetchPage = async (url: string): Promise<string> => {
   // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
   // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
   // which produced the reported invalid runtime path:
-  //   supabase/functions/raw?url=https://animesalt.ac/episode/.../index.ts
+  //   supabase/functions/raw?url=https://animesalt.link/episode/.../index.ts
   // Keep the raw HTML fallback only through the backwards-compatible POST
   // shape supported by our deployable `an-api` source, never as a GET path.
   for (const proxyUrl of proxyUrls) {

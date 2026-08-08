@@ -4,7 +4,7 @@
 // Cloudflare Worker port of Supabase Edge Function: an-api
 // Ported automatically — replace CF_URL in EGD/Cloudflare Manager
 // ============================================================
-const AN_BASE = "https://animesalt.ac";
+const AN_BASE = "https://animesalt.link";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const TEXT_TIMEOUT_MS = 7e3;
 const PLAYER_TIMEOUT_MS = 6500;
