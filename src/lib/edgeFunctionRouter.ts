@@ -150,25 +150,6 @@ export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): st
   return normalizeFunctionEndpointUrl(fnName, `${base}/${fnName}`);
 }
 
-/** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
-function supabaseFallbackUrl(fnName: string): string {
-  // We strictly avoid falling back to Supabase for AN playback and API
-  // as per the user's requirement to have zero Supabase traces in playback.
-  if (fnName === "an-playback" || fnName === "an-api") return "";
-
-  const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
-  if (!base) return "";
-  const ENABLED = new Set([
-    "generate-backdrop",
-    "rs-bot",
-    "send-fcm",
-    "send-otp-email",
-    "process-email-queue",
-  ]);
-  if (!ENABLED.has(fnName)) return "";
-  return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
-}
-
 function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
   const u = String(deployerUrl || "").trim();
   if (!/^https?:\/\//i.test(u)) return "";
@@ -199,8 +180,6 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     }
   }
 
-  const config = await getEdgeRouterConfig();
-
   // Per-function override from Firebase — whatever admin saved wins, no bypass.
   try {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
@@ -212,19 +191,9 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     }
   } catch {}
 
-  // Check dynamic functions
-  const dynFn = Object.values(config.functions).find(f => (f.name === fnName || f.endpoint === fnName) && f.enabled !== false);
-  if (dynFn) return normalizeFunctionEndpointUrl(fnName, buildFunctionUrl(dynFn.endpoint, config));
-
-  const built = buildFunctionUrl(fnName, config);
-  if (built) return normalizeFunctionEndpointUrl(fnName, built);
-
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
-
-  // For internal Lovable functions, ensure we use the correct fallback if not overridden
-  const fallback = supabaseFallbackUrl(fnName);
-  if (fallback) return fallback;
-
+  // Easy Router is the only runtime source of truth. A Default button merely
+  // pastes a URL into the same field; no implicit base URL or backend fallback
+  // may bypass an empty/disabled row.
   return "";
 }
 

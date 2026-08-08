@@ -5143,7 +5143,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    try {
      // Route through EGD Router so the admin's own deployed verify-admin-pin
      // URL (with their private ADMIN_PIN) takes precedence over the project
-     // default. Falls back to the Lovable Cloud default automatically.
+      // saved URL. No hidden fallback is allowed.
      let ok = false;
      try {
        const url = await getEdgeFunctionUrl("verify-admin-pin");
@@ -5157,11 +5157,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
          ok = !!j?.ok;
        }
      } catch {}
-     if (!ok) {
-       // Hard fallback to direct Supabase invoke if router lookup failed.
-       const { data } = await supabase.functions.invoke("verify-admin-pin", { body: { pin: loginPinInput } });
-       ok = !!(data as any)?.ok;
-     }
      if (!ok) {
        logAdminAccess({ method: "pin", success: false, reason: "wrong-pin" });
        toast.error("Wrong PIN");

@@ -1,6 +1,5 @@
 import { db, ref, onValue } from "@/lib/firebase";
 import { getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
-import { supabase } from "@/integrations/supabase/client";
 
 const AN_PLAYBACK_CACHE_KEY = "rs_an_playback_route_v2";
 
