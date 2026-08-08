@@ -161,16 +161,15 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
   // Sequential quality fallback — mark current quality bad, try next healthy
   // one. Only calls onFail when EVERY quality has been tried and none work.
   const advanceToNextQuality = useCallback((reason: string) => {
+    console.warn('[AnNative] quality failed:', qIdx, reason);
     badQualitiesRef.current.add(qIdx);
     const nextIdx = streams.findIndex((_, i) => !badQualitiesRef.current.has(i));
     if (nextIdx < 0) {
-      // All qualities exhausted → let parent try next server.
       if (failedRef.current) return;
       failedRef.current = true;
       onFail?.(`all-qualities-failed:${reason}`);
       return;
     }
-    // Move on to next quality; hls effect will rebuild and re-arm probe.
     setLoading(true);
     setQIdx(nextIdx);
   }, [qIdx, streams, onFail]);
