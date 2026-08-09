@@ -32,6 +32,9 @@ const LS_USER_ID = "rs_fcm_user_id";
 const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const REVALIDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TOKENS_PER_USER = 100;
+const TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const AUTO_CLEANUP_KEY = "rs_fcm_auto_cleanup_last";
+const AUTO_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const isStandaloneApp = () => {
   if (typeof window === "undefined") return false;
   return !!(window.matchMedia?.("(display-mode: standalone)").matches || (window.navigator as any).standalone === true);
