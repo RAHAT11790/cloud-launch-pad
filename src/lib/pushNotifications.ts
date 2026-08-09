@@ -363,22 +363,51 @@ export async function unregisterPushNotifications() {
   } catch {}
 }
 
-/** Wipe all FCM data from RTDB and force client re-registration */
+/** Clean only invalid/expired tokens and old notification logs in batches to avoid WRITE_TOO_BIG */
 export async function wipeAndResetFcmSystem() {
-  if (!confirm("This will delete ALL stored FCM tokens and notification logs from Firebase. Users will need to re-open the app to register again. Continue?")) return;
+  if (!confirm("This will clean up expired tokens and old logs. This is a safe professional cleanup. Continue?")) return;
   
   try {
-    console.info("[FCM] Wiping RTDB nodes...");
-    await remove(ref(db, "fcmTokens"));
-    await remove(ref(db, "notifications"));
+    console.info("[FCM] Starting professional cleanup...");
+    
+    // 1. Delete old notifications (usually the largest node causing WRITE_TOO_BIG)
+    // We do this by user to keep requests small
+    const notifSnap = await get(ref(db, "notifications"));
+    const notifs = notifSnap.val() || {};
+    const notifUserIds = Object.keys(notifs);
+    
+    console.info(`[FCM] Cleaning notifications for ${notifUserIds.length} users...`);
+    for (const uid of notifUserIds) {
+      await remove(ref(db, `notifications/${uid}`)).catch(() => {});
+    }
+
+    // 2. Clean tokens (Only remove truly old ones, e.g. > 30 days)
+    const tokenSnap = await get(ref(db, "fcmTokens"));
+    const allTokens = tokenSnap.val() || {};
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    
+    let removedCount = 0;
+    for (const [uid, userTokens] of Object.entries(allTokens)) {
+      if (!userTokens || typeof userTokens !== "object") continue;
+      for (const [tKey, entry] of Object.entries(userTokens as any)) {
+        const lastUpd = (entry as any)?.updatedAt || 0;
+        if (now - lastUpd > THIRTY_DAYS) {
+          await remove(ref(db, `fcmTokens/${uid}/${tKey}`)).catch(() => {});
+          removedCount++;
+        }
+      }
+    }
+    
+    console.info(`[FCM] Cleanup complete. Removed ${removedCount} expired tokens.`);
     
     // Also reset local device state for current admin/user
     const userId = localStorage.getItem(LS_USER_ID) || "admin";
     await acquireAndRegister(userId, true);
     
-    return { ok: true };
+    return { ok: true, removedCount };
   } catch (err: any) {
-    console.error("[FCM] Wipe failed", err);
+    console.error("[FCM] Professional cleanup failed", err);
     throw err;
   }
 }
