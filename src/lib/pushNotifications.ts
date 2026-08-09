@@ -285,9 +285,11 @@ export async function initPushNotifications(userIdInput?: string) {
   await ensureServiceWorker();
   await acquireAndRegister(userId);
   bindForeground();
+  runAutoCleanup().catch(() => {});
 
   setInterval(() => { acquireAndRegister(userId).catch(() => {}); }, REFRESH_INTERVAL_MS);
   const revalidate = () => {
+
     try {
       const last = Number(localStorage.getItem(LS_LAST_REG) || 0);
       if (Date.now() - last >= REVALIDATE_MS) acquireAndRegister(userId).catch(() => {});
