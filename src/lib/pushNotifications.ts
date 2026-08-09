@@ -154,13 +154,22 @@ async function migrateTokenAcrossUsers(newUserId: string, currentKey: string, cu
   } catch (e) { console.warn("[FCM] cross-user migration failed", e); }
 }
 
-async function acquireAndRegister(userId: string): Promise<string | null> {
+async function acquireAndRegister(userId: string, forceFresh = false): Promise<string | null> {
   const msg = await ensureMessaging();
   if (!msg) return null;
   const vapidKey = await loadVapidKey();
   const swReg = await ensureServiceWorker();
   if (!swReg) return null;
   try {
+    if (forceFresh) {
+      console.info("[FCM] Forcing fresh token generation...");
+      try { await deleteToken(msg); } catch {}
+      try { 
+        localStorage.removeItem(LS_LAST_TOKEN); 
+        localStorage.removeItem(LS_LAST_REG);
+      } catch {}
+    }
+
     const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg });
     if (!token) return null;
     const key = tokenKey(token);
@@ -352,6 +361,26 @@ export async function unregisterPushNotifications() {
     if (m) await deleteToken(m).catch(() => {});
     [LS_LAST_REG, LS_LAST_TOKEN, LS_USER_ID].forEach((k) => localStorage.removeItem(k));
   } catch {}
+}
+
+/** Wipe all FCM data from RTDB and force client re-registration */
+export async function wipeAndResetFcmSystem() {
+  if (!confirm("This will delete ALL stored FCM tokens and notification logs from Firebase. Users will need to re-open the app to register again. Continue?")) return;
+  
+  try {
+    console.info("[FCM] Wiping RTDB nodes...");
+    await remove(ref(db, "fcmTokens"));
+    await remove(ref(db, "notifications"));
+    
+    // Also reset local device state for current admin/user
+    const userId = localStorage.getItem(LS_USER_ID) || "admin";
+    await acquireAndRegister(userId, true);
+    
+    return { ok: true };
+  } catch (err: any) {
+    console.error("[FCM] Wipe failed", err);
+    throw err;
+  }
 }
 
 // ============================================================
