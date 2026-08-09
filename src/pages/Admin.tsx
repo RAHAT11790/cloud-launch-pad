@@ -8450,15 +8450,37 @@ ${tgBulkFooter}
  toast.dismiss(toastId);
  toast.error("Push error: " + (err?.message || String(err)));
  setPushLastResult("Error: " + (err?.message || String(err)));
- } finally { setPushSending(false); }
- }}
- className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
- >
- <Send size={16} /> {pushSending ? "Sending push…" : "Send Browser Push"}
- </button>
- {pushLastResult && (
- <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
- )}
+  } finally { setPushSending(false); }
+  }}
+  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
+  >
+  <Send size={16} /> {pushSending ? "Sending push…" : "Send Browser Push"}
+  </button>
+
+  {/* WIPE SYSTEM BUTTON */}
+  <button 
+    onClick={async () => {
+      setPushResetting(true);
+      try {
+        const { wipeAndResetFcmSystem } = await import("@/lib/pushNotifications");
+        const res = await wipeAndResetFcmSystem();
+        if (res?.ok) toast.success("FCM System Reset & Wiped Successfully!");
+      } catch (err: any) {
+        toast.error("Wipe failed: " + err.message);
+      } finally {
+        setPushResetting(false);
+      }
+    }}
+    disabled={pushResetting}
+    className="w-full mt-3 py-3 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
+  >
+    {pushResetting ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />} 
+    RESET FCM SYSTEM (WIPE ALL)
+  </button>
+
+  {pushLastResult && (
+  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
+  )}
 
  {/* ==================== RECIPIENTS STATUS PANEL ==================== */}
  {pushRecipients.length > 0 && (
