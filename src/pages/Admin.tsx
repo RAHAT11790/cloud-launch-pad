@@ -4093,18 +4093,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (notifTarget === "online" && !userData?.online) return;
  seen.add(uid);
  targetUserIds.push(uid);
- const notifKey = push(ref(db, `notifications/${uid}`)).key;
- if (notifKey) {
- userNotifUpdates[`notifications/${uid}/${notifKey}`] = {
- title: savedTitle,
- message: savedMessage,
- type: notifType,
- contentId, contentType,
- image: contentPoster, poster: contentPoster,
- timestamp: Date.now(),
- read: false,
- };
- }
+    // User asked to stop storing in-app notification history.
+    // userNotifUpdates[`notifications/${uid}/${notifKey}`] = ... (removed)
  });
 
  // Write in-app notifications (for the bell icon)
@@ -8428,13 +8418,8 @@ ${tgBulkFooter}
  if (!uid || seen.has(uid)) return;
  seen.add(uid);
  targetUserIds.push(uid);
- const key = push(ref(db, `notifications/${uid}`)).key;
- if (key) inAppUpdates[`notifications/${uid}/${key}`] = {
- title, message: body, type: "new_episode",
- contentId: String(contentId), contentType,
- image: image || content.poster || "", poster: content.poster || "",
- timestamp: Date.now(), read: false,
- };
+    // User asked to stop storing in-app notification history.
+    // inAppUpdates[`notifications/${uid}/${key}`] = ... (removed)
  });
  if (Object.keys(inAppUpdates).length) await update(ref(db), inAppUpdates);
 
