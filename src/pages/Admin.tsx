@@ -2517,13 +2517,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>({});
 
  // Push progress state
- const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
- const [pushSending, setPushSending] = useState(false);
- const [fcmTokenStats, setFcmTokenStats] = useState<{ totalTokens: number; totalUsers: number; lastUpdated: number }>({
- totalTokens: 0,
- totalUsers: 0,
- lastUpdated: 0,
- });
+  const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
+  const [pushSending, setPushSending] = useState(false);
+  const [pushResetting, setPushResetting] = useState(false);
+  const [fcmTokenStats, setFcmTokenStats] = useState<{ totalTokens: number; totalUsers: number; lastUpdated: number }>({
+  totalTokens: 0,
+  totalUsers: 0,
+  lastUpdated: 0,
+  });
 
  // Expanded episodes
  const [expandedSeasons, setExpandedSeasons] = useState<Record<number, boolean>>({});
