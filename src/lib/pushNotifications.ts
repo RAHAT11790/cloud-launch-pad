@@ -154,13 +154,22 @@ async function migrateTokenAcrossUsers(newUserId: string, currentKey: string, cu
   } catch (e) { console.warn("[FCM] cross-user migration failed", e); }
 }
 
-async function acquireAndRegister(userId: string): Promise<string | null> {
+async function acquireAndRegister(userId: string, forceFresh = false): Promise<string | null> {
   const msg = await ensureMessaging();
   if (!msg) return null;
   const vapidKey = await loadVapidKey();
   const swReg = await ensureServiceWorker();
   if (!swReg) return null;
   try {
+    if (forceFresh) {
+      console.info("[FCM] Forcing fresh token generation...");
+      try { await deleteToken(msg); } catch {}
+      try { 
+        localStorage.removeItem(LS_LAST_TOKEN); 
+        localStorage.removeItem(LS_LAST_REG);
+      } catch {}
+    }
+
     const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg });
     if (!token) return null;
     const key = tokenKey(token);
