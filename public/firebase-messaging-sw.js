@@ -3,12 +3,12 @@ importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
 
 firebase.initializeApp({
-  apiKey: "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
-  authDomain: "rs-anime.firebaseapp.com",
-  projectId: "rs-anime",
-  storageBucket: "rs-anime.firebasestorage.app",
-  messagingSenderId: "843989457516",
-  appId: "1:843989457516:web:57e0577d092183eedd9649",
+  apiKey: "AIzaSyDIMMW8WMG8b_lAJfEcY0tpT9JnipyL3mc",
+  authDomain: "rs-anime-web.firebaseapp.com",
+  projectId: "rs-anime-web",
+  storageBucket: "rs-anime-web.firebasestorage.app",
+  messagingSenderId: "856791666296",
+  appId: "1:856791666296:web:9b769ba6d774734e0ce78d",
 });
 
 const BRAND_ICON = "https://i.ibb.co/gLc93Bc3/android-chrome-512x512.png";
