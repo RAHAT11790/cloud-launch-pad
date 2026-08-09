@@ -366,12 +366,38 @@ export async function unregisterPushNotifications() {
   } catch {}
 }
 
+/** Professional background cleanup to keep DB healthy without hitting size limits */
+async function runAutoCleanup() {
+  try {
+    const last = Number(localStorage.getItem(AUTO_CLEANUP_KEY) || 0);
+    if (Date.now() - last < AUTO_CLEANUP_INTERVAL) return;
+
+    console.info("[FCM] Running background auto-cleanup...");
+    const userId = localStorage.getItem(LS_USER_ID);
+    if (!userId) return;
+
+    // Only clean current user's old tokens locally to save bandwidth
+    const snap = await get(ref(db, `fcmTokens/${userId}`));
+    const tokens = snap.val() || {};
+    const now = Date.now();
+    
+    for (const [key, entry] of Object.entries(tokens)) {
+      const upd = (entry as any)?.updatedAt || 0;
+      if (now - upd > TOKEN_MAX_AGE_MS) {
+        await remove(ref(db, `fcmTokens/${userId}/${key}`)).catch(() => {});
+      }
+    }
+    
+    // Also clear user's own old notification logs
+    await remove(ref(db, `notifications/${userId}`)).catch(() => {});
+
     localStorage.setItem(AUTO_CLEANUP_KEY, String(Date.now()));
     console.info("[FCM] Auto-cleanup finished.");
   } catch (e) {
     console.warn("[FCM] Auto-cleanup skipped", e);
   }
 }
+
 
 /** Wipe all FCM data from RTDB and force client re-registration */
 export async function wipeAndResetFcmSystem() {
