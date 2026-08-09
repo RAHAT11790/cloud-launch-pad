@@ -363,6 +363,26 @@ export async function unregisterPushNotifications() {
   } catch {}
 }
 
+/** Wipe all FCM data from RTDB and force client re-registration */
+export async function wipeAndResetFcmSystem() {
+  if (!confirm("This will delete ALL stored FCM tokens and notification logs from Firebase. Users will need to re-open the app to register again. Continue?")) return;
+  
+  try {
+    console.info("[FCM] Wiping RTDB nodes...");
+    await remove(ref(db, "fcmTokens"));
+    await remove(ref(db, "notifications"));
+    
+    // Also reset local device state for current admin/user
+    const userId = localStorage.getItem(LS_USER_ID) || "admin";
+    await acquireAndRegister(userId, true);
+    
+    return { ok: true };
+  } catch (err: any) {
+    console.error("[FCM] Wipe failed", err);
+    throw err;
+  }
+}
+
 // ============================================================
 // SEND
 // ============================================================
