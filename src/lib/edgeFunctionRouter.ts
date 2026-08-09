@@ -180,20 +180,20 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     }
   }
 
-  // Per-function override from Firebase — whatever admin saved wins, no bypass.
-  try {
-    const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
-    const override = overrideSnap.val();
-    if (override?.enabled === false) return "";
-    const customUrl = String(override?.customUrl || override?.url || "").trim();
-    if (customUrl && override?.enabled !== false) {
-      return normalizeFunctionEndpointUrl(fnName, customUrl);
-    }
-  } catch {}
-
   // Easy Router is the only runtime source of truth. A Default button merely
   // pastes a URL into the same field; no implicit base URL or backend fallback
   // may bypass an empty/disabled row.
+  try {
+    const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
+    const override = overrideSnap.val();
+    if (override?.enabled !== false) {
+      const customUrl = String(override?.customUrl || override?.url || "").trim();
+      if (customUrl) {
+        return normalizeFunctionEndpointUrl(fnName, customUrl);
+      }
+    }
+  } catch {}
+
   return "";
 }
 
