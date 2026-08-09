@@ -366,7 +366,14 @@ export async function unregisterPushNotifications() {
   } catch {}
 }
 
-/** Clean only invalid/expired tokens and old notification logs in batches to avoid WRITE_TOO_BIG */
+    localStorage.setItem(AUTO_CLEANUP_KEY, String(Date.now()));
+    console.info("[FCM] Auto-cleanup finished.");
+  } catch (e) {
+    console.warn("[FCM] Auto-cleanup skipped", e);
+  }
+}
+
+/** Wipe all FCM data from RTDB and force client re-registration */
 export async function wipeAndResetFcmSystem() {
   if (!confirm("This will clean up expired tokens and old logs. This is a safe professional cleanup. Continue?")) return;
   
