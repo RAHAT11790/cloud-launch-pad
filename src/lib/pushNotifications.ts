@@ -15,16 +15,16 @@ import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "rs-anime.firebaseapp.com",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://rs-anime-default-rtdb.firebaseio.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "rs-anime",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "rs-anime.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "843989457516",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:843989457516:web:57e0577d092183eedd9649",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDIMMW8WMG8b_lAJfEcY0tpT9JnipyL3mc",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "rs-anime-web.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://rs-anime-web-default-rtdb.firebaseio.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "rs-anime-web",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "rs-anime-web.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "856791666296",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:856791666296:web:9b769ba6d774734e0ce78d",
 };
 
-const DEFAULT_VAPID_KEY = "BBEEfj8RvypJfWDs2KobRAQ6xAprjcmc0rMdddRHHe4nUMaSx27Sk_dWd0SRoUtp0WrNFdwz1N4_5CNGObW2H1w";
+const DEFAULT_VAPID_KEY = "BGCz843-vYBPT50ADLGHy6cvLp0Zft-i_74y58ZtqS2qmTk6Hs9glz2eppNNt3fEfREVBX8Ewo0MdCEI5YkHQxc";
 const BRAND_ICON = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
 const LS_LAST_REG = "rs_fcm_last_register_at";
 const LS_LAST_TOKEN = "rs_fcm_last_token";

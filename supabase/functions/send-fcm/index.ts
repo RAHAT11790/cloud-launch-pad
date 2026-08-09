@@ -20,7 +20,7 @@ type TokenLookupResult = {
 };
 
 const BRAND_ICON_URL = "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
-const DEFAULT_DB_URL = "https://rs-anime-default-rtdb.firebaseio.com";
+const DEFAULT_DB_URL = "https://rs-anime-web-default-rtdb.firebaseio.com";
 
 function base64UrlEncode(input: string | Uint8Array): string {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
