@@ -6561,11 +6561,15 @@ ${tgBulkFooter}
         setSeasonsData((items) => {
           const oldIndex = items.findIndex((_, i) => `season-${i}` === active.id);
           const newIndex = items.findIndex((_, i) => `season-${i}` === over.id);
-          return arrayMove(items, oldIndex, newIndex);
+          const updated = arrayMove(items, oldIndex, newIndex);
+          // If we reorder, we should probably update the names too if they are just "Season 1", "Season 2" etc.
+          // but we leave that to user preference for now.
+          return updated;
         });
       }
     }}
   >
+
     <SortableContext items={seasonsData.map((_, i) => `season-${i}`)} strategy={verticalListSortingStrategy}>
       {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
         return <SortableSeasonItem 
