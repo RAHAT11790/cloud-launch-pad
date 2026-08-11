@@ -6601,14 +6601,11 @@ ${tgBulkFooter}
     </SortableContext>
   </DndContext>
  </div>
-
  </div>
- );
- })}
- </div>
-
+ 
  {/* Inline URL Changer for current series */}
  {seasonsData.length > 0 && (() => {
+
  const InlineUrlChanger = () => {
  const [inlineOldDomain, setInlineOldDomain] = useState("");
  const [inlineNewDomain, setInlineNewDomain] = useState("");
