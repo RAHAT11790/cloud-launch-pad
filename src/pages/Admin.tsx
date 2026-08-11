@@ -7197,7 +7197,7 @@ ${tgBulkFooter}
  </div>
  );
  })()}
-
+  </main>
 
  {activeSection === "movies" && (
  <div>
