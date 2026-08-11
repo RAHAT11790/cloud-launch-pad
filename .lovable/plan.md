@@ -1,87 +1,55 @@
-ভাই, কাজ ৩টা বড় area-তে — প্রত্যেকটার scope আলাদা। নিচে A→Z কী করব সেটা আছে। Approve করলে সরাসরি implement শুরু করব।
+# Plan: Professional Series Editor Upgrade
 
----
+Upgrade the "Series Editor" in the Admin panel with drag-and-drop sorting and a powerful season combination (merging) system.
 
-## ১) Comment Section (Video Player)
+## User Review Required
 
-File: `src/components/VideoEngagement.tsx`
+> [!IMPORTANT]
+> - **Drag and Drop**: Seasons can be reordered by dragging. This order will be saved to the database.
+> - **Combination Logic**: Merging seasons will sequentially re-number episodes (e.g., if S1 ends at Ep 12, S2 Ep 1 becomes Ep 13).
+> - **Data Persistence**: Changes will be synced to Firebase and will reflect in the user-side video player.
 
-- প্রত্যেক comment ও reply-এর নিচে **Edit / Delete** button add করব — শুধু নিজের comment/reply-এ visible (userId match)।
-- Edit → inline textarea + Save/Cancel; Firebase-এ update হবে + `editedAt` mark।
-- Delete → confirm popup → Firebase থেকে remove (reply থাকলে "[deleted]" placeholder রেখে thread ভাঙবে না)।
-- **Reply push notification restore**:
-  - reply save করার সময় parent comment-এর `userId` নেব
-  - `users/{parentUserId}/fcmTokens` থেকে token পড়ব
-  - existing `send-fcm` edge function call → title: "New reply on your comment", body: reply text (৮০ char), deepLink: বর্তমান video page।
-  - নিজের comment-এ নিজে reply দিলে notification skip।
+## Proposed Changes
 
----
+### 1. Dependencies
+- Install `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` for high-performance drag-and-drop.
 
-## ২) Telegram Search Bot
+### 2. Admin Panel Upgrade (`src/pages/Admin.tsx`)
+- **Drag and Drop Implementation**:
+  - Wrap the Season list in `DndContext` and `SortableContext`.
+  - Create a `SortableSeasonItem` component with a dedicated drag handle icon (GripVertical).
+  - Implement `handleDragEnd` to update the `seasonsData` state and persist to Firebase.
+- **Season Combination (Merge) Feature**:
+  - Add a **"Combination"** button next to the "JSON Import" button.
+  - Implement a Modal/Panel to select multiple seasons for merging.
+  - **Logic**:
+    - Iterate through selected seasons in their current order.
+    - Flat map all episodes into a single list.
+    - Re-assign `episodeNumber` sequentially from 1 to N.
+    - Create a new combined season and remove the individual merged seasons.
+- **UI Enhancements**:
+  - Use smooth animations for dragging.
+  - Add "Merge" indicator tags.
+  - Improve the layout of the season cards for a more "Ultra Professional" look, matching the provided screenshot.
 
-File: `cloudflare-workers/anime-search-bot.js` (+ `src/lib/cloudflareWorkerLibrary.ts`-এ copy sync)
+### 3. Core Logic & Persistence
+- Update `saveSeries` function to handle the new season order and combined structures.
+- Ensure `useSelectedAnimeSalt` and `SaltPlayer` correctly handle the reordered season list.
 
-**Bug fixes:**
-
-- Duplicate/random auto-reply বন্ধ: `update_id` dedup Map (in-memory + short TTL) + প্রত্যেক update একবারই process।
-- Group-এ শুধু direct mention (`@botname`) বা `/anime <name>` বা reply-to-bot হলে reply — random text-এ auto-trigger বন্ধ।
-- Debounce per chat (২ sec) যাতে same query দুইবার fire না হয়।
-
-**Season/Episode breakdown:**
-
-- Firebase থেকে series data fetch করে seasons array parse করব।
-- Reply format:
+## Technical Details
+- **State Management**: Update `seasonsData` React state and sync with `seriesSeasonsByLanguage` to ensure all language variants stay consistent if applicable.
+- **Episode Re-indexing**:
+  ```typescript
+  let currentEpCount = 0;
+  const mergedEpisodes = selectedSeasons.flatMap(s => {
+    return s.episodes.map(ep => {
+      currentEpCount++;
+      return { ...ep, episodeNumber: currentEpCount };
+    });
+  });
   ```
-  🎬 Dr. Stone
-  📺 Season 1 — 24 Episodes
-  📺 Season 2 — 11 Episodes
-  📺 Season 3 — 22 Episodes
-  Total: 57 Episodes across 3 Seasons
-  ```
-- Movie হলে: `🎬 Full Movie` / `Part 1, Part 2` (type-based)।
 
-**Design polish:** header emoji, section separator, watch button inline keyboard, poster থাকলে `sendPhoto` with caption।
-
----
-
-## ৩) Telegram Post System (Admin Panel)
-
-Files: `src/pages/Admin.tsx` (inline `telegram-post` section + `sendTelegramPost`), `supabase/functions/telegram-post/index.ts`, `cloudflare-workers/telegram-post.js`
-
-**Redesign UI (Admin):**
-
-- বর্তমান mixed Bengali/English text সব clean English-এ rewrite (আপনি চাইলে Bengali labels-ও দিতে পারি — জানাবেন)।
-- আলাদা **Template Editor** section: প্রত্যেক লাইন (title, subtitle, episode line, footer, support line, watch button label) আলাদা input-এ edit।
-- Template save হবে Firebase `settings/telegramPostTemplates/{series|movie}`-এ।
-- **Two templates** — Series template + Movie template — dropdown-এ switch।
-- Placeholder token: `{title}`, `{episodeRange}`, `{season}`, `{quality}`, `{watchUrl}`, `{username}`, `{ownerUsername}` — live preview-এ resolve।
-- "Owner support" line-এ hardcoded `admin` remove করে editable `ownerUsername` field (default আপনার username) — save হবে `settings/telegramPost/ownerUsername`।
-
-**Auto-detection fixes:**
-
-- **Episode range bug**: New Releases → Telegram Post transition-এ `episodeFrom/episodeTo` দুই field carry করব (currently শুধু single number যাচ্ছে)। `sendTelegramPost`-এ range থাকলে `Episode {from}-{to}` render।
-- **Movie detection**: content type check (`type === 'movie' || !seasons`) → automatically Movie template load + type label "Full Movie" বা user-selected "Part 1/Part 2/Complete"।
-- Series-এর জন্য existing episode logic রাখব।
-
-**Preview panel:** left side edit, right side rendered Telegram-style card preview (poster + formatted caption + button)।
-
----
-
-## Technical Notes
-
-- Firebase paths: `comments/{contentId}/{commentId}`, `settings/telegramPostTemplates/*`, `settings/telegramPost/ownerUsername`, `users/{uid}/fcmTokens`।
-- Edge function `send-fcm` already exists — reuse।
-- Cloudflare worker changes সাথে সাথে `src/lib/cloudflareWorkerLibrary.ts`-এর copy update (dual-deploy rule)।
-- Message length short রাখব (আপনি চেয়েছেন)।
-
----
-
-## Delivery Order
-
-1. Comment edit/delete + reply push (smallest, isolated)
-2. Search bot dedup + season breakdown
-3. Telegram Post redesign + template editor + movie/series split + range fix
-
-Approve দিলে এক বারে সব শুরু করব।
-
-&nbsp;
+## Verification Plan
+- **Manual Test**: Drag Season 2 above Season 1 in Admin and verify the order changes in the Video Player.
+- **Combination Test**: Merge two seasons with 10 episodes each and verify the resulting season has 20 episodes numbered 1-20.
+- **Persistence Test**: Refresh the Admin page after changes and verify state is restored from Firebase.
