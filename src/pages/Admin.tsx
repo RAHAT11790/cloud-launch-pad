@@ -2569,9 +2569,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Currently-selected anime (for per-anime button persistence)
  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
  
- // Season combination selection
- const [comboSelection, setComboSelection] = useState<number[]>([]);
- const [isComboMode, setIsComboMode] = useState(false);
+  // Season combination selection
+  const [wsMergeSelected, setWsMergeSelected] = useState<Record<number, boolean>>({});
+
 
  // Auto-save per-anime telegram custom buttons whenever the admin edits them
 
