@@ -13145,14 +13145,27 @@ const SortableSeasonItem = memo(({
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-black/30 rounded-xl p-3.5 mb-3 border border-white/5 relative group">
+    <div ref={setNodeRef} style={style} className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
+      {isComboMode && (
+        <div 
+          onClick={() => setComboSelection((prev: number[]) => prev.includes(sIdx) ? prev.filter((i: number) => i !== sIdx) : [...prev, sIdx])}
+          className="absolute inset-0 z-10 cursor-pointer"
+        />
+      )}
       <div className="flex items-center gap-2.5 mb-3">
-        <div {...attributes} {...listeners} className="p-2 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-indigo-400 transition-colors">
-          <GripVertical size={16} />
-        </div>
-        <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} />
-        <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={14} /></button>
+        {!isComboMode ? (
+          <div {...attributes} {...listeners} className="p-2 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-indigo-400 transition-colors">
+            <GripVertical size={16} />
+          </div>
+        ) : (
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${comboSelection.includes(sIdx) ? 'bg-amber-500 border-amber-400 text-white' : 'border-zinc-700 text-transparent'}`}>
+            <Check size={14} />
+          </div>
+        )}
+        <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} disabled={isComboMode} />
+        {!isComboMode && <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={14} /></button>}
       </div>
+
       <div className="mb-2.5 flex justify-between items-center ml-9">
         <span className="text-xs text-[#D1C4E9]">Episodes: {season.episodes.length}</span>
         <div className="flex gap-1.5 items-center">
