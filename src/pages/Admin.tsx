@@ -6578,6 +6578,10 @@ ${tgBulkFooter}
           sIdx={sIdx}
           rawSeason={rawSeason}
           seasonsData={seasonsData}
+          comboSelection={comboSelection}
+          setComboSelection={setComboSelection}
+          isComboMode={isComboMode}
+
           updateSeasonName={updateSeasonName}
           removeSeason={removeSeason}
           wsSeasonJsonFileRef={wsSeasonJsonFileRef}
