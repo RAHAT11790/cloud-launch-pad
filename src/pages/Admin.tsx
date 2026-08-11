@@ -6463,116 +6463,145 @@ ${tgBulkFooter}
  </div>
 
  <div id="seasons-episodes-section" className={`${glassCard} p-4 mb-4 scroll-mt-4`}>
- <div className="flex justify-between items-center mb-3.5">
- <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
- <div className="flex gap-1.5 items-center">
- <button onClick={() => setWsJsonImportMode(prev => !prev)}
- className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${wsJsonImportMode ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/40'}`}>
- <FolderOpen size={12} /> JSON Import
- </button>
- <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
- </div>
+  <div className="flex justify-between items-center mb-3.5">
+  <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
+  <div className="flex gap-1.5 items-center">
+  <button onClick={() => setWsJsonImportMode(prev => !prev)}
+  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${wsJsonImportMode ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/40'}`}>
+  <FolderOpen size={12} /> JSON
+  </button>
+  <button onClick={() => setIsComboMode(prev => !prev)}
+  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isComboMode ? 'bg-amber-500/30 border-amber-500/50 text-amber-300' : 'bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/40'}`}>
+  <Layers size={12} /> Merge
+  </button>
+  <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
+  </div>
+  </div>
+
+  {/* Combination Modal/Panel */}
+  {isComboMode && (
+    <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 rounded-2xl border border-amber-500/20 p-4 mb-4 space-y-3 shadow-lg shadow-amber-500/5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[12px] font-bold text-amber-200 uppercase tracking-wide">Season Combination</p>
+          <p className="text-[9px] text-amber-400/70">Select seasons to merge into a single sequence</p>
+        </div>
+        <button onClick={() => {
+          if (comboSelection.length < 2) { toast.error("Select at least 2 seasons to merge"); return; }
+          
+          // Logic to merge seasons
+          const sortedIndices = [...comboSelection].sort((a, b) => a - b);
+          const baseIdx = sortedIndices[0];
+          const newSeasons = [...seasonsData];
+          const baseSeason = { ...newSeasons[baseIdx], episodes: [...(newSeasons[baseIdx].episodes || [])] };
+          
+          // Re-indexing starting point
+          let currentEpCount = baseSeason.episodes.length;
+          
+          for (let i = 1; i < sortedIndices.length; i++) {
+            const idx = sortedIndices[i];
+            const seasonToMerge = newSeasons[idx];
+            const episodesToMerge = (seasonToMerge.episodes || []).map(ep => ({
+              ...ep,
+              episodeNumber: currentEpCount + Number(ep.episodeNumber || 1)
+            }));
+            baseSeason.episodes = [...baseSeason.episodes, ...episodesToMerge];
+            currentEpCount += episodesToMerge.length;
+          }
+          
+          // Remove merged seasons (starting from highest index to avoid shift)
+          const finalSeasons = newSeasons.filter((_, idx) => !sortedIndices.slice(1).includes(idx));
+          finalSeasons[baseIdx] = baseSeason;
+          
+          setSeasonsData(finalSeasons);
+          setComboSelection([]);
+          setIsComboMode(false);
+          toast.success("Seasons merged professionally!");
+        }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-600/20 transition-all flex items-center gap-1.5 uppercase">
+          <Layers size={12} /> Combine Now
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {seasonsData.map((s, idx) => (
+          <button 
+            key={idx} 
+            onClick={() => setComboSelection(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])}
+            className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${comboSelection.includes(idx) ? 'bg-amber-500 border-amber-400 text-white shadow-md shadow-amber-500/30' : 'bg-black/30 border-white/10 text-zinc-400'}`}
+          >
+            {s.name || `Season ${idx + 1}`} ({s.episodes?.length || 0} EP)
+          </button>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {/* JSON Import Section - Beautiful Panel */}
+  {wsJsonImportMode && (
+  <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
+...
+  <p className="text-[9px] text-blue-400/50 text-center">
+  Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">episodes: [...]</code> or <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">seasons: [...]</code>
+  </p>
+  </div>
+  )}
+  {/* Hidden file input for per-season JSON import */}
+  <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
+  
+  <DndContext 
+    sensors={useSensors(
+      useSensor(PointerSensor),
+      useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    )}
+    collisionDetection={closestCenter}
+    onDragEnd={(event: DragEndEvent) => {
+      const { active, over } = event;
+      if (over && active.id !== over.id) {
+        setSeasonsData((items) => {
+          const oldIndex = items.findIndex((_, i) => `season-${i}` === active.id);
+          const newIndex = items.findIndex((_, i) => `season-${i}` === over.id);
+          return arrayMove(items, oldIndex, newIndex);
+        });
+      }
+    }}
+  >
+    <SortableContext items={seasonsData.map((_, i) => `season-${i}`)} strategy={verticalListSortingStrategy}>
+      {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
+        return <SortableSeasonItem 
+          key={`season-${sIdx}`}
+          id={`season-${sIdx}`}
+          sIdx={sIdx}
+          rawSeason={rawSeason}
+          seasonsData={seasonsData}
+          updateSeasonName={updateSeasonName}
+          removeSeason={removeSeason}
+          wsSeasonJsonFileRef={wsSeasonJsonFileRef}
+          setWsSeasonJsonTarget={setWsSeasonJsonTarget}
+          setWsSeasonPasteTarget={setWsSeasonPasteTarget}
+          setWsSeasonPasteText={setWsSeasonPasteText}
+          setExpandedSeasons={setExpandedSeasons}
+          expandedSeasons={expandedSeasons}
+          wsSeasonPasteTarget={wsSeasonPasteTarget}
+          wsSeasonPasteText={wsSeasonPasteText}
+          wsImportJsonToSeason={wsImportJsonToSeason}
+          addEpisode={addEpisode}
+          episodeRenderLimits={episodeRenderLimits}
+          setEpisodeRenderLimits={setEpisodeRenderLimits}
+          seriesForm={seriesForm}
+          normalizeLanguageValue={normalizeLanguageValue}
+          updateSeriesEpisodeLanguageLink={updateSeriesEpisodeLanguageLink}
+          removeEpisode={removeEpisode}
+          addSeriesEpisodeAudioTrack={addSeriesEpisodeAudioTrack}
+          updateSeriesEpisodeAudioTrack={updateSeriesEpisodeAudioTrack}
+          setSeriesEpisodeDefaultAudioTrack={setSeriesEpisodeDefaultAudioTrack}
+          removeSeriesEpisodeAudioTrack={removeSeriesEpisodeAudioTrack}
+          inputClass={inputClass}
+          btnSecondary={btnSecondary}
+        />;
+      })}
+    </SortableContext>
+  </DndContext>
  </div>
 
- {/* JSON Import Section - Beautiful Panel */}
- {wsJsonImportMode && (
- <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
- <div className="flex items-center gap-2 mb-1">
- <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
- <FolderOpen size={14} className="text-blue-400" />
- </div>
- <div>
- <p className="text-[12px] font-semibold text-blue-200">JSON Import</p>
- <p className="text-[9px] text-blue-400/70">Upload file or paste JSON text</p>
- </div>
- </div>
-
- {/* Two columns: Upload & Paste side by side */}
- <div className="grid grid-cols-2 gap-3">
- {/* File Upload */}
- <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col items-center justify-center gap-2 min-h-[120px] cursor-pointer hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
- onClick={() => wsJsonFileRef.current?.click()}>
- <input type="file" ref={wsJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleJsonFileUpload} className="hidden" />
- <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center">
- <Download size={18} className="text-blue-400" />
- </div>
- <p className="text-[11px] font-semibold text-blue-300 text-center">Upload .json</p>
- <p className="text-[9px] text-blue-400/50 text-center">Click to browse</p>
- </div>
-
- {/* Paste JSON */}
- <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col gap-2">
- <textarea
- value={wsJsonPasteText}
- onChange={e => setWsJsonPasteText(e.target.value)}
- placeholder='{ "episodes": [...] }'
- className="w-full flex-1 bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-blue-400/30 focus:border-blue-500/50 focus:outline-none min-h-[70px] resize-none font-mono"
- />
- <button onClick={wsHandleJsonPaste} disabled={!wsJsonPasteText.trim()}
- className="w-full py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5 hover:from-blue-500 hover:to-indigo-500 transition-all">
- <Download size={11} /> Import
- </button>
- </div>
- </div>
-
- <p className="text-[9px] text-blue-400/50 text-center">
- Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">episodes: [...]</code> or <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">seasons: [...]</code>
- </p>
- </div>
- )}
- {/* Hidden file input for per-season JSON import */}
- <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
- {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
- const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
- return (
- <div key={sIdx} className="bg-black/30 rounded-xl p-3.5 mb-3 border border-white/5">
- <div className="flex items-center gap-2.5 mb-3">
- <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} />
- <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg"><Trash2 size={14} /></button>
- </div>
- <div className="mb-2.5 flex justify-between items-center">
-  <span className="text-xs text-[#D1C4E9]">Episodes: {(Array.isArray(season.episodes) ? season.episodes : []).length}</span>
- <div className="flex gap-1.5 items-center">
- <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
- className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
- <FolderOpen size={10} /> File
- </button>
- <button onClick={() => { setWsSeasonPasteTarget(sIdx); setWsSeasonPasteText(""); }}
- className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/40 transition-all flex items-center gap-1">
- <Download size={10} /> Paste
- </button>
- <button onClick={() => setExpandedSeasons(prev => ({ ...prev, [sIdx]: !prev[sIdx] }))}
- className={`${btnSecondary} px-3 py-1.5 text-[11px]`}><ChevronDown size={12} className={`mr-1 transition-transform ${expandedSeasons[sIdx] ? 'rotate-180' : ''}`} /> Episodes</button>
- </div>
- </div>
- {wsSeasonPasteTarget === sIdx && (
- <div className="mb-3 bg-black/20 rounded-xl border border-green-500/20 p-3">
- <textarea
- value={wsSeasonPasteText}
- onChange={e => setWsSeasonPasteText(e.target.value)}
- placeholder='{ "episodes": [...] } or [{ "episodeNumber": 1, "link": "..." }]'
- className="w-full bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-green-400/30 focus:border-green-500/50 focus:outline-none min-h-[70px] resize-none font-mono mb-2"
- />
- <div className="flex gap-2">
- <button onClick={() => {
- if (!wsSeasonPasteText.trim()) { toast.error('Paste JSON text'); return; }
- try {
- const parsed = JSON.parse(wsSeasonPasteText.trim());
- wsImportJsonToSeason(sIdx, parsed);
- setWsSeasonPasteTarget(-1);
- setWsSeasonPasteText("");
- } catch { toast.error('Invalid JSON'); }
- }} disabled={!wsSeasonPasteText.trim()}
- className="flex-1 py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5">
- <Download size={11} /> Import
- </button>
- <button onClick={() => { setWsSeasonPasteTarget(-1); setWsSeasonPasteText(""); }}
- className="px-3 py-2 rounded-lg text-[10px] font-bold bg-white/5 text-zinc-400 hover:bg-white/10">
- Cancel
- </button>
- </div>
- </div>
- )}
  {expandedSeasons[sIdx] && (
  <div>
   {(() => {
