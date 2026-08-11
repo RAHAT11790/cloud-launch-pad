@@ -13122,8 +13122,10 @@ const SortableSeasonItem = memo(({
   wsImportJsonToSeason, addEpisode, episodeRenderLimits, setEpisodeRenderLimits,
   seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
-  removeSeriesEpisodeAudioTrack, inputClass, btnSecondary
+  removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
+  comboSelection, setComboSelection, isComboMode
 }: any) => {
+
   const {
     attributes,
     listeners,
