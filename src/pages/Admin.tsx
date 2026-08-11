@@ -2568,7 +2568,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgDefaultButtonName, setTgDefaultButtonName] = useState(DEFAULT_TG_BUTTON_TEXT);
  // Currently-selected anime (for per-anime button persistence)
  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
+ 
+ // Season combination selection
+ const [comboSelection, setComboSelection] = useState<number[]>([]);
+ const [isComboMode, setIsComboMode] = useState(false);
+
  // Auto-save per-anime telegram custom buttons whenever the admin edits them
+
  useEffect(() => {
  if (!tgSelectedAnimeId) return;
  const safeId = String(tgSelectedAnimeId).replace(/[^a-zA-Z0-9_-]/g, "_");
