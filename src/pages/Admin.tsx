@@ -6601,7 +6601,6 @@ ${tgBulkFooter}
     </SortableContext>
   </DndContext>
  </div>
- </div>
  
  {/* Inline URL Changer for current series */}
  {seasonsData.length > 0 && (() => {
