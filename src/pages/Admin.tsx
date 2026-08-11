@@ -12,12 +12,31 @@ import {
  Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
  Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
  Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
- Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud
+ Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud, GripVertical, Layers
 } from "lucide-react";
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+
 import {
  buildAdminContentIndexItem,
  fetchAdminCount,
@@ -2549,7 +2568,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [tgDefaultButtonName, setTgDefaultButtonName] = useState(DEFAULT_TG_BUTTON_TEXT);
  // Currently-selected anime (for per-anime button persistence)
  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
+ 
+ // Season combination selection
+ const [comboSelection, setComboSelection] = useState<number[]>([]);
+ const [isComboMode, setIsComboMode] = useState(false);
+
  // Auto-save per-anime telegram custom buttons whenever the admin edits them
+
  useEffect(() => {
  if (!tgSelectedAnimeId) return;
  const safeId = String(tgSelectedAnimeId).replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -6438,286 +6463,148 @@ ${tgBulkFooter}
  </div>
 
  <div id="seasons-episodes-section" className={`${glassCard} p-4 mb-4 scroll-mt-4`}>
- <div className="flex justify-between items-center mb-3.5">
- <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
- <div className="flex gap-1.5 items-center">
- <button onClick={() => setWsJsonImportMode(prev => !prev)}
- className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${wsJsonImportMode ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/40'}`}>
- <FolderOpen size={12} /> JSON Import
- </button>
- <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
- </div>
- </div>
-
- {/* JSON Import Section - Beautiful Panel */}
- {wsJsonImportMode && (
- <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
- <div className="flex items-center gap-2 mb-1">
- <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
- <FolderOpen size={14} className="text-blue-400" />
- </div>
- <div>
- <p className="text-[12px] font-semibold text-blue-200">JSON Import</p>
- <p className="text-[9px] text-blue-400/70">Upload file or paste JSON text</p>
- </div>
- </div>
-
- {/* Two columns: Upload & Paste side by side */}
- <div className="grid grid-cols-2 gap-3">
- {/* File Upload */}
- <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col items-center justify-center gap-2 min-h-[120px] cursor-pointer hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
- onClick={() => wsJsonFileRef.current?.click()}>
- <input type="file" ref={wsJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleJsonFileUpload} className="hidden" />
- <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center">
- <Download size={18} className="text-blue-400" />
- </div>
- <p className="text-[11px] font-semibold text-blue-300 text-center">Upload .json</p>
- <p className="text-[9px] text-blue-400/50 text-center">Click to browse</p>
- </div>
-
- {/* Paste JSON */}
- <div className="bg-black/20 rounded-xl border border-blue-500/10 p-3 flex flex-col gap-2">
- <textarea
- value={wsJsonPasteText}
- onChange={e => setWsJsonPasteText(e.target.value)}
- placeholder='{ "episodes": [...] }'
- className="w-full flex-1 bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-blue-400/30 focus:border-blue-500/50 focus:outline-none min-h-[70px] resize-none font-mono"
- />
- <button onClick={wsHandleJsonPaste} disabled={!wsJsonPasteText.trim()}
- className="w-full py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5 hover:from-blue-500 hover:to-indigo-500 transition-all">
- <Download size={11} /> Import
- </button>
- </div>
- </div>
-
- <p className="text-[9px] text-blue-400/50 text-center">
- Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">episodes: [...]</code> or <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">seasons: [...]</code>
- </p>
- </div>
- )}
- {/* Hidden file input for per-season JSON import */}
- <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
- {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
- const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
- return (
- <div key={sIdx} className="bg-black/30 rounded-xl p-3.5 mb-3 border border-white/5">
- <div className="flex items-center gap-2.5 mb-3">
- <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} />
- <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg"><Trash2 size={14} /></button>
- </div>
- <div className="mb-2.5 flex justify-between items-center">
-  <span className="text-xs text-[#D1C4E9]">Episodes: {(Array.isArray(season.episodes) ? season.episodes : []).length}</span>
- <div className="flex gap-1.5 items-center">
- <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
- className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
- <FolderOpen size={10} /> File
- </button>
- <button onClick={() => { setWsSeasonPasteTarget(sIdx); setWsSeasonPasteText(""); }}
- className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/40 transition-all flex items-center gap-1">
- <Download size={10} /> Paste
- </button>
- <button onClick={() => setExpandedSeasons(prev => ({ ...prev, [sIdx]: !prev[sIdx] }))}
- className={`${btnSecondary} px-3 py-1.5 text-[11px]`}><ChevronDown size={12} className={`mr-1 transition-transform ${expandedSeasons[sIdx] ? 'rotate-180' : ''}`} /> Episodes</button>
- </div>
- </div>
- {wsSeasonPasteTarget === sIdx && (
- <div className="mb-3 bg-black/20 rounded-xl border border-green-500/20 p-3">
- <textarea
- value={wsSeasonPasteText}
- onChange={e => setWsSeasonPasteText(e.target.value)}
- placeholder='{ "episodes": [...] } or [{ "episodeNumber": 1, "link": "..." }]'
- className="w-full bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-green-400/30 focus:border-green-500/50 focus:outline-none min-h-[70px] resize-none font-mono mb-2"
- />
- <div className="flex gap-2">
- <button onClick={() => {
- if (!wsSeasonPasteText.trim()) { toast.error('Paste JSON text'); return; }
- try {
- const parsed = JSON.parse(wsSeasonPasteText.trim());
- wsImportJsonToSeason(sIdx, parsed);
- setWsSeasonPasteTarget(-1);
- setWsSeasonPasteText("");
- } catch { toast.error('Invalid JSON'); }
- }} disabled={!wsSeasonPasteText.trim()}
- className="flex-1 py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5">
- <Download size={11} /> Import
- </button>
- <button onClick={() => { setWsSeasonPasteTarget(-1); setWsSeasonPasteText(""); }}
- className="px-3 py-2 rounded-lg text-[10px] font-bold bg-white/5 text-zinc-400 hover:bg-white/10">
- Cancel
- </button>
- </div>
- </div>
- )}
- {expandedSeasons[sIdx] && (
- <div>
-  {(() => {
-  const episodeList = Array.isArray(season.episodes) ? season.episodes : [];
-  const renderLimit = episodeRenderLimits[sIdx] || 50;
-  const visibleEpisodes = episodeList.map((ep, eIdx) => ({ ep, eIdx })).slice().reverse().slice(0, renderLimit);
-  return <>
- {/* Quick Add Episode (TOP) — fast workflow: add new ep without scrolling */}
- <button onClick={() => addEpisode(sIdx)}
- className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
- <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
- </button>
-   {episodeList.length > 0 && (
- <p className="text-[10px] text-zinc-500 mb-2 px-1">
-   Showing newest first • {Math.min(renderLimit, episodeList.length)}/{episodeList.length} episode{episodeList.length === 1 ? "" : "s"}
- </p>
- )}
-   {visibleEpisodes
- .map(({ ep, eIdx }) => {
- const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
- const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
-  const isAnSeries = !!(seriesForm?.anSlug || seriesForm?.animeSaltSlug || /animesalt/i.test(String(seriesForm?.sourceName || "")));
-  const episodeAudioTracks = Array.isArray((ep as any).audioTracks) ? ((ep as any).audioTracks as any[]) : [];
-   const explicitDefaultAudioIdx = episodeAudioTracks.findIndex((track: any) => track?.isDefault === true);
-   const resolvedDefaultAudioIdx = explicitDefaultAudioIdx >= 0 ? explicitDefaultAudioIdx : (episodeAudioTracks.length > 0 ? 0 : -1);
-   const defaultAudioTrack = resolvedDefaultAudioIdx >= 0 ? episodeAudioTracks[resolvedDefaultAudioIdx] : null;
- const currentLanguageFields = {
- link: ep.link ?? "",
- link480: ep.link480 ?? "",
- link720: ep.link720 ?? "",
- link1080: ep.link1080 ?? "",
- link4k: ep.link4k ?? "",
- };
-
- return (
- <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
- <div className="flex items-center justify-between mb-2">
- <span className="text-xs font-semibold text-purple-400">Episode {ep.episodeNumber}</span>
- <button onClick={() => removeEpisode(sIdx, eIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all">
- <Trash2 size={12} />
- </button>
- </div>
-
- {isAnSeries ? (
-   // AN entries: ONE video-quality block. AN video URLs are language-agnostic;
-   // each language only differs in its audio rendition (handled below).
-   // Saved against baseLanguage so the existing loader keeps reading them.
-   <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
-   <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
-   <p className="mt-0.5 text-[9px] text-indigo-100/60">AN video URLs are shared across every language — only audio differs.</p>
-   <div className="mt-2 space-y-2.5">
-     <div>
-       <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default (1080p)</span>
-       <textarea value={ep.link ?? ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, baseLanguage)}
-         className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default video link (fallback when no quality picked)" rows={2} />
-     </div>
-     {(["link480", "link720", "link1080", "link4k"] as const).map(q => (
-       <div key={`an-video-${q}`}>
-         <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
-           {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
-         </span>
-         <textarea value={(ep as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, baseLanguage)}
-           className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} video link${q === "link4k" ? " (optional)" : ""}`} rows={2} />
-       </div>
-     ))}
-   </div>
-   </div>
- ) : (
- <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
- <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
- <p className="mt-0.5 text-[9px] text-cyan-100/60">
- {selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase() ? "This is the base language." : "This language has its own separate seasons and episode links."}
- </p>
- {selectedAdminLanguage.toLowerCase() !== baseLanguage.toLowerCase() && !currentLanguageFields.link && !currentLanguageFields.link480 && !currentLanguageFields.link720 && !currentLanguageFields.link1080 && !currentLanguageFields.link4k && (
- <p className="mt-1 text-[9px] text-white/50">No links yet for this language. Add them below.</p>
- )}
-
- <div className="mt-2 space-y-2.5">
- <div>
- <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default</span>
- <textarea value={currentLanguageFields.link} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, selectedAdminLanguage)}
- className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default link" rows={2} />
- </div>
- {["link480", "link720", "link1080", "link4k"].map(q => (
- <div key={`${selectedAdminLanguage}-${q}`}>
- <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
- {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
- </span>
- <textarea value={(currentLanguageFields as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, selectedAdminLanguage)}
- className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
- </div>
- ))}
- </div>
- </div>
- )}
-
-  {isAnSeries && (
-  <div className="mt-3 rounded-xl border-2 border-amber-500/35 bg-gradient-to-b from-amber-500/10 to-orange-500/5 p-3 shadow-[0_0_18px_rgba(245,158,11,0.08)]">
-  <div className="mb-3 flex items-start justify-between gap-2">
-  <div>
-  <p className="text-[12px] font-black uppercase tracking-wide text-amber-100">🎧 AN AUDIO URL ROOMS</p>
-   <p className="text-[9px] leading-relaxed text-amber-100/70">RS নয়: উপরের 480/720/1080 video-only link + নিচের প্রতিটা audio URL একসাথে player এ যাবে। যত audio আছে, তত row/ঘর এখানে থাকবে।</p>
-   <p className="mt-1 text-[9px] font-bold text-emerald-200">Saved audio rows: {episodeAudioTracks.length}</p>
-  </div>
-  <div className="flex flex-col gap-1.5 shrink-0">
-  <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/20 px-2.5 py-1.5 text-[10px] font-bold text-amber-100 hover:bg-amber-500/30">
-  <Plus size={10} className="mr-1 inline" /> Add audio row
+  <div className="flex justify-between items-center mb-3.5">
+  <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
+  <div className="flex gap-1.5 items-center">
+  <button onClick={() => setWsJsonImportMode(prev => !prev)}
+  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${wsJsonImportMode ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/40'}`}>
+  <FolderOpen size={12} /> JSON
   </button>
-  <button type="button" onClick={() => { addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); }} className="rounded-lg bg-white/5 px-2.5 py-1.5 text-[9px] font-bold text-zinc-300 hover:bg-white/10">
-  +4 empty rooms
+  <button onClick={() => setIsComboMode(prev => !prev)}
+  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isComboMode ? 'bg-amber-500/30 border-amber-500/50 text-amber-300' : 'bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/40'}`}>
+  <Layers size={12} /> Merge
   </button>
+  <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
   </div>
   </div>
-   {defaultAudioTrack && (
-   <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5">
-   <div className="mb-2 flex items-center justify-between gap-2">
-   <span className="text-[10px] font-bold text-emerald-100">Default audio room: {(defaultAudioTrack as any)?.label || (defaultAudioTrack as any)?.language || `Audio ${resolvedDefaultAudioIdx + 1}`}</span>
-   <span className="rounded-md bg-emerald-500/25 px-2 py-0.5 text-[9px] font-black text-emerald-100">DEFAULT</span>
-   </div>
-   <textarea value={(defaultAudioTrack as any)?.link || (defaultAudioTrack as any)?.audioUrl || (defaultAudioTrack as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, resolvedDefaultAudioIdx, "link", e.target.value)}
-   className={`${inputClass} w-full !py-2 !text-[10px] min-h-[54px] resize-none break-all font-mono`} placeholder="Default audio .m3u8 URL" rows={2} />
-   </div>
-   )}
-  <div className="space-y-2.5">
-  {(episodeAudioTracks.length > 0 ? episodeAudioTracks : [{ label: "", language: "", link: "", audioUrl: "", rawAudioUrl: "", isDefault: true }]).map((track, tIdx) => {
-  const isPlaceholderAudio = episodeAudioTracks.length === 0;
-  const isHindi = /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${(track as any)?.language || ""} ${(track as any)?.label || ""}`);
-  const audioValue = (track as any)?.link || (track as any)?.audioUrl || (track as any)?.rawAudioUrl || "";
-  return (
-  <div key={`an-audio-${tIdx}`} className="rounded-xl border border-amber-300/15 bg-black/35 p-2.5">
-  <div className="mb-2 flex items-center justify-between gap-2">
-   <span className="text-[10px] font-black text-amber-100">Audio room {tIdx + 1}{isPlaceholderAudio ? " • empty" : tIdx === resolvedDefaultAudioIdx ? " • default" : isHindi ? " • Hindi" : ""}</span>
-   <div className="flex items-center gap-1.5">
-   {!isPlaceholderAudio && <button type="button" onClick={() => setSeriesEpisodeDefaultAudioTrack(sIdx, eIdx, tIdx)} className={`rounded-md px-2 py-1 text-[9px] font-bold ${tIdx === resolvedDefaultAudioIdx ? "bg-emerald-500/25 text-emerald-100" : "bg-white/5 text-zinc-400 hover:bg-emerald-500/15 hover:text-emerald-200"}`}>Default</button>}
-  {!isPlaceholderAudio && <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400 hover:bg-red-500/25"><Trash2 size={10} /></button>}
-   </div>
-  </div>
-  <div className="grid grid-cols-2 gap-2 mb-2">
-  <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Audio name: Japanese / Telugu / Tamil / Hindi" />
-  <input value={(track as any)?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Language label/code" />
-  </div>
-  <textarea value={audioValue} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "link", e.target.value)}
-  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[58px] resize-none break-all font-mono`} placeholder="Paste separate audio-only .m3u8 URL here (not video master)" rows={2} />
-  </div>
-  );
-  })}
-  </div>
-  </div>
+
+  {/* Combination Modal/Panel */}
+  {isComboMode && (
+    <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 rounded-2xl border border-amber-500/20 p-4 mb-4 space-y-3 shadow-lg shadow-amber-500/5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[12px] font-bold text-amber-200 uppercase tracking-wide">Season Combination</p>
+          <p className="text-[9px] text-amber-400/70">Select seasons to merge into a single sequence</p>
+        </div>
+        <button onClick={() => {
+          if (comboSelection.length < 2) { toast.error("Select at least 2 seasons to merge"); return; }
+          
+          // Logic to merge seasons
+          const sortedIndices = [...comboSelection].sort((a, b) => a - b);
+          const baseIdx = sortedIndices[0];
+          const newSeasons = [...seasonsData];
+          const baseSeason = { ...newSeasons[baseIdx], episodes: [...(newSeasons[baseIdx].episodes || [])] };
+          
+          // Re-indexing starting point
+          let currentEpCount = baseSeason.episodes.length;
+          
+          for (let i = 1; i < sortedIndices.length; i++) {
+            const idx = sortedIndices[i];
+            const seasonToMerge = newSeasons[idx];
+            const episodesToMerge = (seasonToMerge.episodes || []).map(ep => ({
+              ...ep,
+              episodeNumber: currentEpCount + Number(ep.episodeNumber || 1)
+            }));
+            baseSeason.episodes = [...baseSeason.episodes, ...episodesToMerge];
+            currentEpCount += episodesToMerge.length;
+          }
+          
+          // Remove merged seasons (starting from highest index to avoid shift)
+          const finalSeasons = newSeasons.filter((_, idx) => !sortedIndices.slice(1).includes(idx));
+          finalSeasons[baseIdx] = baseSeason;
+          
+          setSeasonsData(finalSeasons);
+          setComboSelection([]);
+          setIsComboMode(false);
+          toast.success("Seasons merged professionally!");
+        }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-600/20 transition-all flex items-center gap-1.5 uppercase">
+          <Layers size={12} /> Combine Now
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {seasonsData.map((s, idx) => (
+          <button 
+            key={idx} 
+            onClick={() => setComboSelection(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])}
+            className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${comboSelection.includes(idx) ? 'bg-amber-500 border-amber-400 text-white shadow-md shadow-amber-500/30' : 'bg-black/30 border-white/10 text-zinc-400'}`}
+          >
+            {s.name || `Season ${idx + 1}`} ({s.episodes?.length || 0} EP)
+          </button>
+        ))}
+      </div>
+    </div>
   )}
 
- </div>
- );
- })}
-  {episodeList.length > visibleEpisodes.length && (
-  <button type="button" onClick={() => setEpisodeRenderLimits(prev => ({ ...prev, [sIdx]: (prev[sIdx] || 50) + 50 }))}
-  className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 text-[11px] font-bold text-zinc-200 hover:bg-white/10 transition-all">
-  Load 50 more episodes ({visibleEpisodes.length}/{episodeList.length})
-  </button>
+  {/* JSON Import Section - Beautiful Panel */}
+  {wsJsonImportMode && (
+  <div className="bg-gradient-to-br from-blue-900/30 to-indigo-900/20 rounded-2xl border border-blue-500/20 p-4 mb-4 space-y-3">
+...
+  <p className="text-[9px] text-blue-400/50 text-center">
+  Format: <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">episodes: [...]</code> or <code className="bg-black/30 px-1.5 py-0.5 rounded text-blue-300/70">seasons: [...]</code>
+  </p>
+  </div>
   )}
-  </>;
-  })()}
+  {/* Hidden file input for per-season JSON import */}
+  <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
+  
+  <DndContext 
+    sensors={useSensors(
+      useSensor(PointerSensor),
+      useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    )}
+    collisionDetection={closestCenter}
+    onDragEnd={(event: DragEndEvent) => {
+      const { active, over } = event;
+      if (over && active.id !== over.id) {
+        setSeasonsData((items) => {
+          const oldIndex = items.findIndex((_, i) => `season-${i}` === active.id);
+          const newIndex = items.findIndex((_, i) => `season-${i}` === over.id);
+          return arrayMove(items, oldIndex, newIndex);
+        });
+      }
+    }}
+  >
+    <SortableContext items={seasonsData.map((_, i) => `season-${i}`)} strategy={verticalListSortingStrategy}>
+      {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
+        return <SortableSeasonItem 
+          key={`season-${sIdx}`}
+          id={`season-${sIdx}`}
+          sIdx={sIdx}
+          rawSeason={rawSeason}
+          seasonsData={seasonsData}
+          updateSeasonName={updateSeasonName}
+          removeSeason={removeSeason}
+          wsSeasonJsonFileRef={wsSeasonJsonFileRef}
+          setWsSeasonJsonTarget={setWsSeasonJsonTarget}
+          setWsSeasonPasteTarget={setWsSeasonPasteTarget}
+          setWsSeasonPasteText={setWsSeasonPasteText}
+          setExpandedSeasons={setExpandedSeasons}
+          expandedSeasons={expandedSeasons}
+          wsSeasonPasteTarget={wsSeasonPasteTarget}
+          wsSeasonPasteText={wsSeasonPasteText}
+          wsImportJsonToSeason={wsImportJsonToSeason}
+          addEpisode={addEpisode}
+          episodeRenderLimits={episodeRenderLimits}
+          setEpisodeRenderLimits={setEpisodeRenderLimits}
+          seriesForm={seriesForm}
+          normalizeLanguageValue={normalizeLanguageValue}
+          updateSeriesEpisodeLanguageLink={updateSeriesEpisodeLanguageLink}
+          removeEpisode={removeEpisode}
+          addSeriesEpisodeAudioTrack={addSeriesEpisodeAudioTrack}
+          updateSeriesEpisodeAudioTrack={updateSeriesEpisodeAudioTrack}
+          setSeriesEpisodeDefaultAudioTrack={setSeriesEpisodeDefaultAudioTrack}
+          removeSeriesEpisodeAudioTrack={removeSeriesEpisodeAudioTrack}
+          inputClass={inputClass}
+          btnSecondary={btnSecondary}
+        />;
+      })}
+    </SortableContext>
+  </DndContext>
  </div>
- )}
- </div>
- );
- })}
- </div>
-
+ 
  {/* Inline URL Changer for current series */}
  {seasonsData.length > 0 && (() => {
+
  const InlineUrlChanger = () => {
  const [inlineOldDomain, setInlineOldDomain] = useState("");
  const [inlineNewDomain, setInlineNewDomain] = useState("");
@@ -7310,7 +7197,6 @@ ${tgBulkFooter}
  </div>
  );
  })()}
-
 
  {activeSection === "movies" && (
  <div>
@@ -13219,4 +13105,225 @@ const WsInlineLinkChecker = ({
  );
 };
 
+const SortableSeasonItem = memo(({
+  id, sIdx, rawSeason, seasonsData, updateSeasonName, removeSeason,
+  wsSeasonJsonFileRef, setWsSeasonJsonTarget, setWsSeasonPasteTarget, setWsSeasonPasteText,
+  setExpandedSeasons, expandedSeasons, wsSeasonPasteTarget, wsSeasonPasteText,
+  wsImportJsonToSeason, addEpisode, episodeRenderLimits, setEpisodeRenderLimits,
+  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode,
+  addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
+  removeSeriesEpisodeAudioTrack, inputClass, btnSecondary
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-black/30 rounded-xl p-3.5 mb-3 border border-white/5 relative group">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div {...attributes} {...listeners} className="p-2 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-indigo-400 transition-colors">
+          <GripVertical size={16} />
+        </div>
+        <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} />
+        <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={14} /></button>
+      </div>
+      <div className="mb-2.5 flex justify-between items-center ml-9">
+        <span className="text-xs text-[#D1C4E9]">Episodes: {season.episodes.length}</span>
+        <div className="flex gap-1.5 items-center">
+          <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
+            className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
+            <FolderOpen size={10} /> File
+          </button>
+          <button onClick={() => { setWsSeasonPasteTarget(sIdx); setWsSeasonPasteText(""); }}
+            className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/40 transition-all flex items-center gap-1">
+            <Download size={10} /> Paste
+          </button>
+          <button onClick={() => setExpandedSeasons((prev: any) => ({ ...prev, [sIdx]: !prev[sIdx] }))}
+            className={`${btnSecondary} px-3 py-1.5 text-[11px]`}><ChevronDown size={12} className={`mr-1 transition-transform ${expandedSeasons[sIdx] ? 'rotate-180' : ''}`} /> Episodes</button>
+        </div>
+      </div>
+      
+      {wsSeasonPasteTarget === sIdx && (
+        <div className="ml-9 mb-3 bg-black/20 rounded-xl border border-green-500/20 p-3">
+          <textarea
+            value={wsSeasonPasteText}
+            onChange={e => setWsSeasonPasteText(e.target.value)}
+            placeholder='{ "episodes": [...] } or [{ "episodeNumber": 1, "link": "..." }]'
+            className="w-full bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-green-400/30 focus:border-green-500/50 focus:outline-none min-h-[70px] resize-none font-mono mb-2"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => {
+              if (!wsSeasonPasteText.trim()) { toast.error('Paste JSON text'); return; }
+              try {
+                const parsed = JSON.parse(wsSeasonPasteText.trim());
+                wsImportJsonToSeason(sIdx, parsed);
+                setWsSeasonPasteTarget(-1);
+                setWsSeasonPasteText("");
+              } catch { toast.error('Invalid JSON'); }
+            }} disabled={!wsSeasonPasteText.trim()}
+              className="flex-1 py-2 rounded-lg text-[10px] font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white disabled:opacity-30 flex items-center justify-center gap-1.5">
+              <Download size={11} /> Import
+            </button>
+            <button onClick={() => { setWsSeasonPasteTarget(-1); setWsSeasonPasteText(""); }}
+              className="px-3 py-2 rounded-lg text-[10px] font-bold bg-white/5 text-zinc-400 hover:bg-white/10">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {expandedSeasons[sIdx] && (
+        <div className="ml-9 mt-4 border-t border-white/5 pt-4">
+          {(() => {
+            const episodeList = Array.isArray(season.episodes) ? season.episodes : [];
+            const renderLimit = episodeRenderLimits[sIdx] || 50;
+            const visibleEpisodes = episodeList.map((ep, eIdx) => ({ ep, eIdx })).slice().reverse().slice(0, renderLimit);
+            return (
+              <>
+                <button onClick={() => addEpisode(sIdx)}
+                  className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
+                  <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
+                </button>
+                {episodeList.length > 0 && (
+                  <p className="text-[10px] text-zinc-500 mb-2 px-1">
+                    Showing newest first • {Math.min(renderLimit, episodeList.length)}/{episodeList.length} episode{episodeList.length === 1 ? "" : "s"}
+                  </p>
+                )}
+                {visibleEpisodes.map(({ ep, eIdx }) => {
+                  const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
+                  const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
+                  const isAnSeries = !!(seriesForm?.anSlug || seriesForm?.animeSaltSlug || /animesalt/i.test(String(seriesForm?.sourceName || "")));
+                  const episodeAudioTracks = Array.isArray((ep as any).audioTracks) ? ((ep as any).audioTracks as any[]) : [];
+                  const explicitDefaultAudioIdx = episodeAudioTracks.findIndex((track: any) => track?.isDefault === true);
+                  const resolvedDefaultAudioIdx = explicitDefaultAudioIdx >= 0 ? explicitDefaultAudioIdx : (episodeAudioTracks.length > 0 ? 0 : -1);
+                  const defaultAudioTrack = resolvedDefaultAudioIdx >= 0 ? episodeAudioTracks[resolvedDefaultAudioIdx] : null;
+                  const currentLanguageFields = {
+                    link: ep.link ?? "",
+                    link480: ep.link480 ?? "",
+                    link720: ep.link720 ?? "",
+                    link1080: ep.link1080 ?? "",
+                    link4k: ep.link4k ?? "",
+                  };
+
+                  return (
+                    <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-purple-400">Episode {ep.episodeNumber}</span>
+                        <button onClick={() => removeEpisode(sIdx, eIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+
+                      {isAnSeries ? (
+                        <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
+                          <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
+                          <div className="mt-2 space-y-2.5">
+                            <div>
+                              <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default (1080p)</span>
+                              <textarea value={ep.link ?? ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, baseLanguage)}
+                                className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default video link" rows={2} />
+                            </div>
+                            {(["link480", "link720", "link1080", "link4k"] as const).map(q => (
+                              <div key={`an-video-${q}`}>
+                                <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
+                                  {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
+                                </span>
+                                <textarea value={(ep as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, baseLanguage)}
+                                  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q.replace('link','')} link`} rows={2} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
+                          <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
+                          <div className="mt-2 space-y-2.5">
+                            <div>
+                              <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default</span>
+                              <textarea value={currentLanguageFields.link} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, selectedAdminLanguage)}
+                                className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default link" rows={2} />
+                            </div>
+                            {["link480", "link720", "link1080", "link4k"].map(q => (
+                              <div key={`${selectedAdminLanguage}-${q}`}>
+                                <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">{q.replace('link','')}</span>
+                                <textarea value={(currentLanguageFields as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, selectedAdminLanguage)}
+                                  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Optional link" rows={2} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {isAnSeries && (
+                        <div className="mt-3 rounded-xl border-2 border-amber-500/35 bg-gradient-to-b from-amber-500/10 to-orange-500/5 p-3">
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <p className="text-[12px] font-black uppercase text-amber-100">🎧 AUDIO ROOMS</p>
+                            <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/20 px-2.5 py-1.5 text-[10px] font-bold text-amber-100">
+                              <Plus size={10} className="mr-1 inline" /> Add audio
+                            </button>
+                          </div>
+                          {defaultAudioTrack && (
+                            <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5">
+                              <span className="text-[10px] font-bold text-emerald-100 block mb-2">Default: {(defaultAudioTrack as any)?.label || (defaultAudioTrack as any)?.language || `Audio ${resolvedDefaultAudioIdx + 1}`}</span>
+                              <textarea value={(defaultAudioTrack as any)?.link || (defaultAudioTrack as any)?.audioUrl || (defaultAudioTrack as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, resolvedDefaultAudioIdx, "link", e.target.value)}
+                                className={`${inputClass} w-full !py-2 !text-[10px] min-h-[54px] resize-none break-all font-mono`} rows={2} />
+                            </div>
+                          )}
+                          <div className="space-y-2.5">
+                            {episodeAudioTracks.map((track, tIdx) => {
+                              const audioValue = (track as any)?.link || (track as any)?.audioUrl || (track as any)?.rawAudioUrl || "";
+                              return (
+                                <div key={`an-audio-${tIdx}`} className="rounded-xl border border-amber-300/15 bg-black/35 p-2.5">
+                                  <div className="mb-2 flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-black text-amber-100">Room {tIdx + 1}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <button type="button" onClick={() => setSeriesEpisodeDefaultAudioTrack(sIdx, eIdx, tIdx)} className={`rounded-md px-2 py-1 text-[9px] font-bold ${tIdx === resolvedDefaultAudioIdx ? "bg-emerald-500/25 text-emerald-100" : "bg-white/5 text-zinc-400"}`}>Default</button>
+                                      <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400"><Trash2 size={10} /></button>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Label" />
+                                    <input value={(track as any)?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Lang" />
+                                  </div>
+                                  <textarea value={audioValue} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "link", e.target.value)}
+                                    className={`${inputClass} w-full !py-2 !text-[10px] min-h-[58px] resize-none break-all font-mono`} rows={2} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {episodeList.length > visibleEpisodes.length && (
+                  <button type="button" onClick={() => setEpisodeRenderLimits((prev: any) => ({ ...prev, [sIdx]: (prev[sIdx] || 50) + 50 }))}
+                    className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 text-[11px] font-bold text-zinc-200">
+                    Load 50 more
+                  </button>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default Admin;
+
