@@ -2572,6 +2572,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Season combination selection
   const [comboSelection, setComboSelection] = useState<number[]>([]);
   const [isComboMode, setIsComboMode] = useState(false);
+  // Sensors are hooks and must stay at the Admin component's top level.
+  // Creating them inside the conditionally rendered Series Editor changes
+  // the hook order when Edit is opened and crashes the whole admin UI.
+  const seasonDndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
 
 
@@ -6550,10 +6557,7 @@ ${tgBulkFooter}
   <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
   
   <DndContext 
-    sensors={useSensors(
-      useSensor(PointerSensor),
-      useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    )}
+    sensors={seasonDndSensors}
     collisionDetection={closestCenter}
     onDragEnd={(event: DragEndEvent) => {
       const { active, over } = event;
@@ -6561,6 +6565,7 @@ ${tgBulkFooter}
         setSeasonsData((items) => {
           const oldIndex = items.findIndex((_, i) => `season-${i}` === active.id);
           const newIndex = items.findIndex((_, i) => `season-${i}` === over.id);
+          if (oldIndex < 0 || newIndex < 0) return items;
           const updated = arrayMove(items, oldIndex, newIndex);
           // If we reorder, we should probably update the names too if they are just "Season 1", "Season 2" etc.
           // but we leave that to user preference for now.
