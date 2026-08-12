@@ -1,1 +1,2 @@
 Always reply to the user in Bengali (বাংলা). Never give English examples or English prose in chat responses, even short ones. Code, file contents, identifiers, commit messages, and inline code comments stay in English — only the chat reply text is Bengali. This preference is permanent.
+Never claim implementation work is complete until the changed user flow has been tested end-to-end in the running app and the relevant result is confirmed. If testing fails or is unavailable, state that clearly instead of reporting success.
