@@ -993,7 +993,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const currentDownloadLanguageLabel = useMemo(() => {
     if (selectedDownloadLanguageLabel) return selectedDownloadLanguageLabel;
-    return currentLangLabel;
+    return currentLangLabel || "";
   }, [currentLangLabel, selectedDownloadLanguageLabel]);
 
   const primarySeriesLanguageLabel = useMemo(() => {
