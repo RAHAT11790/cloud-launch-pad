@@ -172,6 +172,9 @@ const isBypassSource = (url: string): boolean => {
 };
 
   const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+    // iOS detection - iOS and iPadOS both need specific handling for HTTP/HTTPS switching
+    const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -204,9 +207,17 @@ const isBypassSource = (url: string): boolean => {
   if (isHttp) {
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
     if (customProxyCandidate) addCandidate(customProxyCandidate);
-    // Never hand raw http:// media to the browser from an HTTPS app. It will be
-    // blocked as mixed content (or fail as a media format error) and can trap the
-    // fallback scanner on a route that has no legal playback path.
+    // Never hand raw http:// media to the browser from an HTTPS app on iOS or desktop.
+    // However, on Android some browsers might handle it, but we prefer consistency.
+    return candidates;
+  }
+
+  // iOS playback optimization: iOS handles direct HTTPS best. 
+  // If we're on iOS and the source is HTTPS, we put the direct link first.
+  if (isIOS && !isHttp) {
+    addCandidate(url);
+    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
@@ -3063,23 +3074,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // AN/HLS streams expose audio renditions inside the same HLS master. For
     // those, switch the hls.js audioTrack directly instead of rebuilding the
     // media URL; this makes the control-panel Audio button respond instantly.
-    if (hlsRef.current && hlsAudioOptions.length > 0) {
-      const normalize = (value?: string) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-      const wanted = normalize(track.label || track.language);
-      const wantedToken = normalize(getPrimaryLanguageToken(track.label || track.language || ""));
-      const matchedIdx = hlsAudioOptions.findIndex((opt) => {
-        const optFull = normalize(opt.label || opt.language);
-        const optToken = normalize(getPrimaryLanguageToken(opt.label || opt.language || ""));
-        return !!wanted && (optFull === wanted || optToken === wanted || (!!wantedToken && optToken === wantedToken));
-      });
-      if (matchedIdx >= 0) {
-        try { hlsRef.current.audioTrack = matchedIdx; } catch {}
-        setCurrentHlsAudio(matchedIdx);
-        setCurrentAudioTrack(track.label);
-        setSelectedLanguageLabel(track.label || track.language || "");
-        if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
-        setShowAudioPanel(false);
-        return;
+    if (isAnimeSaltContent && hlsRef.current) {
+      const aTracks = hlsRef.current.audioTracks || [];
+      if (aTracks.length > 0) {
+        const normalize = (value?: string) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+        const wanted = normalize(track.label || track.language);
+        const wantedToken = normalize(getPrimaryLanguageToken(track.label || track.language || ""));
+        
+        const matchedIdx = aTracks.findIndex((opt: any) => {
+          const optFull = normalize(opt.name || opt.lang);
+          const optToken = normalize(getPrimaryLanguageToken(opt.name || opt.lang || ""));
+          return !!wanted && (optFull === wanted || optToken === wanted || (!!wantedToken && optToken === wantedToken));
+        });
+
+        if (matchedIdx >= 0) {
+          try { hlsRef.current.audioTrack = matchedIdx; } catch {}
+          setCurrentHlsAudio(matchedIdx);
+          setCurrentAudioTrack(track.label);
+          setSelectedLanguageLabel(track.label || track.language || "");
+          saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
+          setShowAudioPanel(false);
+          return;
+        }
       }
     }
 
@@ -3101,16 +3117,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedLanguageLabel(track.label || track.language || "");
       if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.src) {
-      if (isAnimeSaltContent && isHlsLikeUrl(track.src) && !isDataHlsUrl(track.src)) {
-        // For AnimeSalt the prop track URL is an audio-only HLS rendition.
-        // Never replace the video source with that URL; real switching must go
-        // through hls.js audioTrack from the synthetic multi-audio master.
-        setCurrentAudioTrack(track.label);
-        setSelectedLanguageLabel(track.label || track.language || "");
-        if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
-        setShowAudioPanel(false);
-        return;
-      }
+      // RS / Multi-quality audio switching
       // Pick quality-matched audio URL based on current quality selection
       let audioUrl = track.src;
       const q = currentQuality.toLowerCase();
@@ -3118,25 +3125,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       else if (q.includes('1080')) audioUrl = track.src1080 || track.src;
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
-      // Switch to a different URL for this language
+      
+      // Force reload for source change
       sourceBaseRef.current = audioUrl;
       const finalAudioUrl = getServerScopedSource(audioUrl);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
       pendingSeek.current = savedTime;
-      setCurrentSrc(proxiedSrc);
+      
+      if (v) {
+        try {
+          v.pause();
+          setCurrentSrc(proxiedSrc);
+          v.src = proxiedSrc;
+          v.load();
+          const restoreTime = () => {
+            try {
+              if (v.duration > 0) {
+                v.currentTime = savedTime;
+                if (wasPlaying) v.play().catch(() => {});
+                v.removeEventListener("loadedmetadata", restoreTime);
+              }
+            } catch {}
+          };
+          v.addEventListener("loadedmetadata", restoreTime);
+        } catch {}
+      }
+      
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
       if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
-    // Restore playback position after source change
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
-      };
-      v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
   }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource]);
@@ -3250,7 +3268,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const initialRawSrc = isFastHlsSource ? baseRawSrc : getServerScopedSource(baseRawSrc, targetServerIndex);
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
-    setCurrentSrc(resolvedSrc);
+    
+    // iOS fix: explicitly call load() when src changes significantly
+    if (_v && _v.src !== resolvedSrc) {
+      setCurrentSrc(resolvedSrc);
+      try {
+        _v.pause();
+        _v.src = resolvedSrc;
+        _v.load();
+      } catch {}
+    } else {
+      setCurrentSrc(resolvedSrc);
+    }
     currentQualityRef.current = preservedQuality?.label || autoStartQuality?.label || "Auto";
     setCurrentQuality(preservedQuality?.label || autoStartQuality?.label || "Auto");
     if (isFastHlsSource || !hadManualServer) {
@@ -4052,9 +4081,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     v.addEventListener("loadstart", onLoadStart);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
     if (v.readyState < 2) setIsBuffering(true);
-    // NOTE: do NOT call v.load() — setting v.src already triggers loading.
-    // Forcing v.load() on every server/quality switch restarts download from scratch
-    // and adds 5-10s latency on otherwise-fast HTTPS sources.
+    // iOS/Safari fix: Ensure load() is called when the source is set.
+    // Some iOS versions ignore source updates without an explicit load().
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS && !isHlsSrc && v.src !== currentSrc) {
+      try {
+        v.src = currentSrc;
+        v.load();
+      } catch {}
+    }
 
     return () => {
       cancelAnimationFrame(rafId.current);
@@ -5052,7 +5087,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {/* Bottom CC button removed — single CC lives in the top server row */}
-                    {audioTrackOptions.length > 0 && (
+                    {(audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
                       <button
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
@@ -5179,7 +5214,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showAudioPanel && audioTrackOptions.length > 0 && (
+          {!isEmbedPlayback && showAudioPanel && (audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
             <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[190px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
               <button onClick={resetToDefaultAudio}
@@ -5226,7 +5261,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <button onClick={() => setSettingsTab("quality")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Quality
                 </button>
-                {audioTrackOptions.length > 0 && (
+                {(audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
                   <button onClick={() => setSettingsTab("audio")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                     Audio
                   </button>
