@@ -782,6 +782,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [commentCount, setCommentCount] = useState(0);
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   const [activePlaybackLanguage, setActivePlaybackLanguage] = useState<string>("");
+  const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
     try {
@@ -3039,10 +3040,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Auto-detect which track matches the active resource language (e.g. Hindi)
     if (tracks.length > 0) {
       const resourceLang = selectedLanguage || anime?.language || "";
-      const matched = tracks.find(t => 
-        (t.label || t.language || "").toLowerCase().includes(resourceLang.toLowerCase()) ||
-        resourceLang.toLowerCase().includes((t.label || t.language || "").toLowerCase())
-      );
+      const matched = tracks.find(t => {
+        const lbl = (t.label || t.language || "").toLowerCase();
+        const res = resourceLang.toLowerCase();
+        return lbl.includes(res) || res.includes(lbl);
+      });
       const initialLabel = matched ? (matched.label || matched.language || "") : (tracks[0].label || tracks[0].language || "");
       setCurrentAudioTrack(initialLabel);
       setActivePlaybackLanguage(initialLabel);
