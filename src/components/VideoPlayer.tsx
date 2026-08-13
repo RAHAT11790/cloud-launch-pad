@@ -3090,9 +3090,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const savedTime = v.currentTime;
     const wasPlaying = !v.paused;
 
-    // AN/HLS streams expose audio renditions inside the same HLS master. For
-    // those, switch the hls.js audioTrack directly instead of rebuilding the
-    // media URL; this makes the control-panel Audio button respond instantly.
+    // AN/HLS streams expose audio renditions inside the same HLS master.
     if (isAnimeSaltContent && hlsRef.current) {
       const aTracks = hlsRef.current.audioTracks || [];
       if (aTracks.length > 0) {
@@ -3110,6 +3108,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           try { hlsRef.current.audioTrack = matchedIdx; } catch {}
           setCurrentHlsAudio(matchedIdx);
           setCurrentAudioTrack(track.label);
+          setActivePlaybackLanguage(track.label || track.language || "");
           setSelectedLanguageLabel(track.label || track.language || "");
           saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
           setShowAudioPanel(false);
@@ -3119,14 +3118,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     if (track.hlsAudioIndex !== undefined && hlsRef.current) {
-      // Switch HLS.js audio rendition (preserves time + playing state automatically)
       hlsRef.current.audioTrack = track.hlsAudioIndex;
       setCurrentAudioTrack(track.label);
       setActivePlaybackLanguage(track.label || track.language || "");
       setSelectedLanguageLabel(track.label || track.language || "");
       saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.nativeIndex !== undefined) {
-      // Switch native audio track
       const audioTracks = (v as any).audioTracks;
       if (audioTracks) {
         for (let i = 0; i < audioTracks.length; i++) {
@@ -3139,7 +3136,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.src) {
       // RS / Multi-quality audio switching
-      // Pick quality-matched audio URL based on current quality selection
       let audioUrl = track.src;
       const q = currentQuality.toLowerCase();
       if (q.includes('4k') || q.includes('2160') || q.includes('uhd')) audioUrl = track.src4k || track.src1080 || track.src;
@@ -3147,42 +3143,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       
-      // Update our source tracking
-      sourceBaseRef.current = audioUrl;
-      activeSourceBaseRef.current = audioUrl;
-      
       // Update UI state immediately
       setCurrentAudioTrack(track.label);
       setActivePlaybackLanguage(track.label || track.language || "");
       setSelectedLanguageLabel(track.label || track.language || "");
       saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
 
+      // Force reload for source change
+      sourceBaseRef.current = audioUrl;
       const finalAudioUrl = getServerScopedSource(audioUrl);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
       pendingSeek.current = savedTime;
       
-      if (v) {
-        try {
-          v.pause();
-          setCurrentSrc(proxiedSrc);
-          v.src = proxiedSrc;
-          v.load();
-          const restoreTime = () => {
-            try {
-              if (v.duration > 0) {
-                v.currentTime = savedTime;
-                if (wasPlaying) v.play().catch(() => {});
-                v.removeEventListener("loadedmetadata", restoreTime);
-              }
-            } catch {}
-          };
-          v.addEventListener("loadedmetadata", restoreTime);
-        } catch {}
-      }
+      try {
+        v.pause();
+        setCurrentSrc(proxiedSrc);
+        v.src = proxiedSrc;
+        v.load();
+        const restoreTime = () => {
+          try {
+            if (v.duration > 0) {
+              v.currentTime = savedTime;
+              if (wasPlaying) v.play().catch(() => {});
+              v.removeEventListener("loadedmetadata", restoreTime);
+            }
+          } catch {}
+        };
+        v.addEventListener("loadedmetadata", restoreTime);
+      } catch {}
     }
     setShowAudioPanel(false);
-  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, activePlaybackLanguage]);
+  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, isAnimeSaltContent, activePlaybackLanguage]);
 
   const resetToDefaultAudio = useCallback(() => {
     if (audioTrackOptions.length === 0) return;
