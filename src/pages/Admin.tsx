@@ -2572,13 +2572,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Season combination selection
   const [comboSelection, setComboSelection] = useState<number[]>([]);
   const [isComboMode, setIsComboMode] = useState(false);
-  // Sensors are hooks and must stay at the Admin component's top level.
-  // Creating them inside the conditionally rendered Series Editor changes
-  // the hook order when Edit is opened and crashes the whole admin UI.
-  const seasonDndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
 
 
@@ -6556,26 +6549,6 @@ ${tgBulkFooter}
   {/* Hidden file input for per-season JSON import */}
   <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
   
-  <DndContext 
-    sensors={seasonDndSensors}
-    collisionDetection={closestCenter}
-    onDragEnd={(event: DragEndEvent) => {
-      const { active, over } = event;
-      if (over && active.id !== over.id) {
-        setSeasonsData((items) => {
-          const oldIndex = items.findIndex((_, i) => `season-${i}` === active.id);
-          const newIndex = items.findIndex((_, i) => `season-${i}` === over.id);
-          if (oldIndex < 0 || newIndex < 0) return items;
-          const updated = arrayMove(items, oldIndex, newIndex);
-          // If we reorder, we should probably update the names too if they are just "Season 1", "Season 2" etc.
-          // but we leave that to user preference for now.
-          return updated;
-        });
-      }
-    }}
-  >
-
-    <SortableContext items={seasonsData.map((_, i) => `season-${i}`)} strategy={verticalListSortingStrategy}>
       {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
         return <SortableSeasonItem 
           key={`season-${sIdx}`}
@@ -6611,10 +6584,19 @@ ${tgBulkFooter}
           removeSeriesEpisodeAudioTrack={removeSeriesEpisodeAudioTrack}
           inputClass={inputClass}
           btnSecondary={btnSecondary}
+          moveSeason={(from: number, to: number) => {
+            if (to < 0 || to >= seasonsData.length || from === to) return;
+            setSeasonsData((items) => arrayMove(items, from, to));
+            setExpandedSeasons((prev) => {
+              const next = { ...prev };
+              const fromValue = !!prev[from];
+              next[from] = !!prev[to];
+              next[to] = fromValue;
+              return next;
+            });
+          }}
         />;
       })}
-    </SortableContext>
-  </DndContext>
  </div>
  
  {/* Inline URL Changer for current series */}
@@ -13128,29 +13110,13 @@ const SortableSeasonItem = memo(({
   seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
   removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
-  comboSelection, setComboSelection, isComboMode
+  comboSelection, setComboSelection, isComboMode, moveSeason
 }: any) => {
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.6 : 1,
-  };
 
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
 
   return (
-    <div ref={setNodeRef} style={style} className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
+    <div className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
       {isComboMode && (
         <div 
           onClick={() => setComboSelection((prev: number[]) => prev.includes(sIdx) ? prev.filter((i: number) => i !== sIdx) : [...prev, sIdx])}
@@ -13159,8 +13125,13 @@ const SortableSeasonItem = memo(({
       )}
       <div className="flex items-center gap-2.5 mb-3">
         {!isComboMode ? (
-          <div {...attributes} {...listeners} className="p-2 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-indigo-400 transition-colors">
-            <GripVertical size={16} />
+          <div className="flex flex-col gap-0.5 shrink-0" aria-label="Reorder season">
+            <button type="button" onClick={() => moveSeason(sIdx, sIdx - 1)} disabled={sIdx === 0} className="h-5 w-7 inline-flex items-center justify-center rounded bg-white/5 text-zinc-300 disabled:opacity-20 active:scale-90" aria-label="Move season up">
+              <ChevronUp size={13} />
+            </button>
+            <button type="button" onClick={() => moveSeason(sIdx, sIdx + 1)} disabled={sIdx === seasonsData.length - 1} className="h-5 w-7 inline-flex items-center justify-center rounded bg-white/5 text-zinc-300 disabled:opacity-20 active:scale-90" aria-label="Move season down">
+              <ChevronDown size={13} />
+            </button>
           </div>
         ) : (
           <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${comboSelection.includes(sIdx) ? 'bg-amber-500 border-amber-400 text-white' : 'border-zinc-700 text-transparent'}`}>
