@@ -3141,8 +3141,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       
-      // Force reload for source change
+      // Update our source tracking
       sourceBaseRef.current = audioUrl;
+      activeSourceBaseRef.current = audioUrl;
+      
+      // Update UI state immediately
+      setCurrentAudioTrack(track.label);
+      setActivePlaybackLanguage(track.label || track.language || "");
+      setSelectedLanguageLabel(track.label || track.language || "");
+      saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
+
       const finalAudioUrl = getServerScopedSource(audioUrl);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
@@ -3166,14 +3174,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           v.addEventListener("loadedmetadata", restoreTime);
         } catch {}
       }
-      
-      setCurrentAudioTrack(track.label);
-      setActivePlaybackLanguage(track.label || track.language || "");
-      setSelectedLanguageLabel(track.label || track.language || "");
-      saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     }
     setShowAudioPanel(false);
-  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource]);
+  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, activePlaybackLanguage]);
 
   const resetToDefaultAudio = useCallback(() => {
     if (audioTrackOptions.length === 0) return;
