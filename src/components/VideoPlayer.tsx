@@ -781,6 +781,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
+  const [activePlaybackLanguage, setActivePlaybackLanguage] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
@@ -3017,26 +3018,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (track) {
       const label = track.label || track.language || `Audio ${idx + 1}`;
       setCurrentAudioTrack(label);
+      setActivePlaybackLanguage(label);
       setSelectedLanguageLabel(getPrimaryLanguageToken(label) || label);
       if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(label) || label);
     }
     setCurrentHlsAudio(idx);
     setShowCcPanel(false);
-  }, [hlsAudioOptions]);
+  }, [hlsAudioOptions, isAnimeSaltContent]);
 
 
   // Build audio track options from props + detect native audio tracks on video load
   useEffect(() => {
     const tracks: AudioTrackOption[] = [];
-    // Add manual audio tracks from props
     if (propAudioTracks?.length) {
       propAudioTracks.forEach(t => {
         tracks.push({ language: t.language, label: t.label, src: t.link || t.audioUrl || t.rawAudioUrl, audioUrl: t.audioUrl, rawAudioUrl: t.rawAudioUrl, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
       });
     }
     setAudioTrackOptions(tracks);
-    setCurrentAudioTrack("Default");
-  }, [propAudioTracks, src]);
+    
+    // Auto-detect which track matches the active resource language (e.g. Hindi)
+    if (tracks.length > 0) {
+      const resourceLang = selectedLanguage || anime?.language || "";
+      const matched = tracks.find(t => {
+        const lbl = (t.label || t.language || "").toLowerCase();
+        const res = resourceLang.toLowerCase();
+        return lbl.includes(res) || res.includes(lbl);
+      });
+      const initialLabel = matched ? (matched.label || matched.language || "") : (tracks[0].label || tracks[0].language || "");
+      setCurrentAudioTrack(initialLabel);
+      setActivePlaybackLanguage(initialLabel);
+    }
+  }, [propAudioTracks, src, selectedLanguage, anime?.language]);
 
   // Detect native audio tracks when video loads
   useEffect(() => {
@@ -3103,8 +3116,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Switch HLS.js audio rendition (preserves time + playing state automatically)
       hlsRef.current.audioTrack = track.hlsAudioIndex;
       setCurrentAudioTrack(track.label);
+      setActivePlaybackLanguage(track.label || track.language || "");
       setSelectedLanguageLabel(track.label || track.language || "");
-      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
+      saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.nativeIndex !== undefined) {
       // Switch native audio track
       const audioTracks = (v as any).audioTracks;
@@ -3114,8 +3128,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
       }
       setCurrentAudioTrack(track.label);
+      setActivePlaybackLanguage(track.label || track.language || "");
       setSelectedLanguageLabel(track.label || track.language || "");
-      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
+      saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     } else if (track.src) {
       // RS / Multi-quality audio switching
       // Pick quality-matched audio URL based on current quality selection
@@ -3153,60 +3168,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       
       setCurrentAudioTrack(track.label);
+      setActivePlaybackLanguage(track.label || track.language || "");
       setSelectedLanguageLabel(track.label || track.language || "");
-      if (isAnimeSaltContent) saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
+      saveAnAudioLanguagePref(getPrimaryLanguageToken(track.label || track.language || "") || track.label || track.language || "");
     }
     setShowAudioPanel(false);
   }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource]);
 
   const resetToDefaultAudio = useCallback(() => {
-    const v = videoRef.current;
-    const defaultRawSrc = src;
-    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc);
-    const savedTime = v?.currentTime || 0;
-    const wasPlaying = !!v && !v.paused;
-
-    const audioTracks = (v as any)?.audioTracks;
-    if (audioTracks?.length) {
-      for (let i = 0; i < audioTracks.length; i++) {
-        audioTracks[i].enabled = i === 0;
-      }
-    }
-    if (hlsRef.current) {
-      const nativeDefaultIdx = (hlsRef.current.audioTracks || []).findIndex((track: any) => track?.default);
-      const defaultIdx = nativeDefaultIdx >= 0 ? nativeDefaultIdx : 0;
-      if ((hlsRef.current.audioTracks || []).length > 0) {
-        try { hlsRef.current.audioTrack = defaultIdx; } catch {}
-        setCurrentHlsAudio(defaultIdx);
-      }
-    }
-
-    sourceBaseRef.current = defaultRawSrc;
-    activeSourceBaseRef.current = defaultRawSrc;
-    const fallbackLanguage = propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || anime?.language || "Unknown";
-    setCurrentAudioTrack("Default");
-    setSelectedLanguageLabel(fallbackLanguage);
-    setShowAudioPanel(false);
-
-    const finalDefaultSrc = getServerScopedSource(defaultRawSrc);
-    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc);
-
-    if (v && currentSrc !== finalResolvedSrc) {
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
-      };
-
-      v.addEventListener("loadedmetadata", restoreTime);
-      activeSourceBaseRef.current = finalDefaultSrc;
-      pendingSeek.current = savedTime;
-      setCurrentSrc(finalResolvedSrc);
-    }
-
-  }, [anime?.language, currentSrc, getServerScopedSource, propAudioTracks, resolvePlaybackSrc, src]);
+    if (audioTrackOptions.length === 0) return;
+    switchAudioTrack(audioTrackOptions[0]);
+  }, [audioTrackOptions, switchAudioTrack]);
 
   // Track the last `src` we actually reacted to. Without this guard the effect
   // re-runs whenever qualityOptions / resolvePlaybackSrc identity changes
@@ -5087,16 +5059,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {/* Bottom CC button removed — single CC lives in the top server row */}
-                    {(audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
+                    {(audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
                       <button
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
                         className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 max-w-[62px] shrink-0 ${
-                          currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
+                          activePlaybackLanguage ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                         aria-label="Audio track"
                       >
-                        <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
+                        <span className="truncate">🎧 {activePlaybackLanguage || "Audio"}</span>
                       </button>
                     )}
                     {onNextEpisode && (
@@ -5214,25 +5186,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showAudioPanel && (audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
+          {!isEmbedPlayback && showAudioPanel && (audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
             <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[190px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
-              <button onClick={resetToDefaultAudio}
-                className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between ${
-                  currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                }`}>
-                <span>Default</span>
-                {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
-              </button>
-              {audioTrackOptions.map((track, idx) => (
-                <button key={idx} onClick={() => switchAudioTrack(track)}
-                  className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
-                    currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                  }`}>
-                  <span className="truncate flex-1 min-w-0">{track.label}</span>
-                  {currentAudioTrack === track.label && <Check className="w-3 h-3 shrink-0" />}
-                </button>
-              ))}
+              {audioTrackOptions.map((track, idx) => {
+                const label = track.label || track.language || `Track ${idx + 1}`;
+                const isActive = activePlaybackLanguage === label;
+                return (
+                  <button key={idx} onClick={() => switchAudioTrack(track)}
+                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
+                      isActive ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                    }`}>
+                    <span className="truncate flex-1 min-w-0">{label}</span>
+                    {isActive && <Check className="w-3 h-3 shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -5261,7 +5230,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <button onClick={() => setSettingsTab("quality")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Quality
                 </button>
-                {(audioTrackOptions.length > 0 || (isAnimeSaltContent && propAudioTracks && propAudioTracks.length > 0)) && (
+                {(audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
                   <button onClick={() => setSettingsTab("audio")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                     Audio
                   </button>
@@ -5310,25 +5279,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               {settingsTab === "audio" && (
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Audio Language</p>
-                  <button onClick={resetToDefaultAudio}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                      currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                    }`}>
-                    <span>Default</span>
-                    {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
-                  </button>
                   {audioTrackOptions.map((track, idx) => {
+                    const label = track.label || track.language || `Track ${idx + 1}`;
+                    const isActive = activePlaybackLanguage === label;
                     const qualityCount = [track.src480, track.src720, track.src1080, track.src4k].filter(Boolean).length;
                     return (
                     <button key={idx} onClick={() => switchAudioTrack(track)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                        currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                        isActive ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                       }`}>
                       <span className="flex items-center gap-1.5">
-                        🎧 {track.label}
+                        🎧 {label}
                         {qualityCount > 0 && <span className="text-[9px] opacity-60 ml-1">({qualityCount + 1} qualities)</span>}
                       </span>
-                      {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
+                      {isActive && <Check className="w-3.5 h-3.5" />}
                     </button>
                     );
                   })}
