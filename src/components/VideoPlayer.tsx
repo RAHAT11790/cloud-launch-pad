@@ -3035,6 +3035,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         tracks.push({ language: t.language, label: t.label, src: t.link || t.audioUrl || t.rawAudioUrl, audioUrl: t.audioUrl, rawAudioUrl: t.rawAudioUrl, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
       });
     }
+    
+    // Always update options immediately
     setAudioTrackOptions(tracks);
     
     // Auto-detect which track matches the active resource language (e.g. Hindi)
@@ -3043,13 +3045,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const matched = tracks.find(t => {
         const lbl = (t.label || t.language || "").toLowerCase();
         const res = resourceLang.toLowerCase();
-        return lbl.includes(res) || res.includes(lbl);
+        return lbl && res && (lbl.includes(res) || res.includes(lbl));
       });
       const initialLabel = matched ? (matched.label || matched.language || "") : (tracks[0].label || tracks[0].language || "");
       setCurrentAudioTrack(initialLabel);
       setActivePlaybackLanguage(initialLabel);
+    } else {
+      // Clear language if no multi-audio tracks are available (standard content)
+      setCurrentAudioTrack("");
+      setActivePlaybackLanguage("");
     }
-  }, [propAudioTracks, src, selectedLanguage, anime?.language]);
+  }, [propAudioTracks, selectedLanguage, anime?.language]);
 
   // Detect native audio tracks when video loads
   useEffect(() => {
