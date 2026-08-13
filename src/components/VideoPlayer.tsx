@@ -3027,29 +3027,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [hlsAudioOptions, isAnimeSaltContent]);
 
 
-  // Build one authoritative list for both RS language variants and AN audio
-  // renditions. RS often stores languages in seasonsByLanguage rather than on
-  // episode.audioTracks, so relying on propAudioTracks hid the button on the
-  // initial Hindi source.
+  // Build audio track options from props + detect native audio tracks on video load
   useEffect(() => {
-    const tracks: AudioTrackOption[] = normalizedLanguageTracks.map((track) => ({
-      language: track.language,
-      label: track.label,
-      src: track.link,
-      audioUrl: track.audioUrl,
-      rawAudioUrl: track.rawAudioUrl,
-      src480: track.link480,
-      src720: track.link720,
-      src1080: track.link1080,
-      src4k: track.link4k,
-    }));
+    const tracks: AudioTrackOption[] = [];
+    if (propAudioTracks?.length) {
+      propAudioTracks.forEach(t => {
+        tracks.push({ language: t.language, label: t.label, src: t.link || t.audioUrl || t.rawAudioUrl, audioUrl: t.audioUrl, rawAudioUrl: t.rawAudioUrl, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
+      });
+    }
     
     // Always update options immediately
     setAudioTrackOptions(tracks);
     
     // Auto-detect which track matches the active resource language (e.g. Hindi)
     if (tracks.length > 0) {
-      const resourceLang = selectedLanguageLabel || selectedLanguage || anime?.language || "";
+      const resourceLang = selectedLanguage || anime?.language || "";
       const matched = tracks.find(t => {
         const lbl = (t.label || t.language || "").toLowerCase();
         const res = resourceLang.toLowerCase();
@@ -3063,7 +3055,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCurrentAudioTrack("");
       setActivePlaybackLanguage("");
     }
-  }, [anime?.language, normalizedLanguageTracks, selectedLanguage, selectedLanguageLabel]);
+  }, [propAudioTracks, selectedLanguage, anime?.language]);
 
   // Detect native audio tracks when video loads
   useEffect(() => {
@@ -3183,22 +3175,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     setShowAudioPanel(false);
   }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, isAnimeSaltContent, activePlaybackLanguage]);
-
-  const selectAudioTrack = useCallback((track: AudioTrackOption) => {
-    const label = track.label || track.language || "";
-    // RS language variants are complete episode sources. Let the parent resolve
-    // the matching seasons/episode while VideoPlayer remains mounted; this keeps
-    // the selected server index and avoids treating a language as a server swap.
-    if (!isAnimeSaltContent && onLanguageChange && anime?.seasonsByLanguage && label) {
-      setCurrentAudioTrack(label);
-      setActivePlaybackLanguage(label);
-      setSelectedLanguageLabel(label);
-      setShowAudioPanel(false);
-      onLanguageChange(label);
-      return;
-    }
-    switchAudioTrack(track);
-  }, [anime?.seasonsByLanguage, isAnimeSaltContent, onLanguageChange, switchAudioTrack]);
 
   const resetToDefaultAudio = useCallback(() => {
     if (audioTrackOptions.length === 0) return;
@@ -5084,7 +5060,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {/* Bottom CC button removed — single CC lives in the top server row */}
-                    {audioTrackOptions.length > 1 && (
+                    {(audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
                       <button
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
@@ -5211,14 +5187,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showAudioPanel && audioTrackOptions.length > 1 && (
+          {!isEmbedPlayback && showAudioPanel && (audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
             <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[190px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
               {audioTrackOptions.map((track, idx) => {
                 const label = track.label || track.language || `Track ${idx + 1}`;
                 const isActive = activePlaybackLanguage === label;
                 return (
-                  <button key={`${track.language}-${idx}`} onClick={() => selectAudioTrack(track)}
+                  <button key={idx} onClick={() => switchAudioTrack(track)}
                     className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
                       isActive ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                     }`}>
@@ -5255,7 +5231,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <button onClick={() => setSettingsTab("quality")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Quality
                 </button>
-                {audioTrackOptions.length > 1 && (
+                {(audioTrackOptions.length > 0 || (propAudioTracks && propAudioTracks.length > 0)) && (
                   <button onClick={() => setSettingsTab("audio")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                     Audio
                   </button>
@@ -5693,10 +5669,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       if (sheetOrigin === "download") {
                         setSelectedDownloadLanguageLabel(label);
                       } else if (isAnimeSaltContent && track) {
-                        selectAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
+                        switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       } else if (seasons?.length && onLanguageChange) {
                         onLanguageChange(label);
-                      } else if (track) selectAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
+                      } else if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
                       if (sheetOrigin === "download") {
                         setShowLanguageSheet(false);

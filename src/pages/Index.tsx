@@ -3507,9 +3507,7 @@ const Index = () => {
               subtitle: `${newSeasons[seasonIdx].name} - Episode ${ep.episodeNumber}`,
               seasonIdx,
               epIdx,
-              // A language change is an audio-source change for the same
-              // episode, not navigation. Preserve the playhead.
-              resumeTime: playerStateRef.current?.resumeTime,
+              resumeTime: 0,
               audioTracks: nextAudioTracks,
               qualityOptions: qOpts.length > 0 ? qOpts : undefined,
               selectedLanguage: resolvedLabel,
