@@ -212,11 +212,16 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  // iOS playback optimization: iOS handles direct HTTPS best. 
-  // If we're on iOS and the source is HTTPS, we put the direct link first.
+  // iOS cannot decode Matroska directly. Prefer the configured range-aware
+  // media route for MKV, while native MP4/HLS remains direct-first.
   if (isIOS && !isHttp) {
-    addCandidate(url);
+    const isMatroska = /\.mkv(?:$|[?#])/i.test(url);
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+    if (isMatroska && customProxyCandidate) {
+      addCandidate(customProxyCandidate);
+      return candidates;
+    }
+    addCandidate(url);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
@@ -963,7 +968,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       link1080: anime?.movieLink1080,
       link4k: anime?.movieLink4k,
     };
-    const pool = [baseTrack, ...(propAudioTracks || [])];
+    const languageEpisodeTracks = Object.entries(anime?.seasonsByLanguage || {}).flatMap(([language, languageSeasons]: [string, any]) => {
+      const season = Array.isArray(languageSeasons) ? languageSeasons[currentSeasonIdx ?? 0] : null;
+      const episode = season?.episodes?.[currentEpisodeIdx ?? 0];
+      if (!episode) return [];
+      const link = String(episode.link1080 || episode.link720 || episode.link480 || episode.link4k || episode.link || "").trim();
+      if (!link) return [];
+      return [{
+        language,
+        label: language,
+        link,
+        link480: episode.link480,
+        link720: episode.link720,
+        link1080: episode.link1080,
+        link4k: episode.link4k,
+      }];
+    });
+    const pool = [baseTrack, ...languageEpisodeTracks, ...(propAudioTracks || [])];
     const unique = new Map<string, typeof baseTrack>();
     pool.forEach((track) => {
       const label = getPrimaryLanguageToken(track.label || track.language || fallbackLanguage) || fallbackLanguage;
@@ -982,7 +1003,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       });
     });
     return Array.from(unique.values());
-  }, [anime?.baseLanguage, anime?.language, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentLangLabel, propAudioTracks, src]);
+  }, [anime?.baseLanguage, anime?.language, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, anime?.seasonsByLanguage, currentEpisodeIdx, currentLangLabel, currentSeasonIdx, propAudioTracks, src]);
 
   const activeLanguageTrack = useMemo(() => {
     const selectedKey = currentLangLabel.trim().toLowerCase();
@@ -3159,7 +3180,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       // Force reload for source change
       sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = getServerScopedSource(audioUrl);
+      // Language URLs already represent the chosen episode source. Keep the
+      // currently selected server index explicitly instead of allowing the
+      // default resolver to reset/jump servers.
+      const finalAudioUrl = getServerScopedSource(audioUrl, activeServerIndex);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
       pendingSeek.current = savedTime;
@@ -3182,7 +3206,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch {}
     }
     setShowAudioPanel(false);
-  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, isAnimeSaltContent, activePlaybackLanguage]);
+  }, [activeServerIndex, currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource, isAnimeSaltContent]);
 
   const selectAudioTrack = useCallback((track: AudioTrackOption) => {
     const label = track.label || track.language || "";
@@ -3266,17 +3290,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
     
-    // iOS fix: explicitly call load() when src changes significantly
-    if (_v && _v.src !== resolvedSrc) {
-      setCurrentSrc(resolvedSrc);
-      try {
-        _v.pause();
-        _v.src = resolvedSrc;
-        _v.load();
-      } catch {}
-    } else {
-      setCurrentSrc(resolvedSrc);
-    }
+    // React owns the media src. Imperatively assigning src + load() here raced
+    // the rendered src on Safari and eventually left iOS in a blocked pipeline.
+    setCurrentSrc(resolvedSrc);
     currentQualityRef.current = preservedQuality?.label || autoStartQuality?.label || "Auto";
     setCurrentQuality(preservedQuality?.label || autoStartQuality?.label || "Auto");
     if (isFastHlsSource || !hadManualServer) {
@@ -4081,9 +4097,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // iOS/Safari fix: Ensure load() is called when the source is set.
     // Some iOS versions ignore source updates without an explicit load().
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    if (isIOS && !isHlsSrc && v.src !== currentSrc) {
+    if (isIOS && !isHlsSrc && v.getAttribute("src") !== currentSrc) {
       try {
-        v.src = currentSrc;
+        v.setAttribute("src", currentSrc);
         v.load();
       } catch {}
     }
