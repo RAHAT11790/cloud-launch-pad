@@ -10,28 +10,10 @@ import { toast } from "sonner";
 import {
  LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
  Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
- Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
+ Shield, LogOut, Search, Save, ChevronDown, ChevronUp, Send, Link, ChevronLeft, ChevronRight,
  Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud, GripVertical, Layers
 } from "lucide-react";
-
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
@@ -2374,8 +2356,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    adminContentInFlightRef.current[kind] = task;
    return task;
   }, [warmAdminPosters]);
- const [usersData, setUsersData] = useState<any[]>([]);
- const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
+ const [usersData, setUsersData] = useState<any[]>(() => {
+  try {
+   const cached = JSON.parse(sessionStorage.getItem("rs_admin_users_cache_v1") || "null");
+   return cached?.ts && Date.now() - Number(cached.ts) < 5 * 60 * 1000 && Array.isArray(cached.items) ? cached.items : [];
+  } catch { return []; }
+ });
+ const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>(() => {
+  try {
+   const cached = JSON.parse(sessionStorage.getItem("rs_admin_app_users_cache_v1") || "null");
+   return cached?.ts && Date.now() - Number(cached.ts) < 5 * 60 * 1000 && cached.items ? cached.items : {};
+  } catch { return {}; }
+ });
  const [userSearchQuery, setUserSearchQuery] = useState("");
  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
  useEffect(() => {
@@ -3106,20 +3098,36 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection, loadAdminContentList]);
 
- // Lazy-load USERS data (dashboard needs it for live Total/Online/Offline)
+ // Load full user records only in user-management sections. Dashboard totals use
+ // the shallow cached count above; this avoids downloading every profile on each
+ // Admin open. A short session cache also prevents repeat reads while navigating.
  useEffect(() => {
-  const needsUsers = ["dashboard", "users", "free-access", "device-limits", "analytics"].includes(activeSection);
+  const needsUsers = ["users", "free-access", "device-limits", "analytics"].includes(activeSection);
  if (!needsUsers) return;
+
+  try {
+   const cached = JSON.parse(sessionStorage.getItem("rs_admin_users_cache_v1") || "null");
+   if (cached?.ts && Date.now() - Number(cached.ts) < 5 * 60 * 1000 && Array.isArray(cached.items)) {
+    setUsersData(cached.items);
+    const appCached = JSON.parse(sessionStorage.getItem("rs_admin_app_users_cache_v1") || "null");
+    if (appCached?.items) setAppUsersGlobal(appCached.items);
+    return;
+   }
+  } catch {}
 
  const unsubs: (() => void)[] = [];
 
  unsubs.push(onValue(ref(db, "users"), (snap) => {
  const data = snap.val() || {};
-  startTransition(() => setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user }))));
+   const items = Object.entries(data).map(([id, user]: any) => ({ id, ...user }));
+   try { sessionStorage.setItem("rs_admin_users_cache_v1", JSON.stringify({ ts: Date.now(), items })); } catch {}
+   startTransition(() => setUsersData(items));
  }));
 
  unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
-  startTransition(() => setAppUsersGlobal(snap.val() || {}));
+   const items = snap.val() || {};
+   try { sessionStorage.setItem("rs_admin_app_users_cache_v1", JSON.stringify({ ts: Date.now(), items })); } catch {}
+   startTransition(() => setAppUsersGlobal(items));
  }));
 
  // FCM token stats listener removed
@@ -6586,7 +6594,13 @@ ${tgBulkFooter}
           btnSecondary={btnSecondary}
           moveSeason={(from: number, to: number) => {
             if (to < 0 || to >= seasonsData.length || from === to) return;
-            setSeasonsData((items) => arrayMove(items, from, to));
+            setSeasonsData((items) => {
+              const next = [...items];
+              const moved = next.splice(from, 1)[0];
+              if (!moved) return items;
+              next.splice(to, 0, moved);
+              return next.map((season, index) => ({ ...season, seasonNumber: index + 1 }));
+            });
             setExpandedSeasons((prev) => {
               const next = { ...prev };
               const fromValue = !!prev[from];

@@ -1697,14 +1697,14 @@ const Index = () => {
           : prev));
       });
     };
-    const unsubWs = tryPath("webseries");
-    const unsubMov = tryPath("movies");
+    const activeItem = playerState?.anime || selectedAnime;
+    const collection = activeItem?.type === "movie" ? "movies" : "webseries";
+    const unsubscribe = tryPath(collection);
     return () => {
       cancelled = true;
-      try { unsubWs(); } catch {}
-      try { unsubMov(); } catch {}
+      try { unsubscribe(); } catch {}
     };
-  }, [liveAnimeId]);
+  }, [liveAnimeId, playerState?.anime?.type, selectedAnime?.type]);
 
   const filteredAnime = useMemo(() => {
     // Home/category screens are series-first only. Movies live in the dedicated
@@ -1714,14 +1714,12 @@ const Index = () => {
   }, [activeCategory, allSeries]);
 
   // Live popularity signals from analytics — used to rank Trending content
-  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
   const [analyticsTotals, setAnalyticsTotals] = useState<Record<string, any>>({});
   const [analyticsClicks, setAnalyticsClicks] = useState<Record<string, any>>({});
   useEffect(() => {
-    const unsubV = onValue(ref(db, "analytics/views"), (snap) => setAnalyticsViews(snap.val() || {}));
     const unsubT = onValue(ref(db, "analytics/totals/views"), (snap) => setAnalyticsTotals(snap.val() || {}));
     const unsubC = onValue(ref(db, "analytics/totals/clicks"), (snap) => setAnalyticsClicks(snap.val() || {}));
-    return () => { unsubV(); unsubT(); unsubC(); };
+    return () => { unsubT(); unsubC(); };
   }, []);
 
   const getViewCount = useCallback((id: string): number => {
@@ -1732,21 +1730,8 @@ const Index = () => {
       if (typeof t === "number") totalViews = t;
       else if (typeof t === "object" && typeof t.count === "number") totalViews = t.count;
     }
-    // Fallback / boost from per-day views
-    const data = analyticsViews[id];
-    if (data) {
-      if (typeof data === "number") totalViews += data;
-      else {
-        Object.values(data).forEach((v: any) => {
-          if (typeof v === "number") totalViews += v;
-          else if (v && typeof v === "object") {
-            Object.values(v).forEach((x: any) => { if (typeof x === "number") totalViews += x; });
-          }
-        });
-      }
-    }
     return totalViews;
-  }, [analyticsViews, analyticsTotals]);
+  }, [analyticsTotals]);
 
   const getClickCount = useCallback((id: string): number => {
     const c = analyticsClicks[id];
