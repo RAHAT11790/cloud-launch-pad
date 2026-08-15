@@ -42,11 +42,14 @@ interface QualityOption {
 interface VideoServerOption {
   name: string;
   domain: string;
+  /** Per-server proxy. Empty => this server plays direct (HTTPS servers). */
+  proxy?: string;
   locked?: boolean;
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -109,6 +112,7 @@ const normalizeVideoServersValue = (val: unknown): VideoServerOption[] => {
   return servers.map((server) => ({
     name: String(server.name || "").trim(),
     domain: String(server.domain || "").trim(),
+    proxy: String((server as any).proxy || "").trim(),
     locked: !!server.locked,
   })).filter((server) => !!server.domain);
 };
