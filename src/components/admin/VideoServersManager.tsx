@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-type Server = { name: string; domain: string; locked?: boolean };
+type Server = { name: string; domain: string; proxy?: string; locked?: boolean };
 
 interface Props {
   glassCard: string;
@@ -32,16 +32,18 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [loading, setLoading] = useState(videoServersCache.length === 0);
   const [newName, setNewName] = useState("");
   const [newDomain, setNewDomain] = useState("");
+  const [newProxy, setNewProxy] = useState("");
 
   // Edit state
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editDomain, setEditDomain] = useState("");
+  const [editProxy, setEditProxy] = useState("");
 
   // Track whether user is mid-edit / mid-typing so Firebase snapshots
   // don't yank the panel out from under them (this is what caused the
   // "panel keeps refreshing every time I type" complaint).
-  const isBusy = editIdx !== null || newName.length > 0 || newDomain.length > 0;
+  const isBusy = editIdx !== null || newName.length > 0 || newDomain.length > 0 || newProxy.length > 0;
   const isBusyRef = useRef(isBusy);
   isBusyRef.current = isBusy;
   const pendingSnapRef = useRef<Server[] | null>(null);
@@ -91,12 +93,14 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       {
         name: newName.trim() || `Server ${servers.length + 1}`,
         domain: newDomain.trim(),
+        proxy: newProxy.trim(),
         locked: false,
       },
     ];
     saveServers(updated);
     setNewName("");
     setNewDomain("");
+    setNewProxy("");
   };
 
   const toggleLocked = (idx: number) => {
@@ -126,12 +130,14 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setEditIdx(idx);
     setEditName(srv.name || "");
     setEditDomain(srv.domain || "");
+    setEditProxy(srv.proxy || "");
   };
 
   const cancelEdit = () => {
     setEditIdx(null);
     setEditName("");
     setEditDomain("");
+    setEditProxy("");
   };
 
   const saveEdit = () => {
@@ -146,6 +152,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       ...updated[editIdx],
       name: editName.trim() || `Server ${editIdx + 1}`,
       domain,
+      proxy: editProxy.trim(),
     };
     saveServers(updated);
     cancelEdit();
@@ -203,6 +210,15 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
                         className={inputClass}
                         placeholder="https://example.com"
                       />
+                      <input
+                        value={editProxy}
+                        onChange={(e) => setEditProxy(e.target.value)}
+                        className={inputClass}
+                        placeholder="Proxy URL for this server (only for http:// servers)"
+                      />
+                      <p className="text-[10px] text-zinc-500 -mt-1">
+                        Leave empty for HTTPS servers. This server will play ONLY through this proxy.
+                      </p>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={saveEdit}
@@ -236,6 +252,9 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
                         </span>
                         <span className="text-[10px] text-zinc-500 block truncate">
                           {srv.domain}
+                        </span>
+                        <span className={`text-[9.5px] block truncate ${srv.proxy ? "text-emerald-400" : "text-zinc-600"}`}>
+                          {srv.proxy ? `proxy: ${srv.proxy}` : "proxy: direct (none)"}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -300,6 +319,15 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
             className={inputClass}
             placeholder="https://example.com"
           />
+          <input
+            value={newProxy}
+            onChange={(e) => setNewProxy(e.target.value)}
+            className={inputClass}
+            placeholder="Proxy URL for this server (http:// servers only)"
+          />
+          <p className="text-[10px] text-zinc-500">
+            HTTP server → paste its own proxy URL here. HTTPS server → leave empty.
+          </p>
           <button
             onClick={addServer}
             className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}
@@ -312,6 +340,8 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       <div className={`${glassCard} p-4`}>
         <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 How it works</h4>
         <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
+          <li>Each server has its OWN proxy — no shared global proxy anymore</li>
+          <li>HTTP servers must have a proxy; HTTPS servers play direct (leave proxy empty)</li>
           <li>With at least 2 servers, the player shows a "Server" switch button</li>
           <li>Switching a server only changes the domain — channel/file ID stays the same</li>
           <li>
