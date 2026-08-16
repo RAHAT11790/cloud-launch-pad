@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
-import { db, ref, get } from "@/lib/firebase";
+import { firebaseRestGet } from "@/lib/firebaseRest";
 import { buyPremiumWithCoins, type CoinPlan } from "@/lib/premiumAccess";
 
 const DEFAULT_COIN_PLANS: CoinPlan[] = [
