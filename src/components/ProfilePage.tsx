@@ -967,49 +967,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         await set(newRef, paymentData);
       }
 
-      // Send notification to admin (both in-app and push)
-      try {
-        const adminSnap = await get(ref(db, "admin"));
-        const adminData = adminSnap.val() || {};
-        const notificationTargets = typeof adminData === "object" ? adminData?.notificationTargets || {} : {};
-        const adminIds = [...new Set([
-          typeof adminData === "string" ? adminData : "",
-          typeof adminData === "object" ? adminData?.userId || "" : "",
-          typeof adminData === "object" ? adminData?.email || "" : "",
-          ...(Array.isArray(notificationTargets?.userIds) ? notificationTargets.userIds : []),
-        ].map((value) => String(value || "").trim()).filter((value): value is string => Boolean(value)))] as string[];
-        const adminTokens = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
-          .map((value: any) => String(value || "").trim())
-          .filter((value): value is string => Boolean(value)))] as string[];
-        const inboxTargets = adminIds.filter((value) => !value.includes("@") && !value.includes(",") && !value.includes("."));
-
-        if (inboxTargets.length > 0) {
-          await Promise.all(inboxTargets.map(async (adminId) => {
-            const adminNotifRef = push(ref(db, `notifications/${adminId}`));
-            await set(adminNotifRef, {
-              title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
-              message: `${userName} — ৳${selectedPlan.price} (${selectedPlan.name}) — TrxID: ${trxInput.trim()}`,
-              type: "payment",
-              timestamp: Date.now(),
-              read: false,
-            });
-          }));
-        }
-
-        // FCM push removed — in-app admin notification (above) is enough
-
-        if (inboxTargets.length === 0 && adminIds.length === 0 && adminTokens.length === 0) {
-          // Fallback: save to notifications/admin key
-          const adminNotifRef = push(ref(db, "notifications/admin"));
-          await set(adminNotifRef, {
-            title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
-            message: `${userName} — ৳${selectedPlan.price} (${selectedPlan.name}) — TrxID: ${trxInput.trim()}`,
-            type: "payment",
-            timestamp: Date.now(),
-            read: false,
-          });
-        }
-      } catch {}
+      // In-app admin notification inbox removed (Firebase bandwidth optimization).
       setEditingPendingRequest(false);
       setTrxInput("");
       setBkashSenderNumber("");
