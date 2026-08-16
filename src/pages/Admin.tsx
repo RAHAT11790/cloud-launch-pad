@@ -2384,7 +2384,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  return name.includes(q) || email.includes(q) || id.includes(q);
  });
  }, [usersData, debouncedUserSearch]);
- const [notificationsData, setNotificationsData] = useState<any[]>([]);
  const [releasesData, setReleasesData] = useState<any[]>([]);
  const [commentsData, setCommentsData] = useState<any[]>([]);
 
@@ -3133,25 +3132,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // FCM token stats listener removed
 
  return () => unsubs.forEach(u => u());
- }, [activeSection]);
-
- // Lazy-load NOTIFICATIONS data
- useEffect(() => {
- if (activeSection !== "notifications") return;
- const unsub = onValue(ref(db, "notifications"), (snap) => {
- const data = snap.val() || {};
- const allNotifs: any[] = [];
- Object.entries(data).forEach(([uid, userNotifs]: any) => {
-  if (allNotifs.length >= 1000) return;
- Object.entries(userNotifs || {}).forEach(([notifId, notif]: any) => {
-  if (allNotifs.length >= 1000) return;
- allNotifs.push({ ...notif, id: notifId, oderId: uid, userId: uid });
- });
- });
- allNotifs.sort((a, b) => b.timestamp - a.timestamp);
-  startTransition(() => setNotificationsData(allNotifs));
- });
- return () => unsub();
  }, [activeSection]);
 
  // Lazy-load NEW RELEASES data
@@ -4121,7 +4101,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const usersSnap = await get(ref(db, "users"));
  const users = usersSnap.val() || {};
  const targetUserIds: string[] = [];
- const userNotifUpdates: Record<string, any> = {};
  const seen = new Set<string>();
  Object.entries(users).forEach(([userKey, userData]: any) => {
  const uid = String(userData?.id || userKey || "").trim();
@@ -4129,14 +4108,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (notifTarget === "online" && !userData?.online) return;
  seen.add(uid);
  targetUserIds.push(uid);
-    // User asked to stop storing in-app notification history.
-    // userNotifUpdates[`notifications/${uid}/${notifKey}`] = ... (removed)
  });
-
- // Write in-app notifications (for the bell icon)
- if (Object.keys(userNotifUpdates).length > 0) {
- await update(ref(db), userNotifUpdates);
- }
 
  // Fire browser push
  const pushMod = await import("@/lib/pushNotifications");
@@ -4163,34 +4135,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  } catch (err: any) {
  console.warn("Notification send failed:", err);
  toast.error("Error: " + err.message);
- }
- };
-
- const deleteNotification = async (title: string, message: string, timestamp: number) => {
- if (!confirm("Delete this notification for all users?")) return;
- try {
- const snap = await get(ref(db, "notifications"));
- const allData = snap.val() || {};
- const deleteUpdates: Record<string, null> = {};
-
- Object.entries(allData).forEach(([uid, userNotifs]: any) => {
- Object.entries(userNotifs || {}).forEach(([nid, notif]: any) => {
- if (notif.title === title && notif.message === message) {
- deleteUpdates[`notifications/${uid}/${nid}`] = null;
- }
- });
- });
-
- const deleteCount = Object.keys(deleteUpdates).length;
- if (deleteCount > 0) {
- await update(ref(db), deleteUpdates);
- toast.success(`Deleted ${deleteCount} notifications`);
- } else {
- toast.error("Notification not found");
- }
- } catch (err: any) {
- console.error("Delete error:", err);
- toast.error("Error deleting notification");
  }
  };
 
@@ -4349,13 +4293,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const exportData = async () => {
  try {
- const [ws, mv, cat, us, rel, not] = await Promise.all([
+ const [ws, mv, cat, us, rel] = await Promise.all([
  get(ref(db, "webseries")), get(ref(db, "movies")), get(ref(db, "categories")),
- get(ref(db, "users")), get(ref(db, "newEpisodeReleases")), get(ref(db, "notifications"))
+ get(ref(db, "users")), get(ref(db, "newEpisodeReleases"))
  ]);
  const data = {
  webseries: ws.val(), movies: mv.val(), categories: cat.val(),
- users: us.val(), newEpisodeReleases: rel.val(), notifications: not.val(),
+ users: us.val(), newEpisodeReleases: rel.val(),
  exportedAt: new Date().toISOString()
  };
  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -8704,31 +8648,12 @@ ${tgBulkFooter}
  devices: currentPremium?.devices || {},
  });
  await update(ref(db, `bkashPayments/${req.id}`), { status: "approved", approvedAt: Date.now() });
- // Send in-app notification to user
- const userNotifRef = push(ref(db, `notifications/${req.userId}`));
- await set(userNotifRef, {
- title: "Premium Activated! 🎉",
- message: `your ${req.planName} plan অ্যাক্ভেট done। ${days} day Ad-free enjoy !`,
- type: "success",
- timestamp: Date.now(),
- read: false,
- });
- // FCM push removed — in-app notification (above) is enough
  toast.success(`${req.userName} of premium অ্যাক্ভেট done (${days} day)`);
  }} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
  <Check size={12} /> Approve
  </button>
  <button onClick={async () => {
  await update(ref(db, `bkashPayments/${req.id}`), { status: "rejected", rejectedAt: Date.now() });
- const userNotifRef = push(ref(db, `notifications/${req.userId}`));
- await set(userNotifRef, {
- title: "Payment Rejected ❌",
- message: "your payment request গ্রহণ not done। valid Transaction ID with again চেষ্ ।",
- type: "error",
- timestamp: Date.now(),
- read: false,
- });
- // FCM push removed — in-app notification (above) is enough
  toast.success("request reject done");
  }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
  <X size={12} /> Reject
@@ -10780,23 +10705,6 @@ const AdminCommentsSection = ({
  timestamp: now,
  });
 
- if (targetComment?.userId && targetComment.userId !== "admin") {
- const title = "Admin replied to your comment";
- const message = `Admin replied on ${getContentTitle(animeId)}`;
-
- await set(push(ref(db, `notifications/${targetComment.userId}`)), {
- title,
- message,
- type: "admin_reply",
- contentId: animeId,
- image: targetComment.poster || "",
- poster: targetComment.poster || "",
- timestamp: now,
- read: false,
- });
-
- // FCM push removed — in-app notification (above) is enough
- }
 
  setReplyText("");
  setReplyingTo(null);
@@ -11284,14 +11192,6 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
  try {
  await remove(ref(db, `users/${userId}/premium`));
  setUserDevices(prev => { const copy = { ...prev }; delete copy[userId]; return copy; });
- const notifRef = push(ref(db, `notifications/${userId}`));
- await set(notifRef, {
- title: "Subscription Cancelled ❌",
- message: "Your premium subscription has been canceled by an admin।",
- type: "warning",
- timestamp: Date.now(),
- read: false,
- });
  toast.success("subscription cancel and user নোফাthis done");
  } catch { toast.error("Error cancelling"); }
  };

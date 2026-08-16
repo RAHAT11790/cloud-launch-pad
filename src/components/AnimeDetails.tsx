@@ -144,24 +144,6 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
       const replyRef = push(ref(db, `comments/${anime.id}/${commentKey}/replies`));
       await set(replyRef, { userId, userName, text, timestamp: now });
 
-      if (targetComment?.userId && targetComment.userId !== userId) {
-        const notifTitle = "New Reply on Your Comment";
-        const notifMsg = `${userName} replied to your comment on ${anime.title}`;
-
-        await set(push(ref(db, `notifications/${targetComment.userId}`)), {
-          title: notifTitle,
-          message: notifMsg,
-          type: "comment_reply",
-          contentId: anime.id,
-          contentType: anime.type,
-          image: anime.poster || "",
-          poster: anime.poster || "",
-          timestamp: now,
-          read: false,
-        });
-
-        // FCM push removed — in-app notification (above) is enough
-      }
     } catch (err) {
       console.error("Reply post failed:", err);
       setReplyText(text);

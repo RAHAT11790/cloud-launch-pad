@@ -166,18 +166,6 @@ export async function autoApprovePayment(
     } catch {}
   }
 
-  // In-app notification
-  try {
-    const notifRef = push(ref(db, `notifications/${req.userId}`));
-    await set(notifRef, {
-      title: opts.source === "auto-sms" ? "Payment Auto-Verified! ⚡" : "Premium Activated! 🎉",
-      message: `${req.planName} (৳${req.planPrice}) — ${req.planDays} days unlocked.`,
-      type: "success",
-      timestamp: Date.now(),
-      read: false,
-    });
-  } catch {}
-
   // FCM push removed — in-app notification (above) is enough
 }
 
