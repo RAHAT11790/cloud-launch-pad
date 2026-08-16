@@ -595,10 +595,23 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       }
     };
 
-    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => applyRemoteProfile(snap.val() || {}));
+    // Bandwidth: subscribe only to the tiny profile fields. Subscribing to the
+    // whole `users/{uid}` node re-downloads the full record on every heartbeat
+    // / watch-history write.
+    const subscribeProfileFields = (key: string) => {
+      const state: any = {};
+      const bind = (field: string) => onValue(ref(db, `users/${key}/${field}`), (snap) => {
+        state[field] = snap.val();
+        applyRemoteProfile(state);
+      });
+      const unsubs = ["name", "profilePhoto", "photoUpdatedAt"].map(bind);
+      return () => unsubs.forEach((u) => u());
+    };
+
+    const unsubUser = subscribeProfileFields(userId);
     let unsubAlias: (() => void) | undefined;
     if (emailAlias && emailAlias !== userId) {
-      unsubAlias = onValue(ref(db, `users/${emailAlias}`), (snap) => applyRemoteProfile(snap.val() || {}));
+      unsubAlias = subscribeProfileFields(emailAlias);
     }
 
     return () => { unsubUser(); unsubAlias?.(); };
