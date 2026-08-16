@@ -31,16 +31,26 @@ export default function PremiumBuyPage() {
   }, [settings?.extraPlans]);
 
 
+  // Bandwidth: count locked titles from the tiny `adminContentIndex` instead of
+  // downloading the full `webseries` + `movies` nodes (~20 MB) on every visit.
   useEffect(() => {
     let cancel = false;
+    const CACHE_KEY = "rs_locked_count_v1";
+    try {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) setLockedCount(Number(cached) || 0);
+    } catch {}
     (async () => {
       try {
-        const [wsSnap, mvSnap] = await Promise.all([
-          get(ref(db, "webseries")),
-          get(ref(db, "movies")),
+        const [idxWs, idxMv] = await Promise.all([
+          firebaseRestGet<Record<string, any>>("adminContentIndex/webseries"),
+          firebaseRestGet<Record<string, any>>("adminContentIndex/movies"),
         ]);
         const count = (obj: any) => Object.values(obj || {}).filter((v: any) => v?.premium).length;
-        if (!cancel) setLockedCount(count(wsSnap.val()) + count(mvSnap.val()));
+        const total = count(idxWs) + count(idxMv);
+        if (cancel) return;
+        setLockedCount(total);
+        try { sessionStorage.setItem(CACHE_KEY, String(total)); } catch {}
       } catch {}
     })();
     return () => { cancel = true; };
