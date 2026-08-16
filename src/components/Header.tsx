@@ -115,31 +115,34 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     };
   }, []);
 
-  // Firebase profile + online status — re-bound whenever userId changes
+  // Firebase profile + online status — re-bound whenever userId changes.
+  // Bandwidth note: we subscribe to the two tiny child fields we actually use
+  // instead of the whole `users/{uid}` object, otherwise every heartbeat write
+  // re-downloads the entire user record (watchlist, history, devices…).
   useEffect(() => {
     if (!userId) return;
-    const userUnsub = onValue(ref(db, `users/${userId}`), (snap) => {
-      const data = snap.val() || {};
-      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-      const remoteName = String(data.name || "").trim();
-      if (remotePhoto) {
-        writeProfilePhoto(remotePhoto, userId);
-        setProfilePhoto(remotePhoto);
-      }
-      if (remoteName && remoteName !== "Guest User") {
-        try {
-          writeDisplayName(remoteName, userId);
-          const rawUser = localStorage.getItem("rsanime_user");
-          const parsedUser = rawUser ? JSON.parse(rawUser) : {};
-          localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
-        } catch {}
-      }
+    const unsubPhoto = onValue(ref(db, `users/${userId}/profilePhoto`), (snap) => {
+      const remotePhoto = String(snap.val() || "").trim();
+      if (!remotePhoto) return;
+      writeProfilePhoto(remotePhoto, userId);
+      setProfilePhoto(remotePhoto);
     });
+    const unsubName = onValue(ref(db, `users/${userId}/name`), (snap) => {
+      const remoteName = String(snap.val() || "").trim();
+      if (!remoteName || remoteName === "Guest User") return;
+      try {
+        writeDisplayName(remoteName, userId);
+        const rawUser = localStorage.getItem("rsanime_user");
+        const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+        localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
+      } catch {}
+    });
+    const userUnsub = () => { unsubPhoto(); unsubName(); };
     const updateOnline = () => {
       update(ref(db, `users/${userId}`), { online: true, lastSeen: Date.now() }).catch(() => {});
     };
     updateOnline();
-    const heartbeat = setInterval(updateOnline, 30000);
+    const heartbeat = setInterval(updateOnline, 120000);
     const onUnload = () => {
       update(ref(db, `users/${userId}`), { online: false, lastSeen: Date.now() }).catch(() => {});
     };
