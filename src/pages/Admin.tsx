@@ -1477,9 +1477,6 @@ const UIThemesSection = ({ glassCard, btnPrimary }: { glassCard: string; btnPrim
  );
 };
 
-// ==================== FORCE NOTIFICATION TOGGLE ====================
- );
-};
 
 // ==================== CUSTOM FONTS LIST ====================
 const CUSTOM_FONTS = [
