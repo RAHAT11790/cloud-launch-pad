@@ -340,7 +340,12 @@ type SeasonsByLanguage = Record<string, Season[]>;
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// ==================== FCM PROVIDER TOGGLE SECTION ====================
+// ==================== EMAIL SERVICE SECTION ====================
+const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+ const [otpUrl, setOtpUrl] = useState("");
+ const [otpUrlInput, setOtpUrlInput] = useState("");
+ const [testing, setTesting] = useState(false);
+ const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
  const [resetLogs, setResetLogs] = useState<any[]>([]);
  const [loadingLogs, setLoadingLogs] = useState(true);
 
