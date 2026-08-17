@@ -7646,7 +7646,6 @@ ${tgBulkFooter}
  )}
 
         {/* Browser Push section removed — notifications fully disabled */}
- )}
 
  {/* ==================== TMDB FETCH ==================== */}
  {activeSection === "tmdb-fetch" && (
