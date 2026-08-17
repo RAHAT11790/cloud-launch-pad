@@ -96,7 +96,6 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "an-api",
   "an-playback",
   "verify-admin-pin",
-  "send-fcm",
 ]);
 
 const KNOWN_FUNCTION_NAMES = new Set([

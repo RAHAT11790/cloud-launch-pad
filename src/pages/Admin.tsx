@@ -96,39 +96,6 @@ const buildBrowserPushBody = (title: unknown, seasonName: unknown, episodeText: 
 
 type BrowserPushRecipient = { userId: string; name: string; email: string };
 
-const getFcmTokenOwnerIds = async (): Promise<string[]> => {
- try {
-  const snap = await get(ref(db, "fcmTokens"));
-  return Object.keys(snap.val() || {}).map(String).filter(Boolean);
- } catch { return []; }
-};
-
-const mergeTargetIdsWithFcmOwners = async (targetUserIds: string[]): Promise<string[]> => {
- const tokenOwners = await getFcmTokenOwnerIds();
- return [...new Set([...targetUserIds, ...tokenOwners].map((id) => String(id || "").trim()).filter(Boolean))];
-};
-
-const mapBrowserPushRecipients = async (users: Record<string, any>, deliveredUserIds?: string[]): Promise<BrowserPushRecipient[]> => {
- const ids = [...new Set((deliveredUserIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
- if (!ids.length) return [];
- const values = Object.entries(users || {});
- let fcmTree: Record<string, any> = {};
- try {
-  const fcmSnap = await get(ref(db, "fcmTokens"));
-  fcmTree = fcmSnap.val() || {};
- } catch {}
- return ids.map((uid) => {
-  const direct = users?.[uid];
-  const found = direct || values.find(([key, value]: any) => key === uid || String(value?.id || "") === uid)?.[1] || {};
-  const tokenEntries = Object.values(fcmTree?.[uid] || {}) as any[];
-  const tokenMeta = tokenEntries.find((entry) => entry?.email || entry?.name) || {};
-  return {
-   userId: uid,
-   name: String(found?.name || found?.displayName || tokenMeta?.name || "User").trim(),
-   email: String(found?.email || tokenMeta?.email || (uid.includes("@") ? uid : "")).trim(),
-  };
- });
-};
 
 const TG_DUB_TAGS = {
  official: "#ᴏғғɪᴄɪᴀʟ",
@@ -214,7 +181,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "manual-push" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -372,181 +339,6 @@ interface Season {
 type SeasonsByLanguage = Record<string, Season[]>;
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
-
-// ==================== FCM PROVIDER TOGGLE SECTION ====================
-const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [activeProvider, setActiveProvider] = useState<"cloudflare" | "supabase">("cloudflare");
- const [cfUrl, setCfUrl] = useState("");
- const [cfUrlInput, setCfUrlInput] = useState("");
- const [sbUrl, setSbUrl] = useState("");
- const [sbUrlInput, setSbUrlInput] = useState("");
- const [testing, setTesting] = useState<string | null>(null);
- const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/fcmProvider"), (snap) => {
- const val = snap.val();
- if (val) {
- setActiveProvider(val.active || "cloudflare");
- setCfUrl(val.cloudflareUrl || "");
- setCfUrlInput(val.cloudflareUrl || "");
- setSbUrl(val.supabaseUrl || "");
- setSbUrlInput(val.supabaseUrl || "");
- }
- });
- return () => unsub();
- }, []);
-
- const switchProvider = async (provider: "cloudflare" | "supabase") => {
- const url = provider === "cloudflare" ? cfUrl : sbUrl;
- if (!url) {
- toast.error(`Set the ${provider === "cloudflare" ? "Cloudflare" : "Supabase"} URL first.`);
- return;
- }
- setActiveProvider(provider);
- await update(ref(db, "settings/fcmProvider"), { active: provider, url });
- toast.success(`🔔 FCM Provider: ${provider === "cloudflare" ? "☁️ Cloudflare" : "🟢 Supabase"} enabled.`);
- };
-
- const saveCfUrl = async () => {
- const url = cfUrlInput.trim();
- setCfUrl(url);
- const updates: Record<string, any> = { cloudflareUrl: url };
- if (activeProvider === "cloudflare") updates.url = url;
- await update(ref(db, "settings/fcmProvider"), updates);
- toast.success("✅ Cloudflare FCM URL saved.");
- };
-
- const saveSbUrl = async () => {
- const url = sbUrlInput.trim();
- setSbUrl(url);
- const updates: Record<string, any> = { supabaseUrl: url };
- if (activeProvider === "supabase") updates.url = url;
- await update(ref(db, "settings/fcmProvider"), updates);
- toast.success("✅ Supabase FCM URL saved.");
- };
-
- const testProvider = async (provider: "cloudflare" | "supabase") => {
- const url = provider === "cloudflare" ? cfUrl : sbUrl;
- if (!url) { toast.error("Enter a URL first."); return; }
- setTesting(provider);
- const start = Date.now();
- try {
- const controller = new AbortController();
- const t = setTimeout(() => controller.abort(), 10000);
- const res = await fetch(url, {
- method: "POST",
- headers: {
- "Content-Type": "application/json",
- ...(provider === "supabase" && SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
- },
- body: JSON.stringify({ tokens: [], title: "test", body: "test" }),
- signal: controller.signal,
- });
- clearTimeout(t);
- const latency = Date.now() - start;
- const text = await res.text().catch(() => "");
- const alive = text.includes('"error"') || text.includes('"success"') || text.includes('"totalTokens"') || res.status < 500;
- setTestResults(prev => ({ ...prev, [provider]: { alive, latency } }));
- } catch {
- setTestResults(prev => ({ ...prev, [provider]: { alive: false, latency: Date.now() - start } }));
- }
- setTesting(null);
- };
-
- return (
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
- <Bell size={14} className="text-yellow-400" /> 🔔 FCM Push Provider
- </h3>
- <p className="text-[10px] text-zinc-400 mb-4">
- Choose Cloudflare or Supabase as your push notification provider. Only one active at a time.
- </p>
-
- {/* Provider Toggle */}
- <div className="grid grid-cols-2 gap-2 mb-4">
- <button
- onClick={() => switchProvider("cloudflare")}
- className={`p-3 rounded-xl border-2 transition-all text-center ${
- activeProvider === "cloudflare"
- ? "border-cyan-500 bg-cyan-500/10"
- : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
- }`}
- >
- <div className="text-lg mb-1">☁️</div>
- <div className="text-[11px] font-semibold text-white">Cloudflare</div>
- {activeProvider === "cloudflare" && (
- <div className="flex items-center justify-center gap-1 mt-1">
- <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
- <span className="text-[9px] text-green-400">Active</span>
- </div>
- )}
- </button>
- <button
- onClick={() => switchProvider("supabase")}
- className={`p-3 rounded-xl border-2 transition-all text-center ${
- activeProvider === "supabase"
- ? "border-emerald-500 bg-emerald-500/10"
- : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
- }`}
- >
- <div className="text-lg mb-1">🟢</div>
- <div className="text-[11px] font-semibold text-white">Supabase</div>
- {activeProvider === "supabase" && (
- <div className="flex items-center justify-center gap-1 mt-1">
- <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
- <span className="text-[9px] text-green-400">Active</span>
- </div>
- )}
- </button>
- </div>
-
- {/* Cloudflare URL */}
- <div className={`p-3 rounded-xl border mb-3 ${activeProvider === "cloudflare" ? "border-cyan-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
- <div className="flex items-center gap-2 mb-2">
- <span className="text-[11px] font-semibold">☁️ Cloudflare FCM URL</span>
- {testResults.cloudflare && (
- <span className={`text-[9px] font-mono ${testResults.cloudflare.alive ? "text-green-400" : "text-red-400"}`}>
- {testResults.cloudflare.alive ? `✓ ${testResults.cloudflare.latency}ms` : "✕ Down"}
- </span>
- )}
- </div>
- <div className="flex gap-1.5">
- <input value={cfUrlInput} onChange={(e) => setCfUrlInput(e.target.value)}
- placeholder="https://worker.workers.dev/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
- <button onClick={saveCfUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
- <button onClick={() => testProvider("cloudflare")} disabled={testing === "cloudflare"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- {testing === "cloudflare" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
- </button>
- </div>
- </div>
-
- {/* Supabase URL */}
- <div className={`p-3 rounded-xl border ${activeProvider === "supabase" ? "border-emerald-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
- <div className="flex items-center gap-2 mb-2">
- <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 1</span>
- {testResults.supabase && (
- <span className={`text-[9px] font-mono ${testResults.supabase.alive ? "text-green-400" : "text-red-400"}`}>
- {testResults.supabase.alive ? `✓ ${testResults.supabase.latency}ms` : "✕ Down"}
- </span>
- )}
- </div>
- <div className="flex gap-1.5 mb-2">
- <input value={sbUrlInput} onChange={(e) => setSbUrlInput(e.target.value)}
- placeholder="https://xxx.supabase.co/functions/v1/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
- <button onClick={saveSbUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
- <button onClick={() => testProvider("supabase")} disabled={testing === "supabase"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
- </button>
- </div>
- </div>
- </div>
- );
-};
-
-
-
-// Legacy Telegram URL/webhook panels removed: EGD Router → telegram-post is the single URL source.
 
 // ==================== EMAIL SERVICE SECTION ====================
 const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
@@ -1685,62 +1477,6 @@ const UIThemesSection = ({ glassCard, btnPrimary }: { glassCard: string; btnPrim
  );
 };
 
-// ==================== FORCE NOTIFICATION TOGGLE ====================
-const ForceNotifToggle = ({ glassCard }: { glassCard: string }) => {
- const [enabled, setEnabled] = useState(false);
- const [totalTokens, setTotalTokens] = useState(0);
- const [totalUsers, setTotalUsers] = useState(0);
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/forceNotifPrompt"), (snap) => {
- setEnabled(snap.val() === true);
- });
- return () => unsub();
- }, []);
-
- useEffect(() => {
- const unsub = onValue(ref(db, "fcmTokens"), (snap) => {
- const data = snap.val() || {};
- const users = Object.keys(data).length;
- let tokens = 0;
- Object.values(data).forEach((ut: any) => { tokens += Object.keys(ut || {}).length; });
- setTotalUsers(users);
- setTotalTokens(tokens);
- });
- return () => unsub();
- }, []);
-
- const toggle = async () => {
- const next = !enabled;
- await set(ref(db, "settings/forceNotifPrompt"), next);
- toast.success(next ? "✅ Notification prompts will be shown to all users" : "⏸ Notification prompt disabled");
- };
-
- return (
- <div>
- <div className="flex items-center justify-between mb-3">
- <div className="flex items-center gap-2">
- <span className={`w-2.5 h-2.5 rounded-full ${enabled ? "bg-green-500 animate-pulse" : "bg-zinc-600"}`} />
- <span className="text-xs font-medium">{enabled ? "Active" : "Off"}</span>
- </div>
- <button onClick={toggle}
- className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${enabled ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-green-500/20 text-green-400 hover:bg-green-500/30"}`}>
- {enabled ? "Disable" : "Enable"}
- </button>
- </div>
- <div className="grid grid-cols-2 gap-2 mt-2">
- <div className="bg-zinc-800/50 rounded-lg p-2.5 text-center">
- <p className="text-lg font-bold text-green-400">{totalUsers}</p>
- <p className="text-[10px] text-zinc-400">Users with tokens</p>
- </div>
- <div className="bg-zinc-800/50 rounded-lg p-2.5 text-center">
- <p className="text-lg font-bold text-blue-400">{totalTokens}</p>
- <p className="text-[10px] text-zinc-400">Total FCM Tokens</p>
- </div>
- </div>
- </div>
- );
-};
 
 // ==================== CUSTOM FONTS LIST ====================
 const CUSTOM_FONTS = [
@@ -2215,7 +1951,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // and the browser treats each as a real page (less overlay lag).
   const ROUTED_SECTIONS = useMemo(() => new Set<Section>([
     "categories", "webseries", "weekly-episode", "movies", "users",
-    "notifications", "new-releases", "manual-push", "tmdb-fetch", "add-content",
+    "new-releases", "tmdb-fetch", "add-content",
     "redeem-codes", "bkash-payments", "device-limits", "maintenance", "free-access",
     "settings", "comments", "analytics", "auto-import", "animesalt-manager",
     "telegram-post", "tg-url-changer", "live-support", "ui-themes", "hero-pinned",
@@ -3068,7 +2804,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       // on the very first admin visit.
       "dashboard",
       "webseries", "movies", "add-content", "tmdb-fetch", "telegram-post",
-      "animesalt-manager", "new-releases", "manual-push", "notifications",
+      "animesalt-manager", "new-releases",
       "comments", "hero-pinned", "url-changer", "link-checker", "auto-import",
       "tg-url-changer", "analytics",
     ];
@@ -3129,7 +2865,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    startTransition(() => setAppUsersGlobal(items));
  }));
 
- // FCM token stats listener removed
 
  return () => unsubs.forEach(u => u());
  }, [activeSection]);
@@ -3148,7 +2883,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Lazy-load AnimeSalt selected data for content options
  useEffect(() => {
- if (activeSection !== "new-releases" && activeSection !== "notifications") return;
+ if (activeSection !== "new-releases") return;
  const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
   startTransition(() => setAnimesaltSelectedData(snap.val() || {}));
  });
@@ -3522,9 +3257,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  "weekly-episode": "Weekly Episode",
  movies: "Movies",
  users: "Users",
- notifications: "Notifications",
  "new-releases": "New Releases",
- "manual-push": "Browser Push",
  "tmdb-fetch": "TMDB Fetch",
  "add-content": "Add Content",
  "redeem-codes": "Redeem Codes",
@@ -4082,61 +3815,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }
  };
 
-  // ==================== NOTIFICATIONS ====================
- const sendNotification = async () => {
- if (!notifTitle || !notifMessage) { toast.error("Please enter title and message"); return; }
- const savedTitle = notifTitle;
- const savedMessage = notifMessage;
-
- try {
- let contentId = "", contentType = "", contentPoster = "";
- if (notifContent) {
- const parts = notifContent.split("|");
- contentId = parts[0]; contentType = parts[1];
- const selectedOption = contentOptions.find((o) => o.value === notifContent);
- contentPoster = selectedOption?.backdrop || selectedOption?.poster || "";
- }
-
- // Load all users to build target list + in-app notifications.
- const usersSnap = await get(ref(db, "users"));
- const users = usersSnap.val() || {};
- const targetUserIds: string[] = [];
- const seen = new Set<string>();
- Object.entries(users).forEach(([userKey, userData]: any) => {
- const uid = String(userData?.id || userKey || "").trim();
- if (!uid || seen.has(uid)) return;
- if (notifTarget === "online" && !userData?.online) return;
- seen.add(uid);
- targetUserIds.push(uid);
- });
-
- // Fire browser push
- const pushMod = await import("@/lib/pushNotifications");
- const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
- const result = await pushMod.sendPushNotification({
- title: savedTitle,
- body: savedMessage,
- image: toPushImageUrl(contentPoster),
- deepLink: contentId ? `/?anime=${contentId}` : "/",
- contentId,
- contentType,
- userIds: browserTargetUserIds,
- });
-
- setPushRecipients(await mapBrowserPushRecipients(users, result.deliveredUserIds));
-
- if (!result.ok && result.total === 0) {
- toast.warning(`In-app sent to ${targetUserIds.length} users. Browser push: no tokens found${result.reason ? ` [${result.reason}]` : ""}`);
- } else {
- toast.success(`Sent → ${targetUserIds.length} in-app · ${result.sent}/${result.total} browser push · ${result.deliveredUsers || 0} browser users`);
- }
- setNotifTitle("");
- setNotifMessage("");
- } catch (err: any) {
- console.warn("Notification send failed:", err);
- toast.error("Error: " + err.message);
- }
- };
+  // Notifications removed — in-app and browser push fully disabled.
 
  // ==================== NEW RELEASES ====================
  const handleReleaseContentChange = async (value: string) => {
@@ -4218,36 +3897,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  try {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
- const releaseNotifTitle = buildBrowserPushTitle(content.title);
- const releaseEpisodeText = contentType === "webseries"
-  ? `Episode ${episodeInfo.episodeNumberEnd > episodeInfo.episodeNumber ? `${episodeInfo.episodeNumber}-${episodeInfo.episodeNumberEnd}` : episodeInfo.episodeNumber}`
-  : "Movie release";
- const releaseNotifMsg = contentType === "webseries"
- ? buildBrowserPushBody(content.title, episodeInfo.seasonName, releaseEpisodeText)
- : `${content.title} • Movie release`;
- const releaseDeepLink = contentType === "webseries"
- ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
- : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
    startTransition(() => { setReleaseContent(""); setReleaseSeason(""); setReleaseEpisode(""); setReleaseEpisodeEnd(""); setShowSeasonEpisode(false); });
-  adminIdle(async () => {
-  try {
-  const pushMod = await import("@/lib/pushNotifications");
-  const res = await pushMod.sendPushNotification({
-  title: releaseNotifTitle,
-  body: releaseNotifMsg,
-  image: toPushImageUrl(content.backdrop || content.poster || ""),
-  deepLink: releaseDeepLink,
-  contentId,
-  contentType,
-  seasonNumber: contentType === "webseries" ? episodeInfo.seasonNumber : undefined,
-  episodeNumber: contentType === "webseries" ? episodeInfo.episodeNumber : undefined,
-  seasonName: contentType === "webseries" ? episodeInfo.seasonName : undefined,
-  episodeRange: contentType === "webseries" ? releaseEpisodeText : undefined,
-  });
-  if (res.ok) toast.success(`Browser push sent → ${res.sent}/${res.total} users`);
-  else toast.warning(`Push skipped: ${res.error || "send-fcm not configured"}`);
-  } catch (err: any) { console.warn("Background release notification failed", err); }
-  }, 500);
+
  
  } catch (err: any) { toast.error("Error: " + err.message); }
  };
@@ -5663,7 +5314,6 @@ ${tgBulkFooter}
  { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
  { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
  { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
- { section: "manual-push", icon: <Bell size={16} />, label: "Browser Push" },
  { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
@@ -6891,53 +6541,7 @@ ${tgBulkFooter}
  : "✅ New Release added!");
  // Clear so a future Save+Notify on the same form starts fresh
   startTransition(() => setWsAutoRanges([]));
-  // ⚡ FCM Push — send background push to every user who has notifications enabled.
-  // Notification body: anime backdrop image + RS logo badge, click deep-links
-  // straight to /watch/<seriesId>?s=<season>&e=<episodeIdx> and auto-plays.
-  try {
-    const pushMod = await import("@/lib/pushNotifications");
-    const isRange = rangesToPublish.length === 1 && rangesToPublish[0].endEp !== rangesToPublish[0].startEp;
-    const isMulti = rangesToPublish.length > 1;
-    const pushTitle = buildBrowserPushTitle(ctxForm.title);
-    const firstR = rangesToPublish[0];
-    const epLine = isMulti
-      ? `Multiple episodes`
-      : (isRange
-        ? `Episode ${firstR.startEp}–${firstR.endEp}`
-        : `Episode ${firstR.startEp}`);
-    const pushBody = buildBrowserPushBody(ctxForm.title, isMulti ? "New seasons" : firstR.seasonName, epLine);
-    const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
-    const firstRange = rangesToPublish[0];
-    const seasonIdxForLink = usingMulti ? (wsAutoRanges[0]?.seasonIdx ?? 0) : parseInt(wsNotifySeason);
-    const firstRangeSeason = ctxForm.seasons?.[seasonIdxForLink] || season;
-    const epIdxForLink = getEpisodeIndexForShare(firstRangeSeason, firstRange.startEp, usingMulti ? Math.max(0, firstRange.startEp - 1) : parseInt(wsNotifyEpisode));
-    const deepLink = buildEpisodeShareUrl(ctxSeriesId, seasonIdxForLink, epIdxForLink).replace(/^https?:\/\/[^/]+/, "");
-    const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
-    setAdminBusyTask("Sending push to users…");
-    const pushResult = await pushMod.sendPushNotification({
-      title: pushTitle,
-      body: pushBody,
-      image,
-      deepLink,
-      contentId: String(ctxSeriesId),
-      contentType: "webseries",
-      seasonNumber: firstRange.seasonIdxNum,
-      episodeNumber: firstRange.startEp,
-      seasonName: isMulti ? "New seasons" : String(firstRange.seasonName || ""),
-      episodeRange: epLine,
-    });
-    toast.dismiss(pushToastId);
-    setAdminBusyTask(null);
-    if (pushResult.ok) {
-      toast.success(`🔔 Push sent → ${pushResult.sent}/${pushResult.total} users${pushResult.invalidRemoved ? ` (cleaned ${pushResult.invalidRemoved} dead tokens)` : ""}`, { duration: 5000 });
-    } else {
-      toast.warning(`Push skipped: ${pushResult.error || "send-fcm not configured"}`);
-    }
-  } catch (pushErr: any) {
-    toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
-  }
-  // Auto-fill Telegram post fields next (Telegram post step comes after push)
- // Auto-fill telegram fields
+  // Browser push removed.
   startTransition(() => setTgTitle(ctxForm.title));
  const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
   startTransition(() => setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/')));
@@ -7653,34 +7257,7 @@ ${tgBulkFooter}
  setAdminBusyTask(null);
  toast.success("✅ New Release added!");
 
- try {
- const pushMod = await import("@/lib/pushNotifications");
- const pushTitle = buildBrowserPushTitle(ctxForm.title);
- const pushBody = `${ctxForm.title} • ${releaseLabel}`;
- const image = toPushImageUrl(ctxForm.backdrop || ctxForm.poster || "");
- const deepLink = partsRange
-   ? buildEpisodeShareUrl(ctxMovieId, 0, Math.max(0, partsRange.start - 1)).replace(/^https?:\/\/[^/]+/, "")
-   : buildEpisodeShareUrl(ctxMovieId).replace(/^https?:\/\/[^/]+/, "");
- const pushToastId = toast.loading("🔔 Sending push notifications to all users…", { duration: 60000 });
- setAdminBusyTask("Sending push to users…");
- const pushResult = await pushMod.sendPushNotification({
- title: pushTitle,
- body: pushBody,
- image,
- deepLink,
- contentId: String(ctxMovieId),
- contentType: "movie",
- });
- toast.dismiss(pushToastId);
- setAdminBusyTask(null);
- if (pushResult.ok) {
- toast.success(`🔔 Push sent → ${pushResult.sent}/${pushResult.total} users${pushResult.invalidRemoved ? ` (cleaned ${pushResult.invalidRemoved} dead tokens)` : ""}`, { duration: 5000 });
- } else {
- toast.warning(`Push skipped: ${pushResult.error || "send-fcm not configured"}`);
- }
- } catch (pushErr: any) {
- toast.warning("Push notification skipped: " + (pushErr?.message || String(pushErr)));
- }
+    // Browser push removed.
 
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
@@ -8068,291 +7645,7 @@ ${tgBulkFooter}
  </div>
  )}
 
-  {/* ==================== BROWSER PUSH NOTIFICATION (own section) ==================== */}
- {activeSection === "manual-push" && (
- <div>
- <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
- <Bell size={14} className="text-yellow-400" /> Browser Push
- </h3>
- <p className="text-[11px] text-[#957DAD] mb-4">Search anime → pick season & episode range → Chrome/browser push to users. Notification click loads the start episode.</p>
-
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Anime / Movie</label>
- <div className="relative z-[130] mb-4">
- <button type="button" onClick={() => setPushDropdownOpen(!pushDropdownOpen)}
- className={`${selectClass} w-full text-left flex items-center gap-2`}>
- {pushContent ? (
- <>
- <CachedImg src={contentOptions.find(o => o.value === pushContent)?.poster} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
- <span className="truncate text-sm">{contentOptions.find(o => o.value === pushContent)?.label}</span>
- </>
- ) : <span className="text-[#957DAD]">Select Content</span>}
- <ChevronDown size={14} className="ml-auto flex-shrink-0" />
- </button>
- {pushDropdownOpen && (
- <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#1A1A2E] border border-purple-500/40 rounded-xl max-h-[320px] overflow-hidden shadow-xl flex flex-col">
- <div className="p-2 border-b border-white/10 flex-shrink-0">
- <div className="relative">
- <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-purple-500" />
- <input
- value={pushContentSearch}
- onChange={e => setPushContentSearch(e.target.value)}
- className="w-full pl-8 pr-3 py-2 bg-[#151521] border border-white/10 rounded-lg text-white text-[12px] focus:border-purple-500 focus:outline-none placeholder:text-[#957DAD]"
- placeholder="🔍 search anime / movie..."
- autoFocus
- onClick={e => e.stopPropagation()}
- />
- </div>
- </div>
- <div className="overflow-y-auto max-h-[260px]">
- {(() => {
- const q = pushContentSearch.trim().toLowerCase();
- const filtered = q ? contentOptions.filter(o => o.label.toLowerCase().includes(q)) : contentOptions;
- const visible = filtered.slice(0, ADMIN_DROPDOWN_LIMIT);
- return filtered.length === 0 ? (
- <p className="text-[#957DAD] text-[11px] text-center py-4">No content found</p>
- ) : <>
- {visible.map(o => (
- <div key={o.value}
- className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${pushContent === o.value ? "bg-purple-500/30" : ""}`}
- onClick={async () => {
- setPushContent(o.value); setPushDropdownOpen(false); setPushContentSearch('');
- setPushSeason(""); setPushEpisode(""); setPushSeasons([]); setPushEpisodes([]);
- const [cid, ctype] = o.value.split("|");
- if (ctype === "webseries") {
- const c = (await getFullAdminContentItem("webseries", cid)) || webseriesData.find(s => s.id === cid);
- if (c?.seasons?.length) {
- setPushSeasons(c.seasons.map((s: any, i: number) => ({ index: i, name: s.name || `Season ${i + 1}` })));
- setPushShowSeasonEp(true);
- } else { setPushShowSeasonEp(false); }
- } else { setPushShowSeasonEp(false); }
- }}>
- <CachedImg src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" loading="lazy" decoding="async" />
- <span className="text-sm truncate">{o.label}</span>
- </div>
- ))}
- {filtered.length > visible.length && <div className="px-3 py-2 text-center text-[10px] text-[#957DAD]">Showing {visible.length}/{filtered.length} — type to narrow</div>}
- </>;
- })()}
- </div>
- </div>
- )}
- </div>
-
- {pushShowSeasonEp && (
- <>
- <div className="mb-3">
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Season</label>
- <select value={pushSeason} onChange={async e => {
- const val = e.target.value; setPushSeason(val); setPushEpisode(""); setPushEpisodeEnd("");
- if (!pushContent || val === "") { setPushEpisodes([]); return; }
- const [cid] = pushContent.split("|");
- const c = (await getFullAdminContentItem("webseries", cid)) || webseriesData.find(s => s.id === cid);
- const season = c?.seasons?.[parseInt(val)];
- const eps = (season?.episodes || []).map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}`, num: ep.episodeNumber || i + 1 }));
- setPushEpisodes(eps);
- }} className={selectClass}>
- <option value="">Select Season</option>
- {pushSeasons.map(s => <option key={s.index} value={s.index}>{s.name}</option>)}
- </select>
- </div>
- <div className="grid grid-cols-2 gap-3 mb-4">
- <div>
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode Start</label>
- <select value={pushEpisode} onChange={e => { setPushEpisode(e.target.value); if (pushEpisodeEnd !== "" && parseInt(pushEpisodeEnd) < parseInt(e.target.value)) setPushEpisodeEnd(e.target.value); }} className={selectClass}>
- <option value="">Start</option>
- {pushEpisodes.map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
- </select>
- </div>
- <div>
- <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Episode End</label>
- <select value={pushEpisodeEnd} onChange={e => setPushEpisodeEnd(e.target.value)} className={selectClass} disabled={pushEpisode === ""}>
- <option value="">End (= Start if empty)</option>
- {pushEpisodes.filter(ep => pushEpisode === "" || ep.index >= parseInt(pushEpisode)).map(ep => <option key={ep.index} value={ep.index}>{ep.name}</option>)}
- </select>
- </div>
- </div>
- </>
- )}
-
- {/* Live auto-preview */}
- {pushContent && (() => {
- const opt = contentOptions.find(o => o.value === pushContent);
- const [, ctype] = pushContent.split("|");
- const seasonName = pushShowSeasonEp && pushSeason !== "" ? (pushSeasons.find(s => String(s.index) === pushSeason)?.name || `Season ${parseInt(pushSeason) + 1}`) : "";
- const startEpNum = pushShowSeasonEp && pushEpisode !== "" ? (pushEpisodes.find(e => String(e.index) === pushEpisode)?.num || parseInt(pushEpisode) + 1) : null;
- const endIdx = pushEpisodeEnd !== "" ? pushEpisodeEnd : pushEpisode;
- const endEpNum = pushShowSeasonEp && endIdx !== "" ? (pushEpisodes.find(e => String(e.index) === endIdx)?.num || parseInt(endIdx) + 1) : null;
- const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
- const autoTitle = buildBrowserPushTitle(opt?.label || "");
- const autoDesc = ctype === "webseries"
- ? buildBrowserPushBody(opt?.label || "", seasonName, epRange || "New episode")
- : `${opt?.label || "Movie"} • Movie release`;
- return (
- <div className="bg-[#0F0F1A] border border-yellow-500/25 rounded-xl p-3 mb-4 space-y-1.5">
- <p className="text-[10px] uppercase tracking-wide text-yellow-500/70 font-semibold">Auto preview</p>
- <p className="text-[13px] font-semibold text-white truncate">{pushTitleOverride.trim() || autoTitle}</p>
- <p className="text-[11.5px] text-[#D1C4E9] whitespace-pre-line leading-snug">{pushBodyOverride.trim() || autoDesc}</p>
- </div>
- );
- })()}
-
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Title (leave empty for auto)</label>
- <input value={pushTitleOverride} onChange={e => setPushTitleOverride(e.target.value)} className={`${inputClass} mb-3`} placeholder="Auto-detected from anime title" />
-
- <label className="block text-xs text-[#D1C4E9] mb-1 font-medium">Short Description (leave empty for auto)</label>
-  <textarea value={pushBodyOverride} onChange={e => setPushBodyOverride(e.target.value)} rows={3} className={`${inputClass} mb-4 resize-none`} placeholder="Auto: anime title, season, episode" />
-
- <button
- disabled={pushSending || !pushContent}
- onClick={async () => {
- if (!pushContent) { toast.error("Select a content first"); return; }
- if (pushShowSeasonEp && (pushSeason === "" || pushEpisode === "")) {
- toast.error("Pick season and start episode"); return;
- }
- const [contentId, contentType] = pushContent.split("|");
- const content = contentType === "webseries"
- ? ((await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId))
- : ((await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId));
- if (!content) { toast.error("Content not found"); return; }
-
- let seasonNumber: number | undefined; let episodeNumber: number | undefined;
- let seasonName = "Movie"; let deepLink = buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
- let startEpNum: number | null = null; let endEpNum: number | null = null;
- if (contentType === "webseries") {
- const sIdx = parseInt(pushSeason);
- const startIdx = parseInt(pushEpisode);
- const endIdx = pushEpisodeEnd !== "" ? parseInt(pushEpisodeEnd) : startIdx;
- const season = content.seasons?.[sIdx];
- const startEp = season?.episodes?.[startIdx];
- const endEp = season?.episodes?.[endIdx];
- seasonNumber = sIdx + 1;
- episodeNumber = startEp?.episodeNumber || startIdx + 1;
- startEpNum = startEp?.episodeNumber || startIdx + 1;
- endEpNum = endEp?.episodeNumber || endIdx + 1;
- seasonName = season?.name || `Season ${seasonNumber}`;
-  // Notification click → load START episode; helper converts indexes to 1-based URL params.
-  deepLink = buildEpisodeShareUrl(contentId, sIdx, startIdx).replace(/^https?:\/\/[^/]+/, "");
- }
-
- const backdrop = content.backdrop || content.poster || "";
- const image = backdrop ? String(backdrop).replace('/w780/', '/w1280/').replace('/original/', '/w1280/') : "";
- const epRange = startEpNum && endEpNum ? (endEpNum !== startEpNum ? `Episode ${startEpNum}–${endEpNum}` : `Episode ${startEpNum}`) : "";
-  const autoTitle = buildBrowserPushTitle(content.title);
-  const autoBody = contentType === "webseries"
-  ? buildBrowserPushBody(content.title, seasonName, epRange || "New episode")
-  : `${content.title} • Movie release`;
- const title = pushTitleOverride.trim() || autoTitle;
- const body = pushBodyOverride.trim() || autoBody;
-
-  setPushSending(true); setPushLastResult(""); setPushRecipients([]);
- const toastId = toast.loading("🔔 Sending push to all users…", { duration: 60000 });
- try {
- // Build in-app notifications for the bell icon. Recipient panel below must
- // show only users whose FCM token got a successful browser push.
- const usersSnap = await get(ref(db, "users"));
- const users = usersSnap.val() || {};
- const targetUserIds: string[] = [];
- const inAppUpdates: Record<string, any> = {};
- const seen = new Set<string>();
- Object.entries(users).forEach(([userKey, userData]: any) => {
- const uid = String(userData?.id || userKey || "").trim();
- if (!uid || seen.has(uid)) return;
- seen.add(uid);
- targetUserIds.push(uid);
-    // User asked to stop storing in-app notification history.
-    // inAppUpdates[`notifications/${uid}/${key}`] = ... (removed)
- });
- if (Object.keys(inAppUpdates).length) await update(ref(db), inAppUpdates);
-
- const pushMod = await import("@/lib/pushNotifications");
- const browserTargetUserIds = await mergeTargetIdsWithFcmOwners(targetUserIds);
- const res = await pushMod.sendPushNotification({
- title, body, image, deepLink,
- contentId: String(contentId), contentType,
- seasonNumber, episodeNumber,
-  seasonName,
-  episodeRange: epRange,
-  userIds: browserTargetUserIds,
- });
- toast.dismiss(toastId);
- const browserRecipients = await mapBrowserPushRecipients(users, res.deliveredUserIds);
- setPushRecipients(browserRecipients);
- if (res.ok) {
- const msg = `Browser push sent → ${res.sent}/${res.total} tokens · ${browserRecipients.length} users${res.invalidRemoved ? ` · cleaned ${res.invalidRemoved}` : ""}`;
- toast.success("🔔 " + msg, { duration: 6000 });
- setPushLastResult(msg);
- } else {
- const msg = `In-app: ${targetUserIds.length} · Browser push: ${res.error || res.reason || "no FCM token delivered"}`;
- toast.warning(msg);
- setPushLastResult(msg);
- }
- } catch (err: any) {
- toast.dismiss(toastId);
- toast.error("Push error: " + (err?.message || String(err)));
- setPushLastResult("Error: " + (err?.message || String(err)));
-  } finally { setPushSending(false); }
-  }}
-  className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
-  >
-  <Send size={16} /> {pushSending ? "Sending push…" : "Send Browser Push"}
-  </button>
-
-  {/* WIPE SYSTEM BUTTON */}
-  <button 
-    onClick={async () => {
-      setPushResetting(true);
-      try {
-        const { wipeAndResetFcmSystem } = await import("@/lib/pushNotifications");
-        const res = await wipeAndResetFcmSystem();
-        if (res?.ok) toast.success("FCM System Reset & Wiped Successfully!");
-      } catch (err: any) {
-        toast.error("Wipe failed: " + err.message);
-      } finally {
-        setPushResetting(false);
-      }
-    }}
-    disabled={pushResetting}
-    className="w-full mt-3 py-3 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
-  >
-    {pushResetting ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />} 
-    RESET FCM SYSTEM (WIPE ALL)
-  </button>
-
-  {pushLastResult && (
-  <p className="text-[11px] text-center text-[#957DAD] mt-3">{pushLastResult}</p>
-  )}
-
- {/* ==================== RECIPIENTS STATUS PANEL ==================== */}
- {pushRecipients.length > 0 && (
- <div className="mt-4 bg-gradient-to-br from-[#141422] to-[#0F0F1A] border border-yellow-500/25 rounded-xl overflow-hidden">
- <div className="px-4 py-2.5 border-b border-white/8 flex items-center justify-between bg-yellow-500/5">
- <div className="flex items-center gap-2">
- <Bell size={13} className="text-yellow-400" />
- <span className="text-[12px] font-semibold text-white">Browser Push Delivered</span>
- </div>
- <span className="text-[11px] text-yellow-400 font-bold">{pushRecipients.length} users</span>
- </div>
- <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
- {pushRecipients.map((r, i) => (
-  <div key={r.userId || i} className="px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
- <div className="flex items-center gap-2.5 min-w-0">
- <div className="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-500/30 to-pink-500/30 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-yellow-100">
- {(r.name || r.email || "U").charAt(0).toUpperCase()}
- </div>
- <div className="min-w-0">
- <p className="text-[12px] text-white font-medium truncate">{r.name || "User"}</p>
- </div>
- </div>
- <span className="text-[10.5px] text-[#957DAD] truncate max-w-[55%] text-right">{r.email || "—"}</span>
- </div>
- ))}
- </div>
- </div>
- )}
- </div>
- </div>
- )}
+        {/* Browser Push section removed — notifications fully disabled */}
 
  {/* ==================== TMDB FETCH ==================== */}
  {activeSection === "tmdb-fetch" && (
