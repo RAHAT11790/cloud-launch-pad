@@ -3897,19 +3897,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  try {
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  toast.success("Added as New Release");
- const releaseNotifTitle = buildBrowserPushTitle(content.title);
- const releaseEpisodeText = contentType === "webseries"
-  ? `Episode ${episodeInfo.episodeNumberEnd > episodeInfo.episodeNumber ? `${episodeInfo.episodeNumber}-${episodeInfo.episodeNumberEnd}` : episodeInfo.episodeNumber}`
-  : "Movie release";
- const releaseNotifMsg = contentType === "webseries"
- ? buildBrowserPushBody(content.title, episodeInfo.seasonName, releaseEpisodeText)
- : `${content.title} • Movie release`;
- const releaseDeepLink = contentType === "webseries"
- ? buildEpisodeShareUrl(contentId, parseInt(releaseSeason), parseInt(releaseEpisode)).replace(/^https?:\/\/[^/]+/, "")
- : buildEpisodeShareUrl(contentId).replace(/^https?:\/\/[^/]+/, "");
    startTransition(() => { setReleaseContent(""); setReleaseSeason(""); setReleaseEpisode(""); setReleaseEpisodeEnd(""); setShowSeasonEpisode(false); });
-  // Browser push removed.
-  }, 500);
+
  
  } catch (err: any) { toast.error("Error: " + err.message); }
  };
