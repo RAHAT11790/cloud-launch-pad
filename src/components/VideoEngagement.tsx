@@ -118,30 +118,8 @@ const Avatar = ({ name, photo, size = "md" }: { name: string; photo?: string; si
   );
 };
 
-// Fire-and-forget push notification to parent-comment owner when someone replies.
-async function notifyReplyOwner(params: {
-  parentUid: string;
-  parentAuthorName: string;
-  replierName: string;
-  replyText: string;
-  animeTitle?: string;
-  animeId: string;
-}) {
-  try {
-    if (!params.parentUid) return;
-    const { sendPushNotification } = await import("@/lib/pushNotifications");
-    const short = params.replyText.length > 90 ? params.replyText.slice(0, 87) + "…" : params.replyText;
-    await sendPushNotification({
-      userIds: [params.parentUid],
-      title: `💬 ${params.replierName} replied to your comment`,
-      body: short,
-      deepLink: `/?anime=${encodeURIComponent(params.animeId)}#comments`,
-      data: { kind: "comment_reply", animeId: params.animeId },
-    });
-  } catch {
-    // silent — reply already saved, notification is best-effort
-  }
-}
+// Push notifications removed site-wide.
+async function notifyReplyOwner(_params: Record<string, unknown>) { /* no-op */ }
 
 const VideoEngagement = ({ animeId, title }: Props) => {
   const user = useMemo(() => getLocalUser(), []);
