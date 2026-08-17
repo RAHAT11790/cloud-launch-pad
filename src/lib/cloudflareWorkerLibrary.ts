@@ -18,7 +18,6 @@ import commentBridgeSrc from "../../cloudflare-workers/comment-bridge.js?raw";
 import anApiSrc         from "../../cloudflare-workers/an-api.js?raw";
 import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
-import sendFcmSrc       from "../../cloudflare-workers/send-fcm.js?raw";
 import animeSearchBotSrc from "../../cloudflare-workers/anime-search-bot.js?raw";
 
 
@@ -62,7 +61,6 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   entry("video-proxy",     "Video Proxy",     "⚡ v9 CLOUDFLARE-NATIVE FAST PATH — https ranges pass through untouched (no extra edge hop on seek), only http mirrors are windowed (8MB), CF edge cache for segments, same-origin-Referer-first + 7s header timeout so dead mirrors fail over instantly. Tuned ONLY for Cloudflare — do not mirror the Supabase build here.", videoProxySrc, [], { isNew: true, badgeText: "v9 · CF", badgeTone: "amber" }),
 
   entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"]),
-  entry("send-fcm",        "Send FCM (Push) v2", "🔔 v2 Offline-Guaranteed Push worker — Firebase Admin (service-account JWT) → FCM v1 API. Hybrid webpush.notification + data payload, unique notificationId per message, requireInteraction + renotify, tag='rsanime-<id>', 28-day TTL + Urgency:high headers. Routes: /send /register /unregister /cleanup /health. Required secrets: FIREBASE_SERVICE_ACCOUNT_KEY (full JSON), FIREBASE_DB_URL. Optional: ALLOWED_ORIGINS, TOKEN_TTL_HOURS.", sendFcmSrc, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"]),
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "NEW", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "NEW", badgeTone: "emerald" }),
   entry("live-tv-proxy",   "Live TV Proxy",   "Dedicated HLS proxy for Live TV — isolates streaming bandwidth from the main video proxy.", liveTvProxySrc),

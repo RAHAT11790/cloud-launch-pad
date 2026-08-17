@@ -24,7 +24,6 @@ import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/ind
 import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
 import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw";
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
-import sendFcmSource from "../../supabase/functions/send-fcm/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
@@ -88,7 +87,6 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-proxy",    "Video Proxy",    "⚡ v9 ADAPTIVE-WINDOW BUILD (Supabase/Deno) — 1MB first window for instant start, 6MB steady (12MB on https), 7s header timeout, same-origin-Referer-first so HTTP mirrors answer on the first try. Fixes 'proxy down / video never loads'. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
-  entry("send-fcm",       "Send FCM (Push)", "🔔 Firebase Admin push notification sender (FCM v1 API). Routes: /send /register /unregister /cleanup /health. Auto-purges dead tokens + 24h TTL. Requires FIREBASE_SERVICE_ACCOUNT_KEY (full JSON) + FIREBASE_DB_URL secrets.", sendFcmSource, ["FIREBASE_SERVICE_ACCOUNT_KEY", "FIREBASE_DB_URL"]),
   entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",    "AN Playback API", "Playback-only AnimeSalt HLS proxy: playlist/segment CORS, range streaming, and CDN-safe headers. Use for user-panel video playback after links are cached.", anPlaybackSource, [], { badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
