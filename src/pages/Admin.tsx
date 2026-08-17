@@ -7258,7 +7258,6 @@ ${tgBulkFooter}
  toast.success("✅ New Release added!");
 
     // Browser push removed.
- }
 
  const movieIdForRedirect = ctxMovieId;
  setMvSaveNotifyModal(false);
