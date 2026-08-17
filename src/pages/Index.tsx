@@ -1502,31 +1502,7 @@ const Index = () => {
       return () => unsub();
     } catch {}
   }, [isLoggedIn]);
-  // FCM push registration — request permission + register token via send-fcm worker.
-  // Runs once per session per user; keeps token fresh with a 12h interval.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const raw = localStorage.getItem("rsanime_user");
-        const parsed = raw ? JSON.parse(raw) : null;
-        let uid = String(parsed?.id || parsed?.uid || "").trim();
-        // Guest visitors also register for push — falls back to guest_<deviceId>.
-        if (!uid) {
-          try {
-            const { getDeviceId } = await import("@/lib/premiumAccess");
-            uid = `guest_${getDeviceId()}`;
-          } catch { uid = ""; }
-        }
-        if (cancelled) return;
-        const mod = await import("@/lib/pushNotifications");
-        await mod.initPushNotifications(uid);
-      } catch (err) {
-        console.warn("[FCM] init failed", err);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isLoggedIn]);
+  // Push notifications fully removed from the app.
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
