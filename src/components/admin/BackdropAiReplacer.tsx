@@ -31,6 +31,26 @@ Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect an
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
 
 const callGenerateBackdrop = async (body: Record<string, any>) => {
+  // EGD Router first: if the admin pasted a deployed `lovable-backdrop` URL in
+  // the router, that URL is the single source of truth. Otherwise fall back to
+  // the in-project Lovable Cloud function.
+  const routed = await getEdgeFunctionUrl("lovable-backdrop").catch(() => "");
+  if (routed) {
+    const res = await fetch(routed, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let json: any = null;
+    try { json = await res.json(); } catch {}
+    if (!res.ok || json?.error) {
+      const err = new Error(json?.error || `Backdrop route failed (${res.status})`) as any;
+      err.status = res.status;
+      throw err;
+    }
+    return json;
+  }
+
   const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
   if (error) {
     const err = new Error(error.message || "Lovable AI call failed") as any;
