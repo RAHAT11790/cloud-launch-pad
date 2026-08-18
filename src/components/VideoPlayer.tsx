@@ -3431,14 +3431,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
 
-  // If the active admin server resolves to http:// but no EGD Router video-proxy
-  // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
-  // Do not leave the player on a blank src forever — immediately continue the
-  // same quality scan/server failover chain.
+  // If the active admin server resolves to http:// but THAT server has no proxy
+  // URL saved (Admin → Video Servers), there is no legal browser route (HTTPS
+  // pages block raw HTTP). Do not leave the player on a blank src forever —
+  // immediately continue the same quality scan/server failover chain.
   useEffect(() => {
     if (!playbackRouteReady || adGateActive || isEmbedPlayback) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
-    if (!raw || !isInsecureHttpSource(raw) || proxyUrl) return;
+    if (!raw || !isInsecureHttpSource(raw) || resolveServerProxyForUrl(raw)) return;
     const t = window.setTimeout(() => {
       tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
     }, 80);
