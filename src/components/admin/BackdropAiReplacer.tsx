@@ -3,6 +3,7 @@ import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
 import { supabase } from "@/integrations/supabase/client";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
