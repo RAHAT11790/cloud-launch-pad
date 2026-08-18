@@ -175,11 +175,25 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, fallbackProxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
     // iOS detection - iOS and iPadOS both need specific handling for HTTP/HTTPS switching
     const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
   if (!url) return [];
+
+  // PER-SERVER PROXY: the proxy is resolved from the host of THIS url, so every
+  // server plays through its own proxy. Only urls whose host is not in the admin
+  // server list may use the caller-supplied fallback.
+  const perServerProxy = resolveServerProxyForUrl(url);
+  const knownServerHost = (() => {
+    try {
+      const host = new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).host.toLowerCase();
+      return readCachedProxyServers().some((s) => {
+        try { return new URL(/^https?:\/\//i.test(s.domain) ? s.domain : `http://${s.domain}`).host.toLowerCase() === host; } catch { return false; }
+      });
+    } catch { return false; }
+  })();
+  const proxyUrl = perServerProxy || (knownServerHost ? "" : fallbackProxyUrl);
 
   const candidates: string[] = [];
   const addCandidate = (candidate?: string | null) => {
