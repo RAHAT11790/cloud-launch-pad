@@ -96,6 +96,14 @@ const isVideoProxyPlaybackUrl = (value: string, configuredBase?: string): boolea
 
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
+
+// iOS / iPadOS detection used across the playback pipeline. Safari (even when
+// hls.js reports MSE support on iPadOS) is far more reliable on its NATIVE HLS
+// pipeline, so every HLS decision below prefers native on iOS.
+export const IS_IOS_DEVICE =
+  typeof navigator !== "undefined" &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    ((navigator as any).platform === "MacIntel" && (navigator as any).maxTouchPoints > 1));
 const RS_VALID_SOURCE_TTL_MS = 10 * 60 * 1000;
 const RS_SEEK_GRACE_MS = 60_000;
 const RS_SEEK_PROXY_RESCUE_MS = 18_000;
