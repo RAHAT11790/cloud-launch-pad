@@ -558,7 +558,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [noServerSwitch, videoServers]);
 
   const videoServerFingerprint = useMemo(
-    () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.locked ? "1" : "0"}`).join("|"),
+    () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.proxy || ""}:${s.locked ? "1" : "0"}`).join("|"),
     [effectiveVideoServers],
   );
 
