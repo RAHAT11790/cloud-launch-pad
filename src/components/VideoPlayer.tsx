@@ -230,15 +230,19 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  // iOS cannot decode Matroska directly. Prefer the configured range-aware
-  // media route for MKV, while native MP4/HLS remains direct-first.
+  // iOS/Safari cannot decode Matroska at all. For .mkv the ONLY viable route is
+  // the server's own range-aware proxy; if that server has no proxy configured
+  // we return zero candidates so the failover chain jumps to the next server
+  // instead of parking Safari on a permanently blocked source.
   if (isIOS && !isHttp) {
     const isMatroska = /\.mkv(?:$|[?#])/i.test(url);
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    if (isMatroska && customProxyCandidate) {
-      addCandidate(customProxyCandidate);
+    if (isMatroska) {
+      if (customProxyCandidate) addCandidate(customProxyCandidate);
       return candidates;
     }
+    // MP4 / HLS are natively supported — always direct-first on iOS, because
+    // Safari's byte-range handling through a proxy stalls initial playback.
     addCandidate(url);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
