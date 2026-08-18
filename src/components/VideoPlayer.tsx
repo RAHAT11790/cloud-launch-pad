@@ -96,6 +96,14 @@ const isVideoProxyPlaybackUrl = (value: string, configuredBase?: string): boolea
 
 const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
+
+// iOS / iPadOS detection used across the playback pipeline. Safari (even when
+// hls.js reports MSE support on iPadOS) is far more reliable on its NATIVE HLS
+// pipeline, so every HLS decision below prefers native on iOS.
+export const IS_IOS_DEVICE =
+  typeof navigator !== "undefined" &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    ((navigator as any).platform === "MacIntel" && (navigator as any).maxTouchPoints > 1));
 const RS_VALID_SOURCE_TTL_MS = 10 * 60 * 1000;
 const RS_SEEK_GRACE_MS = 60_000;
 const RS_SEEK_PROXY_RESCUE_MS = 18_000;
@@ -175,11 +183,25 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
+  const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, fallbackProxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
     // iOS detection - iOS and iPadOS both need specific handling for HTTP/HTTPS switching
     const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
   if (!url) return [];
+
+  // PER-SERVER PROXY: the proxy is resolved from the host of THIS url, so every
+  // server plays through its own proxy. Only urls whose host is not in the admin
+  // server list may use the caller-supplied fallback.
+  const perServerProxy = resolveServerProxyForUrl(url);
+  const knownServerHost = (() => {
+    try {
+      const host = new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`).host.toLowerCase();
+      return readCachedProxyServers().some((s) => {
+        try { return new URL(/^https?:\/\//i.test(s.domain) ? s.domain : `http://${s.domain}`).host.toLowerCase() === host; } catch { return false; }
+      });
+    } catch { return false; }
+  })();
+  const proxyUrl = perServerProxy || (knownServerHost ? "" : fallbackProxyUrl);
 
   const candidates: string[] = [];
   const addCandidate = (candidate?: string | null) => {
@@ -216,15 +238,19 @@ const isBypassSource = (url: string): boolean => {
     return candidates;
   }
 
-  // iOS cannot decode Matroska directly. Prefer the configured range-aware
-  // media route for MKV, while native MP4/HLS remains direct-first.
+  // iOS/Safari cannot decode Matroska at all. For .mkv the ONLY viable route is
+  // the server's own range-aware proxy; if that server has no proxy configured
+  // we return zero candidates so the failover chain jumps to the next server
+  // instead of parking Safari on a permanently blocked source.
   if (isIOS && !isHttp) {
     const isMatroska = /\.mkv(?:$|[?#])/i.test(url);
     const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    if (isMatroska && customProxyCandidate) {
-      addCandidate(customProxyCandidate);
+    if (isMatroska) {
+      if (customProxyCandidate) addCandidate(customProxyCandidate);
       return candidates;
     }
+    // MP4 / HLS are natively supported — always direct-first on iOS, because
+    // Safari's byte-range handling through a proxy stalls initial playback.
     addCandidate(url);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
@@ -544,7 +570,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [noServerSwitch, videoServers]);
 
   const videoServerFingerprint = useMemo(
-    () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.locked ? "1" : "0"}`).join("|"),
+    () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.proxy || ""}:${s.locked ? "1" : "0"}`).join("|"),
     [effectiveVideoServers],
   );
 
@@ -702,17 +728,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
-  // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
+  // PER-SERVER PROXY ONLY. There is no global player proxy anymore: each server
+  // in Admin → Video Servers carries its own proxy URL, resolved by host.
+  // `proxyUrl` here is just the resolved proxy of the CURRENT source (used for
+  // preconnect + proxy-detection); candidate building resolves per url itself.
   useEffect(() => {
     let cancelled = false;
-    let overrideRaw: any = null;
     const applyProxyRoute = () => {
       if (cancelled) return;
+      const isAnHls = isAnApiHlsProxyUrl(src || "");
       if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
-      const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
-      const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      const finalUrl = enabled ? overrideUrl : "";
+      const finalUrl = resolveServerProxyForUrl(src || "");
       setProxyUrl(finalUrl);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
@@ -727,17 +753,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCdnEnabled(val !== false);
     });
 
-    // Single proxy: `video-proxy` only. AN URLs use their own an-playback proxy.
-    const isAnHls = isAnApiHlsProxyUrl(src || "");
+    applyProxyRoute();
 
-    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
-      if (cancelled) return;
-      overrideRaw = snap.val();
-      applyProxyRoute();
-    });
-
-    return () => { cancelled = true; unsub1(); unsub2(); };
-  }, [noProxy, preferProxy, src]);
+    return () => { cancelled = true; unsub1(); };
+  }, [noProxy, preferProxy, src, videoServerFingerprint]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateBusy, setAdGateBusy] = useState(false);
   const downloadAdPassedRef = useRef(false);
@@ -3424,14 +3443,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, proxyUrl, tryNextPlaybackRoute]);
 
-  // If the active admin server resolves to http:// but no EGD Router video-proxy
-  // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
-  // Do not leave the player on a blank src forever — immediately continue the
-  // same quality scan/server failover chain.
+  // If the active admin server resolves to http:// but THAT server has no proxy
+  // URL saved (Admin → Video Servers), there is no legal browser route (HTTPS
+  // pages block raw HTTP). Do not leave the player on a blank src forever —
+  // immediately continue the same quality scan/server failover chain.
   useEffect(() => {
     if (!playbackRouteReady || adGateActive || isEmbedPlayback) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
-    if (!raw || !isInsecureHttpSource(raw) || proxyUrl) return;
+    if (!raw || !isInsecureHttpSource(raw) || resolveServerProxyForUrl(raw)) return;
     const t = window.setTimeout(() => {
       tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
     }, 80);

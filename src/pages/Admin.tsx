@@ -483,9 +483,21 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // "Default" button pastes the Lovable-hosted URL so admin can fall back when
 // self-hosted credits run out, and switch back to their own URL anytime.
 const LOVABLE_DEFAULT_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1` : "";
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
-);
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = [
+ // `video-proxy` is intentionally NOT routable anymore — every video server
+ // carries its own proxy URL (Admin → Video Servers). No global player proxy.
+ ...EDGE_FUNCTION_LIBRARY.filter((e) => e.slug !== "video-proxy").map(
+  (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
+ ),
+ {
+  slug: "lovable-backdrop",
+  label: "Backdrop AI (Lovable)",
+  isNew: true,
+  badgeText: "BACKDROP AI",
+  badgeTone: "cyan" as const,
+  defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/lovable-backdrop` : "",
+ },
+];
 
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
