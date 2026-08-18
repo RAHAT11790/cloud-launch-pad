@@ -716,17 +716,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy.
-  // Used for http:// sources and as a last-resort fallback; HTTPS RS stays direct-first.
+  // PER-SERVER PROXY ONLY. There is no global player proxy anymore: each server
+  // in Admin → Video Servers carries its own proxy URL, resolved by host.
+  // `proxyUrl` here is just the resolved proxy of the CURRENT source (used for
+  // preconnect + proxy-detection); candidate building resolves per url itself.
   useEffect(() => {
     let cancelled = false;
-    let overrideRaw: any = null;
     const applyProxyRoute = () => {
       if (cancelled) return;
+      const isAnHls = isAnApiHlsProxyUrl(src || "");
       if (isAnHls || noProxy) { setProxyUrl(""); setProxyApiKey(""); setPlaybackRouteReady(true); return; }
-      const overrideUrl = normalizeFunctionEndpointUrl("video-proxy", String(overrideRaw?.customUrl || overrideRaw?.url || "").trim());
-      const enabled = Boolean(overrideUrl) && overrideRaw?.enabled !== false;
-      const finalUrl = enabled ? overrideUrl : "";
+      const finalUrl = resolveServerProxyForUrl(src || "");
       setProxyUrl(finalUrl);
       setProxyApiKey('');
       setPlaybackRouteReady(true);
@@ -741,17 +741,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCdnEnabled(val !== false);
     });
 
-    // Single proxy: `video-proxy` only. AN URLs use their own an-playback proxy.
-    const isAnHls = isAnApiHlsProxyUrl(src || "");
+    applyProxyRoute();
 
-    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
-      if (cancelled) return;
-      overrideRaw = snap.val();
-      applyProxyRoute();
-    });
-
-    return () => { cancelled = true; unsub1(); unsub2(); };
-  }, [noProxy, preferProxy, src]);
+    return () => { cancelled = true; unsub1(); };
+  }, [noProxy, preferProxy, src, videoServerFingerprint]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateBusy, setAdGateBusy] = useState(false);
   const downloadAdPassedRef = useRef(false);
