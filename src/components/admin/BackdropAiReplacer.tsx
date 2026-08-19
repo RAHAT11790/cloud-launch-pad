@@ -203,6 +203,20 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const checkLovable = useCallback(async (silent = false) => {
     setLovableStatus((s) => { const next = { ...s, state: "checking" as const }; statusCache = next; return next; });
     try {
+      // Routed (custom deployed) URL → probe the ENDPOINT itself. A custom
+      // function is not required to implement the `check-lovable` action, so
+      // asking for it was the reason a perfectly working URL showed "Down".
+      const routed = await getRoutedBackdropUrl();
+      if (routed) {
+        const probe = await probeRoutedUrl(routed);
+        const next = probe.ok
+          ? { state: "online" as const, model: "custom route", message: probe.message, checkedAt: Date.now() }
+          : { state: "offline" as const, message: probe.message, checkedAt: Date.now() };
+        setLovableStatus(next); statusCache = next;
+        if (!silent) probe.ok ? toast.success("Custom backdrop route ✓") : toast.error(probe.message);
+        return;
+      }
+
       const data = await callGenerateBackdrop({ action: "check-lovable" });
       const l = data?.lovable || {};
       const next = l?.ok
@@ -219,6 +233,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       if (!silent) toast.error(e?.message || "Probe failed");
     }
   }, []);
+
 
   // Only re-probe if status is unknown OR older than 5 min. Prevents a probe
   // every time the tab opens.
