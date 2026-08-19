@@ -130,10 +130,14 @@ function requestedOpenEndedRange(range) {
   return /^bytes=\d+-$/i.test(String(range || "").trim());
 }
 
-function browserRangeResponseHeaders(headers, originalRange) {
+function browserRangeResponseHeaders(headers, originalRange, status) {
   if (!requestedOpenEndedRange(originalRange)) return;
+  // A 200 means the mirror ignored the Range and is sending the WHOLE file.
+  // Safari needs the real content-length in that case, otherwise it aborts.
+  if (status === 200) return;
   if (!headers.has("content-range")) headers.delete("content-length");
 }
+
 
 function proxyUrl(reqUrl, target) {
   return `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
