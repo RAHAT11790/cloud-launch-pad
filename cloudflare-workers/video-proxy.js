@@ -236,12 +236,20 @@ export default {
     const out = new Headers(cors);
     for (const k of PASS) { const v = res.headers.get(k); if (v) out.set(k, v); }
     clampInvalidContentRange(out);
-    browserRangeResponseHeaders(out, rawRange);
+    browserRangeResponseHeaders(out, rawRange, res.status);
     if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
+
+    // iOS/Safari MIME repair (see EXT_MIME above).
+    const guessed = guessMediaMime(up);
+    if (guessed && isUselessContentType(out.get("content-type")) && !isM3u8(up.toString(), res.headers.get("content-type"))) {
+      out.set("content-type", guessed);
+    }
+
     out.set("content-disposition", "inline");
     out.set("Cross-Origin-Resource-Policy", "cross-origin");
     out.set("Timing-Allow-Origin", "*");
-    out.set("x-rs-edge", "cf-v9");
+    out.set("x-rs-edge", "cf-v10-ios");
+
 
     if (req.method !== "HEAD" && res.ok && isM3u8(up.toString(), res.headers.get("content-type"))) {
       const body = rewritePlaylist(await res.text(), up.toString(), reqUrl);
