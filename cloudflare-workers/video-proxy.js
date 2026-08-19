@@ -46,6 +46,28 @@ const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/
 const isMediaSegment = (u) => /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac)(?:$|[?#])/i.test(u.pathname + u.search);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
 
+// iOS/Safari FIX — Safari does NOT content-sniff media. If a mirror (Telegram
+// file hosts, cheap RS mirrors) answers `application/octet-stream`, `text/html`
+// or nothing at all, Safari refuses to decode the stream and the <video> tag
+// stays black/blocked even though Chrome plays it fine. So we always force a
+// correct media MIME type derived from the file extension.
+const EXT_MIME = {
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+  mkv: "video/x-matroska", ts: "video/mp2t", m4s: "video/iso.segment",
+  aac: "audio/aac", m4a: "audio/mp4", mp3: "audio/mpeg",
+};
+const extOf = (u) => {
+  const m = String(u.pathname || "").toLowerCase().match(/\.([a-z0-9]{2,4})(?:$|[?#])/);
+  return m ? m[1] : "";
+};
+const guessMediaMime = (u) => EXT_MIME[extOf(u)] || "";
+const isUselessContentType = (ct) => {
+  const v = String(ct || "").toLowerCase();
+  return !v || v.includes("octet-stream") || v.includes("text/") || v.includes("application/binary")
+    || v.includes("application/download") || v.includes("application/force-download") || v === "application/json";
+};
+
+
 const toOpaqueUrlToken = (value) => {
   try {
     return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
