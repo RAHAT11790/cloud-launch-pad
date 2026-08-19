@@ -31,11 +31,53 @@ Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect an
 
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
 
+// Different deployments answer with different shapes. Normalise them all to
+// `{ url, model }` so the UI never shows "no url" for a working function.
+const pickImageUrl = (json: any): string => {
+  if (!json) return "";
+  const direct =
+    json.url || json.imageUrl || json.image_url || json.backdrop || json.logo ||
+    json.output || json.result?.url || json.data?.url;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const arr = Array.isArray(json.data) ? json.data : Array.isArray(json.images) ? json.images : [];
+  for (const it of arr) {
+    if (typeof it === "string" && it.trim()) return it.trim();
+    const u = it?.url || it?.image_url?.url || it?.imageUrl;
+    if (typeof u === "string" && u.trim()) return u.trim();
+    if (it?.b64_json) return `data:image/png;base64,${it.b64_json}`;
+  }
+  if (json.b64_json) return `data:image/png;base64,${json.b64_json}`;
+  return "";
+};
+
+/** Probe a routed URL for life without assuming any specific API contract. */
+const probeRoutedUrl = async (url: string): Promise<{ ok: boolean; message: string }> => {
+  const attempt = async (init: RequestInit): Promise<boolean | null> => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(url, { ...init, signal: ctrl.signal });
+      if ((r as any).type === "opaque") return true;
+      return r.status < 500;
+    } catch { return null; }
+    finally { clearTimeout(t); }
+  };
+  let ok = await attempt({ method: "OPTIONS" });
+  if (ok === null) ok = await attempt({ method: "GET" });
+  if (ok === null) ok = await attempt({ method: "GET", mode: "no-cors" });
+  return ok === true
+    ? { ok: true, message: "Custom route reachable" }
+    : { ok: false, message: "Custom route unreachable" };
+};
+
+const getRoutedBackdropUrl = async (): Promise<string> =>
+  (await getEdgeFunctionUrl("lovable-backdrop").catch(() => "")) || "";
+
 const callGenerateBackdrop = async (body: Record<string, any>) => {
-  // EGD Router first: if the admin pasted a deployed `lovable-backdrop` URL in
-  // the router, that URL is the single source of truth. Otherwise fall back to
-  // the in-project Lovable Cloud function.
-  const routed = await getEdgeFunctionUrl("lovable-backdrop").catch(() => "");
+  // EGD Router first: if the admin pasted a deployed URL in the router, that URL
+  // is the single source of truth — whatever the deployed function is named.
+  // Only when the row is empty/disabled do we use the Lovable Cloud function.
+  const routed = await getRoutedBackdropUrl();
   if (routed) {
     const res = await fetch(routed, {
       method: "POST",
@@ -43,13 +85,15 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
       body: JSON.stringify(body),
     });
     let json: any = null;
-    try { json = await res.json(); } catch {}
+    const raw = await res.text().catch(() => "");
+    try { json = raw ? JSON.parse(raw) : null; } catch {}
     if (!res.ok || json?.error) {
-      const err = new Error(json?.error || `Backdrop route failed (${res.status})`) as any;
+      const err = new Error(json?.error || `Backdrop route failed (${res.status})${raw ? ` — ${raw.slice(0, 160)}` : ""}`) as any;
       err.status = res.status;
       throw err;
     }
-    return json;
+    const url = pickImageUrl(json);
+    return { ...(json || {}), url: url || json?.url, provider: "custom-route" };
   }
 
   const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
@@ -63,7 +107,8 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
     err.status = data.status;
     throw err;
   }
-  return data;
+  return { ...(data || {}), url: pickImageUrl(data) || data?.url };
+
 };
 
 // ---------------------------------------------------------------------------
