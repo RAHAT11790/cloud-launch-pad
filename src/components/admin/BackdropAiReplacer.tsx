@@ -257,11 +257,15 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider: "lovable",
+        // Compatibility fields for custom deployed art functions.
+        quality: "medium",
+        count: 1,
         // gpt-image-2 generates from prompt only; no reference image needed.
         useReference: false,
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
+
       if (usePromptOverride && customPrompt.trim()) {
         payload.customPrompt = customPrompt
           .replace(/\{title\}/gi, activeItem.title)
