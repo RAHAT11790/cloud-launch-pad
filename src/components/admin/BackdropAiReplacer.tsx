@@ -31,11 +31,53 @@ Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect an
 
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
 
+// Different deployments answer with different shapes. Normalise them all to
+// `{ url, model }` so the UI never shows "no url" for a working function.
+const pickImageUrl = (json: any): string => {
+  if (!json) return "";
+  const direct =
+    json.url || json.imageUrl || json.image_url || json.backdrop || json.logo ||
+    json.output || json.result?.url || json.data?.url;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const arr = Array.isArray(json.data) ? json.data : Array.isArray(json.images) ? json.images : [];
+  for (const it of arr) {
+    if (typeof it === "string" && it.trim()) return it.trim();
+    const u = it?.url || it?.image_url?.url || it?.imageUrl;
+    if (typeof u === "string" && u.trim()) return u.trim();
+    if (it?.b64_json) return `data:image/png;base64,${it.b64_json}`;
+  }
+  if (json.b64_json) return `data:image/png;base64,${json.b64_json}`;
+  return "";
+};
+
+/** Probe a routed URL for life without assuming any specific API contract. */
+const probeRoutedUrl = async (url: string): Promise<{ ok: boolean; message: string }> => {
+  const attempt = async (init: RequestInit): Promise<boolean | null> => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(url, { ...init, signal: ctrl.signal });
+      if ((r as any).type === "opaque") return true;
+      return r.status < 500;
+    } catch { return null; }
+    finally { clearTimeout(t); }
+  };
+  let ok = await attempt({ method: "OPTIONS" });
+  if (ok === null) ok = await attempt({ method: "GET" });
+  if (ok === null) ok = await attempt({ method: "GET", mode: "no-cors" });
+  return ok === true
+    ? { ok: true, message: "Custom route reachable" }
+    : { ok: false, message: "Custom route unreachable" };
+};
+
+const getRoutedBackdropUrl = async (): Promise<string> =>
+  (await getEdgeFunctionUrl("lovable-backdrop").catch(() => "")) || "";
+
 const callGenerateBackdrop = async (body: Record<string, any>) => {
-  // EGD Router first: if the admin pasted a deployed `lovable-backdrop` URL in
-  // the router, that URL is the single source of truth. Otherwise fall back to
-  // the in-project Lovable Cloud function.
-  const routed = await getEdgeFunctionUrl("lovable-backdrop").catch(() => "");
+  // EGD Router first: if the admin pasted a deployed URL in the router, that URL
+  // is the single source of truth — whatever the deployed function is named.
+  // Only when the row is empty/disabled do we use the Lovable Cloud function.
+  const routed = await getRoutedBackdropUrl();
   if (routed) {
     const res = await fetch(routed, {
       method: "POST",
@@ -43,13 +85,15 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
       body: JSON.stringify(body),
     });
     let json: any = null;
-    try { json = await res.json(); } catch {}
+    const raw = await res.text().catch(() => "");
+    try { json = raw ? JSON.parse(raw) : null; } catch {}
     if (!res.ok || json?.error) {
-      const err = new Error(json?.error || `Backdrop route failed (${res.status})`) as any;
+      const err = new Error(json?.error || `Backdrop route failed (${res.status})${raw ? ` — ${raw.slice(0, 160)}` : ""}`) as any;
       err.status = res.status;
       throw err;
     }
-    return json;
+    const url = pickImageUrl(json);
+    return { ...(json || {}), url: url || json?.url, provider: "custom-route" };
   }
 
   const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
@@ -63,7 +107,8 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
     err.status = data.status;
     throw err;
   }
-  return data;
+  return { ...(data || {}), url: pickImageUrl(data) || data?.url };
+
 };
 
 // ---------------------------------------------------------------------------
@@ -158,6 +203,20 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const checkLovable = useCallback(async (silent = false) => {
     setLovableStatus((s) => { const next = { ...s, state: "checking" as const }; statusCache = next; return next; });
     try {
+      // Routed (custom deployed) URL → probe the ENDPOINT itself. A custom
+      // function is not required to implement the `check-lovable` action, so
+      // asking for it was the reason a perfectly working URL showed "Down".
+      const routed = await getRoutedBackdropUrl();
+      if (routed) {
+        const probe = await probeRoutedUrl(routed);
+        const next = probe.ok
+          ? { state: "online" as const, model: "custom route", message: probe.message, checkedAt: Date.now() }
+          : { state: "offline" as const, message: probe.message, checkedAt: Date.now() };
+        setLovableStatus(next); statusCache = next;
+        if (!silent) probe.ok ? toast.success("Custom backdrop route ✓") : toast.error(probe.message);
+        return;
+      }
+
       const data = await callGenerateBackdrop({ action: "check-lovable" });
       const l = data?.lovable || {};
       const next = l?.ok
@@ -174,6 +233,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       if (!silent) toast.error(e?.message || "Probe failed");
     }
   }, []);
+
 
   // Only re-probe if status is unknown OR older than 5 min. Prevents a probe
   // every time the tab opens.
@@ -197,11 +257,15 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider: "lovable",
+        // Compatibility fields for custom deployed art functions.
+        quality: "medium",
+        count: 1,
         // gpt-image-2 generates from prompt only; no reference image needed.
         useReference: false,
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
+
       if (usePromptOverride && customPrompt.trim()) {
         payload.customPrompt = customPrompt
           .replace(/\{title\}/gi, activeItem.title)
@@ -251,7 +315,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13.5px] font-bold text-white tracking-tight leading-none">Backdrop &amp; Logo AI</h3>
           <div className="text-[10px] text-white/50 mt-1 flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full ${statusTone.dot}`} />
-            <span>Lovable Gateway · {statusTone.label}</span>
+            <span>{lovableStatus.model === "custom route" ? "Custom route" : "Lovable Gateway"} · {statusTone.label}</span>
           </div>
         </div>
         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border ${statusTone.chip}`}>

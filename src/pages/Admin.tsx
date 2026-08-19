@@ -547,21 +547,35 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  setEnabled((p) => ({ ...p, [slug]: false }));
  };
 
- const ping = async (slug: string) => {
-  const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
- if (!u) { toast.error("Paste and save a deployed URL first"); return; }
- setTesting(slug);
- const start = Date.now();
- try {
- const ctrl = new AbortController();
- const t = setTimeout(() => ctrl.abort(), 6000);
- const r = await fetch(u, { method: "OPTIONS", signal: ctrl.signal });
- clearTimeout(t);
- setTestResult((p) => ({ ...p, [slug]: { ok: r.status < 500, ms: Date.now() - start } }));
- } catch {
- setTestResult((p) => ({ ...p, [slug]: { ok: false, ms: Date.now() - start } }));
- } finally { setTesting(null); }
- };
+  const ping = async (slug: string) => {
+   const u = normalizeFunctionEndpointUrl(slug, (urls[slug] || "").trim());
+   if (!u) { toast.error("Paste and save a deployed URL first"); return; }
+   setTesting(slug);
+   const start = Date.now();
+   // A deployed function can answer very differently depending on how it was
+   // written: some only implement POST, some reject GET, some hide behind a
+   // CORS policy. So we probe in order and accept the FIRST sign of life.
+   const attempt = async (init: RequestInit): Promise<boolean | null> => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+     const r = await fetch(u, { ...init, signal: ctrl.signal });
+     // opaque (no-cors) responses have status 0 but prove the host answered
+     if (r.type === "opaque") return true;
+     return r.status < 500;
+    } catch { return null; }
+    finally { clearTimeout(t); }
+   };
+   let ok: boolean | null = null;
+   ok = await attempt({ method: "OPTIONS" });
+   if (ok === null) ok = await attempt({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ping" }) });
+   if (ok === null) ok = await attempt({ method: "GET" });
+   if (ok === null) ok = await attempt({ method: "GET", mode: "no-cors" });
+   setTestResult((p) => ({ ...p, [slug]: { ok: ok === true, ms: Date.now() - start } }));
+   setTesting(null);
+  };
+
+
 
  return (
  <div className={`${glassCard} p-4 mb-4`}>

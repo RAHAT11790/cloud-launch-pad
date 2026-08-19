@@ -46,6 +46,28 @@ const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/
 const isMediaSegment = (u) => /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac)(?:$|[?#])/i.test(u.pathname + u.search);
 const isDirectMp4Like = (u) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(u.pathname + u.search);
 
+// iOS/Safari FIX — Safari does NOT content-sniff media. If a mirror (Telegram
+// file hosts, cheap RS mirrors) answers `application/octet-stream`, `text/html`
+// or nothing at all, Safari refuses to decode the stream and the <video> tag
+// stays black/blocked even though Chrome plays it fine. So we always force a
+// correct media MIME type derived from the file extension.
+const EXT_MIME = {
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+  mkv: "video/x-matroska", ts: "video/mp2t", m4s: "video/iso.segment",
+  aac: "audio/aac", m4a: "audio/mp4", mp3: "audio/mpeg",
+};
+const extOf = (u) => {
+  const m = String(u.pathname || "").toLowerCase().match(/\.([a-z0-9]{2,4})(?:$|[?#])/);
+  return m ? m[1] : "";
+};
+const guessMediaMime = (u) => EXT_MIME[extOf(u)] || "";
+const isUselessContentType = (ct) => {
+  const v = String(ct || "").toLowerCase();
+  return !v || v.includes("octet-stream") || v.includes("text/") || v.includes("application/binary")
+    || v.includes("application/download") || v.includes("application/force-download") || v === "application/json";
+};
+
+
 const toOpaqueUrlToken = (value) => {
   try {
     return btoa(unescape(encodeURIComponent(String(value || "")))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -108,10 +130,14 @@ function requestedOpenEndedRange(range) {
   return /^bytes=\d+-$/i.test(String(range || "").trim());
 }
 
-function browserRangeResponseHeaders(headers, originalRange) {
+function browserRangeResponseHeaders(headers, originalRange, status) {
   if (!requestedOpenEndedRange(originalRange)) return;
+  // A 200 means the mirror ignored the Range and is sending the WHOLE file.
+  // Safari needs the real content-length in that case, otherwise it aborts.
+  if (status === 200) return;
   if (!headers.has("content-range")) headers.delete("content-length");
 }
+
 
 function proxyUrl(reqUrl, target) {
   return `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
@@ -210,12 +236,20 @@ export default {
     const out = new Headers(cors);
     for (const k of PASS) { const v = res.headers.get(k); if (v) out.set(k, v); }
     clampInvalidContentRange(out);
-    browserRangeResponseHeaders(out, rawRange);
+    browserRangeResponseHeaders(out, rawRange, res.status);
     if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
+
+    // iOS/Safari MIME repair (see EXT_MIME above).
+    const guessed = guessMediaMime(up);
+    if (guessed && isUselessContentType(out.get("content-type")) && !isM3u8(up.toString(), res.headers.get("content-type"))) {
+      out.set("content-type", guessed);
+    }
+
     out.set("content-disposition", "inline");
     out.set("Cross-Origin-Resource-Policy", "cross-origin");
     out.set("Timing-Allow-Origin", "*");
-    out.set("x-rs-edge", "cf-v9");
+    out.set("x-rs-edge", "cf-v10-ios");
+
 
     if (req.method !== "HEAD" && res.ok && isM3u8(up.toString(), res.headers.get("content-type"))) {
       const body = rewritePlaylist(await res.text(), up.toString(), reqUrl);

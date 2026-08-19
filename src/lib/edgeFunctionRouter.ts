@@ -120,15 +120,19 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
     if (functionsIdx >= 0) {
       const fnIdx = functionsIdx + 2;
       const currentFn = parts[fnIdx] || "";
+      // IMPORTANT: a pasted URL is the source of truth. The deployed function
+      // may be named ANYTHING (e.g. `generate-anime-art` for the backdrop row),
+      // so we only fill in the slug when the path has no function segment, or
+      // when the admin clearly pasted a DIFFERENT known function of this app.
       if (!currentFn) {
         parts[fnIdx] = fnName;
-      } else if (currentFn !== fnName && (KNOWN_FUNCTION_NAMES.has(currentFn) || parts.length === fnIdx + 1)) {
+      } else if (currentFn !== fnName && KNOWN_FUNCTION_NAMES.has(currentFn)) {
         parts[fnIdx] = fnName;
       }
-      // Admin sometimes pastes a source/deploy URL ending in `/index.ts` or a
-      // route suffix. Function base URLs must stop at `/functions/v1/<name>`;
+      // Function base URLs must stop at `/functions/v1/<name>`;
       // query params are appended later by callers.
       parts.splice(fnIdx + 1);
+
       url.pathname = `/${parts.join("/")}`;
       url.search = "";
       url.hash = "";
