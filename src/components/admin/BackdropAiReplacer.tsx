@@ -315,7 +315,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13.5px] font-bold text-white tracking-tight leading-none">Backdrop &amp; Logo AI</h3>
           <div className="text-[10px] text-white/50 mt-1 flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full ${statusTone.dot}`} />
-            <span>Lovable Gateway · {statusTone.label}</span>
+            <span>{lovableStatus.model === "custom route" ? "Custom route" : "Lovable Gateway"} · {statusTone.label}</span>
           </div>
         </div>
         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border ${statusTone.chip}`}>
