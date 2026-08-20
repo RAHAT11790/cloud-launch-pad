@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const FIREBASE_DB = Deno.env.get("FIREBASE_DB_URL") || "https://rs-anime-default-rtdb.firebaseio.com";
+const FIREBASE_DB = Deno.env.get("FIREBASE_DB_URL") || "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 async function fbGet(path: string) {
   const res = await fetch(`${FIREBASE_DB.replace(/\/$/, "")}/${path}.json`);

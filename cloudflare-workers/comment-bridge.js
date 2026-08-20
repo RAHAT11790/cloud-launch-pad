@@ -16,7 +16,7 @@
 // ============================================================
 
 const CONFIG = {
-  FIREBASE_DB_URL: "https://rs-anime-default-rtdb.firebaseio.com",
+  FIREBASE_DB_URL: "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app",
   FIREBASE_DB_SECRET: "", // only if RTDB rules are locked
   SEND_FCM_URL: "", // optional: send-fcm worker URL for push
   ADMIN_DISPLAY_NAME: "Admin",

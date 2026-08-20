@@ -21,7 +21,7 @@ const ADMIN_ID = Number(Deno.env.get("LINK_SHARE_ADMIN_ID") || "6621572366");
 
 // Inline Firebase defaults — same as src/lib/firebase.ts
 const FIREBASE_DB_URL =
-  Deno.env.get("FIREBASE_DB_URL") || "https://rs-anime-default-rtdb.firebaseio.com";
+  Deno.env.get("FIREBASE_DB_URL") || "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 const FIREBASE_PROJECT_ID =
   Deno.env.get("FIREBASE_PROJECT_ID") || "rs-anime";
 // Service account JSON MUST come from secret (private key cannot be inlined)

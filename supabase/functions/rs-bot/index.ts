@@ -16,7 +16,7 @@ const corsHeaders = {
 
 const FIREBASE_DB =
   Deno.env.get("FIREBASE_DATABASE_URL") ??
-  "https://rs-anime-default-rtdb.firebaseio.com";
+  "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://rsanime03.lovable.app";
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
