@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
@@ -5955,6 +5956,18 @@ ${tgBulkFooter}
  </div>
  )}
 
+ <InlineBackdropAi
+ title={seriesForm.title || ""}
+ year={seriesForm.year}
+ genres={Array.isArray(seriesForm.genres) ? seriesForm.genres : (seriesForm.category ? [seriesForm.category] : undefined)}
+ overview={seriesForm.storyline}
+ contentId={seriesForm.id}
+ contentType="webseries"
+ currentBackdrop={seriesForm.backdrop}
+ currentLogo={seriesForm.logo}
+ onApply={(mode, url) => setSeriesForm((f: any) => ({ ...f, [mode]: url }))}
+ glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary}
+ />
  <div className={`${glassCard} p-4 mb-4`}>
  <div className="text-base font-semibold mb-4 flex items-center gap-2.5"><span className="text-purple-500">ℹ️</span> Series Details</div>
  {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
@@ -6902,6 +6915,18 @@ ${tgBulkFooter}
  </div>
  )}
 
+ <InlineBackdropAi
+ title={movieForm.title || ""}
+ year={movieForm.year}
+ genres={Array.isArray(movieForm.genres) ? movieForm.genres : (movieForm.category ? [movieForm.category] : undefined)}
+ overview={movieForm.storyline}
+ contentId={movieForm.id}
+ contentType="movies"
+ currentBackdrop={movieForm.backdrop}
+ currentLogo={movieForm.logo}
+ onApply={(mode, url) => setMovieForm((f: any) => ({ ...f, [mode]: url }))}
+ glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary}
+ />
  <div className={`${glassCard} p-4 mb-4`}>
  <div className="text-base font-semibold mb-4 flex items-center gap-2.5"><span className="text-purple-500">ℹ️</span> Movie Details</div>
  {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
