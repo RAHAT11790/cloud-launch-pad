@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
-import { supabase } from "@/integrations/supabase/client";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import {
+  DEFAULT_BACKDROP_PROMPT,
+  DEFAULT_LOGO_PROMPT,
+  callGenerateBackdrop,
+  getRoutedBackdropUrl,
+  probeRoutedUrl,
+  buildBackdropPayload,
+} from "@/lib/backdropAi";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
@@ -22,94 +28,6 @@ type Item = {
   addedAt?: number;
 };
 type Mode = "backdrop" | "logo";
-
-const DEFAULT_BACKDROP_PROMPT = `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "{title}" IN ULTRA DETAILED 4K HDR QUALITY.
-
-Use ONLY the OFFICIAL canonical main characters of "{title}" — exact signature hairstyle, eye design, outfit, weapons. Characters must be instantly recognizable. Hero protagonist on the right 55% of frame; supporting cast in official hierarchy.
-
-Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect anatomy, no deformed faces, no watermarks. Ultra detailed, 4K, HDR.`;
-
-const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
-
-// Different deployments answer with different shapes. Normalise them all to
-// `{ url, model }` so the UI never shows "no url" for a working function.
-const pickImageUrl = (json: any): string => {
-  if (!json) return "";
-  const direct =
-    json.url || json.imageUrl || json.image_url || json.backdrop || json.logo ||
-    json.output || json.result?.url || json.data?.url;
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
-  const arr = Array.isArray(json.data) ? json.data : Array.isArray(json.images) ? json.images : [];
-  for (const it of arr) {
-    if (typeof it === "string" && it.trim()) return it.trim();
-    const u = it?.url || it?.image_url?.url || it?.imageUrl;
-    if (typeof u === "string" && u.trim()) return u.trim();
-    if (it?.b64_json) return `data:image/png;base64,${it.b64_json}`;
-  }
-  if (json.b64_json) return `data:image/png;base64,${json.b64_json}`;
-  return "";
-};
-
-/** Probe a routed URL for life without assuming any specific API contract. */
-const probeRoutedUrl = async (url: string): Promise<{ ok: boolean; message: string }> => {
-  const attempt = async (init: RequestInit): Promise<boolean | null> => {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    try {
-      const r = await fetch(url, { ...init, signal: ctrl.signal });
-      if ((r as any).type === "opaque") return true;
-      return r.status < 500;
-    } catch { return null; }
-    finally { clearTimeout(t); }
-  };
-  let ok = await attempt({ method: "OPTIONS" });
-  if (ok === null) ok = await attempt({ method: "GET" });
-  if (ok === null) ok = await attempt({ method: "GET", mode: "no-cors" });
-  return ok === true
-    ? { ok: true, message: "Custom route reachable" }
-    : { ok: false, message: "Custom route unreachable" };
-};
-
-const getRoutedBackdropUrl = async (): Promise<string> =>
-  (await getEdgeFunctionUrl("lovable-backdrop").catch(() => "")) || "";
-
-const callGenerateBackdrop = async (body: Record<string, any>) => {
-  // EGD Router first: if the admin pasted a deployed URL in the router, that URL
-  // is the single source of truth — whatever the deployed function is named.
-  // Only when the row is empty/disabled do we use the Lovable Cloud function.
-  const routed = await getRoutedBackdropUrl();
-  if (routed) {
-    const res = await fetch(routed, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    let json: any = null;
-    const raw = await res.text().catch(() => "");
-    try { json = raw ? JSON.parse(raw) : null; } catch {}
-    if (!res.ok || json?.error) {
-      const err = new Error(json?.error || `Backdrop route failed (${res.status})${raw ? ` — ${raw.slice(0, 160)}` : ""}`) as any;
-      err.status = res.status;
-      throw err;
-    }
-    const url = pickImageUrl(json);
-    return { ...(json || {}), url: url || json?.url, provider: "custom-route" };
-  }
-
-  const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
-  if (error) {
-    const err = new Error(error.message || "Lovable AI call failed") as any;
-    err.status = (error as any)?.context?.status;
-    throw err;
-  }
-  if (data?.error) {
-    const err = new Error(data.error) as any;
-    err.status = data.status;
-    throw err;
-  }
-  return { ...(data || {}), url: pickImageUrl(data) || data?.url };
-
-};
 
 // ---------------------------------------------------------------------------
 // Module-level caches so remounting this tab paints INSTANTLY. The listener
@@ -250,27 +168,16 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       setProgress((p) => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2)));
     }, 500);
     try {
-      const payload: any = {
-        animeId: activeItem.id,
+      const payload = buildBackdropPayload({
         title: activeItem.title,
-        type: activeItem.type,
-        year: activeItem.year,
         mode,
-        provider: "lovable",
-        // Compatibility fields for custom deployed art functions.
-        quality: "medium",
-        count: 1,
-        // gpt-image-2 generates from prompt only; no reference image needed.
-        useReference: false,
+        year: activeItem.year,
         genres: activeItem.genres,
         overview: activeItem.storyline,
-      };
-
-      if (usePromptOverride && customPrompt.trim()) {
-        payload.customPrompt = customPrompt
-          .replace(/\{title\}/gi, activeItem.title)
-          .replace(/\[WRITE ANIME NAME HERE\]/gi, activeItem.title);
-      }
+        animeId: activeItem.id,
+        type: activeItem.type,
+        customPrompt: usePromptOverride ? customPrompt : undefined,
+      });
       const data = await callGenerateBackdrop(payload);
       if (!data?.url) throw new Error(data?.error || "no url");
       setProgress(100);
