@@ -24,6 +24,7 @@ import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/ind
 import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
 import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw";
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
+import iosProtectionSource from "../../supabase/functions/ios-protection/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
