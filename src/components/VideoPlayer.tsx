@@ -50,6 +50,7 @@ interface VideoServerOption {
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
+import { wrapWithIosProtection } from "@/lib/iosProtection";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
