@@ -1,6 +1,6 @@
 // Lovable AI Gateway-backed backdrop/logo generator.
-// Default model: google/gemini-3.1-flash-image (supported Lovable AI image model).
-// only when a reference image is attached (gpt-image-2 has different edit shape).
+// Default model: openai/gpt-image-2 (best quality text + character rendering).
+// Gemini stays only as the reference-image edit model (different edit shape).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
-const DEFAULT_MODEL = "google/gemini-3.1-flash-image";
+const DEFAULT_MODEL = "openai/gpt-image-2";
 const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image";
 const IMGBB_KEY = "d5c0bce7c98c54d813bf285ffe453689";
 
