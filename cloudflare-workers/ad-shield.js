@@ -172,12 +172,30 @@ export default {
           });
         }
 
+        case "check": {
+          // Edge-side reachability of an ad host. Client compares: edge OK +
+          // client blocked === ad blocker / filtering DNS in use.
+          const target =
+            decodeTarget(url.searchParams.get("u")) ||
+            "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js";
+          let reachable = false, status = 0;
+          try {
+            const r = await fetch(target, { method: "GET", cf: { cacheTtl: 60 } });
+            status = r.status;
+            reachable = r.status < 500;
+          } catch {}
+          return json({ ok: true, target, reachable, status, ts: Date.now() }, 200, {
+            "Cache-Control": "no-store",
+          });
+        }
+
         case "v": {
           const slice = Math.floor(Date.now() / 60000);
           return json({ ok: true, ts: Date.now(), token: b64url(`rs:${slice}`) }, 200, {
             "Cache-Control": "no-store",
           });
         }
+
 
         default:
           return json({
