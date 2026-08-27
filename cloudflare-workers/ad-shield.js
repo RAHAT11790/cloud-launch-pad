@@ -137,7 +137,7 @@ const GIF = Uint8Array.from([
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    const selfOrigin = url.origin + url.pathname.replace(/\/(health|probe|px|s|t|v)$/i, "");
+    const selfOrigin = url.origin + url.pathname.replace(/\/(health|probe|px|s|t|v|check)$/i, "");
     const path = url.pathname.replace(/\/+$/, "").split("/").pop() || "";
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -202,7 +202,7 @@ export default {
             ok: true,
             service: "rs-ad-shield",
             version: 1,
-            endpoints: ["/health", "/probe", "/px", "/s?u=", "/t?u=", "/v"],
+            endpoints: ["/health", "/probe", "/px", "/s?u=", "/t?u=", "/check?u=", "/v"],
           });
       }
     } catch (e) {
