@@ -25,6 +25,7 @@ import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
 import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw";
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 import iosProtectionSource from "../../supabase/functions/ios-protection/index.ts?raw";
+import adShieldSource from "../../supabase/functions/ad-shield/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
@@ -88,6 +89,7 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-proxy",    "Video Proxy",    "⚡ v9 ADAPTIVE-WINDOW BUILD (Supabase/Deno) — 1MB first window for instant start, 6MB steady (12MB on https), 7s header timeout, same-origin-Referer-first so HTTP mirrors answer on the first try. Fixes 'proxy down / video never loads'. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
+  entry("ad-shield",      "Ad Shield",      "🛡️ ANTI-ADBLOCK GATEWAY — first-party relay for every ad script/asset (/s, /t), unblockable control probe (/probe, /px) and edge-side reachability oracle (/check) that exposes AdGuard DNS / NextDNS / Pi-hole / Brave / AdBlock browsers. The home-page Ad-Blocker Gate uses this to prove a block instead of guessing. Attach the URL here and the whole anti-adblock system switches on.", adShieldSource, [], { isNew: true, badgeText: "AD SHIELD · NEW", badgeTone: "amber" }),
   entry("ios-protection", "iOS Protection", "🍏 iPhone / iPad / Safari playback gateway. Fixes wrong MIME types, serves '.mkv' files whose real container is MP4 as video/mp4 so Safari plays them natively, normalises byte-range responses, rewrites HLS playlists, and reports true Matroska with 415 so the player fails over instantly. Attach it once here — the player uses it for EVERY video server on iOS only.", iosProtectionSource, [], { isNew: true, badgeText: "iOS · NEW", badgeTone: "cyan" }),
   entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
   entry("an-playback",    "AN Playback API", "Playback-only AnimeSalt HLS proxy: playlist/segment CORS, range streaming, and CDN-safe headers. Use for user-panel video playback after links are cached.", anPlaybackSource, [], { badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
