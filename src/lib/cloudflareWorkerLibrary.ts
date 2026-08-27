@@ -19,6 +19,7 @@ import anApiSrc         from "../../cloudflare-workers/an-api.js?raw";
 import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
 import animeSearchBotSrc from "../../cloudflare-workers/anime-search-bot.js?raw";
+import adShieldSrc from "../../cloudflare-workers/ad-shield.js?raw";
 
 
 export type CfLibraryEntry = {
@@ -60,6 +61,7 @@ const entry = (
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   entry("video-proxy",     "Video Proxy",     "⚡ v9 CLOUDFLARE-NATIVE FAST PATH — https ranges pass through untouched (no extra edge hop on seek), only http mirrors are windowed (8MB), CF edge cache for segments, same-origin-Referer-first + 7s header timeout so dead mirrors fail over instantly. Tuned ONLY for Cloudflare — do not mirror the Supabase build here.", videoProxySrc, [], { isNew: true, badgeText: "v9 · CF", badgeTone: "amber" }),
 
+  entry("ad-shield",       "Ad Shield",       "🛡️ ANTI-ADBLOCK GATEWAY (Cloudflare build) — relays ad scripts/assets through YOUR worker domain (/s, /t) so DNS blockers and filter lists have nothing to match, plus /probe, /px and the /check reachability oracle used by the home-page Ad-Blocker Gate. Deploy and paste the URL into EGD Router → ad-shield.", adShieldSrc, [], { isNew: true, badgeText: "AD SHIELD · NEW", badgeTone: "amber" }),
   entry("anime-search-bot","Anime Asset Bot", "🤖 Telegram bot: search any anime → returns backdrop, poster, title-logo URL & title (TMDB). Ultra-professional 🪄 Remove BG per-image (HD transparent PNG, semi-transparent hair edges, auto-crop — powered by remove.bg). Auto-registers webhook on first visit. Secrets: TELEGRAM_BOT_TOKEN + REMOVE_BG_API_KEY.", animeSearchBotSrc, ["TELEGRAM_BOT_TOKEN", "REMOVE_BG_API_KEY"]),
   entry("an-api",          "AN Fetch API",    "AnimeSalt extractor: search, seasons, episodes, and Hindi-first stream/audio discovery. Paste this Worker URL into EGD Router → 'an-api' to route the whole app through Cloudflare.", anApiSrc, [], { isNew: true, badgeText: "NEW", badgeTone: "emerald" }),
   entry("an-playback",     "AN Playback API", "Playback-only AnimeSalt HLS proxy — playlist rewriting, range streaming, CDN-safe headers. Paste into EGD Router → 'an-playback' for unlimited-bandwidth playback.", anPlaybackSrc, [], { isNew: true, badgeText: "NEW", badgeTone: "emerald" }),
