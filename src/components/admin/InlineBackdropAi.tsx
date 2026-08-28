@@ -129,7 +129,7 @@ const InlineBackdropAi = ({
             <div className="text-[9.5px] text-white/40 mt-1 leading-snug">
               Locked always: the anime title and the current backdrop image (official characters are read from it first). Your prompt only controls the art direction.
             </div>
-
+            {usePromptOverride && (
               <textarea
                 value={customPrompt}
                 onChange={e => setCustomPrompt(e.target.value)}
@@ -138,6 +138,7 @@ const InlineBackdropAi = ({
                 placeholder="Use {title} for the anime name…"
               />
             )}
+
           </div>
 
           <div className="bg-black/40 rounded-xl border border-white/10 p-2 min-h-[140px] grid place-items-center overflow-hidden">
