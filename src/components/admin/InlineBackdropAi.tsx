@@ -99,7 +99,7 @@ const InlineBackdropAi = ({
         <span className="inline-flex w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500/25 to-amber-500/25 border border-white/10 items-center justify-center text-[14px]">🎨</span>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-bold text-white leading-none">Backdrop &amp; Logo AI</div>
-          <div className="text-[10px] text-white/50 mt-1">এখান থেকেই image বানিয়ে সরাসরি বসান</div>
+          <div className="text-[10px] text-white/50 mt-1">Generate art here and apply it straight into the editor</div>
         </div>
         <span className="text-white/50 text-xs">{open ? "▲" : "▼"}</span>
       </button>
