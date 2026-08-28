@@ -174,6 +174,8 @@ export const buildBackdropPayload = (opts: {
   animeId?: string;
   type?: string;
   customPrompt?: string;
+  /** Existing TMDB/IMDB backdrop — PERMANENT reference for official characters. */
+  referenceImageUrl?: string;
 }) => {
   const payload: any = {
     animeId: opts.animeId,
@@ -184,10 +186,13 @@ export const buildBackdropPayload = (opts: {
     provider: "lovable",
     quality: "medium",
     count: 1,
-    useReference: false,
+    // Title + existing backdrop are permanent values — always sent.
+    referenceImageUrl: opts.referenceImageUrl || undefined,
+    useReference: Boolean(opts.referenceImageUrl),
     genres: opts.genres,
     overview: opts.overview,
   };
+
   if (opts.customPrompt?.trim()) {
     payload.customPrompt = opts.customPrompt
       .replace(/\{title\}/gi, opts.title)
