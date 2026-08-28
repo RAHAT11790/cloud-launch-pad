@@ -6,13 +6,65 @@ import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 export type BackdropMode = "backdrop" | "logo";
 
-export const DEFAULT_BACKDROP_PROMPT = `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "{title}" IN ULTRA DETAILED 4K HDR QUALITY.
+export const DEFAULT_BACKDROP_PROMPT = `Create a PROFESSIONAL 16:9 cinematic anime promotional poster/banner in ultra detailed 4K quality.
 
-Use ONLY the OFFICIAL canonical main characters of "{title}" — exact signature hairstyle, eye design, outfit, weapons. Characters must be instantly recognizable. Hero protagonist on the right 55% of frame; supporting cast in official hierarchy.
+Style Requirements:
+- Modern anime thumbnail/poster design
+- Dark cinematic atmosphere with glowing effects
+- Ultra high detail anime illustration
+- Sharp focus, vibrant lighting, dramatic shadows
+- Dynamic composition with depth and motion
+- Professional typography and clean layout
+- Eye-catching YouTube/Telegram style anime banner
+- Highly detailed background matching the anime theme
+- Add energy effects, particles, glow, sparks, speed lines, cinematic lighting
+- Make the entire design feel PREMIUM and VIRAL
 
-Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect anatomy, no deformed faces, no watermarks. Ultra detailed, 4K, HDR.`;
+Character Design:
+- Use the main anime characters in the most iconic pose
+- Characters should look powerful, emotional, stylish, and dynamic
+- Anime art must look modern, polished, and studio-quality
+- Match the color grading with the anime's theme
+- Use detailed anime eyes, hair glow, dramatic expressions
 
-export const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
+Typography:
+- BIG bold stylized anime title text
+- Title should feel aggressive, modern, and cinematic
+- Use brush-stroke / neon / sharp-edge typography style
+- Add a small stylish subtitle for anime aesthetic
+- Make the text blend naturally with the effects and background
+
+Branding Layout:
+- Top-right corner: small elegant "RS ANIME 03" logo with a crown icon, minimal and premium
+- Bottom-left: Telegram logo + text "TG :- @CARTOONFUNNY03"
+- Below it: website icon + text "WEBSITE :- RS ANIME 03"
+- Use glowing UI bars/shapes around the social links
+- Keep branding small but stylish and professional
+
+Color & Theme:
+- Match the anime's original mood and genre
+- Use cinematic contrast and vibrant colors
+- Add blue/red/purple/orange glow depending on the anime vibe
+- Use high contrast lighting and realistic anime shading
+
+Quality:
+- Ultra detailed, 4K, HDR, professional anime poster
+- Trending anime thumbnail style, clean edges, no blur, no watermark
+
+Composition:
+- Left side = title and text elements
+- Right side = main anime characters/artwork
+- Balanced cinematic framing, depth and layered visual effects
+
+Extra Instructions:
+- Automatically use the correct original anime release year
+- Design must look UNIQUE for every anime, avoid generic layouts
+- Official anime key visual mixed with premium YouTube thumbnail design
+
+LANGUAGE LOCK: ENGLISH TEXT ONLY in the artwork — no Japanese, Hindi or Bengali characters.`;
+
+export const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text. ENGLISH TEXT ONLY.`;
+
 
 /** Different deployments answer with different shapes — normalise to a URL. */
 export const pickImageUrl = (json: any): string => {
