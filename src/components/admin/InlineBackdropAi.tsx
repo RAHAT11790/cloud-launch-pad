@@ -126,7 +126,10 @@ const InlineBackdropAi = ({
               <input type="checkbox" checked={usePromptOverride} onChange={e => toggleOverride(e.target.checked)} />
               <span>Custom prompt override</span>
             </label>
-            {usePromptOverride && (
+            <div className="text-[9.5px] text-white/40 mt-1 leading-snug">
+              Locked always: the anime title and the current backdrop image (official characters are read from it first). Your prompt only controls the art direction.
+            </div>
+
               <textarea
                 value={customPrompt}
                 onChange={e => setCustomPrompt(e.target.value)}
