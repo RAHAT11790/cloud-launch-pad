@@ -53,13 +53,16 @@ const InlineBackdropAi = ({
 
   const generate = async () => {
     if (busy) return;
-    if (!title?.trim()) { toast.error("Title আগে লিখুন"); return; }
+    if (!title?.trim()) { toast.error("Enter the title first"); return; }
     setBusy(true); setErr(null); setProgress(8);
     const tick = setInterval(() => setProgress(p => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2))), 500);
     try {
       const data = await callGenerateBackdrop(buildBackdropPayload({
         title, mode, year, genres, overview,
         animeId: contentId, type: contentType,
+        // PERMANENT: the existing backdrop is always analysed first so the AI
+        // uses the real official characters instead of inventing them.
+        referenceImageUrl: currentBackdrop,
         customPrompt: usePromptOverride ? customPrompt : undefined,
       }));
       if (!data?.url) throw new Error("no url");
@@ -79,9 +82,10 @@ const InlineBackdropAi = ({
   const apply = () => {
     if (!preview) return;
     onApply(mode, preview);
-    toast.success(`${mode === "backdrop" ? "Backdrop" : "Logo"} editor-এ বসানো হয়েছে — এখন Save করুন`);
+    toast.success(`${mode === "backdrop" ? "Backdrop" : "Logo"} applied to the editor — hit Save now`);
     setPreview(null); setProgress(0);
   };
+
 
   const current = mode === "backdrop" ? currentBackdrop : currentLogo;
 
@@ -95,7 +99,7 @@ const InlineBackdropAi = ({
         <span className="inline-flex w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500/25 to-amber-500/25 border border-white/10 items-center justify-center text-[14px]">🎨</span>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] font-bold text-white leading-none">Backdrop &amp; Logo AI</div>
-          <div className="text-[10px] text-white/50 mt-1">এখান থেকেই image বানিয়ে সরাসরি বসান</div>
+          <div className="text-[10px] text-white/50 mt-1">Generate art here and apply it straight into the editor</div>
         </div>
         <span className="text-white/50 text-xs">{open ? "▲" : "▼"}</span>
       </button>
@@ -122,6 +126,9 @@ const InlineBackdropAi = ({
               <input type="checkbox" checked={usePromptOverride} onChange={e => toggleOverride(e.target.checked)} />
               <span>Custom prompt override</span>
             </label>
+            <div className="text-[9.5px] text-white/40 mt-1 leading-snug">
+              Locked always: the anime title and the current backdrop image (official characters are read from it first). Your prompt only controls the art direction.
+            </div>
             {usePromptOverride && (
               <textarea
                 value={customPrompt}
@@ -131,6 +138,7 @@ const InlineBackdropAi = ({
                 placeholder="Use {title} for the anime name…"
               />
             )}
+
           </div>
 
           <div className="bg-black/40 rounded-xl border border-white/10 p-2 min-h-[140px] grid place-items-center overflow-hidden">

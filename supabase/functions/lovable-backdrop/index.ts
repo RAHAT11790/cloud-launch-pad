@@ -1,6 +1,11 @@
 // Lovable AI Gateway-backed backdrop/logo generator.
 // Default model: openai/gpt-image-2 (best quality text + character rendering).
-// Gemini stays only as the reference-image edit model (different edit shape).
+//
+// PERMANENT VALUES (never overridable, always injected first):
+//   1. the anime TITLE of the item being edited
+//   2. the EXISTING backdrop image (TMDB/IMDB key art) — analysed by a vision
+//      model so the generated art uses the REAL official characters
+// Any custom prompt is applied AFTER those two permanent values.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,8 +14,9 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
+const CHAT_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "openai/gpt-image-2";
-const GEMINI_FALLBACK_MODEL = "google/gemini-3.1-flash-image";
+const VISION_MODEL = "google/gemini-3-flash";
 const IMGBB_KEY = "d5c0bce7c98c54d813bf285ffe453689";
 
 interface Body {
@@ -27,33 +33,154 @@ interface Body {
   quality?: "low" | "medium" | "high";
 }
 
-function backdropPrompt(b: Body): string {
-  if (b.customPrompt?.trim()) {
-    return b.customPrompt.replace(/\{title\}/gi, b.title || "").replace(/\[WRITE ANIME NAME HERE\]/gi, b.title || "");
+/** The master house style — supplied by the site owner. */
+const HOUSE_PROMPT = `Create a PROFESSIONAL 16:9 cinematic anime promotional poster/banner in ultra detailed 4K quality.
+
+Style Requirements:
+- Modern anime thumbnail/poster design
+- Dark cinematic atmosphere with glowing effects
+- Ultra high detail anime illustration
+- Sharp focus, vibrant lighting, dramatic shadows
+- Dynamic composition with depth and motion
+- Professional typography and clean layout
+- Eye-catching YouTube/Telegram style anime banner
+- Highly detailed background matching the anime theme
+- Add energy effects, particles, glow, sparks, speed lines, cinematic lighting
+- Make the entire design feel PREMIUM and VIRAL
+
+Character Design:
+- Use the main anime characters in the most iconic pose
+- Characters should look powerful, emotional, stylish, and dynamic
+- Anime art must look modern, polished, and studio-quality
+- Match the color grading with the anime's theme
+- Use detailed anime eyes, hair glow, dramatic expressions
+
+Typography:
+- BIG bold stylized anime title text
+- Title should feel aggressive, modern, and cinematic
+- Use brush-stroke / neon / sharp-edge typography style
+- Add a small stylish subtitle for anime aesthetic
+- Make the text blend naturally with the effects and background
+
+Branding Layout:
+- Top-right corner: small elegant "RS ANIME 03" logo with a crown icon, minimal and premium
+- Bottom-left: Telegram logo + text "TG :- @CARTOONFUNNY03"
+- Below it: website icon + text "WEBSITE :- RS ANIME 03"
+- Use glowing UI bars/shapes around the social links
+- Keep branding small but stylish and professional
+
+Color & Theme:
+- Match the anime's original mood and genre
+- Use cinematic contrast and vibrant colors
+- Add blue/red/purple/orange glow depending on the anime vibe
+- Use high contrast lighting and realistic anime shading
+
+Quality:
+- Ultra detailed, 4K, HDR, professional anime poster
+- Trending anime thumbnail style, clean edges, no blur, no watermark
+- Sharp anime rendering, high quality texture details
+
+Composition:
+- Left side = title and text elements
+- Right side = main anime characters/artwork
+- Balanced cinematic framing, depth and layered visual effects
+- Make the poster feel alive and immersive
+
+Extra Instructions:
+- Design must look UNIQUE for this anime, avoid generic layouts
+- Official anime promotional key visual mixed with premium YouTube thumbnail design
+- Highly attractive and click-worthy professional anime marketing artwork
+
+LANGUAGE LOCK: every visible letter in the image MUST be ENGLISH ONLY. No Japanese, no Kanji, no Hindi, no Bengali, no invented glyphs anywhere in the artwork.`;
+
+/**
+ * Vision pass — read the existing TMDB/IMDB backdrop and describe the REAL
+ * official characters so the image model cannot invent random people.
+ * Falls back silently (empty string) if the vision call fails.
+ */
+async function describeOfficialCharacters(
+  key: string,
+  title: string,
+  imageUrl: string,
+): Promise<string> {
+  try {
+    const res = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: VISION_MODEL,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+`This is the OFFICIAL key art of the anime "${title}" (the same artwork Crunchyroll / IMDb / TMDB use).
+
+Identify the anime and its canonical main characters. Using both this image and your knowledge of the official Crunchyroll and IMDb pages for "${title}", write a precise CHARACTER SHEET an illustrator could draw from without ever seeing the anime.
+
+For each main character (max 4, hero first) give on one line:
+NAME — hair (colour, length, style) | eyes (colour, shape) | outfit (exact colours, armour/uniform details) | signature weapon or power | typical expression.
+
+Then one line: SETTING — the canonical world/environment.
+Then one line: PALETTE — the show's signature colours.
+
+Be factual and specific. No prose, no markdown, no invented characters.`,
+            },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) return "";
+    const j = await res.json();
+    const txt = j?.choices?.[0]?.message?.content;
+    return typeof txt === "string" ? txt.trim().slice(0, 2000) : "";
+  } catch {
+    return "";
   }
-  const t = b.title || "";
-  const genres = b.genres?.length ? b.genres.join(", ") : "";
-  const overview = (b.overview || "").trim().slice(0, 500);
-  return `Create an ULTRA-PROFESSIONAL 16:9 anime promotional banner — Crunchyroll / Netflix key-visual quality — for "${t}"${b.year ? ` (${b.year})` : ""}.
-${genres ? `Genres: ${genres}.` : ""} ${overview ? `Overview: ${overview}.` : ""}
-
-STYLE LOCK: Japanese anime ONLY (ufotable / MAPPA / Wit / Bones quality). Sharp cel-shaded linework, cinematic HDR lighting, atmospheric particles, deep cinematic palette. NO Western cartoon / 3D Pixar / chibi.
-
-CHARACTERS: use the canonical official anime characters of "${t}" — exact hair, eyes, outfit, weapons. Hero front-and-center, supports layered behind with depth.
-
-LAYOUT (16:9): Left — stylized anime title "${t}" in bold brushstroke logo typography + small kanji subtitle. Right — hero in dynamic cinematic pose.
-
-BRANDING: top-right small "RS ANIME" badge with crown. Bottom-left small glass chips: "TG :- @CARTOONFUNNY03" and "WEBSITE :- RS ANIME".
-
-4K ultra-detailed, sharp focus, perfect anatomy, no watermarks, no random text, no year numbers.`;
 }
 
-function logoPrompt(b: Body): string {
-  if (b.customPrompt?.trim()) {
-    return b.customPrompt.replace(/\{title\}/gi, b.title || "");
-  }
+function backdropPrompt(b: Body, characterSheet: string): string {
   const t = b.title || "";
-  return `Official anime TITLE LOGO for "${t}", square 1:1. Title "${t.toUpperCase()}" rendered in canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background with atmospheric particles. High resolution, perfect kerning, crisp edges, no foreground characters, no extra text.`;
+  const genres = b.genres?.length ? b.genres.join(", ") : "";
+  const overview = (b.overview || "").trim().slice(0, 400);
+
+  // ---- PERMANENT BLOCK (always first, never replaced by a custom prompt) ----
+  const permanent =
+`ANIME: "${t}"${b.year ? ` (${b.year})` : ""}
+${genres ? `GENRES: ${genres}\n` : ""}${overview ? `SYNOPSIS: ${overview}\n` : ""}
+TITLE LOCK: the big title text in the artwork must read exactly "${t}" — spelled correctly, in English letters.
+
+CHARACTER LOCK: draw ONLY the real, official, canonical characters of "${t}" exactly as they appear in the official Crunchyroll / IMDb key art. Do NOT invent characters, do NOT substitute look-alikes, do NOT change hair colour, eye colour, outfit or weapon.
+${characterSheet ? `\nOFFICIAL CHARACTER SHEET (extracted from the official key art — follow it strictly):\n${characterSheet}\n` : ""}
+STYLE LOCK: Japanese anime illustration only (ufotable / MAPPA / Wit / Bones quality). No Western cartoon, no 3D Pixar look, no chibi.`;
+
+  const custom = b.customPrompt?.trim()
+    ? b.customPrompt
+        .replace(/\{title\}/gi, t)
+        .replace(/\[WRITE ANIME NAME HERE\]/gi, t)
+    : "";
+
+  return custom
+    ? `${permanent}\n\n=== ART DIRECTION ===\n${custom}\n\nThe ANIME, TITLE LOCK and CHARACTER LOCK above override anything in the art direction. All visible text must be ENGLISH ONLY.`
+    : `${permanent}\n\n=== ART DIRECTION ===\n${HOUSE_PROMPT}`;
+}
+
+function logoPrompt(b: Body, characterSheet: string): string {
+  const t = b.title || "";
+  const permanent =
+`Official anime TITLE LOGO for "${t}", square 1:1.
+TITLE LOCK: the logo text must read exactly "${t}" in ENGLISH letters, spelled correctly.
+BRAND LOCK: match the canonical official logo treatment of the real anime "${t}" — its real font weight, colours, glow and ornaments.
+${characterSheet ? `Show palette reference:\n${characterSheet}\n` : ""}`;
+
+  const custom = b.customPrompt?.trim() ? b.customPrompt.replace(/\{title\}/gi, t) : "";
+  if (custom) {
+    return `${permanent}\n=== ART DIRECTION ===\n${custom}\n\nENGLISH TEXT ONLY. No Japanese, Hindi or Bengali characters.`;
+  }
+  return `${permanent}
+Deep black radial gradient background with atmospheric particles and subtle glow. High resolution, perfect kerning, crisp edges, no foreground characters, no extra text, no watermark. ENGLISH TEXT ONLY.`;
 }
 
 async function uploadToImgBB(b64: string): Promise<string> {
@@ -63,16 +190,6 @@ async function uploadToImgBB(b64: string): Promise<string> {
   const j = await res.json();
   if (!j?.data?.url) throw new Error("ImgBB upload failed");
   return j.data.url as string;
-}
-
-async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string }> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Reference image fetch failed (${r.status})`);
-  const mime = r.headers.get("Content-Type") || "image/jpeg";
-  const buf = new Uint8Array(await r.arrayBuffer());
-  let bin = "";
-  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-  return { b64: btoa(bin), mime };
 }
 
 // Domain allowlist — this endpoint is admin-only from the RS Anime panel.
@@ -115,12 +232,7 @@ Deno.serve(async (req) => {
       const probe = await fetch(GATEWAY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
-        body: JSON.stringify({
-          model: DEFAULT_MODEL,
-          prompt: "ping",
-          size: "1024x1024",
-          n: 1,
-        }),
+        body: JSON.stringify({ model: DEFAULT_MODEL, prompt: "ping", size: "1024x1024", n: 1 }),
       });
       const ok = probe.status < 500 && probe.status !== 401 && probe.status !== 402;
       let msg = "Gateway reachable";
@@ -139,37 +251,25 @@ Deno.serve(async (req) => {
 
   try {
     const mode = body.mode || "backdrop";
-    const prompt = mode === "logo" ? logoPrompt(body) : backdropPrompt(body);
     const model = body.model || DEFAULT_MODEL;
-    const useRef = mode === "backdrop" && body.useReference && !!body.referenceImageUrl;
 
-    let endpoint = GATEWAY_URL;
-    let payload: Record<string, unknown>;
-    if (useRef) {
-      // Reference-image editing uses the chat-completions image shape.
-      endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
-      const { b64, mime } = await fetchAsBase64(body.referenceImageUrl!);
-      payload = {
-        model: GEMINI_FALLBACK_MODEL,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } },
-          ],
-        }],
-        modalities: ["image", "text"],
-      };
-    } else {
-      payload = {
-        model,
-        prompt,
-        size: mode === "logo" ? "1024x1024" : "1536x1024",
-        n: 1,
-      };
+    // PERMANENT STEP — always look at the existing backdrop first (when we have
+    // one) so the official characters are reproduced instead of invented.
+    let characterSheet = "";
+    if (body.referenceImageUrl && body.title) {
+      characterSheet = await describeOfficialCharacters(key, body.title, body.referenceImageUrl);
     }
 
-    const upstream = await fetch(endpoint, {
+    const prompt = mode === "logo" ? logoPrompt(body, characterSheet) : backdropPrompt(body, characterSheet);
+
+    const payload: Record<string, unknown> = {
+      model,
+      prompt,
+      size: mode === "logo" ? "1024x1024" : "1536x1024",
+      n: 1,
+    };
+
+    const upstream = await fetch(GATEWAY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
       body: JSON.stringify(payload),
@@ -185,7 +285,6 @@ Deno.serve(async (req) => {
       });
     }
 
-
     const data = JSON.parse(raw);
     const chatImg = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url as string | undefined;
     const b64 = data?.data?.[0]?.b64_json || (chatImg?.includes(",") ? chatImg.split(",")[1] : undefined);
@@ -196,11 +295,11 @@ Deno.serve(async (req) => {
     }
 
     const url = await uploadToImgBB(b64);
-    return new Response(JSON.stringify({ url, model, provider: "lovable" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({
+      url, model, provider: "lovable", usedReference: Boolean(characterSheet),
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
+    return new Response(JSON.stringify({ error: String((e as Error)?.message || e) }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
