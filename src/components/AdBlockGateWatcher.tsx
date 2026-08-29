@@ -29,13 +29,14 @@ const AdBlockGateWatcher = () => {
   }, [loc.pathname, loc.search]);
 
   useEffect(() => {
-    return subscribeGate((s) => {
+    const off = subscribeGate((s) => {
       const path = window.location.pathname;
       if (s.blocked && !isExemptPath(path) && path !== GATE_PATH && path !== CLEARED_PATH) {
         rememberReturnPath(path + window.location.search);
         nav(GATE_PATH, { replace: true });
       }
     });
+    return () => { off(); };
   }, [nav]);
 
   return null;

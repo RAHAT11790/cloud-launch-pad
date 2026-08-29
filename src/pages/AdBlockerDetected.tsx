@@ -103,7 +103,10 @@ const AdBlockerDetected = () => {
 
   const t = COPY[lang];
 
-  useEffect(() => subscribeGate((s) => setSignals(s.signals)), []);
+  useEffect(() => {
+    const off = subscribeGate((s) => setSignals(s.signals));
+    return () => { off(); };
+  }, []);
   useEffect(() => { document.title = `${t.title} · RS Anime`; }, [t.title]);
 
   const reasons = useMemo(() => signals?.reasons ?? [], [signals]);
