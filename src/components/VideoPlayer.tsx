@@ -770,6 +770,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const [adGateActive, setAdGateActive] = useState(false);
   const adGateActiveRef = useRef(false);
+  const resumeRetryTimerRef = useRef<number | null>(null);
   useEffect(() => { adGateActiveRef.current = adGateActive; }, [adGateActive]);
   const selectedLanguageRef = useRef(selectedLanguage);
   useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
@@ -3646,10 +3647,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 0);
   }, [clearHideTimer, closeInlineSheets, onClose]);
 
-  // Back button now performs one stable action: close the player immediately.
+  // Back button is two-stage in fullscreen/landscape:
+  //   1st press → leave fullscreen (back to portrait/windowed player)
+  //   2nd press → close the player and return to the page.
   const handleBackPress = useCallback(() => {
+    const inFullscreen =
+      Boolean(document.fullscreenElement) ||
+      Boolean((document as any).webkitFullscreenElement) ||
+      isFullscreen;
+    if (inFullscreen) {
+      try { (screen.orientation as any).unlock?.(); } catch {}
+      void toggleFullscreen();
+      setIsFullscreen(false);
+      resetHideTimer();
+      return;
+    }
     stopAndClosePlayer();
-  }, [stopAndClosePlayer]);
+  }, [isFullscreen, resetHideTimer, stopAndClosePlayer, toggleFullscreen]);
 
   // Pause when user leaves the page/app. Never clear src here: ad popups / app
   // switching can fire pagehide, and wiping the media source restarts playback.
@@ -4230,6 +4244,48 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [preserveResumePoint]);
 
+  // Resilient resume. A single v.play() can silently reject (AbortError after a
+  // pause/seek race) or resolve while the buffer stays stalled — that is what made
+  // the player look "stuck paused". We retry, and nudge the buffer if needed.
+  const resumePlayback = useCallback((target?: HTMLVideoElement | null) => {
+    const v = target || videoRef.current;
+    if (!v) return;
+    userPlaybackIntentRef.current = true;
+    if (resumeRetryTimerRef.current) {
+      window.clearTimeout(resumeRetryTimerRef.current);
+      resumeRetryTimerRef.current = null;
+    }
+    const attempt = (n: number) => {
+      if (!videoRef.current || videoRef.current !== v) return;
+      if (!userPlaybackIntentRef.current) return;
+      try {
+        const p = v.play();
+        if (p && typeof (p as Promise<void>).catch === "function") {
+          (p as Promise<void>).catch(() => {
+            if (n < 4) resumeRetryTimerRef.current = window.setTimeout(() => attempt(n + 1), 200 + n * 150);
+          });
+        }
+      } catch {
+        if (n < 4) resumeRetryTimerRef.current = window.setTimeout(() => attempt(n + 1), 200 + n * 150);
+        return;
+      }
+      resumeRetryTimerRef.current = window.setTimeout(() => {
+        if (!videoRef.current || videoRef.current !== v) return;
+        if (!v.paused || !userPlaybackIntentRef.current) return;
+        if (n === 2) {
+          // Buffer stall rescue: a tiny seek re-arms the media pipeline / HLS loader.
+          try { v.currentTime = Math.max(0, (v.currentTime || 0) - 0.05); } catch {}
+        }
+        if (n < 4) attempt(n + 1);
+      }, 420);
+    };
+    attempt(0);
+  }, []);
+
+  useEffect(() => () => {
+    if (resumeRetryTimerRef.current) window.clearTimeout(resumeRetryTimerRef.current);
+  }, []);
+
   const togglePlay = useCallback(() => {
     if (isEmbedPlayback) {
       userPlaybackIntentRef.current = !playing;
@@ -4243,14 +4299,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (v.paused) {
       userPlaybackIntentRef.current = true;
       repairUnexpectedReset(v);
-      v.play();
+      resumePlayback(v);
     } else {
       userPlaybackIntentRef.current = false;
+      if (resumeRetryTimerRef.current) {
+        window.clearTimeout(resumeRetryTimerRef.current);
+        resumeRetryTimerRef.current = null;
+      }
       preserveResumePoint(v.currentTime || 0);
-      v.pause();
+      try { v.pause(); } catch {}
+      setPlaying(false);
     }
     resetHideTimer();
-  }, [isEmbedPlayback, playing, preserveResumePoint, repairUnexpectedReset, resetHideTimer, sendEmbedCmd]);
+  }, [isEmbedPlayback, playing, preserveResumePoint, repairUnexpectedReset, resetHideTimer, resumePlayback, sendEmbedCmd]);
 
   const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
