@@ -213,10 +213,13 @@ export async function detectAdBlock(): Promise<AdBlockSignals> {
   if (networkBlocked) {
     // A DNS filter (dns.adguard.com, NextDNS, Pi-hole) kills the hostname.
     // If the edge can still reach it, this is a filter — proven, not guessed.
-    score += edge === false ? 1 : 3;
-    reasons.push(edge === false
-      ? "ad networks unreachable (network-wide outage possible)"
-      : "ad networks unreachable from your device only — DNS / VPN filter");
+    // Only a PROVEN mismatch (edge can reach, browser cannot) is a hard signal.
+    // edge === null means the oracle is unavailable — treat as soft evidence so
+    // a flaky network can never lock out an innocent user on its own.
+    score += edge === true ? 3 : 1;
+    reasons.push(edge === true
+      ? "ad networks unreachable from your device only — DNS / VPN filter"
+      : "ad networks unreachable (could not confirm with the edge oracle)");
   }
   if (adsterraFailed) { score += 1; reasons.push("live ad tag failed to initialise"); }
   if (brave) { score += 1; reasons.push("Brave shields capable browser"); }

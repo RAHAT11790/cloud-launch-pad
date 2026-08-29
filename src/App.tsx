@@ -17,6 +17,10 @@ import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
 
 import { installUiGuard } from "@/lib/uiGuard";
+import AdBlockGateWatcher from "./components/AdBlockGateWatcher";
+import AdBlockerDetected from "./pages/AdBlockerDetected";
+import AdBlockerRemoved from "./pages/AdBlockerRemoved";
+import { initAdShield } from "@/lib/adShield";
 
 const RouteAttrSync = () => {
   const loc = useLocation();
@@ -28,6 +32,8 @@ const RouteAttrSync = () => {
 
 // Install global anti-copy / anti-save / anti-devtools guard once.
 installUiGuard();
+// Warm the ad-shield relay base as early as possible.
+initAdShield();
 // Boot daily-task systems (visit-time tracker + referral capture).
 startVisitTracker();
 captureReferralFromUrl();
@@ -66,6 +72,7 @@ const App = () => (
       <DynamicMeta />
       <BrowserRouter>
         <RouteAttrSync />
+        <AdBlockGateWatcher />
         <ManifestManager />
         
         <Toaster />
@@ -79,6 +86,8 @@ const App = () => (
           <Route path="/premium-required" element={<PremiumRequired />} />
           <Route path="/premium-buy" element={<PremiumBuyPage />} />
           <Route path="/daily-tasks" element={<DailyTasksPage />} />
+          <Route path="/adblocker-detected" element={<AdBlockerDetected />} />
+          <Route path="/adblocker-removed" element={<AdBlockerRemoved />} />
           
 
           {/* Main tab routes — all render Index, which syncs activePage from pathname */}
