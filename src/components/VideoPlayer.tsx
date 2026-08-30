@@ -3650,6 +3650,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // Back button is two-stage in fullscreen/landscape:
   //   1st press → leave fullscreen (back to portrait/windowed player)
   //   2nd press → close the player and return to the page.
+  const toggleFullscreenRef = useRef<(() => void | Promise<void>) | null>(null);
+  const resetHideTimerRef = useRef<(() => void) | null>(null);
   const handleBackPress = useCallback(() => {
     const inFullscreen =
       Boolean(document.fullscreenElement) ||
@@ -3657,13 +3659,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       isFullscreen;
     if (inFullscreen) {
       try { (screen.orientation as any).unlock?.(); } catch {}
-      void toggleFullscreen();
+      void toggleFullscreenRef.current?.();
       setIsFullscreen(false);
-      resetHideTimer();
+      resetHideTimerRef.current?.();
       return;
     }
     stopAndClosePlayer();
-  }, [isFullscreen, resetHideTimer, stopAndClosePlayer, toggleFullscreen]);
+  }, [isFullscreen, stopAndClosePlayer]);
+
 
   // Pause when user leaves the page/app. Never clear src here: ad popups / app
   // switching can fire pagehide, and wiping the media source restarts playback.
@@ -4440,6 +4443,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     } catch (e) { console.log('Fullscreen not supported'); }
   }, []);
+
+  toggleFullscreenRef.current = toggleFullscreen;
+  resetHideTimerRef.current = resetHideTimer;
+
 
   const applyPlaybackRateNow = useCallback((rate: number) => {
     if (isEmbedPlayback) {

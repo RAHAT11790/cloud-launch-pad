@@ -1195,6 +1195,22 @@ const Index = () => {
     const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     if (anime.type === "webseries" && resolvedSeasons?.length) {
+      // Some admin-entered titles have empty links on the very first episode
+      // (e.g. EP1 not uploaded yet). Landing on it makes the card look dead,
+      // so default to the first episode that actually has a playable source.
+      const hasPlayable = (ep: any): boolean => {
+        if (!ep) return false;
+        const direct = [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k];
+        const quality = Object.values((ep.qualityLinks || {}) as Record<string, unknown>);
+        const audio = (ep.audioTracks || []).flatMap((t: any) => [t?.link, t?.link480, t?.link720, t?.link1080, t?.link4k, t?.audioUrl]);
+        return [...direct, ...quality, ...audio].some((v) => typeof v === "string" && v.trim().length > 0);
+      };
+      for (let s = 0; s < resolvedSeasons.length; s += 1) {
+        const eps = resolvedSeasons[s]?.episodes || [];
+        for (let e = 0; e < eps.length; e += 1) {
+          if (hasPlayable(eps[e])) return { seasonIdx: s, epIdx: e };
+        }
+      }
       return { seasonIdx: 0, epIdx: 0 };
     }
     if (hasMovieParts(anime)) {
@@ -1202,6 +1218,7 @@ const Index = () => {
     }
     return { seasonIdx: undefined, epIdx: undefined };
   }, []);
+
   const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
   }, []);
@@ -2376,10 +2393,13 @@ const Index = () => {
           return handlePlay({ ...(fresh as any), __rsRetriedFreshPlayback: true } as AnimeItem, resolvedSeasonIdx, resolvedEpIdx);
         }
       }
-      // No src resolved — fail silently; the LoadingDetailsOverlay path already
-      // surfaces explicit errors for AN content. RS content shouldn't reach this
-      // branch in practice (loadFullFirebaseAnimeItemWithTimeout fills src).
+      // No src resolved anywhere. Never leave the card looking dead — tell the
+      // user explicitly so a missing/not-yet-uploaded link is obvious.
       console.warn("[handlePlay] no src resolved for", anime?.title);
+      if (!isAnimeSaltContent) {
+        toast.error("This episode has no video link yet. Please try another episode.");
+      }
+
     }
   };
 
