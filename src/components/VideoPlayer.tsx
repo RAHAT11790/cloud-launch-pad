@@ -4444,6 +4444,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     } catch (e) { console.log('Fullscreen not supported'); }
   }, []);
 
+  toggleFullscreenRef.current = toggleFullscreen;
+  resetHideTimerRef.current = resetHideTimer;
+
+
   const applyPlaybackRateNow = useCallback((rate: number) => {
     if (isEmbedPlayback) {
       sendEmbedCmd("rate", { rate });
