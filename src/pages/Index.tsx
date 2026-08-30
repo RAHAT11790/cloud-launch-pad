@@ -2393,10 +2393,13 @@ const Index = () => {
           return handlePlay({ ...(fresh as any), __rsRetriedFreshPlayback: true } as AnimeItem, resolvedSeasonIdx, resolvedEpIdx);
         }
       }
-      // No src resolved — fail silently; the LoadingDetailsOverlay path already
-      // surfaces explicit errors for AN content. RS content shouldn't reach this
-      // branch in practice (loadFullFirebaseAnimeItemWithTimeout fills src).
+      // No src resolved anywhere. Never leave the card looking dead — tell the
+      // user explicitly so a missing/not-yet-uploaded link is obvious.
       console.warn("[handlePlay] no src resolved for", anime?.title);
+      if (!isAnimeSaltContent) {
+        toast.error("This episode has no video link yet. Please try another episode.");
+      }
+
     }
   };
 
