@@ -463,8 +463,15 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     if (hasEpisodes(hindi)) return hindi;
     const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
     if (firstPlayable) return firstPlayable as Season[];
+    // Nothing has episodes in the language map — fall back to any season list
+    // (top-level first, then the first non-empty entry) so the episode panel
+    // never disappears just because "Hindi" is missing.
+    if (Array.isArray(anime.seasons) && anime.seasons.length > 0) return anime.seasons;
+    const firstAny = entries.map(([, seasons]) => seasons).find((s) => Array.isArray(s) && s.length > 0);
+    if (firstAny) return firstAny as Season[];
   }
   return anime.seasons || [];
+
 };
 
 const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) => {
