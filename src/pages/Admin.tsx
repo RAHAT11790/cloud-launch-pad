@@ -3480,7 +3480,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  audioTracks: Array.isArray(syncedForm.audioTracks)
  ? syncedForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
  : [],
- seasons: cloneSeasonList(nextMap[syncedForm.baseLanguage || "Hindi"] || []),
+ seasons: cloneSeasonList(
+ (nextMap[syncedForm.baseLanguage || "Hindi"]?.length ? nextMap[syncedForm.baseLanguage || "Hindi"] : null)
+ || Object.values(nextMap).find((list: any) => Array.isArray(list) && list.some((s: any) => Array.isArray(s?.episodes) && s.episodes.length > 0))
+ || Object.values(nextMap).find((list: any) => Array.isArray(list) && list.length > 0)
+ || [],
+ ),
+
  seasonsByLanguage: nextMap,
  type: "webseries",
  weeklyEnabled: seriesForm.weeklyEnabled === true,
