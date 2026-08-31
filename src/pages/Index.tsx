@@ -495,9 +495,14 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
     if (hindi) return hindi.label;
     const firstPlayable = normalizedEntries.find((entry) => hasPlayableEpisodes(entry.seasons));
     if (firstPlayable) return firstPlayable.label;
+    // No episode carries a resolvable src yet (AN sentinels, pending links…).
+    // Still prefer a language that actually has episodes over the stored base.
+    const firstWithEpisodes = normalizedEntries.find((entry) => entry.seasons?.some((s) => (s?.episodes?.length || 0) > 0));
+    if (firstWithEpisodes) return firstWithEpisodes.label;
   }
 
   return normalizedPreferred || normalizeLanguageName(anime.baseLanguage || anime.language) || normalizeLanguageName(anime.language) || "";
+
 };
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
