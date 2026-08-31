@@ -463,8 +463,15 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
     if (hasEpisodes(hindi)) return hindi;
     const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
     if (firstPlayable) return firstPlayable as Season[];
+    // Nothing has episodes in the language map — fall back to any season list
+    // (top-level first, then the first non-empty entry) so the episode panel
+    // never disappears just because "Hindi" is missing.
+    if (Array.isArray(anime.seasons) && anime.seasons.length > 0) return anime.seasons;
+    const firstAny = entries.map(([, seasons]) => seasons).find((s) => Array.isArray(s) && s.length > 0);
+    if (firstAny) return firstAny as Season[];
   }
   return anime.seasons || [];
+
 };
 
 const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) => {
@@ -488,9 +495,14 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
     if (hindi) return hindi.label;
     const firstPlayable = normalizedEntries.find((entry) => hasPlayableEpisodes(entry.seasons));
     if (firstPlayable) return firstPlayable.label;
+    // No episode carries a resolvable src yet (AN sentinels, pending links…).
+    // Still prefer a language that actually has episodes over the stored base.
+    const firstWithEpisodes = normalizedEntries.find((entry) => entry.seasons?.some((s) => (s?.episodes?.length || 0) > 0));
+    if (firstWithEpisodes) return firstWithEpisodes.label;
   }
 
   return normalizedPreferred || normalizeLanguageName(anime.baseLanguage || anime.language) || normalizeLanguageName(anime.language) || "";
+
 };
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
