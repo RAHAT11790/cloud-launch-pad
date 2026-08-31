@@ -4211,16 +4211,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const syncSeriesLanguageSummary = useCallback((form: any, seasonsByLanguage: SeasonsByLanguage) => {
  const normalizedMap = sanitizeSeasonLanguageMap(seasonsByLanguage);
  const seasonLanguages = new Set<string>();
+ const episodeLanguages = new Set<string>();
  Object.entries(normalizedMap).forEach(([language, seasons]) => {
  if (Array.isArray(seasons) && seasons.length > 0) {
  seasonLanguages.add(language);
+ if (seasons.some((season: any) => Array.isArray(season?.episodes) && season.episodes.length > 0)) {
+ episodeLanguages.add(language);
+ }
  }
  });
  const selectedBase = normalizeLanguageValue(form?.selectedAdminLanguage);
  const fallbackBase = normalizeLanguageValue(form?.baseLanguage || form?.language || Array.from(seasonLanguages)[0] || "Hindi");
- const resolvedBase = fallbackBase || "Hindi";
+ let resolvedBase = fallbackBase || "Hindi";
+ // The base language MUST point at a language that actually has episodes,
+ // otherwise the saved top-level `seasons` array is empty and the player
+ // shows no season/episode list (e.g. an English-only series saved while the
+ // stored base still said "Hindi").
+ if (episodeLanguages.size > 0 && !episodeLanguages.has(resolvedBase)) {
+ resolvedBase = (selectedBase && episodeLanguages.has(selectedBase) ? selectedBase : Array.from(episodeLanguages)[0]) || resolvedBase;
+ }
  const summaryLanguages = Array.from(new Set([resolvedBase, ...Array.from(seasonLanguages)].filter(Boolean)));
  const ordered = Array.from(new Set([resolvedBase, ...Array.from(seasonLanguages), selectedBase].filter(Boolean)));
+
 
  return {
  ...form,
