@@ -20,6 +20,8 @@ const CLEARED_UNTIL_KEY = "rs_gate_cleared_until";
 /** Grace window after a verified clean re-check (ms). */
 const CLEAR_GRACE = 3 * 60_000;
 const SWEEP_MS = 45_000;
+/** Forced (grace-ignoring) re-verification interval — catches mid-session re-enable. */
+const FORCE_SWEEP_MS = 90_000;
 
 /** Routes the gate must never fight with. */
 const EXEMPT = [GATE_PATH, CLEARED_PATH, "/admin", "/an-explorer"];
@@ -104,7 +106,15 @@ export function startAdBlockGate() {
   setTimeout(kick, 9000);
   setInterval(kick, SWEEP_MS);
 
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) kick(); });
+  // 🔁 HARD re-verification loop. Ignores the "cleared" grace window, so a user
+  // who passed the gate with the blocker OFF and switched it back ON mid-session
+  // (including while a video is playing) is caught within FORCE_SWEEP_MS.
+  setInterval(() => { void runGateCheck(true); }, FORCE_SWEEP_MS);
+  setTimeout(() => { void runGateCheck(true); }, 30_000);
+
+  // A returning tab is the most common moment a blocker/DNS filter gets toggled.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) void runGateCheck(true); });
   window.addEventListener("online", kick);
   window.addEventListener("focus", kick);
 }
+
