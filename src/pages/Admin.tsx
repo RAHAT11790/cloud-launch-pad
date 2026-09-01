@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
+import PremiumUsersManager from "@/components/admin/PremiumUsersManager";
 import { toast } from "sonner";
 import {
  LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -8093,6 +8094,10 @@ ${tgBulkFooter}
  </div>
  </div>
  </div>
+ )}
+
+ {activeSection === "premium-users" && (
+ <PremiumUsersManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
  {/* ==================== DEVICE LIMITS ==================== */}
