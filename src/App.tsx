@@ -18,6 +18,7 @@ import ManifestManager from "./components/ManifestManager";
 
 import { installUiGuard } from "@/lib/uiGuard";
 import AdBlockGateWatcher from "./components/AdBlockGateWatcher";
+import BanGate from "./components/BanGate";
 import AdBlockerDetected from "./pages/AdBlockerDetected";
 import AdBlockerRemoved from "./pages/AdBlockerRemoved";
 import { initAdShield } from "@/lib/adShield";
@@ -73,6 +74,7 @@ const App = () => (
       <BrowserRouter>
         <RouteAttrSync />
         <AdBlockGateWatcher />
+        <BanGate />
         <ManifestManager />
         
         <Toaster />
