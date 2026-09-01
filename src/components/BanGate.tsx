@@ -23,7 +23,9 @@ const BanGate = () => {
     return () => { try { document.documentElement.style.overflow = ""; } catch { /* noop */ } };
   }, [state.banned]);
 
-  if (!state.banned) return null;
+  const onAdmin = typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+  if (!state.banned || onAdmin) return null;
+
 
   return (
     <div className="fixed inset-0 z-[999999] bg-background flex items-center justify-center p-6">
