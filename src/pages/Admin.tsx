@@ -182,7 +182,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -1979,7 +1979,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const ROUTED_SECTIONS = useMemo(() => new Set<Section>([
     "categories", "webseries", "weekly-episode", "movies", "users",
     "new-releases", "tmdb-fetch", "add-content",
-    "redeem-codes", "bkash-payments", "device-limits", "maintenance", "free-access",
+    "redeem-codes", "bkash-payments", "premium-users", "device-limits", "maintenance", "free-access",
     "settings", "comments", "analytics", "auto-import", "animesalt-manager",
     "telegram-post", "tg-url-changer", "live-support", "ui-themes", "hero-pinned",
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
@@ -3296,6 +3296,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  "auto-import": "Auto Import",
  "animesalt-manager": "AnimeSalt Manager",
  "bkash-payments": "bKash Payments",
+ "premium-users": "Premium Users",
  "device-limits": "Device Limits",
  "telegram-post": "Telegram Post",
  "live-support": "Live Support",
@@ -5364,6 +5365,7 @@ ${tgBulkFooter}
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
  { section: "redeem-codes", icon: <Shield size={16} />, label: "Redeem Codes" },
  { section: "bkash-payments", icon: <KeyRound size={16} />, label: "bKash Payments" },
+ { section: "premium-users", icon: <Crown size={16} />, label: "Premium Users" },
  { section: "device-limits", icon: <Lock size={16} />, label: "Device Limits" },
  { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
  { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
