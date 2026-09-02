@@ -32,6 +32,8 @@ let state: GateState = { blocked: false, signals: null, checking: false };
 const listeners = new Set<(s: GateState) => void>();
 let started = false;
 let inflight: Promise<AdBlockSignals> | null = null;
+/** Premium members are never gated — premium means premium, blocker or not. */
+let premiumExempt = false;
 
 const emit = () => { for (const l of listeners) { try { l(state); } catch {} } };
 
@@ -42,7 +44,19 @@ export const subscribeGate = (fn: (s: GateState) => void) => {
   return () => listeners.delete(fn);
 };
 
+/** Called by the app whenever the current user's premium status changes. */
+export const setGatePremiumExempt = (value: boolean) => {
+  if (premiumExempt === value) return;
+  premiumExempt = value;
+  if (premiumExempt && state.blocked) {
+    state = { ...state, blocked: false };
+    emit();
+  }
+};
+export const isGatePremiumExempt = () => premiumExempt;
+
 export const isExemptPath = (p: string) => EXEMPT.some((e) => p === e || p.startsWith(e + "/"));
+
 
 const graceActive = () => {
   try { return Number(sessionStorage.getItem(CLEARED_UNTIL_KEY) || 0) > Date.now(); } catch { return false; }
