@@ -3891,23 +3891,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onPlay = () => {
       userPlaybackIntentRef.current = true;
       setPlaying(true);
-      // Start RAF loop for smooth progress
+      // Progress loop. The old version wrote layout-affecting styles on EVERY
+      // animation frame while the decoder was busy — on low-end phones that
+      // steals main-thread time from the video pipeline and shows up as the
+      // "1-2 second freeze / frame drop" users reported. A progress bar only
+      // needs ~5 updates per second, so we throttle DOM writes and never touch
+      // React state more than once per second.
+      const UI_TICK_MS = 200;
+      let lastUiPaint = 0;
+      let lastPct = -1;
+      let lastLabel = "";
       const tick = () => {
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
           if (ct > 0) lastPlaybackPositionRef.current = ct;
           const dur = v.duration;
-          // Direct DOM updates for progress bar — 60fps, no React re-render
-          if (progressRef.current && dur > 0) {
-            progressRef.current.style.width = `${(ct / dur) * 100}%`;
-          }
-          if (timeDisplayRef.current && dur > 0) {
-            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+          const now = performance.now();
+          if (now - lastUiPaint >= UI_TICK_MS) {
+            lastUiPaint = now;
+            if (dur > 0) {
+              const pct = Math.round((ct / dur) * 10000) / 100;
+              if (progressRef.current && pct !== lastPct) {
+                lastPct = pct;
+                progressRef.current.style.transform = "";
+                progressRef.current.style.width = `${pct}%`;
+              }
+              if (timeDisplayRef.current) {
+                const label = `${formatTime(ct)} / ${formatTime(dur)}`;
+                if (label !== lastLabel) {
+                  lastLabel = label;
+                  timeDisplayRef.current.textContent = label;
+                }
+              }
+            }
           }
           // Throttle React state to ~1 Hz so the giant component doesn't
           // re-render every frame. UI buttons stay smooth via DOM refs above.
-          const now = performance.now();
           if (now - lastNativeSyncRef.current >= 1000) {
             lastNativeSyncRef.current = now;
             setCurrentTime(ct);
@@ -3917,6 +3937,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
       };
       rafId.current = requestAnimationFrame(tick);
+
     };
     const onPause = () => {
       userPlaybackIntentRef.current = false;
