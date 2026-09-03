@@ -2836,26 +2836,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     hlsFatalRetriesRef.current = 0;
     rsSoftRetriesRef.current = 0;
 
+    // Device-aware tuning. Low-end phones (few cores / little RAM) choke on a
+    // 200MB buffer: the append+GC pressure is exactly what produces the
+    // "video freezes for a second, then continues" stutter. Strong devices
+    // keep the big buffer for maximum smoothness.
+    const hw = (navigator as any).hardwareConcurrency || 4;
+    const mem = (navigator as any).deviceMemory || 4;
+    const isLowEnd = hw <= 4 || mem <= 3;
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      testBandwidth: true,
-      abrEwmaDefaultEstimate: 5_000_000,
-      abrBandWidthFactor: 0.9,
-      abrBandWidthUpFactor: 0.7,
+      // Skip the bandwidth probe: it delays the very first fragment. The ABR
+      // estimate below starts optimistic and self-corrects within seconds.
+      testBandwidth: false,
+      abrEwmaDefaultEstimate: isLowEnd ? 2_500_000 : 6_000_000,
+      abrEwmaFastVoD: 2,
+      abrEwmaSlowVoD: 8,
+      abrBandWidthFactor: 0.95,
+      abrBandWidthUpFactor: 0.75,
       abrMaxWithRealBitrate: true,
-      backBufferLength: 90,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 600,
-      maxBufferSize: 200 * 1024 * 1024,
+      backBufferLength: isLowEnd ? 20 : 60,
+      maxBufferLength: isLowEnd ? 30 : 60,
+      maxMaxBufferLength: isLowEnd ? 120 : 600,
+      maxBufferSize: (isLowEnd ? 40 : 150) * 1024 * 1024,
       maxBufferHole: 0.5,
-      highBufferWatchdogPeriod: 2,
-      nudgeMaxRetry: 8,
+      highBufferWatchdogPeriod: 1,
+      nudgeMaxRetry: 10,
       nudgeOffset: 0.1,
       maxFragLookUpTolerance: 0.25,
       startLevel: -1,
       startFragPrefetch: true,
-      progressive: true,
+      // progressive:true streams fragments through a slower append path and is
+      // a known source of micro-stutter on mobile — keep the normal path.
+      progressive: false,
       manifestLoadingTimeOut: 7000,
       manifestLoadingMaxRetry: 4,
       manifestLoadingRetryDelay: 250,
@@ -2867,8 +2880,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       fragLoadingRetryDelay: 250,
       appendErrorMaxRetry: 4,
       capLevelToPlayerSize: true,
+      capLevelOnFPSDrop: true,
       renderTextTracksNatively: false,
     });
+
     hlsRef.current = hls;
 
     hls.on(Hls.Events.MEDIA_ATTACHED, () => {
