@@ -294,10 +294,24 @@ export function buildDirectDownloadUrl(rawUrl: string): string | null {
   return trimmedUrl;
 }
 
-function openDownloadLink(finalUrl: string, fileName: string) {
-  if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
-  // Use a same-document iframe navigation so attachment responses go straight
-  // to the browser/PWA download manager instead of opening a JSON/error tab.
+function clickAnchorDownload(finalUrl: string, fileName: string) {
+  // A real anchor click is the only trigger every browser reliably routes to
+  // its native download manager. Content-Disposition from the proxy keeps the
+  // filename correct even for cross-origin responses.
+  const a = document.createElement("a");
+  a.href = finalUrl;
+  a.download = fileName;
+  a.rel = "noopener";
+  a.style.position = "fixed";
+  a.style.left = "-9999px";
+  a.style.opacity = "0";
+  a.setAttribute("aria-hidden", "true");
+  document.body.appendChild(a);
+  try { a.click(); } catch {}
+  window.setTimeout(() => { try { a.remove(); } catch {} }, 5_000);
+}
+
+function iframeDownload(finalUrl: string, fileName: string) {
   const frame = document.createElement("iframe");
   frame.src = finalUrl;
   frame.title = `Download ${fileName}`;
@@ -309,12 +323,46 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   frame.style.opacity = "0";
   frame.setAttribute("aria-hidden", "true");
   document.body.appendChild(frame);
-  window.setTimeout(() => {
-    try { frame.remove(); } catch {}
-  }, 60_000);
+  window.setTimeout(() => { try { frame.remove(); } catch {} }, 60_000);
 }
 
+function openDownloadLink(finalUrl: string, fileName: string) {
+  if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
+  clickAnchorDownload(finalUrl, fileName);
+}
 
+// ---------------------------------------------------------------------------
+// Batch queue
+// ---------------------------------------------------------------------------
+// Browsers throttle (Chrome) or silently drop (Safari/WebView) downloads that
+// are fired in the same tick. Only the first one used to survive, which is
+// exactly the "select 6, only 1 downloads" bug. We therefore keep a global
+// queue: the first item fires synchronously inside the user's gesture and the
+// rest are spaced out so every single selection reaches the download manager.
+const BATCH_GAP_MS = 900;
+const queue: Array<{ url: string; fileName: string }> = [];
+let queueTimer: number | null = null;
+
+const pumpQueue = () => {
+  if (queueTimer !== null) return;
+  const next = queue.shift();
+  if (!next) return;
+  queueTimer = window.setTimeout(() => {
+    queueTimer = null;
+    openDownloadLink(next.url, next.fileName);
+    // Belt-and-braces: an iframe hit as well for engines that ignore an
+    // anchor click made outside a gesture (older Android WebViews).
+    if (!isInTelegramWebView()) {
+      window.setTimeout(() => iframeDownload(next.url, next.fileName), 150);
+    }
+    pumpQueue();
+  }, BATCH_GAP_MS);
+};
+
+const enqueueDownload = (url: string, fileName: string) => {
+  queue.push({ url, fileName });
+  pumpQueue();
+};
 
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
@@ -340,6 +388,7 @@ export function triggerBulkBackgroundDownloads(
 ): number {
   if (!Array.isArray(items) || items.length === 0) return 0;
 
+  const seen = new Set<string>();
   const valid = items
     .map((it) => {
       const u = String(it?.url || "").trim();
@@ -347,7 +396,9 @@ export function triggerBulkBackgroundDownloads(
       const fn = buildSafeFileName(it?.fileName || "video");
       const fallbacks = Array.isArray(it?.fallbackUrls) ? it.fallbackUrls : [];
       const proxied = buildVideoDownloadUrlCandidates(u, fn, fallbacks)[0] || buildVideoDownloadUrl(u, fn, fallbacks);
-      return proxied ? { final: proxied, fn } : null;
+      if (!proxied || seen.has(proxied)) return null;
+      seen.add(proxied);
+      return { final: proxied, fn };
     })
     .filter((x): x is { final: string; fn: string } => !!x);
 
@@ -356,12 +407,13 @@ export function triggerBulkBackgroundDownloads(
     return 0;
   }
 
-  // Fire every download as a real anchor click, all in one synchronous batch
-  // from the user's gesture. Browser's native downloader handles the queue —
-  // user can pause/resume individually from the browser's download tray.
-  valid.forEach((entry) => openDownloadLink(entry.final, entry.fn));
+  // First one inside the user gesture (keeps the permission prompt attached to
+  // the click), the remaining ones staggered through the queue.
+  openDownloadLink(valid[0].final, valid[0].fn);
+  valid.slice(1).forEach((entry) => enqueueDownload(entry.final, entry.fn));
 
   return valid.length;
 }
+
 
 

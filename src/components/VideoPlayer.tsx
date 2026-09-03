@@ -2836,26 +2836,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     hlsFatalRetriesRef.current = 0;
     rsSoftRetriesRef.current = 0;
 
+    // Device-aware tuning. Low-end phones (few cores / little RAM) choke on a
+    // 200MB buffer: the append+GC pressure is exactly what produces the
+    // "video freezes for a second, then continues" stutter. Strong devices
+    // keep the big buffer for maximum smoothness.
+    const hw = (navigator as any).hardwareConcurrency || 4;
+    const mem = (navigator as any).deviceMemory || 4;
+    const isLowEnd = hw <= 4 || mem <= 3;
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      testBandwidth: true,
-      abrEwmaDefaultEstimate: 5_000_000,
-      abrBandWidthFactor: 0.9,
-      abrBandWidthUpFactor: 0.7,
+      // Skip the bandwidth probe: it delays the very first fragment. The ABR
+      // estimate below starts optimistic and self-corrects within seconds.
+      testBandwidth: false,
+      abrEwmaDefaultEstimate: isLowEnd ? 2_500_000 : 6_000_000,
+      abrEwmaFastVoD: 2,
+      abrEwmaSlowVoD: 8,
+      abrBandWidthFactor: 0.95,
+      abrBandWidthUpFactor: 0.75,
       abrMaxWithRealBitrate: true,
-      backBufferLength: 90,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 600,
-      maxBufferSize: 200 * 1024 * 1024,
+      backBufferLength: isLowEnd ? 20 : 60,
+      maxBufferLength: isLowEnd ? 30 : 60,
+      maxMaxBufferLength: isLowEnd ? 120 : 600,
+      maxBufferSize: (isLowEnd ? 40 : 150) * 1024 * 1024,
       maxBufferHole: 0.5,
-      highBufferWatchdogPeriod: 2,
-      nudgeMaxRetry: 8,
+      highBufferWatchdogPeriod: 1,
+      nudgeMaxRetry: 10,
       nudgeOffset: 0.1,
       maxFragLookUpTolerance: 0.25,
       startLevel: -1,
       startFragPrefetch: true,
-      progressive: true,
+      // progressive:true streams fragments through a slower append path and is
+      // a known source of micro-stutter on mobile — keep the normal path.
+      progressive: false,
       manifestLoadingTimeOut: 7000,
       manifestLoadingMaxRetry: 4,
       manifestLoadingRetryDelay: 250,
@@ -2867,8 +2880,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       fragLoadingRetryDelay: 250,
       appendErrorMaxRetry: 4,
       capLevelToPlayerSize: true,
+      capLevelOnFPSDrop: true,
       renderTextTracksNatively: false,
     });
+
     hlsRef.current = hls;
 
     hls.on(Hls.Events.MEDIA_ATTACHED, () => {
@@ -3891,23 +3906,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onPlay = () => {
       userPlaybackIntentRef.current = true;
       setPlaying(true);
-      // Start RAF loop for smooth progress
+      // Progress loop. The old version wrote layout-affecting styles on EVERY
+      // animation frame while the decoder was busy — on low-end phones that
+      // steals main-thread time from the video pipeline and shows up as the
+      // "1-2 second freeze / frame drop" users reported. A progress bar only
+      // needs ~5 updates per second, so we throttle DOM writes and never touch
+      // React state more than once per second.
+      const UI_TICK_MS = 200;
+      let lastUiPaint = 0;
+      let lastPct = -1;
+      let lastLabel = "";
       const tick = () => {
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
           if (ct > 0) lastPlaybackPositionRef.current = ct;
           const dur = v.duration;
-          // Direct DOM updates for progress bar — 60fps, no React re-render
-          if (progressRef.current && dur > 0) {
-            progressRef.current.style.width = `${(ct / dur) * 100}%`;
-          }
-          if (timeDisplayRef.current && dur > 0) {
-            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+          const now = performance.now();
+          if (now - lastUiPaint >= UI_TICK_MS) {
+            lastUiPaint = now;
+            if (dur > 0) {
+              const pct = Math.round((ct / dur) * 10000) / 100;
+              if (progressRef.current && pct !== lastPct) {
+                lastPct = pct;
+                progressRef.current.style.transform = "";
+                progressRef.current.style.width = `${pct}%`;
+              }
+              if (timeDisplayRef.current) {
+                const label = `${formatTime(ct)} / ${formatTime(dur)}`;
+                if (label !== lastLabel) {
+                  lastLabel = label;
+                  timeDisplayRef.current.textContent = label;
+                }
+              }
+            }
           }
           // Throttle React state to ~1 Hz so the giant component doesn't
           // re-render every frame. UI buttons stay smooth via DOM refs above.
-          const now = performance.now();
           if (now - lastNativeSyncRef.current >= 1000) {
             lastNativeSyncRef.current = now;
             setCurrentTime(ct);
@@ -3917,6 +3952,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
       };
       rafId.current = requestAnimationFrame(tick);
+
     };
     const onPause = () => {
       userPlaybackIntentRef.current = false;
