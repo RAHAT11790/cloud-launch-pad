@@ -43,7 +43,9 @@ const writeCache = (c: CacheShape) => {
 };
 
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
-  const [vpEnabled, setVpEnabled] = useState<boolean>(adsterraCache?.vpEnabled ?? true);
+  const [gateEnabled, setGateEnabled] = useState<boolean>(true);
+  const [savingGate, setSavingGate] = useState(false);
+
   const [popunder, setPopunder] = useState<string>(adsterraCache?.popunder ?? "");
   const [directLink, setDirectLink] = useState<string>(adsterraCache?.directLink ?? "");
   const [socialLink, setSocialLink] = useState<string>(adsterraCache?.socialLink ?? "");
