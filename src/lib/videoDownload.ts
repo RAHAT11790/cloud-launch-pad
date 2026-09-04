@@ -311,58 +311,13 @@ function clickAnchorDownload(finalUrl: string, fileName: string) {
   window.setTimeout(() => { try { a.remove(); } catch {} }, 5_000);
 }
 
-function iframeDownload(finalUrl: string, fileName: string) {
-  const frame = document.createElement("iframe");
-  frame.src = finalUrl;
-  frame.title = `Download ${fileName}`;
-  frame.style.position = "fixed";
-  frame.style.left = "-9999px";
-  frame.style.top = "-9999px";
-  frame.style.width = "1px";
-  frame.style.height = "1px";
-  frame.style.opacity = "0";
-  frame.setAttribute("aria-hidden", "true");
-  document.body.appendChild(frame);
-  window.setTimeout(() => { try { frame.remove(); } catch {} }, 60_000);
-}
-
 function openDownloadLink(finalUrl: string, fileName: string) {
+  // NEVER use window.location.href here: navigating away kills the page (and
+  // every queued sibling download) — that was the "only the first file
+  // downloads" bug. Telegram gets its own non-navigating API.
   if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
   clickAnchorDownload(finalUrl, fileName);
 }
-
-// ---------------------------------------------------------------------------
-// Batch queue
-// ---------------------------------------------------------------------------
-// Browsers throttle (Chrome) or silently drop (Safari/WebView) downloads that
-// are fired in the same tick. Only the first one used to survive, which is
-// exactly the "select 6, only 1 downloads" bug. We therefore keep a global
-// queue: the first item fires synchronously inside the user's gesture and the
-// rest are spaced out so every single selection reaches the download manager.
-const BATCH_GAP_MS = 900;
-const queue: Array<{ url: string; fileName: string }> = [];
-let queueTimer: number | null = null;
-
-const pumpQueue = () => {
-  if (queueTimer !== null) return;
-  const next = queue.shift();
-  if (!next) return;
-  queueTimer = window.setTimeout(() => {
-    queueTimer = null;
-    openDownloadLink(next.url, next.fileName);
-    // Belt-and-braces: an iframe hit as well for engines that ignore an
-    // anchor click made outside a gesture (older Android WebViews).
-    if (!isInTelegramWebView()) {
-      window.setTimeout(() => iframeDownload(next.url, next.fileName), 150);
-    }
-    pumpQueue();
-  }, BATCH_GAP_MS);
-};
-
-const enqueueDownload = (url: string, fileName: string) => {
-  queue.push({ url, fileName });
-  pumpQueue();
-};
 
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
@@ -383,6 +338,16 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Batch downloads
+// ---------------------------------------------------------------------------
+// Browsers only keep the "user activation" flag alive for the task that the
+// click started. Anything fired from a setTimeout is treated as an automatic
+// download and is silently dropped — which is exactly why 6 selected episodes
+// produced 1 file. So every selected item is fired synchronously inside the
+// same gesture; Chrome/Edge then ask once ("Download multiple files?") and let
+// all of them through. Telegram WebView is spaced out because its bridge can
+// only hand one link at a time to the system browser.
 export function triggerBulkBackgroundDownloads(
   items: Array<{ url: string; fileName: string; fallbackUrls?: string[] }>,
 ): number {
@@ -407,13 +372,19 @@ export function triggerBulkBackgroundDownloads(
     return 0;
   }
 
-  // First one inside the user gesture (keeps the permission prompt attached to
-  // the click), the remaining ones staggered through the queue.
-  openDownloadLink(valid[0].final, valid[0].fn);
-  valid.slice(1).forEach((entry) => enqueueDownload(entry.final, entry.fn));
+  if (isInTelegramWebView()) {
+    // One at a time — Telegram's openLink bridge ignores rapid-fire calls.
+    valid.forEach((entry, i) => {
+      window.setTimeout(() => openExternalBrowser(entry.final), i * 1200);
+    });
+    return valid.length;
+  }
 
+  // All inside the original user gesture — no timers, no navigation.
+  valid.forEach((entry) => clickAnchorDownload(entry.final, entry.fn));
   return valid.length;
 }
+
 
 
 
