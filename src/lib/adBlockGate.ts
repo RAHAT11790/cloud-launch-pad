@@ -12,6 +12,7 @@
 // ============================================================
 
 import { detectAdBlock, type AdBlockSignals } from "@/lib/adBlockDetect";
+import { db, ref, onValue } from "@/lib/firebase";
 
 export const GATE_PATH = "/adblocker-detected";
 export const CLEARED_PATH = "/adblocker-removed";
@@ -35,7 +36,34 @@ let inflight: Promise<AdBlockSignals> | null = null;
 /** Premium members are never gated — premium means premium, blocker or not. */
 let premiumExempt = false;
 
+// ---------------------------------------------------------------------------
+// Global ON/OFF switch (admin → Adsterra Ads → "Ad-Blocker Detection").
+// When OFF nobody is ever checked or gated: normal free browsing for everyone.
+// Cached locally so a cold start honours the last known setting instantly.
+// ---------------------------------------------------------------------------
+const ENABLED_CACHE_KEY = "rs_adblock_gate_enabled_v1";
+let gateEnabled = (() => {
+  try { return localStorage.getItem(ENABLED_CACHE_KEY) !== "0"; } catch { return true; }
+})();
+
+export const isAdBlockGateEnabled = () => gateEnabled;
+
 const emit = () => { for (const l of listeners) { try { l(state); } catch {} } };
+
+try {
+  if (typeof window !== "undefined") {
+    onValue(ref(db, "settings/adBlockGate/enabled"), (snap) => {
+      const raw = snap.val();
+      gateEnabled = raw !== false;
+      try { localStorage.setItem(ENABLED_CACHE_KEY, gateEnabled ? "1" : "0"); } catch {}
+      if (!gateEnabled && state.blocked) {
+        state = { ...state, blocked: false, checking: false };
+        emit();
+      }
+    });
+  }
+} catch {}
+
 
 export const getGateState = () => state;
 export const subscribeGate = (fn: (s: GateState) => void) => {
@@ -78,7 +106,7 @@ export const takeReturnPath = () => {
 
 /** Run the evidence chain (de-duplicated across concurrent callers). */
 export async function runGateCheck(force = false): Promise<AdBlockSignals> {
-  if (premiumExempt) {
+  if (premiumExempt || !gateEnabled) {
     if (state.blocked) { state = { ...state, blocked: false, checking: false }; emit(); }
     return state.signals as AdBlockSignals;
   }
@@ -87,7 +115,7 @@ export async function runGateCheck(force = false): Promise<AdBlockSignals> {
   emit();
   inflight = detectAdBlock()
     .then((s) => {
-      const blocked = !premiumExempt && s.blocked && (force || !graceActive());
+      const blocked = gateEnabled && !premiumExempt && s.blocked && (force || !graceActive());
       state = { blocked, signals: s, checking: false };
       emit();
       return s;

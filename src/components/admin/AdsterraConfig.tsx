@@ -43,6 +43,9 @@ const writeCache = (c: CacheShape) => {
 };
 
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
+  const [gateEnabled, setGateEnabled] = useState<boolean>(true);
+  const [savingGate, setSavingGate] = useState(false);
+
   const [vpEnabled, setVpEnabled] = useState<boolean>(adsterraCache?.vpEnabled ?? true);
   const [popunder, setPopunder] = useState<string>(adsterraCache?.popunder ?? "");
   const [directLink, setDirectLink] = useState<string>(adsterraCache?.directLink ?? "");
@@ -106,7 +109,10 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setAdWatchSeconds(Number(v.adWatchSeconds) || DEFAULT_PREMIUM_SETTINGS.adWatchSeconds);
       setDailyAdCap(Number(v.dailyAdCap) || DEFAULT_PREMIUM_SETTINGS.dailyAdCap);
     });
-    return () => { u1(); u2(); u3(); };
+    const u4 = onValue(ref(db, "settings/adBlockGate/enabled"), (snap) => {
+      setGateEnabled(snap.val() !== false);
+    });
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
   const saveVideoPlayer = async () => {
@@ -163,6 +169,47 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
 
   return (
     <div className="space-y-5 min-w-0">
+      {/* Ad-Blocker Detection master switch */}
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#2a0f16]/70 to-black/40 p-4 space-y-3 min-w-0 overflow-hidden">
+        <header className="flex items-start justify-between gap-3 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-400/25 flex items-center justify-center">🛡️</span>
+              <h3 className="text-sm font-bold text-white truncate">Ad-Blocker Detection</h3>
+            </div>
+            <p className="text-[11px] text-white/50 mt-1">
+              ON = users with an ad blocker / filtering DNS / VPN are stopped at the gate page.
+              OFF = nobody is checked or blocked, everyone browses freely.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={savingGate}
+            onClick={async () => {
+              const next = !gateEnabled;
+              setGateEnabled(next);
+              setSavingGate(true);
+              try {
+                await set(ref(db, "settings/adBlockGate/enabled"), next);
+                toast.success(next ? "Ad-blocker detection ON" : "Ad-blocker detection OFF — nobody is blocked");
+              } catch {
+                setGateEnabled(!next);
+                toast.error("Save failed");
+              }
+              setSavingGate(false);
+            }}
+            className={`shrink-0 h-8 px-3 rounded-full text-[11px] font-bold border transition-all ${
+              gateEnabled
+                ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+                : "bg-white/5 border-white/15 text-white/60"
+            }`}
+          >
+            {savingGate ? "Saving…" : gateEnabled ? "ON" : "OFF"}
+          </button>
+        </header>
+      </section>
+
+
       {/* Video Player Ads */}
       <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a0f2e]/70 to-black/40 p-4 space-y-4 min-w-0 overflow-hidden">
         <header className="flex items-start justify-between gap-3 min-w-0">
