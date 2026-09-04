@@ -106,7 +106,7 @@ export const takeReturnPath = () => {
 
 /** Run the evidence chain (de-duplicated across concurrent callers). */
 export async function runGateCheck(force = false): Promise<AdBlockSignals> {
-  if (premiumExempt) {
+  if (premiumExempt || !gateEnabled) {
     if (state.blocked) { state = { ...state, blocked: false, checking: false }; emit(); }
     return state.signals as AdBlockSignals;
   }
@@ -115,7 +115,7 @@ export async function runGateCheck(force = false): Promise<AdBlockSignals> {
   emit();
   inflight = detectAdBlock()
     .then((s) => {
-      const blocked = !premiumExempt && s.blocked && (force || !graceActive());
+      const blocked = gateEnabled && !premiumExempt && s.blocked && (force || !graceActive());
       state = { blocked, signals: s, checking: false };
       emit();
       return s;
