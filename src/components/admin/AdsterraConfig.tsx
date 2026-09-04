@@ -46,6 +46,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [gateEnabled, setGateEnabled] = useState<boolean>(true);
   const [savingGate, setSavingGate] = useState(false);
 
+  const [vpEnabled, setVpEnabled] = useState<boolean>(adsterraCache?.vpEnabled ?? true);
   const [popunder, setPopunder] = useState<string>(adsterraCache?.popunder ?? "");
   const [directLink, setDirectLink] = useState<string>(adsterraCache?.directLink ?? "");
   const [socialLink, setSocialLink] = useState<string>(adsterraCache?.socialLink ?? "");
