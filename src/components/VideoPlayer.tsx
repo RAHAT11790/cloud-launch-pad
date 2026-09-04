@@ -6390,7 +6390,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             </span>
                           </button>
                         </div>
+                        {(() => {
+                          const tgUrl = String((anime as any)?.telegramDownloadUrl || "").trim();
+                          if (!/^https?:\/\//i.test(tgUrl)) return null;
+                          return (
+                            <a
+                              href={tgUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => { try { fireAdOnly("download-start", isPremium); } catch {} }}
+                              className="mt-2.5 h-10 rounded-[10px] bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[13px] font-semibold flex items-center justify-center gap-1.5 px-3 active:scale-[0.98]"
+                            >
+                              <Send className="w-4 h-4" />
+                              <span className="truncate">Telegram Download</span>
+                            </a>
+                          );
+                        })()}
                       </div>
+
                     );
                   })()}
                 </div>
