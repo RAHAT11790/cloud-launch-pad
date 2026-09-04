@@ -10,6 +10,7 @@ import { usePremium } from "@/hooks/usePremium";
 import {
   GATE_PATH,
   CLEARED_PATH,
+  isAdBlockGateEnabled,
   isExemptPath,
   rememberReturnPath,
   runGateCheck,
@@ -36,6 +37,7 @@ const AdBlockGateWatcher = () => {
   // Re-verify on every route change.
   useEffect(() => {
     if (isPremium) return;
+    if (!isAdBlockGateEnabled()) return;
     if (isExemptPath(loc.pathname)) return;
     rememberReturnPath(loc.pathname + loc.search);
     void runGateCheck();
@@ -43,8 +45,13 @@ const AdBlockGateWatcher = () => {
 
   useEffect(() => {
     const off = subscribeGate((s) => {
-      if (isPremium) return;
       const path = window.location.pathname;
+      // Admin switched detection OFF → release anyone stuck on the gate page.
+      if (!isAdBlockGateEnabled()) {
+        if (path === GATE_PATH || path === CLEARED_PATH) nav("/", { replace: true });
+        return;
+      }
+      if (isPremium) return;
       if (s.blocked && !isExemptPath(path) && path !== GATE_PATH && path !== CLEARED_PATH) {
         rememberReturnPath(path + window.location.search);
         nav(GATE_PATH, { replace: true });
