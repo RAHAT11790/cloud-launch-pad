@@ -48,6 +48,7 @@ interface VideoServerOption {
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { wrapWithIosProtection } from "@/lib/iosProtection";
@@ -791,6 +792,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
   const [sharePanelEpisodeIdx, setSharePanelEpisodeIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
+  const [downloadMode, setDownloadMode] = useState<"choose" | "website" | "telegram">("choose");
+  const [tgSelectedEpisodes, setTgSelectedEpisodes] = useState<Set<number>>(new Set());
+  const [tgSelectedQualities, setTgSelectedQualities] = useState<string[]>(["720P"]);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
@@ -1474,6 +1478,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadLanguageLabel(currentLangLabel);
       setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setSelectedDownloadQuality(preferredDownloadQuality);
+      setDownloadMode("choose");
+      setTgSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setTgSelectedQualities(["720P"]);
     }
     setShowInfoSheet(sheet === "info");
     setShowLanguageSheet(sheet === "language");
