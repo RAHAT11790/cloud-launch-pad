@@ -6206,8 +6206,165 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </button>
                   </div>
 
+                  {/* ============ Step 1 — pick a download source ============ */}
+                  {downloadMode === "choose" && (
+                    <div className="px-4 py-5 flex flex-col gap-3">
+                      <p className="text-[12px] text-white/55 leading-snug">
+                        Choose how you want to get this {hasMultiEpisodes ? "episode" : "movie"}.
+                      </p>
+                      <button
+                        onClick={() => setDownloadMode("telegram")}
+                        className="w-full rounded-[14px] border border-sky-400/30 bg-gradient-to-r from-sky-500/20 to-blue-600/15 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+                      >
+                        <span className="h-11 w-11 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0">
+                          <Send className="w-5 h-5 text-white" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-bold text-white">Telegram Download</span>
+                          <span className="block text-[11px] text-white/60 mt-0.5">Free 480P, 720P & 1080P — delivered by our Telegram bot.</span>
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
+                      </button>
+                      <button
+                        onClick={() => setDownloadMode("website")}
+                        className="w-full rounded-[14px] border border-emerald-400/25 bg-gradient-to-r from-emerald-500/15 to-cyan-500/10 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+                      >
+                        <span className="h-11 w-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shrink-0">
+                          <Download className="w-5 h-5 text-black" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-bold text-white">Website Download</span>
+                          <span className="block text-[11px] text-white/60 mt-0.5">Direct download in your browser, with quality and size details.</span>
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ============ Telegram download ============ */}
+                  {downloadMode === "telegram" && (() => {
+                    const botUrl = getTelegramBotUrl();
+                    const seasonNumber = (() => {
+                      const raw = String(panelSeason?.name || "");
+                      const match = raw.match(/(\d+)/);
+                      const parsed = match ? Number(match[1]) : NaN;
+                      return Number.isFinite(parsed) && parsed > 0 ? parsed : downloadPanelSeasonIdx + 1;
+                    })();
+                    const animeTitle = String((anime as any)?.title || title || "").trim();
+                    const tgEpisodeList = hasMultiEpisodes ? panelEpisodes : [];
+                    const chosenEpisodes = hasMultiEpisodes
+                      ? tgEpisodeList.filter((ep) => tgSelectedEpisodes.has(ep.index)).map((ep) => Number(ep.episodeNumber) || 0).filter(Boolean)
+                      : [1];
+                    const telegramUrl = buildTelegramDownloadUrl({
+                      botUrl,
+                      title: animeTitle,
+                      season: seasonNumber,
+                      episodes: chosenEpisodes,
+                      qualities: tgSelectedQualities,
+                    });
+                    const toggleTgEpisode = (idx: number) => {
+                      setTgSelectedEpisodes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(idx)) next.delete(idx); else next.add(idx);
+                        return next;
+                      });
+                    };
+                    const allTgSelected = tgEpisodeList.length > 0 && tgEpisodeList.every((ep) => tgSelectedEpisodes.has(ep.index));
+                    const toggleTgAll = () => {
+                      setTgSelectedEpisodes(allTgSelected ? new Set() : new Set(tgEpisodeList.map((ep) => ep.index)));
+                    };
+                    const toggleTgQuality = (label: string) => {
+                      setTgSelectedQualities((prev) => (
+                        prev.includes(label) ? prev.filter((q) => q !== label) : [...prev, label]
+                      ));
+                    };
+                    return (
+                      <>
+                        <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
+                          <div className="rounded-[10px] border border-sky-400/20 bg-sky-400/[0.06] p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="text-[11px] font-bold text-sky-200/90 uppercase tracking-wider">Telegram — free for everyone</h4>
+                              <button onClick={() => setDownloadMode("choose")} className="text-[11px] text-white/50 underline underline-offset-2">Back</button>
+                            </div>
+                            {hasMultiEpisodes && (
+                              <button onClick={() => { openInlineSheet("season", "download"); }} className="mt-2.5 h-10 w-full rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
+                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
+                                <ChevronDown className="w-4 h-4 text-white/55 shrink-0" />
+                              </button>
+                            )}
+                            <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                              <p className="text-[10px] text-white/50 mb-1.5">Select one or more qualities</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                {TELEGRAM_FREE_QUALITIES.map((label) => {
+                                  const isOn = tgSelectedQualities.includes(label);
+                                  return (
+                                    <button
+                                      key={`tg-${label}`}
+                                      onClick={() => toggleTgQuality(label)}
+                                      className={`h-9 rounded-[8px] text-[11px] font-semibold border transition-all ${isOn ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white border-sky-300 shadow-[0_4px_14px_-2px_rgba(56,189,248,0.5)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                    >
+                                      {normalizeTelegramQuality(label)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {hasMultiEpisodes && (
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                              <div className="space-y-2.5">
+                                {tgEpisodeList.map((ep) => {
+                                  const selected = tgSelectedEpisodes.has(ep.index);
+                                  return (
+                                    <button key={`tg-ep-${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleTgEpisode(ep.index)} className="w-full flex items-start gap-2.5 text-left">
+                                      <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/35 text-transparent'}`}>
+                                        <Check className="w-3 h-3" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block text-[13px] font-medium text-white">S{String(seasonNumber).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                        <span className="block text-[11px] text-white/50 mt-0.5 truncate">{ep.metaText}</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-3 border-t border-white/10 bg-black">
+                          {hasMultiEpisodes && (
+                            <button onClick={toggleTgAll} className={`flex items-center gap-1.5 text-[11px] mb-2.5 ${allTgSelected ? 'text-white' : 'text-white/55'}`}>
+                              <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allTgSelected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
+                              <span>Select all episodes</span>
+                            </button>
+                          )}
+                          <button
+                            disabled={!telegramUrl}
+                            onClick={() => {
+                              if (!telegramUrl) {
+                                toast.error(!botUrl ? "Telegram download is not configured yet" : "Select at least one episode and quality");
+                                return;
+                              }
+                              try { fireAdOnly("download-start", isPremium); } catch {}
+                              window.open(telegramUrl, "_blank", "noopener,noreferrer");
+                            }}
+                            className={`w-full h-11 rounded-[10px] text-[13px] font-semibold flex items-center justify-center gap-2 px-3 ${telegramUrl ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white active:scale-[0.98]' : 'bg-white/[0.07] text-white/35'}`}
+                          >
+                            <Send className="w-4 h-4" />
+                            <span className="truncate">Go to Telegram</span>
+                          </button>
+                          <p className="mt-2 text-[10px] leading-snug text-white/40 break-all">
+                            {telegramUrl || (!botUrl ? "Telegram bot link is missing in the admin settings." : "Pick episodes and qualities to build your link.")}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
+
                   {/* Picker body */}
-                  {(
+                  {downloadMode === "website" && (
 
                   <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
                     <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
@@ -6352,7 +6509,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-                  {(() => {
+                  {downloadMode === "website" && (() => {
                     const fmtSize = (bytes: number) => {
                       if (!bytes || bytes <= 0) return "";
                       const mb = bytes / (1024 * 1024);
@@ -6397,22 +6554,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             </span>
                           </button>
                         </div>
-                        {(() => {
-                          const tgUrl = String((anime as any)?.telegramDownloadUrl || "").trim();
-                          if (!/^https?:\/\//i.test(tgUrl)) return null;
-                          return (
-                            <a
-                              href={tgUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => { try { fireAdOnly("download-start", isPremium); } catch {} }}
-                              className="mt-2.5 h-10 rounded-[10px] bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[13px] font-semibold flex items-center justify-center gap-1.5 px-3 active:scale-[0.98]"
-                            >
-                              <Send className="w-4 h-4" />
-                              <span className="truncate">Telegram Download</span>
-                            </a>
-                          );
-                        })()}
                       </div>
 
                     );
