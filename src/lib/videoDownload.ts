@@ -341,13 +341,26 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
 // ---------------------------------------------------------------------------
 // Batch downloads
 // ---------------------------------------------------------------------------
-// Browsers only keep the "user activation" flag alive for the task that the
-// click started. Anything fired from a setTimeout is treated as an automatic
-// download and is silently dropped — which is exactly why 6 selected episodes
-// produced 1 file. So every selected item is fired synchronously inside the
-// same gesture; Chrome/Edge then ask once ("Download multiple files?") and let
-// all of them through. Telegram WebView is spaced out because its bridge can
-// only hand one link at a time to the system browser.
+// Chromium keeps "user activation" only for the task the click started, and it
+// also throttles many <a download> clicks fired in the very same tick — that is
+// why 6 selected episodes produced 1 file. The reliable recipe is:
+//   1. fire the FIRST item as a real anchor click inside the user gesture, then
+//   2. hand every remaining item to a hidden <iframe>, spaced out in time.
+// Our download proxy always answers with `Content-Disposition: attachment`, so
+// an iframe navigation never leaves the page — the browser just downloads it.
+function iframeDownload(finalUrl: string) {
+  const frame = document.createElement("iframe");
+  frame.style.position = "fixed";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  frame.style.opacity = "0";
+  frame.setAttribute("aria-hidden", "true");
+  frame.src = finalUrl;
+  document.body.appendChild(frame);
+  window.setTimeout(() => { try { frame.remove(); } catch {} }, 120_000);
+}
+
 export function triggerBulkBackgroundDownloads(
   items: Array<{ url: string; fileName: string; fallbackUrls?: string[] }>,
 ): number {
@@ -380,10 +393,20 @@ export function triggerBulkBackgroundDownloads(
     return valid.length;
   }
 
-  // All inside the original user gesture — no timers, no navigation.
-  valid.forEach((entry) => clickAnchorDownload(entry.final, entry.fn));
+  // First one inside the live user gesture (this is what unlocks Chrome's
+  // "Download multiple files?" permission for this origin).
+  clickAnchorDownload(valid[0].final, valid[0].fn);
+
+  // The rest go through spaced-out hidden iframes so none of them is dropped.
+  valid.slice(1).forEach((entry, i) => {
+    window.setTimeout(() => {
+      try { iframeDownload(entry.final); } catch { clickAnchorDownload(entry.final, entry.fn); }
+    }, 600 + i * 900);
+  });
+
   return valid.length;
 }
+
 
 
 
