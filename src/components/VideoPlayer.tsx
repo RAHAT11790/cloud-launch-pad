@@ -6,7 +6,7 @@ import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw, Send
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -6355,9 +6355,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             <Send className="w-4 h-4" />
                             <span className="truncate">Go to Telegram</span>
                           </button>
-                          <p className="mt-2 text-[10px] leading-snug text-white/40 break-all">
-                            {telegramUrl || (!botUrl ? "Telegram bot link is missing in the admin settings." : "Pick episodes and qualities to build your link.")}
-                          </p>
+                          {telegramUrl ? (
+                            <p className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[9.5px] leading-snug text-sky-200/70 break-all">
+                              {telegramUrl}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-[10px] leading-snug text-amber-300/70">
+                              {!botUrl ? "Telegram bot link is missing in the admin settings." : "Pick episodes and qualities to build your link."}
+                            </p>
+                          )}
+
                         </div>
                       </>
                     );
