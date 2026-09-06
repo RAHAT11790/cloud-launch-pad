@@ -393,16 +393,25 @@ export function triggerBulkBackgroundDownloads(
     return valid.length;
   }
 
-  // First one inside the live user gesture (this is what unlocks Chrome's
-  // "Download multiple files?" permission for this origin).
-  clickAnchorDownload(valid[0].final, valid[0].fn);
+  // Every item is clicked inside the SAME user gesture/task. This is the only
+  // pattern browsers accept for multi-file downloads: Chrome shows a single
+  // "Download multiple files?" prompt and then hands all of them to its native
+  // download manager. Anything fired from a timer has lost user activation and
+  // is silently dropped ("Aborting download - not user initiated") — that was
+  // the old "only the first file downloads" bug.
+  valid.forEach((entry) => {
+    try { clickAnchorDownload(entry.final, entry.fn); } catch {}
+  });
 
-  // The rest go through spaced-out hidden iframes so none of them is dropped.
+  // Safety net: if a browser still throttled some of the clicks, re-issue the
+  // remaining ones through hidden iframes (our proxy always answers with
+  // Content-Disposition: attachment, so the page never navigates away).
   valid.slice(1).forEach((entry, i) => {
     window.setTimeout(() => {
-      try { iframeDownload(entry.final); } catch { clickAnchorDownload(entry.final, entry.fn); }
-    }, 600 + i * 900);
+      try { iframeDownload(entry.final); } catch {}
+    }, 1500 + i * 700);
   });
+
 
   return valid.length;
 }
