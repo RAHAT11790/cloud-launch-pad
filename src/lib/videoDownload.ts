@@ -403,14 +403,8 @@ export function triggerBulkBackgroundDownloads(
     try { clickAnchorDownload(entry.final, entry.fn); } catch {}
   });
 
-  // Safety net: if a browser still throttled some of the clicks, re-issue the
-  // remaining ones through hidden iframes (our proxy always answers with
-  // Content-Disposition: attachment, so the page never navigates away).
-  valid.slice(1).forEach((entry, i) => {
-    window.setTimeout(() => {
-      try { iframeDownload(entry.final); } catch {}
-    }, 1500 + i * 700);
-  });
+
+
 
 
   return valid.length;
