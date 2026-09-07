@@ -10,7 +10,7 @@ const DynamicMeta = () => {
     const logoUrl = branding.logoUrl || "";
 
     // Title
-    document.title = branding.siteName;
+    document.title = branding.siteName || "RS Anime 03 - Watch Anime Online in HD";
 
     // Helper to update or create meta tag
     const setMeta = (attr: string, key: string, content: string) => {
@@ -24,8 +24,8 @@ const DynamicMeta = () => {
     };
 
     // Description
-    setMeta("name", "description", branding.siteDescription);
-    setMeta("name", "author", branding.siteName);
+    setMeta("name", "description", branding.siteDescription || "RS Anime 03 is an anime streaming platform where you can discover anime series, movies, donghua and cartoons with HD video, Hindi dubbed, English subtitles and multiple audio options.");
+    setMeta("name", "author", branding.siteName || "RS Anime 03");
 
     // OG tags
     setMeta("property", "og:title", branding.siteName);
