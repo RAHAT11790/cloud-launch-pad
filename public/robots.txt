@@ -3,5 +3,9 @@ Allow: /
 Disallow: /admin
 Disallow: /unlock
 Disallow: /unlock-required
+Disallow: /notifications
+Disallow: /premium-required
+Disallow: /adblocker-detected
+Disallow: /adblocker-removed
 
 Sitemap: https://rsanime03.lovable.app/sitemap.xml
