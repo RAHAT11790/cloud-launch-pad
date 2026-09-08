@@ -6355,15 +6355,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             <Send className="w-4 h-4" />
                             <span className="truncate">Go to Telegram</span>
                           </button>
-                          {telegramUrl ? (
-                            <p className="mt-2 rounded-[8px] border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[9.5px] leading-snug text-sky-200/70 break-all">
-                              {telegramUrl}
-                            </p>
-                          ) : (
+                          {!telegramUrl && (
                             <p className="mt-2 text-[10px] leading-snug text-amber-300/70">
-                              {!botUrl ? "Telegram bot link is missing in the admin settings." : "Pick episodes and qualities to build your link."}
+                              {!botUrl ? "Telegram download is not available right now." : "Pick episodes and qualities first."}
                             </p>
                           )}
+
 
                         </div>
                       </>

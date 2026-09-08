@@ -12,6 +12,7 @@ const DynamicMeta = () => {
     const siteName = branding.siteName || "RS Anime 03";
     const siteDescription = branding.siteDescription || "RS Anime 03 is an anime streaming platform where you can discover anime series, movies, donghua and cartoons with HD video, Hindi dubbed, English subtitles and multiple audio options.";
     const fullTitle = siteName + " - Watch Anime Online in HD";
+    const logoUrl = String((branding as any)?.logoUrl || (branding as any)?.logo || "");
 
     // Title
     document.title = fullTitle;
