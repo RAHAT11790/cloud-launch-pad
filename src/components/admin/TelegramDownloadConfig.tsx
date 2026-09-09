@@ -102,22 +102,24 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 max-w-3xl">
       {/* Bot link */}
       <div className={card}>
-        <div className="flex items-start gap-3 mb-5">
-          <div className="h-11 w-11 shrink-0 rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
-            <Bot size={20} />
+        <div className="mb-5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+              <Bot size={18} />
+            </div>
+            <h3 className="flex-1 min-w-0 text-[15px] font-bold text-foreground leading-snug truncate">
+              Telegram Download Bot
+            </h3>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide ${botUrl ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
+              {loading ? "…" : botUrl ? "ACTIVE" : "OFF"}
+            </span>
           </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-foreground leading-tight">Telegram Download Bot</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Only the bot link is needed. Deep links are generated automatically and never shown to users.
-            </p>
-          </div>
-          <span className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${botUrl ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
-            {loading ? "…" : botUrl ? "ACTIVE" : "OFF"}
-          </span>
+          <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+            Only the bot link is needed. Deep links are generated automatically and never shown to users.
+          </p>
         </div>
 
         <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Bot link</label>

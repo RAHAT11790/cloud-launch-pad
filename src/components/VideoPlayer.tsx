@@ -2862,15 +2862,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       abrBandWidthFactor: 0.95,
       abrBandWidthUpFactor: 0.75,
       abrMaxWithRealBitrate: true,
-      backBufferLength: isLowEnd ? 20 : 60,
-      maxBufferLength: isLowEnd ? 30 : 60,
-      maxMaxBufferLength: isLowEnd ? 120 : 600,
-      maxBufferSize: (isLowEnd ? 40 : 150) * 1024 * 1024,
-      maxBufferHole: 0.5,
+      backBufferLength: isLowEnd ? 30 : 90,
+      // Aggressive pre-download: keep 1.5–4 minutes ahead so playback never
+      // waits for the network on normal VOD streams.
+      maxBufferLength: isLowEnd ? 90 : 240,
+      maxMaxBufferLength: isLowEnd ? 240 : 900,
+      maxBufferSize: (isLowEnd ? 80 : 320) * 1024 * 1024,
+      // Small holes must be jumped instantly, otherwise audio keeps running
+      // while video waits — the classic "audio ahead of video" symptom.
+      maxBufferHole: 0.1,
       highBufferWatchdogPeriod: 1,
-      nudgeMaxRetry: 10,
+      nudgeMaxRetry: 12,
       nudgeOffset: 0.1,
-      maxFragLookUpTolerance: 0.25,
+      maxFragLookUpTolerance: 0.2,
+      // --- A/V sync hardening -------------------------------------------
+      // Re-align audio to the video timeline instead of letting drift build up.
+      maxAudioFramesDrift: 1,
+      stretchShortVideoTrack: true,
+      forceKeyFrameOnDiscontinuity: true,
       startLevel: -1,
       startFragPrefetch: true,
       // progressive:true streams fragments through a slower append path and is
