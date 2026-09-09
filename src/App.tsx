@@ -70,8 +70,8 @@ const RouteFallback = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <DynamicMeta />
       <BrowserRouter>
+        <DynamicMeta />
         <RouteAttrSync />
         <AdBlockGateWatcher />
         <BanGate />
