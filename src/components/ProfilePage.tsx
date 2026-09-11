@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins } from "lucide-react";
+import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
@@ -17,6 +17,17 @@ import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManag
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { getTodayRemaining } from "@/lib/premiumAccess";
+import { Button } from "@/components/ui/button";
+import {
+  buyProfileFrame,
+  DEFAULT_PROFILE_CUSTOMIZATION,
+  PROFILE_FONTS,
+  PROFILE_FRAMES,
+  PROFILE_THEMES,
+  saveProfileStyle,
+  subscribeProfileCustomization,
+  type ProfileCustomization,
+} from "@/lib/profileCustomization";
 
 import VideoPlayer from "@/components/VideoPlayer";
 import InviteFriendCard from "@/components/InviteFriendCard";
@@ -474,7 +485,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   })();
   const brandingCfg = useBranding();
   const { wallet: coinWallet, settings: premiumSettings } = usePremium();
-  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
+  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "customize" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try {
       const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;
@@ -524,6 +535,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [paymentTab, setPaymentTab] = useState<"bkash" | "redeem">("bkash");
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
+  const [customization, setCustomization] = useState<ProfileCustomization>(DEFAULT_PROFILE_CUSTOMIZATION);
+  const [customizeTab, setCustomizeTab] = useState<"frames" | "themes" | "fonts">("frames");
+  const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
 
   // User-side APK download — admin sets URL + ON/OFF toggle from APK DW.
   // Paths: settings/apk/userEnabled (bool), settings/apk/userUrl (string).
@@ -569,6 +583,81 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
   const dailyCoinCap = Math.max(1, Number(premiumSettings.dailyAdCap || 5));
   const remainingCoinAds = getTodayRemaining(coinWallet, dailyCoinCap);
+  const selectedTheme = PROFILE_THEMES.find((theme) => theme.id === customization.themeId) || PROFILE_THEMES[0];
+  const selectedFont = PROFILE_FONTS.find((font) => font.id === customization.fontId) || PROFILE_FONTS[0];
+
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeProfileCustomization(userId, setCustomization);
+  }, [userId]);
+
+  const applyProfileStyle = async (kind: "frameId" | "themeId" | "fontId", value: string) => {
+    if (!userId) return;
+    if ((kind === "themeId" || kind === "fontId") && !isPremium) {
+      toast.info("Premium members can use every theme and name style for free.");
+      setActivePanel("premium");
+      return;
+    }
+    setCustomization((current) => ({ ...current, [kind]: value }));
+    try {
+      await saveProfileStyle(userId, { [kind]: value });
+      toast.success("Profile style applied");
+    } catch {
+      toast.error("Could not save this style");
+    }
+  };
+
+  const selectOrBuyFrame = async (frameId: string) => {
+    if (!userId || buyingFrame) return;
+    const frame = PROFILE_FRAMES.find((item) => item.id === frameId);
+    if (!frame) return;
+    if (isPremium || customization.ownedFrames[frameId]) {
+      setCustomization((current) => ({
+        ...current,
+        frameId,
+        ownedFrames: isPremium ? { ...current.ownedFrames, [frameId]: true } : current.ownedFrames,
+      }));
+      try {
+        await saveProfileStyle(userId, { frameId });
+        toast.success(`${frame.name} equipped`);
+      } catch {
+        toast.error("Could not equip this frame");
+      }
+      return;
+    }
+    setBuyingFrame(frameId);
+    try {
+      const result = await buyProfileFrame(userId, frameId);
+      if (!result.ok) {
+        toast.error(result.reason === "insufficient" ? `You need ${frame.price} coins for this frame` : "Frame unavailable");
+        return;
+      }
+      setCustomization((current) => ({
+        ...current,
+        frameId,
+        ownedFrames: { ...current.ownedFrames, [frameId]: true },
+      }));
+      toast.success(`${frame.name} unlocked and equipped`);
+    } catch {
+      toast.error("Purchase could not be completed");
+    } finally {
+      setBuyingFrame(null);
+    }
+  };
+
+  const renderProfileAvatar = (size: "large" | "small" = "large") => (
+    <div className={`profile-avatar-frame profile-frame-${customization.frameId} ${size === "small" ? "profile-avatar-small" : ""}`}>
+      <div className="profile-frame-orbit" aria-hidden="true" />
+      <div className="profile-avatar-core">
+        {profilePhoto ? (
+          <img src={profilePhoto} alt="Profile" className="h-full w-full rounded-full object-cover" />
+        ) : (
+          <span>{initial}</span>
+        )}
+      </div>
+      {isPremium && <span className="profile-crown"><Crown className="h-3.5 w-3.5" /></span>}
+    </div>
+  );
 
   useEffect(() => {
     if (!userId) return;
