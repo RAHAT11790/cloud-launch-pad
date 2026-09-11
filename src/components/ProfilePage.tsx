@@ -1689,6 +1689,113 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     return <ChangePasswordPanel onBack={() => setActivePanel("edit")} />;
   }
 
+  if (activePanel === "customize") {
+    return (
+      <motion.div
+        className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-[70px] ${selectedTheme.className} ${selectedFont.className}`}
+        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.26 }}
+      >
+        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+          <button onClick={() => setActivePanel("main")} className="profile-back-button mb-5">
+            <ArrowLeft className="h-5 w-5" /> <span>Profile Studio</span>
+          </button>
+
+          <section className="profile-studio-preview">
+            <div className="flex items-center gap-4">
+              {renderProfileAvatar("small")}
+              <div className="min-w-0 flex-1">
+                <p className="profile-eyebrow">LIVE PREVIEW</p>
+                <h2 className="truncate text-xl font-bold sm:text-2xl">{displayName}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {isPremium ? "Every collectible is unlocked" : `${coinWallet.coins || 0} coins available`}
+                </p>
+              </div>
+              {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+            </div>
+          </section>
+
+          <div className="profile-studio-tabs" role="tablist" aria-label="Profile customization">
+            {([
+              ["frames", ScanFace, "Frames"],
+              ["themes", Palette, "Themes"],
+              ["fonts", Type, "Name Style"],
+            ] as const).map(([id, Icon, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={customizeTab === id}
+                onClick={() => setCustomizeTab(id)} className={customizeTab === id ? "is-active" : ""}>
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+
+          {customizeTab === "frames" && (
+            <section>
+              <div className="profile-section-heading">
+                <div><p className="profile-eyebrow">ANIMATED COLLECTION</p><h3>Choose your aura</h3></div>
+                <span><Coins className="h-4 w-4" /> {coinWallet.coins || 0}</span>
+              </div>
+              <div className="profile-frame-grid">
+                {PROFILE_FRAMES.map((frame) => {
+                  const owned = isPremium || customization.ownedFrames[frame.id];
+                  const equipped = customization.frameId === frame.id;
+                  return (
+                    <button key={frame.id} type="button" onClick={() => selectOrBuyFrame(frame.id)}
+                      disabled={buyingFrame === frame.id}
+                      className={`profile-frame-card ${equipped ? "is-equipped" : ""}`}>
+                      <span className={`profile-frame-demo profile-frame-${frame.id}`}><span /></span>
+                      <strong>{frame.name}</strong>
+                      <small>{frame.tier}</small>
+                      <span className="profile-frame-price">
+                        {equipped ? <><Check className="h-3 w-3" /> Equipped</> : owned ? "Use frame" : <><Coins className="h-3 w-3" /> {frame.price}</>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {customizeTab === "themes" && (
+            <section>
+              <div className="profile-section-heading">
+                <div><p className="profile-eyebrow">PROFILE BACKDROPS</p><h3>Set the atmosphere</h3></div>
+                {!isPremium && <span><Lock className="h-3.5 w-3.5" /> Premium</span>}
+              </div>
+              <div className="profile-theme-grid">
+                {PROFILE_THEMES.map((theme) => (
+                  <button key={theme.id} type="button" onClick={() => applyProfileStyle("themeId", theme.id)}
+                    className={`profile-theme-card ${theme.className} ${customization.themeId === theme.id ? "is-equipped" : ""}`}>
+                    <span className="profile-theme-swatch" />
+                    <strong>{theme.name}</strong>
+                    {customization.themeId === theme.id ? <Check className="h-4 w-4" /> : !isPremium ? <Lock className="h-3.5 w-3.5" /> : null}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {customizeTab === "fonts" && (
+            <section>
+              <div className="profile-section-heading">
+                <div><p className="profile-eyebrow">DISPLAY NAME</p><h3>Choose your signature</h3></div>
+                {!isPremium && <span><Lock className="h-3.5 w-3.5" /> Premium</span>}
+              </div>
+              <div className="profile-font-grid">
+                {PROFILE_FONTS.map((font) => (
+                  <button key={font.id} type="button" onClick={() => applyProfileStyle("fontId", font.id)}
+                    className={`${font.className} ${customization.fontId === font.id ? "is-equipped" : ""}`}>
+                    <strong>{displayName}</strong><span>{font.name}</span>
+                    {customization.fontId === font.id ? <Check className="h-4 w-4" /> : !isPremium ? <Lock className="h-3.5 w-3.5" /> : null}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
   // Edit Profile Panel
   if (activePanel === "edit") {
     const isGoogleUser = (() => {
@@ -1715,20 +1822,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Edit Profile</span>
         </button>
-        <div className="text-center mb-8">
+        <div className={`profile-edit-identity text-center mb-8 ${selectedFont.className}`}>
           <div className="relative inline-block">
-            {profilePhoto ? (
-              <div className="relative">
-                <img src={profilePhoto} alt="Profile" className="w-[100px] h-[100px] rounded-full object-cover border-4 border-primary/30 shadow-[0_10px_40px_hsla(355,85%,55%,0.3)]" />
-                <button onClick={removePhoto} className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-destructive flex items-center justify-center">
-                  <X className="w-3 h-3 text-white" />
-                </button>
-              </div>
-            ) : (
-              <div className="w-[100px] h-[100px] rounded-full gradient-primary flex items-center justify-center text-[42px] font-extrabold shadow-[0_10px_40px_hsla(355,85%,55%,0.4)] border-4 border-foreground/10">
-                {initial}
-              </div>
-            )}
+            {renderProfileAvatar()}
+            {profilePhoto && <button onClick={removePhoto} className="absolute -top-1 -left-1 z-20 w-7 h-7 rounded-full bg-destructive flex items-center justify-center"><X className="w-3.5 h-3.5 text-destructive-foreground" /></button>}
             <button disabled={photoUploading} onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg disabled:opacity-70">
               {photoUploading ? <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" /> : <Camera className="w-4 h-4 text-primary-foreground" />}
             </button>
@@ -1744,6 +1841,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         <button onClick={saveName} className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 mb-4">
           <Save className="w-4 h-4" /> Save Changes
         </button>
+
+        <Button type="button" variant="outline" onClick={() => setActivePanel("customize")} className="mb-4 w-full gap-2">
+          <Sparkles className="h-4 w-4 text-primary" /> Open Profile Studio
+        </Button>
 
         {/* Change/Set Password Button - show for all users */}
         <button onClick={() => setActivePanel("change-password")}
