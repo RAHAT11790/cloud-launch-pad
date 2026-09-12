@@ -91,24 +91,31 @@ export type BuyFrameResult = { ok: true; coins: number } | { ok: false; reason: 
 export const buyProfileFrame = async (uid: string, frameId: string): Promise<BuyFrameResult> => {
   const frame = PROFILE_FRAMES.find((item) => item.id === frameId);
   if (!frame) return { ok: false, reason: "missing" };
-  const ownedSnap = await get(ref(db, `users/${uid}/profileCustomization/ownedFrames/${frameId}`));
-  if (ownedSnap.val() === true) {
-    await saveProfileStyle(uid, { frameId });
-    const wallet = await get(ref(db, `users/${uid}/coinWallet/coins`));
-    return { ok: true, coins: Number(wallet.val() || 0) };
-  }
   let result: BuyFrameResult = { ok: false, reason: "insufficient" };
-  await runTransaction(ref(db, `users/${uid}/coinWallet`), (current: any) => {
-    const wallet = current || { coins: 0, adWatchLog: {} };
+  await runTransaction(ref(db, `users/${uid}`), (current: any) => {
+    const user = current || {};
+    const customization = user.profileCustomization || {};
+    const ownedFrames = customization.ownedFrames || {};
+    const wallet = user.coinWallet || { coins: 0, adWatchLog: {} };
     const coins = Math.max(0, Number(wallet.coins || 0));
+    if (ownedFrames[frameId] === true) {
+      result = { ok: true, coins };
+      return {
+        ...user,
+        profileCustomization: { ...customization, frameId },
+      };
+    }
     if (coins < frame.price) return current;
     result = { ok: true, coins: coins - frame.price };
-    return { ...wallet, coins: coins - frame.price };
-  });
-  if (!result.ok) return result;
-  await update(ref(db, `users/${uid}/profileCustomization`), {
-    [`ownedFrames/${frameId}`]: true,
-    frameId,
+    return {
+      ...user,
+      coinWallet: { ...wallet, coins: coins - frame.price },
+      profileCustomization: {
+        ...customization,
+        frameId,
+        ownedFrames: { ...ownedFrames, [frameId]: true },
+      },
+    };
   });
   return result;
 };
