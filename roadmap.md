@@ -6,4 +6,4 @@
 - [ ] Diagnose and repair RS server URL/proxy playback without changing HLS behavior.
 - [ ] Implement the actionable Google Search Console fixes from the uploaded audit.
 - [ ] Run focused tests, build verification, and end-to-end browser checks.
-- [ ] Redesign Profile with premium fonts/themes and 20 coin-purchasable animated frames.
+- [x] Redesign Profile with premium fonts/themes and 20 coin-purchasable animated frames.

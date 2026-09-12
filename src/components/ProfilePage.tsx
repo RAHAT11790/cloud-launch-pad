@@ -30,7 +30,6 @@ import {
 } from "@/lib/profileCustomization";
 
 import VideoPlayer from "@/components/VideoPlayer";
-import InviteFriendCard from "@/components/InviteFriendCard";
 
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
@@ -1857,83 +1856,66 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Main Profile
   return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+    <motion.div className={`profile-page fixed inset-0 z-[200] overflow-y-auto pb-24 pt-[70px] ${selectedTheme.className} ${selectedFont.className}`}
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
       transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
-      <button onClick={onClose} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="w-5 h-5" />
-        <span className="font-medium">Back</span>
-      </button>
+      <div className="profile-page-inner">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} className="profile-back-button mb-4 gap-2">
+          <ArrowLeft className="h-4 w-4" /><span>Back</span>
+        </Button>
 
-      {/* Avatar - Premium styled */}
-      <div className="text-center mb-7">
-        <div className="relative inline-block">
-          {profilePhoto ? (
-            <img src={profilePhoto} alt="Profile" className={`w-[100px] h-[100px] rounded-full object-cover mx-auto mb-4 border-4 ${isPremium ? "" : "border-foreground/10"}`}
-              style={isPremium ? { borderColor: "hsl(45,90%,55%)", boxShadow: "0 10px 40px hsla(45,90%,55%,0.3)" } : { boxShadow: "0 10px 40px hsla(355,85%,55%,0.4)" }} />
-          ) : (
-            <div className={`w-[100px] h-[100px] rounded-full mx-auto mb-4 flex items-center justify-center text-[42px] font-extrabold border-4 ${isPremium ? "" : "gradient-primary border-foreground/10"}`}
-              style={isPremium ? { background: "linear-gradient(135deg, hsl(45,90%,55%), hsl(30,85%,45%))", borderColor: "hsl(45,90%,55%)", boxShadow: "0 10px 40px hsla(45,90%,55%,0.3)", color: "hsl(30,20%,8%)" } : { boxShadow: "0 10px 40px hsla(355,85%,55%,0.4)" }}>
-              {initial}
+        <section className="profile-identity-panel">
+          <div className="profile-cover-pattern" aria-hidden="true" />
+          <div className="profile-identity-content">
+            {renderProfileAvatar()}
+            <div className="profile-identity-copy">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1>{displayName}</h1>
+                {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+              </div>
+              <p>{(() => {
+                try {
+                  const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+                  const email = String(u.email || "");
+                  return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
+                } catch { return "Guest Profile"; }
+              })()}</p>
+              <div className="profile-identity-actions">
+                <Button type="button" size="sm" onClick={() => { setTempName(displayName); setActivePanel("edit"); }}>
+                  <User className="h-4 w-4" /> Edit profile
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setActivePanel("customize")}>
+                  <Sparkles className="h-4 w-4" /> Profile Studio
+                </Button>
+              </div>
             </div>
-          )}
-          {isPremium && (
-            <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center premium-gradient" style={{ boxShadow: "0 2px 10px hsla(45,90%,55%,0.5)" }}>
-              <Crown className="w-4 h-4" style={{ color: "hsl(30,20%,8%)" }} />
-            </div>
-          )}
+          </div>
+        </section>
+
+        <div className="profile-stat-grid">
+          <div><Coins className="h-4 w-4" /><strong>{coinWallet.coins || 0}</strong><span>Coins</span></div>
+          <div><History className="h-4 w-4" /><strong>{watchHistory.length}</strong><span>Watched</span></div>
+          <div><Bookmark className="h-4 w-4" /><strong>{watchlist.length}</strong><span>Watchlist</span></div>
         </div>
-        <h2 className="text-2xl font-bold mb-1">{displayName}</h2>
-        {isPremium && (
-          <span className="inline-block px-3 py-0.5 rounded-full text-[10px] font-bold premium-badge mb-1">
-            ⭐ PREMIUM MEMBER
+
+        <div className="profile-access-card"><AccessTimer /></div>
+
+        <Button type="button" variant="outline" onClick={() => navigate("/daily-tasks")} className="profile-daily-card h-auto w-full justify-start">
+          <span className="profile-daily-icon"><Coins className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1 text-left">
+            <strong>Daily Bonus & Invite Rewards</strong>
+            <small>{remainingCoinAds} tasks left today · Invite friends to earn up to 10 coins</small>
           </span>
-        )}
-        <p className="text-sm text-secondary-foreground">
-          {(() => {
-            try {
-              const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-              const email = String(u.email || "");
-              return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
-            } catch { return "Guest Profile"; }
-          })()}
-        </p>
-      </div>
-
-
-      {/* Free / Global Access Timer */}
-      <AccessTimer />
-
-      {/* Get Free Coins — daily tasks entry (permanent) */}
-      <button
-        type="button"
-        onClick={() => navigate("/daily-tasks")}
-        className="w-full mb-7 rounded-2xl p-4 text-left border border-amber-400/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/5 active:scale-[0.99] transition-transform relative overflow-hidden group"
-      >
-        <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
-        <div className="flex items-center gap-3 relative">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/25">
-            <Coins className="w-6 h-6 text-black" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-black text-amber-200 leading-none">Get Free Coins</p>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 uppercase tracking-wider">Daily</span>
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground leading-tight">
-              5 daily tasks • Earn coins • Redeem Premium — Balance: <b className="text-amber-300">{coinWallet.coins || 0}</b>
-            </p>
-          </div>
-          <span className="text-amber-300 text-xl font-black flex-shrink-0">›</span>
-        </div>
-      </button>
+          <ChevronRight className="h-4 w-4 shrink-0" />
+        </Button>
 
 
 
 
 
+      <div className="profile-content-grid">
       {/* Watch History */}
-      <div className="mb-7">
+      <div className="profile-content-section">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-bold flex items-center category-bar">Watch History</h3>
           {watchHistory.length > 0 && (
@@ -1974,7 +1956,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       </div>
 
       {/* Watchlist */}
-      <div className="mb-7">
+      <div className="profile-content-section">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-bold flex items-center category-bar">My Watchlist</h3>
           {watchlist.length > 0 && (
@@ -2107,8 +2089,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         </div>
       )}
 
+      </div>
+
       {/* Menu Items */}
-      <div className="flex flex-col gap-2">
+      <div className="profile-menu-grid">
         <div onClick={() => setActivePanel("premium")}
           className={`flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl ${isPremium ? (isPremiumExpiringSoon ? "border border-destructive/50 bg-destructive/10 animate-pulse" : "premium-card-glow") : "glass-card border-foreground/20 bg-gradient-to-r from-foreground/5 to-transparent hover:border-primary"}`}
           style={isPremiumExpiringSoon ? { boxShadow: "0 0 24px hsla(0,84%,60%,0.25)" } : undefined}>
@@ -2183,10 +2167,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </>
         ) : null}
 
-        {/* Invite Friends — prominent section at the very bottom of profile */}
-        <div className="mt-5">
-          <InviteFriendCard variant="full" siteName={brandingCfg.siteName || SITE_NAME} />
-        </div>
+      </div>
       </div>
     </motion.div>
   );
