@@ -2257,3 +2257,39 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 @media (prefers-reduced-motion: reduce) {
   .profile-page *, .profile-page *::after, .profile-page *::before { animation: none !important; }
 }
+
+/* Studio shell shares the profile background */
+.profile-studio {
+  --pf-bg: 17 18 23; --pf-surface: 24 26 33;
+  --pf-accent: 237 66 69; --pf-accent-2: 240 178 50; --pf-text: 245 245 245;
+  background:
+    radial-gradient(1100px 560px at 12% -8%, hsl(var(--pf-accent) / .18), transparent 60%),
+    radial-gradient(900px 480px at 96% 0%, hsl(var(--pf-accent-2) / .12), transparent 60%),
+    rgb(var(--pf-bg));
+  color: rgb(var(--pf-text));
+}
+.profile-studio > div { display: flex; flex-direction: column; gap: 16px; }
+.profile-studio .profile-back-button { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; font-weight: 600; }
+.profile-studio-tabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 999px; font-size: .8rem; font-weight: 600;
+  border: 1px solid rgb(255 255 255 / .1); background: rgb(var(--pf-surface) / .8); color: rgb(var(--pf-text) / .75);
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+.profile-studio-tabs button:hover { border-color: hsl(var(--pf-accent) / .5); color: rgb(var(--pf-text)); }
+.profile-studio-tabs button.is-active { background: linear-gradient(120deg, hsl(var(--pf-accent)), hsl(var(--pf-accent) / .7)); border-color: transparent; color: #fff; }
+.profile-studio .profile-section-heading { justify-content: space-between; align-items: flex-end; }
+.profile-studio .profile-section-heading h3 { font-size: 1.05rem; font-weight: 700; }
+.profile-studio .profile-section-heading > span { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 600; color: hsl(var(--pf-accent-2)); }
+.profile-frame-card small { font-size: .64rem; text-transform: uppercase; letter-spacing: .1em; color: rgb(var(--pf-text) / .45); }
+.profile-frame-card strong { font-size: .76rem; font-weight: 700; line-height: 1.2; }
+.profile-frame-card:disabled { opacity: .6; cursor: wait; }
+.profile-theme-card strong { flex: 1; text-align: left; font-weight: 600; }
+.profile-theme-card svg { color: hsl(var(--pf-accent-2)); }
+.profile-font-grid button {
+  display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid rgb(255 255 255 / .08); background: rgb(var(--pf-surface) / .85); color: rgb(var(--pf-text));
+}
+.profile-font-grid button strong { flex: 1; text-align: left; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-font-grid button span { font-size: .66rem; color: rgb(var(--pf-text) / .5); }
+.profile-font-grid button.is-equipped, .profile-theme-card.is-equipped { border-color: hsl(var(--pf-accent-2)); }
