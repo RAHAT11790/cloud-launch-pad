@@ -628,9 +628,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     try {
       const result = await buyProfileFrame(userId, frameId);
       if (!result.ok) {
-        toast.error(result.reason === "insufficient" ? `You need ${frame.price} coins for this frame` : "Frame unavailable");
+        const reason = (result as { reason?: string }).reason;
+        toast.error(reason === "insufficient" ? `You need ${frame.price} coins for this frame` : "Frame unavailable");
         return;
       }
+
       setCustomization((current) => ({
         ...current,
         frameId,
