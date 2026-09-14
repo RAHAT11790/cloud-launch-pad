@@ -28,6 +28,7 @@ import {
   subscribeProfileCustomization,
   type ProfileCustomization,
 } from "@/lib/profileCustomization";
+import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -648,7 +649,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   const renderProfileAvatar = (size: "large" | "small" = "large") => (
     <div className={`profile-avatar-frame profile-frame-${customization.frameId} ${size === "small" ? "profile-avatar-small" : ""}`}>
-      <div className="profile-frame-orbit" aria-hidden="true" />
+      <div className="profile-frame-decoration" aria-hidden="true">
+        <i /><i /><i /><i />
+      </div>
       <div className="profile-avatar-core">
         {profilePhoto ? (
           <img src={profilePhoto} alt="Profile" className="h-full w-full rounded-full object-cover" />
@@ -1843,10 +1846,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <Save className="w-4 h-4" /> Save Changes
         </button>
 
-        <Button type="button" variant="outline" onClick={() => setActivePanel("customize")} className="mb-4 w-full gap-2">
-          <Sparkles className="h-4 w-4 text-primary" /> Open Profile Studio
-        </Button>
-
         {/* Change/Set Password Button - show for all users */}
         <button onClick={() => setActivePanel("change-password")}
           className="w-full py-3 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground font-medium flex items-center justify-center gap-2 transition-all hover:border-primary text-sm">
@@ -1867,7 +1866,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         </Button>
 
         <section className="profile-identity-panel">
-          <div className="profile-cover-pattern" aria-hidden="true" />
+          <div className="profile-cover-pattern" aria-hidden="true">
+            <img src={profileAnimeBanner} alt="" width={1536} height={512} />
+          </div>
           <div className="profile-identity-content">
             {renderProfileAvatar()}
             <div className="profile-identity-copy">
@@ -1883,9 +1884,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 } catch { return "Guest Profile"; }
               })()}</p>
               <div className="profile-identity-actions">
-                <Button type="button" size="sm" onClick={() => { setTempName(displayName); setActivePanel("edit"); }}>
-                  <User className="h-4 w-4" /> Edit profile
-                </Button>
+                {!isGuestUser && (
+                  <Button type="button" size="sm" onClick={() => { setTempName(displayName); setActivePanel("edit"); }}>
+                    <User className="h-4 w-4" /> Edit profile
+                  </Button>
+                )}
                 <Button type="button" size="sm" variant="outline" onClick={() => setActivePanel("customize")}>
                   <Sparkles className="h-4 w-4" /> Profile Studio
                 </Button>
@@ -1893,6 +1896,24 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             </div>
           </div>
         </section>
+
+        {isGuestUser && (
+          <Button type="button" onClick={() => { onClose(); onLoginClick?.(); }} className="profile-login-primary h-auto w-full">
+            <span className="profile-login-icon"><User className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1 text-left"><strong>Login / Sign Up</strong><small>Sync your profile, watchlist and rewards</small></span>
+            <ChevronRight className="h-5 w-5 shrink-0" />
+          </Button>
+        )}
+
+        <Button type="button" variant="outline" onClick={() => setActivePanel("premium")} className={`profile-premium-banner h-auto w-full ${isPremium ? "is-active" : ""}`}>
+          <span className="profile-premium-emblem"><Crown className="h-6 w-6" /></span>
+          <span className="min-w-0 flex-1 text-left">
+            <small>{isPremium ? "MEMBERSHIP ACTIVE" : "RS ANIME PREMIUM"}</small>
+            <strong>{isPremium ? `${premiumDaysLeft} days remaining` : "Upgrade your anime experience"}</strong>
+            <span>{isPremium ? `${premiumDeviceCount}/${premiumMaxDevices} devices connected` : "Premium access with bKash"}</span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0" />
+        </Button>
 
         <div className="profile-stat-grid">
           <div><Coins className="h-4 w-4" /><strong>{coinWallet.coins || 0}</strong><span>Coins</span></div>
@@ -2095,39 +2116,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       {/* Menu Items */}
       <div className="profile-menu-grid">
-        <div onClick={() => setActivePanel("premium")}
-          className={`flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl ${isPremium ? (isPremiumExpiringSoon ? "border border-destructive/50 bg-destructive/10 animate-pulse" : "premium-card-glow") : "glass-card border-foreground/20 bg-gradient-to-r from-foreground/5 to-transparent hover:border-primary"}`}
-          style={isPremiumExpiringSoon ? { boxShadow: "0 0 24px hsla(0,84%,60%,0.25)" } : undefined}>
-          <Crown className="w-5 h-5" style={isPremium ? { color: "hsl(45,90%,55%)" } : { color: "hsl(var(--primary))" }} />
-          <div className="flex-1">
-            <span className={`text-[13px] font-medium ${isPremium ? "premium-text" : ""}`}>{isPremium ? "Premium Active ✨" : "Get Premium"}</span>
-            {isPremium && premiumExpiry && (
-              <p className={`text-[10px] ${isPremiumExpiringSoon ? "text-destructive" : "text-muted-foreground"}`}>Expires: {new Date(premiumExpiry).toLocaleDateString()} • {premiumDeviceCount}/{premiumMaxDevices} devices • {premiumDaysLeft} day{premiumDaysLeft === 1 ? "" : "s"} left</p>
-            )}
-            {!isPremium && <p className="text-[10px] text-muted-foreground">Buy premium with bKash</p>}
-          </div>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
         <div onClick={() => setActivePanel("settings")}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <Settings className="w-5 h-5 text-primary" />
           <span className="flex-1 text-[13px] font-medium">Settings</span>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
-        <div onClick={() => { setTempName(displayName); setActivePanel("edit"); }}
-          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
-          <User className="w-5 h-5 text-primary" />
-          <span className="flex-1 text-[13px] font-medium">Edit Profile</span>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
-        {isGuestUser ? (
-          <div onClick={() => { onClose(); onLoginClick?.(); }}
-            className="flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg">
-            <User className="w-5 h-5" />
-            <span className="flex-1 text-[13px] font-bold">Login / Sign Up</span>
-            <ChevronRight className="w-3 h-3 opacity-80" />
-          </div>
-        ) : (
+        {!isGuestUser && (
           <div onClick={handleDeleteThisPhoneLogin}
             className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:bg-accent/20 border-accent/30 bg-accent/15 rounded-xl">
             <LogOut className="w-5 h-5" />
