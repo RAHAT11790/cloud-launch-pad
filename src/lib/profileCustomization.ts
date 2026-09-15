@@ -70,13 +70,16 @@ export const DEFAULT_PROFILE_CUSTOMIZATION: ProfileCustomization = {
   frameId: "ember",
   themeId: "crimson",
   fontId: "sora",
+  backgroundId: "",
   ownedFrames: { ember: true },
+  ownedBackgrounds: {},
 };
 
 const cleanCustomization = (raw: Partial<ProfileCustomization> | null): ProfileCustomization => ({
   ...DEFAULT_PROFILE_CUSTOMIZATION,
   ...(raw || {}),
   ownedFrames: { ...DEFAULT_PROFILE_CUSTOMIZATION.ownedFrames, ...(raw?.ownedFrames || {}) },
+  ownedBackgrounds: { ...(raw?.ownedBackgrounds || {}) },
 });
 
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
