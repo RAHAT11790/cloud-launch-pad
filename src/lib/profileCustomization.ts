@@ -18,7 +18,9 @@ export type ProfileCustomization = {
   frameId: string;
   themeId: string;
   fontId: string;
+  backgroundId: string;
   ownedFrames: Record<string, boolean>;
+  ownedBackgrounds: Record<string, boolean>;
 };
 
 export const PROFILE_FRAMES: ProfileFrame[] = [
