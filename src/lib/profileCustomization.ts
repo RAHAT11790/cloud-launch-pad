@@ -87,7 +87,10 @@ export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCu
   return () => unsubscribe();
 };
 
-export const saveProfileStyle = async (uid: string, patch: Partial<Pick<ProfileCustomization, "frameId" | "themeId" | "fontId">>) => {
+export const saveProfileStyle = async (
+  uid: string,
+  patch: Partial<Pick<ProfileCustomization, "frameId" | "themeId" | "fontId" | "backgroundId">>,
+) => {
   await update(ref(db, `users/${uid}/profileCustomization`), patch);
 };
 
