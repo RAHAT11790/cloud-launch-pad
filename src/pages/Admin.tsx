@@ -45,6 +45,7 @@ import CloudflareManager from "@/components/admin/CloudflareManager";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 import AdsterraConfig from "@/components/admin/AdsterraConfig";
 import TelegramDownloadConfig from "@/components/admin/TelegramDownloadConfig";
+import ProfileShopManager from "@/components/admin/ProfileShopManager";
 import AdsterraAnalytics from "@/components/admin/AdsterraAnalytics";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
@@ -184,7 +185,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "profile-shop";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -1987,7 +1988,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
     "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
     "egd-manager", "cf-manager", "fb-analytics", "adsterra", "backdrop-ai",
-    "security-center", "task-manager", "tg-download"
+    "security-center", "task-manager", "tg-download", "profile-shop"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
   const routeNavigate = useNavigate();
@@ -3324,6 +3325,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "security-center": "Security & Access",
   "task-manager": "Daily Task Manager",
   "tg-download": "Telegram Download",
+  "profile-shop": "Profile Shop",
   
   };
 
@@ -5385,6 +5387,7 @@ ${tgBulkFooter}
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
  { section: "tg-download", icon: <Send size={16} />, label: "Telegram Download" },
+ { section: "profile-shop", icon: <ScanFace size={16} />, label: "Profile Shop" },
  { section: "fb-analytics", icon: <Database size={16} />, label: "FB Analytics" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
  { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
