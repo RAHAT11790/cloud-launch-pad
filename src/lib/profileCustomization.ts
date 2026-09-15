@@ -18,7 +18,9 @@ export type ProfileCustomization = {
   frameId: string;
   themeId: string;
   fontId: string;
+  backgroundId: string;
   ownedFrames: Record<string, boolean>;
+  ownedBackgrounds: Record<string, boolean>;
 };
 
 export const PROFILE_FRAMES: ProfileFrame[] = [
@@ -68,13 +70,16 @@ export const DEFAULT_PROFILE_CUSTOMIZATION: ProfileCustomization = {
   frameId: "ember",
   themeId: "crimson",
   fontId: "sora",
+  backgroundId: "",
   ownedFrames: { ember: true },
+  ownedBackgrounds: {},
 };
 
 const cleanCustomization = (raw: Partial<ProfileCustomization> | null): ProfileCustomization => ({
   ...DEFAULT_PROFILE_CUSTOMIZATION,
   ...(raw || {}),
   ownedFrames: { ...DEFAULT_PROFILE_CUSTOMIZATION.ownedFrames, ...(raw?.ownedFrames || {}) },
+  ownedBackgrounds: { ...(raw?.ownedBackgrounds || {}) },
 });
 
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
@@ -82,7 +87,10 @@ export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCu
   return () => unsubscribe();
 };
 
-export const saveProfileStyle = async (uid: string, patch: Partial<Pick<ProfileCustomization, "frameId" | "themeId" | "fontId">>) => {
+export const saveProfileStyle = async (
+  uid: string,
+  patch: Partial<Pick<ProfileCustomization, "frameId" | "themeId" | "fontId" | "backgroundId">>,
+) => {
   await update(ref(db, `users/${uid}/profileCustomization`), patch);
 };
 

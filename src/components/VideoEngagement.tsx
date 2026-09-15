@@ -141,7 +141,14 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     if (!animeId) return;
     return onValue(ref(db, `comments/${animeId}`), (snap) => {
       const raw = snap.val() || {};
-      const list: CommentItem[] = Object.entries(raw).map(([id, v]: [string, any]) => normalizeComment(id, v));
+      const list: CommentItem[] = [];
+      Object.entries(raw).forEach(([id, v]: [string, any]) => {
+        list.push(normalizeComment(id, v));
+        // Admin panel replies are stored nested under the parent comment.
+        Object.entries(v?.replies || {}).forEach(([rid, rv]: [string, any]) => {
+          list.push({ ...normalizeComment(rid, rv), parentId: id });
+        });
+      });
       list.sort((a, b) => b.ts - a.ts);
       setAllComments(list);
     });
