@@ -1,26 +1,37 @@
-# Telegram, RS playback, and Search indexing fixes
+# Profile page and Profile Shop completion
 
 ## What will change
 
-1. **Telegram download handoff**
-   - Replace the oversized deep-link payload with a compact request token that stays within Telegram's limit.
-   - Store the selected title, season, episodes, and qualities behind that token, then let the bot retrieve and process it from `/start`.
-   - Add the matching `/start` payload handler to the active bot implementation and preserve the normal welcome response.
-   - Remove the visible link preview and keep one **Go to Telegram** button.
-   - Account for Telegram's mandatory first-contact consent: Telegram itself requires a user to press **Start** the first time; after that the bot will receive the request and reply correctly.
+1. **Fix the current error and unfinished wiring**
+   - Resolve the reported mobile-hook TypeScript error and any related build errors.
+   - Complete the already-added Profile Shop connection without changing unrelated website behavior.
 
-2. **RS server repair only**
-   - Trace RS URL domain replacement, per-server proxy selection, failure switching, and Range requests.
-   - Fix RS-specific broken paths and stalls without changing HLS/AN behavior or introducing cross-server URL mirroring.
-   - Validate representative direct HTTPS and proxied HTTP RS URLs where available.
+2. **Use only admin-added frame images**
+   - Remove the twenty generated CSS frames and their animations from the profile experience.
+   - Load enabled frames from the admin Profile Shop and place the selected transparent PNG above the avatar at a stable, centered size.
+   - Keep premium items free; other users can unlock them with the configured coin price.
 
-3. **Google indexing fixes**
-   - Apply the remaining concrete items from the uploaded audit: accurate metadata, route-aware canonical/indexing rules, valid robots directives, and a clean sitemap containing only public canonical pages.
-   - Keep private/admin/account-like pages out of indexing.
+3. **Add admin-managed profile backgrounds**
+   - Load enabled background images from the same shop, show them as a separate collection, and support buy/equip behavior.
+   - Display the equipped background across the profile banner without awkward cropping or covering the controls.
+
+4. **Rebuild the admin Profile Shop workflow**
+   - Add gallery file selection with automatic image hosting and URL insertion, while preserving manual URL entry.
+   - Use a clear add/edit form followed by a saved-item list; saved frames and backgrounds appear immediately in ordered rows/cards.
+   - Add explicit Edit, Save, Cancel, visibility, free/paid, price, preview, and delete controls with mobile-safe text and buttons.
+
+5. **Polish the profile layout**
+   - Move the back control into a stable top bar.
+   - Improve banner/avatar alignment, hierarchy, spacing, and restrained motion while keeping the selected Discord-inspired anime direction.
+   - Ensure long names, prices, and button labels do not overflow.
+
+6. **Finish and verify**
+   - Complete the admin-reply visibility fix already identified.
+   - Check TypeScript/build output and verify the profile and Profile Shop at desktop and mobile sizes in the running website.
 
 ## Technical details
 
-- Telegram deep-link payloads are restricted to 64 characters and a limited character set. A short opaque token avoids title-length failures and keeps request details out of the visible URL.
-- The request record will expire and be readable only for the bot handoff flow.
-- Existing HLS detection, HLS buffering, and AN paths remain untouched.
-- Verification includes URL/token unit tests, bot payload tests, production build status, and mobile browser flow checks.
+- Existing stored customization remains compatible; missing or removed legacy frame IDs fall back to no frame.
+- Frame artwork uses `object-fit: contain` and an oversized square overlay around the circular avatar, suitable for transparent ornamental PNGs.
+- Background artwork uses responsive cover/position rules with a readable content overlay.
+- Coin deduction and ownership remain atomic through the existing profile-shop purchase helper.
