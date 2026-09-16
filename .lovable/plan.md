@@ -1,37 +1,27 @@
-# Profile page and Profile Shop completion
+# Admin-managed profile collectibles
 
 ## What will change
 
-1. **Fix the current error and unfinished wiring**
-   - Resolve the reported mobile-hook TypeScript error and any related build errors.
-   - Complete the already-added Profile Shop connection without changing unrelated website behavior.
+1. **Fix the current TypeScript error**
+   - Correct the mobile hook/module issue reported by the build.
+   - Resolve any directly related profile integration errors.
 
-2. **Use only admin-added frame images**
-   - Remove the twenty generated CSS frames and their animations from the profile experience.
-   - Load enabled frames from the admin Profile Shop and place the selected transparent PNG above the avatar at a stable, centered size.
-   - Keep premium items free; other users can unlock them with the configured coin price.
+2. **Connect Profile Shop to the user profile**
+   - Subscribe to the frames and backgrounds saved from the admin panel.
+   - Show only enabled admin items; remove the generated placeholder frame collection from the user-facing shop.
+   - Gracefully show no equipped frame when an old or deleted frame ID is stored.
 
-3. **Add admin-managed profile backgrounds**
-   - Load enabled background images from the same shop, show them as a separate collection, and support buy/equip behavior.
-   - Display the equipped background across the profile banner without awkward cropping or covering the controls.
+3. **Frame and background ownership**
+   - Mark an item available when it is already owned, free, or the user has premium access.
+   - Let other users purchase items with coins through the existing atomic purchase helper.
+   - Equip the item after a successful purchase and update the visible coin balance immediately.
+   - Display clear states for Equipped, Owned/Use, Free, Premium free, price, and insufficient coins.
 
-4. **Rebuild the admin Profile Shop workflow**
-   - Add gallery file selection with automatic image hosting and URL insertion, while preserving manual URL entry.
-   - Use a clear add/edit form followed by a saved-item list; saved frames and backgrounds appear immediately in ordered rows/cards.
-   - Add explicit Edit, Save, Cancel, visibility, free/paid, price, preview, and delete controls with mobile-safe text and buttons.
+4. **Correct visual placement**
+   - Layer transparent frame PNGs above the avatar with centered `object-fit: contain` sizing.
+   - Display the selected background image across the profile identity banner with readable profile details above it.
+   - Add Frames and Backgrounds collections to Profile Studio with stable card dimensions and no text overflow.
 
-5. **Polish the profile layout**
-   - Move the back control into a stable top bar.
-   - Improve banner/avatar alignment, hierarchy, spacing, and restrained motion while keeping the selected Discord-inspired anime direction.
-   - Ensure long names, prices, and button labels do not overflow.
-
-6. **Finish and verify**
-   - Complete the admin-reply visibility fix already identified.
-   - Check TypeScript/build output and verify the profile and Profile Shop at desktop and mobile sizes in the running website.
-
-## Technical details
-
-- Existing stored customization remains compatible; missing or removed legacy frame IDs fall back to no frame.
-- Frame artwork uses `object-fit: contain` and an oversized square overlay around the circular avatar, suitable for transparent ornamental PNGs.
-- Background artwork uses responsive cover/position rules with a readable content overlay.
-- Coin deduction and ownership remain atomic through the existing profile-shop purchase helper.
+5. **Verify**
+   - Check the build output and TypeScript status.
+   - Test the profile page at desktop and mobile sizes, including free/owned/paid display states and equip behavior.
