@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Image as ImageIcon, Loader2, Plus, ScanFace, Trash2, Save, Coins, Gift } from "lucide-react";
+import { Eye, EyeOff, Image as ImageIcon, Loader2, Plus, ScanFace, Trash2, Save, Coins, Gift, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   EMPTY_SHOP,
   ProfileShop,
@@ -26,16 +27,17 @@ const blankItem = (kind: ShopKind, order: number): DraftItem => ({
   isNew: true,
 });
 
-const card = "rounded-2xl border border-white/10 bg-[#15152a] p-4";
-const label = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[#9d93c2]";
+const card = "rounded-lg border border-border/60 bg-card p-4 shadow-sm";
+const label = "mb-1.5 block text-[11px] font-semibold uppercase text-muted-foreground";
 const field =
-  "h-10 w-full rounded-lg border border-white/10 bg-[#0f0f1e] px-3 text-[13px] text-white outline-none placeholder:text-[#6f6893] focus:border-purple-500";
+  "h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary";
 
 const ProfileShopManager = () => {
   const [shop, setShop] = useState<ProfileShop>(EMPTY_SHOP);
   const [kind, setKind] = useState<ShopKind>("frames");
   const [drafts, setDrafts] = useState<Record<string, DraftItem>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
   useEffect(() => subscribeProfileShop(setShop), []);
 
@@ -57,6 +59,25 @@ const ProfileShopManager = () => {
   const addItem = () => {
     const draft = blankItem(kind, items.length + 1);
     setDrafts((current) => ({ ...current, [draft.id]: draft }));
+  };
+
+  const uploadImage = async (item: DraftItem, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Choose an image file");
+    if (file.size > 10 * 1024 * 1024) return toast.error("Image must be smaller than 10MB");
+    setUploadingId(item.id);
+    try {
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const imageUrl = await uploadToImgbb(file);
+      patch(item.id, { imageUrl, name: item.name || file.name.replace(/\.[^.]+$/, "") });
+      toast.success("Image uploaded. Save the item to publish it.");
+    } catch {
+      toast.error("Image upload failed. Try again or paste an image URL.");
+    } finally {
+      setUploadingId(null);
+    }
   };
 
   const save = async (item: DraftItem) => {
@@ -102,55 +123,53 @@ const ProfileShopManager = () => {
       <div className={`${card} flex flex-col gap-3`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
-              <ScanFace size={15} className="text-purple-400" /> Profile Shop
+            <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <ScanFace size={17} className="text-primary" /> Profile Shop
             </h3>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#9d93c2]">
-              Add avatar frames and profile background images, then set each price. Free items unlock for everyone;
-              premium members get everything free.
+            <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+              Upload transparent frame artwork or profile backdrops. Premium members unlock every published item automatically.
             </p>
           </div>
-          <button
+          <Button
             onClick={addItem}
-            className="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-600 px-4 text-[13px] font-semibold text-white"
+            className="h-10 max-w-full shrink-0 px-4 text-[13px]"
           >
             <Plus size={14} /> Add {kind === "frames" ? "frame" : "background"}
-          </button>
+          </Button>
         </div>
 
         <div className="flex gap-2">
           {(["frames", "backgrounds"] as const).map((k) => (
-            <button
+            <Button
               key={k}
+              type="button"
+              variant={kind === k ? "default" : "outline"}
               onClick={() => setKind(k)}
-              className={`h-9 flex-1 rounded-lg border text-[12px] font-semibold capitalize transition-colors ${
-                kind === k
-                  ? "border-transparent bg-purple-600 text-white"
-                  : "border-white/10 bg-[#0f0f1e] text-[#9d93c2] hover:border-purple-500/50"
-              }`}
+              className="h-10 min-w-0 flex-1 whitespace-normal px-2 text-[12px] font-semibold"
             >
               {k === "frames" ? "Avatar Frames" : "Backgrounds"} ({k === "frames" ? shop.frames.length : shop.backgrounds.length})
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <div className={`${card} py-10 text-center text-[13px] text-[#9d93c2]`}>
-          No {kind} yet. Click “Add {kind === "frames" ? "frame" : "background"}” to upload your first PNG URL.
+        <div className={`${card} py-10 text-center text-[13px] text-muted-foreground`}>
+          No {kind} yet. Add one, then choose an image from your gallery.
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {rows.map((item) => {
             const dirty = !!drafts[item.id];
+            const isUploading = uploadingId === item.id;
             return (
               <div key={item.id} className={`${card} space-y-3`}>
                 <div className="flex items-start gap-3">
-                  <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/10 bg-[#0f0f1e]">
+                  <div className={`grid shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted/30 ${kind === "frames" ? "h-24 w-24" : "h-20 w-28"}`}>
                     {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain" />
+                      <img src={item.imageUrl} alt={item.name || `${kind} preview`} className={`h-full w-full ${kind === "frames" ? "object-contain" : "object-cover"}`} />
                     ) : (
-                      <ImageIcon size={18} className="text-[#6f6893]" />
+                      <ImageIcon size={20} className="text-muted-foreground" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-2">
@@ -163,19 +182,23 @@ const ProfileShopManager = () => {
                         onChange={(e) => patch(item.id, { name: e.target.value })}
                       />
                     </div>
-                    <div>
-                      <span className={label}>Image URL (transparent PNG for frames)</span>
-                      <input
-                        className={field}
-                        value={item.imageUrl}
-                        placeholder="https://..."
-                        onChange={(e) => patch(item.id, { imageUrl: e.target.value })}
-                      />
-                    </div>
+                    <label className="block">
+                      <span className={label}>Gallery image</span>
+                      <span className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-primary/50 bg-primary/5 px-3 text-[12px] font-semibold text-primary hover:bg-primary/10">
+                        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                        {isUploading ? "Uploading…" : "Choose from gallery"}
+                      </span>
+                      <input type="file" accept={kind === "frames" ? "image/png,image/webp" : "image/*"} className="hidden" disabled={isUploading} onChange={(event) => uploadImage(item, event)} />
+                    </label>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className={label}>Image URL</span>
+                  <input className={field} value={item.imageUrl} placeholder="Uploaded URL appears here" onChange={(e) => patch(item.id, { imageUrl: e.target.value })} />
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
                   <div>
                     <span className={label}>Price (coins)</span>
                     <input
@@ -196,46 +219,48 @@ const ProfileShopManager = () => {
                       onChange={(e) => patch(item.id, { tier: e.target.value })}
                     />
                   </div>
+                  <div>
+                    <span className={label}>Display order</span>
+                    <input type="number" min={0} className={field} value={item.order} onChange={(e) => patch(item.id, { order: Math.max(0, Number(e.target.value || 0)) })} />
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => patch(item.id, { free: !item.free })}
-                    className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-[12px] font-semibold ${
-                      item.free
-                        ? "border-transparent bg-emerald-600 text-white"
-                        : "border-white/10 bg-[#0f0f1e] text-[#9d93c2]"
-                    }`}
+                    className={`h-9 min-w-0 px-2 text-[12px] ${item.free ? "border-success/50 bg-success/10 text-success" : ""}`}
                   >
                     {item.free ? <Gift size={13} /> : <Coins size={13} />} {item.free ? "Free for all" : "Paid"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => patch(item.id, { enabled: !item.enabled })}
-                    className={`inline-flex h-9 items-center whitespace-nowrap rounded-lg border px-3 text-[12px] font-semibold ${
-                      item.enabled
-                        ? "border-transparent bg-sky-600 text-white"
-                        : "border-white/10 bg-[#0f0f1e] text-[#9d93c2]"
-                    }`}
+                    className="h-9 min-w-0 px-2 text-[12px]"
                   >
-                    {item.enabled ? "Visible" : "Hidden"}
-                  </button>
-                  <div className="flex-1" />
-                  <button
+                    {item.enabled ? <Eye size={13} /> : <EyeOff size={13} />} {item.enabled ? "Visible" : "Hidden"}
+                  </Button>
+                  <div className="hidden flex-1 sm:block" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
                     onClick={() => drop(item)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-[#0f0f1e] text-[#9d93c2] hover:text-red-400"
+                    className="h-9 w-full text-destructive sm:w-9"
                     aria-label="Delete"
                   >
                     <Trash2 size={14} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    type="button"
                     onClick={() => save(item)}
-                    disabled={savingId === item.id}
-                    className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-[12px] font-semibold text-white ${
-                      dirty || item.isNew ? "bg-gradient-to-r from-purple-600 to-fuchsia-600" : "bg-white/10"
-                    }`}
+                    disabled={savingId === item.id || isUploading || (!dirty && !item.isNew)}
+                    className="h-9 min-w-0 px-4 text-[12px]"
                   >
                     {savingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
