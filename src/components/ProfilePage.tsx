@@ -19,7 +19,6 @@ import { optimizedImageUrl } from "@/lib/imageCache";
 import { getTodayRemaining } from "@/lib/premiumAccess";
 import { Button } from "@/components/ui/button";
 import {
-  buyProfileFrame,
   DEFAULT_PROFILE_CUSTOMIZATION,
   PROFILE_FONTS,
   PROFILE_FRAMES,
@@ -28,6 +27,7 @@ import {
   subscribeProfileCustomization,
   type ProfileCustomization,
 } from "@/lib/profileCustomization";
+import { EMPTY_SHOP, equipOrBuyShopItem, subscribeProfileShop, type ProfileShop, type ShopItem, type ShopKind } from "@/lib/profileShop";
 import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
 
 import VideoPlayer from "@/components/VideoPlayer";
@@ -536,8 +536,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
   const [customization, setCustomization] = useState<ProfileCustomization>(DEFAULT_PROFILE_CUSTOMIZATION);
-  const [customizeTab, setCustomizeTab] = useState<"frames" | "themes" | "fonts">("frames");
+  const [customizeTab, setCustomizeTab] = useState<"frames" | "backgrounds" | "themes" | "fonts">("frames");
   const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
+  const [profileShop, setProfileShop] = useState<ProfileShop>(EMPTY_SHOP);
 
   // User-side APK download — admin sets URL + ON/OFF toggle from APK DW.
   // Paths: settings/apk/userEnabled (bool), settings/apk/userUrl (string).
@@ -591,6 +592,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     return subscribeProfileCustomization(userId, setCustomization);
   }, [userId]);
 
+  useEffect(() => subscribeProfileShop(setProfileShop), []);
+
+  const visibleFrames = useMemo(() => profileShop.frames.filter((item) => item.enabled), [profileShop.frames]);
+  const visibleBackgrounds = useMemo(() => profileShop.backgrounds.filter((item) => item.enabled), [profileShop.backgrounds]);
+  const selectedShopFrame = visibleFrames.find((item) => item.id === customization.frameId);
+  const selectedShopBackground = visibleBackgrounds.find((item) => item.id === customization.backgroundId);
+
   const applyProfileStyle = async (kind: "frameId" | "themeId" | "fontId", value: string) => {
     if (!userId) return;
     if ((kind === "themeId" || kind === "fontId") && !isPremium) {
@@ -607,39 +615,26 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     }
   };
 
-  const selectOrBuyFrame = async (frameId: string) => {
+  const selectOrBuyShopItem = async (kind: ShopKind, item: ShopItem) => {
     if (!userId || buyingFrame) return;
-    const frame = PROFILE_FRAMES.find((item) => item.id === frameId);
-    if (!frame) return;
-    if (isPremium || customization.ownedFrames[frameId]) {
-      setCustomization((current) => ({
-        ...current,
-        frameId,
-        ownedFrames: isPremium ? { ...current.ownedFrames, [frameId]: true } : current.ownedFrames,
-      }));
-      try {
-        await saveProfileStyle(userId, { frameId });
-        toast.success(`${frame.name} equipped`);
-      } catch {
-        toast.error("Could not equip this frame");
-      }
-      return;
-    }
-    setBuyingFrame(frameId);
+    setBuyingFrame(item.id);
     try {
-      const result = await buyProfileFrame(userId, frameId);
+      const result = await equipOrBuyShopItem(userId, kind, item, { isPremium });
       if (!result.ok) {
-        const reason = (result as { reason?: string }).reason;
-        toast.error(reason === "insufficient" ? `You need ${frame.price} coins for this frame` : "Frame unavailable");
+        toast.error(`You need ${item.price} coins for this ${kind === "frames" ? "frame" : "background"}`);
         return;
       }
-
       setCustomization((current) => ({
         ...current,
-        frameId,
-        ownedFrames: { ...current.ownedFrames, [frameId]: true },
+        ...(kind === "frames" ? {
+          frameId: item.id,
+          ownedFrames: { ...current.ownedFrames, [item.id]: true },
+        } : {
+          backgroundId: item.id,
+          ownedBackgrounds: { ...current.ownedBackgrounds, [item.id]: true },
+        }),
       }));
-      toast.success(`${frame.name} unlocked and equipped`);
+      toast.success(`${item.name} equipped`);
     } catch {
       toast.error("Purchase could not be completed");
     } finally {
@@ -648,10 +643,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   };
 
   const renderProfileAvatar = (size: "large" | "small" = "large") => (
-    <div className={`profile-avatar-frame profile-frame-${customization.frameId} ${size === "small" ? "profile-avatar-small" : ""}`}>
-      <div className="profile-frame-decoration" aria-hidden="true">
-        <i /><i /><i /><i />
-      </div>
+    <div className={`profile-avatar-frame ${size === "small" ? "profile-avatar-small" : ""}`}>
       <div className="profile-avatar-core">
         {profilePhoto ? (
           <img src={profilePhoto} alt="Profile" className="h-full w-full rounded-full object-cover" />
@@ -659,6 +651,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <span>{initial}</span>
         )}
       </div>
+      {selectedShopFrame?.imageUrl && (
+        <img src={selectedShopFrame.imageUrl} alt="" className="profile-frame-artwork" aria-hidden="true" />
+      )}
       {isPremium && <span className="profile-crown"><Crown className="h-3.5 w-3.5" /></span>}
     </div>
   );
@@ -1722,6 +1717,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <div className="profile-studio-tabs" role="tablist" aria-label="Profile customization">
             {([
               ["frames", ScanFace, "Frames"],
+              ["backgrounds", ImageIcon, "Backdrops"],
               ["themes", Palette, "Themes"],
               ["fonts", Type, "Name Style"],
             ] as const).map(([id, Icon, label]) => (
@@ -1739,23 +1735,47 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 <span><Coins className="h-4 w-4" /> {coinWallet.coins || 0}</span>
               </div>
               <div className="profile-frame-grid">
-                {PROFILE_FRAMES.map((frame) => {
+                {visibleFrames.map((frame) => {
                   const owned = isPremium || customization.ownedFrames[frame.id];
                   const equipped = customization.frameId === frame.id;
                   return (
-                    <button key={frame.id} type="button" onClick={() => selectOrBuyFrame(frame.id)}
+                    <button key={frame.id} type="button" onClick={() => selectOrBuyShopItem("frames", frame)}
                       disabled={buyingFrame === frame.id}
                       className={`profile-frame-card ${equipped ? "is-equipped" : ""}`}>
-                      <span className={`profile-frame-demo profile-frame-${frame.id}`}><span /></span>
+                      <span className="profile-frame-demo"><span /><img src={frame.imageUrl} alt="" loading="lazy" /></span>
                       <strong>{frame.name}</strong>
                       <small>{frame.tier}</small>
                       <span className="profile-frame-price">
-                        {equipped ? <><Check className="h-3 w-3" /> Equipped</> : owned ? "Use frame" : <><Coins className="h-3 w-3" /> {frame.price}</>}
+                        {equipped ? <><Check className="h-3 w-3" /> Equipped</> : owned || frame.free ? "Use frame" : <><Coins className="h-3 w-3" /> {frame.price}</>}
                       </span>
                     </button>
                   );
                 })}
               </div>
+              {visibleFrames.length === 0 && <p className="profile-shop-empty">No frames are available yet.</p>}
+            </section>
+          )}
+
+          {customizeTab === "backgrounds" && (
+            <section>
+              <div className="profile-section-heading">
+                <div><p className="profile-eyebrow">PROFILE BACKDROPS</p><h3>Choose your banner</h3></div>
+                <span><Coins className="h-4 w-4" /> {coinWallet.coins || 0}</span>
+              </div>
+              <div className="profile-background-grid">
+                {visibleBackgrounds.map((background) => {
+                  const owned = isPremium || background.free || customization.ownedBackgrounds[background.id];
+                  const equipped = customization.backgroundId === background.id;
+                  return (
+                    <button key={background.id} type="button" onClick={() => selectOrBuyShopItem("backgrounds", background)} disabled={buyingFrame === background.id}
+                      className={`profile-background-card ${equipped ? "is-equipped" : ""}`}>
+                      <img src={background.imageUrl} alt={background.name} loading="lazy" />
+                      <span><strong>{background.name}</strong><small>{equipped ? "Equipped" : owned ? "Use backdrop" : `${background.price} coins`}</small></span>
+                    </button>
+                  );
+                })}
+              </div>
+              {visibleBackgrounds.length === 0 && <p className="profile-shop-empty">No backdrops are available yet.</p>}
             </section>
           )}
 
@@ -1867,7 +1887,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
         <section className="profile-identity-panel">
           <div className="profile-cover-pattern" aria-hidden="true">
-            <img src={profileAnimeBanner} alt="" width={1536} height={512} />
+            <img src={selectedShopBackground?.imageUrl || profileAnimeBanner} alt="" width={1536} height={512} />
           </div>
           <div className="profile-identity-content">
             {renderProfileAvatar()}

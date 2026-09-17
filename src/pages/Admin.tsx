@@ -10080,12 +10080,14 @@ const AdminCommentsSection = ({
 
  try {
  const now = Date.now();
- const replyRef = push(ref(db, `comments/${animeId}/${commentId}/replies`));
- await set(replyRef, {
+  const replyRef = push(ref(db, `comments/${animeId}`));
+  await set(replyRef, {
  userId: "admin",
  userName: "Admin",
  text,
  timestamp: now,
+  parentId: commentId,
+  isAdmin: true,
  });
 
 
@@ -10105,9 +10107,12 @@ const AdminCommentsSection = ({
  }
  };
 
- const deleteReply = (animeId: string, commentId: string, replyId: string) => {
+  const deleteReply = (animeId: string, commentId: string, replyId: string) => {
  if (confirm("Delete this reply?")) {
- remove(ref(db, `comments/${animeId}/${commentId}/replies/${replyId}`))
+  Promise.all([
+  remove(ref(db, `comments/${animeId}/${replyId}`)),
+  remove(ref(db, `comments/${animeId}/${commentId}/replies/${replyId}`)).catch(() => undefined),
+  ])
  .then(() => toast.success("Reply deleted"))
  .catch(() => toast.error("Error deleting"));
  }
