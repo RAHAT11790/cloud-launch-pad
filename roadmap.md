@@ -7,3 +7,7 @@
 - [ ] Implement the actionable Google Search Console fixes from the uploaded audit.
 - [ ] Run focused tests, build verification, and end-to-end browser checks.
 - [x] Redesign Profile with premium fonts/themes and 20 coin-purchasable animated frames.
+- [ ] Connect Admin Profile Shop frames/backgrounds to the Profile Studio purchase and equip flow.
+- [ ] Add gallery uploads through ImgBB with editable previews and reliable save states.
+- [ ] Replace generated frame shapes with uploaded transparent frame artwork and correct avatar placement.
+- [ ] Fix profile back-button/banner placement and verify admin/profile views on mobile and desktop.
