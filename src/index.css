@@ -2063,7 +2063,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   flex-direction: column;
   gap: 16px;
 }
-.profile-back-button { color: rgb(var(--pf-text) / 0.85); }
+.profile-back-button { color: rgb(var(--pf-text) / 0.9); }
 
 /* Themes override accents only */
 .profile-theme-crimson { --pf-accent: 237 66 69; --pf-accent-2: 240 178 50; }
@@ -2091,6 +2091,19 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border: 1px solid rgb(255 255 255 / 0.08);
   background: linear-gradient(150deg, rgb(var(--pf-surface)) 0%, rgb(var(--pf-bg)) 100%);
   box-shadow: 0 18px 50px -28px rgb(0 0 0 / 0.9);
+}
+.profile-identity-panel > .profile-back-button {
+  position: absolute;
+  z-index: 10;
+  top: 10px;
+  left: 10px;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border: 1px solid rgb(var(--pf-text) / .18);
+  background: rgb(var(--pf-bg) / .72);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 5px 18px rgb(0 0 0 / .3);
 }
 .profile-cover-pattern {
   position: absolute; inset: 0 0 auto 0; height: 118px;
@@ -2328,7 +2341,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   inset: 0;
   background: linear-gradient(to bottom, transparent 42%, rgb(var(--pf-surface) / .88));
 }
-.profile-cover-pattern img { width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; }
+.profile-cover-pattern img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .profile-identity-content {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -2336,7 +2349,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   gap: 14px;
   padding: 0 16px 18px;
 }
-.profile-identity-content > .profile-avatar-frame { margin-top: -42px; }
+.profile-identity-content > .profile-avatar-frame { margin-top: -34px; }
 .profile-identity-copy { padding-top: 10px; }
 .profile-identity-copy h1 { font-size: 1.24rem; letter-spacing: 0; }
 .profile-identity-copy p { color: rgb(var(--pf-text) / .58); }
@@ -2389,16 +2402,16 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   z-index: 4;
   left: 50%;
   top: 50%;
-  width: 142%;
-  height: 142%;
+  width: var(--frame-scale, 126%);
+  height: var(--frame-scale, 126%);
   max-width: none;
   object-fit: contain;
   pointer-events: none;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px)));
   filter: drop-shadow(0 5px 8px rgb(0 0 0 / .42));
   animation: pf-frame-artwork 4s ease-in-out infinite;
 }
-@keyframes pf-frame-artwork { 0%,100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -51%) scale(1.015); } }
+@keyframes pf-frame-artwork { 0%,100% { transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px))) scale(1); } 50% { transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-51% + var(--frame-y, 0px))) scale(1.012); } }
 .profile-frame-decoration i { position: absolute; display: block; background: rgb(var(--frame-main, var(--pf-accent-2))); filter: drop-shadow(0 2px 3px rgb(0 0 0 / .35)); }
 .profile-frame-decoration i:nth-child(1), .profile-frame-decoration i:nth-child(2) { top: 12%; width: 28%; height: 53%; clip-path: polygon(100% 0, 72% 27%, 100% 42%, 58% 55%, 78% 100%, 28% 70%, 0 82%, 26% 42%, 4% 20%); }
 .profile-frame-decoration i:nth-child(1) { left: -2%; }
@@ -2452,7 +2465,19 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-frame-card { align-items: flex-start; padding: 12px; border-radius: 10px; background: rgb(var(--pf-surface)); }
 .profile-frame-demo { align-self: center; width: 82px; height: 82px; overflow: visible; border-radius: 0; }
 .profile-frame-demo > span { inset: 19%; z-index: 2; border-radius: 50%; animation: none !important; background: linear-gradient(145deg, rgb(var(--frame-main, var(--pf-accent-2))), rgb(var(--pf-surface-raised))); border: 3px solid rgb(var(--pf-surface)); }
-.profile-frame-demo > img { position: absolute; z-index: 4; left: 50%; top: 50%; width: 142%; height: 142%; max-width: none; object-fit: contain; transform: translate(-50%, -50%); filter: drop-shadow(0 3px 4px rgb(0 0 0 / .38)); }
+.profile-frame-demo > img { position: absolute; z-index: 4; left: 50%; top: 50%; width: var(--frame-scale, 126%); height: var(--frame-scale, 126%); max-width: none; object-fit: contain; transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px))); filter: drop-shadow(0 3px 4px rgb(0 0 0 / .38)); }
+
+/* Transparent checkerboard makes frame alpha obvious in the admin preview. */
+.profile-shop-admin-preview { background-color: hsl(var(--muted)); }
+.profile-shop-admin-preview.is-frame {
+  background-image:
+    linear-gradient(45deg, hsl(var(--border) / .48) 25%, transparent 25%),
+    linear-gradient(-45deg, hsl(var(--border) / .48) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, hsl(var(--border) / .48) 75%),
+    linear-gradient(-45deg, transparent 75%, hsl(var(--border) / .48) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+}
 .profile-background-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .profile-background-card { overflow: hidden; border: 1px solid rgb(var(--pf-line) / .3); border-radius: 8px; background: rgb(var(--pf-surface)); color: rgb(var(--pf-text)); text-align: left; }
 .profile-background-card img { width: 100%; aspect-ratio: 16 / 6; object-fit: cover; display: block; }
