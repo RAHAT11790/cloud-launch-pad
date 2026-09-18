@@ -34,8 +34,11 @@ async function compressImage(file: File): Promise<Blob> {
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close?.();
 
+    // PNG/WebP artwork (especially profile frames) can contain transparency.
+    // Converting those files to JPEG paints transparent pixels black/white.
+    const outputType = /image\/(png|webp)/i.test(file.type) ? "image/webp" : "image/jpeg";
     const blob: Blob | null = await new Promise((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.85),
+      canvas.toBlob(resolve, outputType, outputType === "image/webp" ? 0.92 : 0.85),
     );
     if (!blob) return file;
     // Use whichever is smaller

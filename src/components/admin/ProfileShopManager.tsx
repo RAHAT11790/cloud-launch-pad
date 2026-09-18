@@ -24,6 +24,9 @@ const blankItem = (kind: ShopKind, order: number): DraftItem => ({
   enabled: true,
   tier: "Custom",
   order,
+  scale: 126,
+  offsetX: 0,
+  offsetY: 0,
   isNew: true,
 });
 
@@ -120,21 +123,21 @@ const ProfileShopManager = () => {
 
   return (
     <div className="space-y-4">
-      <div className={`${card} flex flex-col gap-3`}>
+      <div className={`${card} flex flex-col gap-4`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
               <ScanFace size={17} className="text-primary" /> Profile Shop
             </h3>
             <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-              Upload transparent frame artwork or profile backdrops. Premium members unlock every published item automatically.
+              Add transparent PNG/WebP frames or wide backdrop images. Upload, preview, set the price, then publish.
             </p>
           </div>
           <Button
             onClick={addItem}
             className="h-10 max-w-full shrink-0 px-4 text-[13px]"
           >
-            <Plus size={14} /> Add {kind === "frames" ? "frame" : "background"}
+            <Plus size={14} /> New {kind === "frames" ? "frame" : "backdrop"}
           </Button>
         </div>
 
@@ -163,9 +166,18 @@ const ProfileShopManager = () => {
             const dirty = !!drafts[item.id];
             const isUploading = uploadingId === item.id;
             return (
-              <div key={item.id} className={`${card} space-y-3`}>
+              <div key={item.id} className={`${card} relative space-y-3 ${dirty ? "ring-1 ring-primary/50" : ""}`}>
+                <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-3">
+                  <div className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold text-foreground">{item.name || `Untitled ${kind === "frames" ? "frame" : "backdrop"}`}</span>
+                    <span className={`mt-0.5 block text-[10px] font-bold uppercase ${item.isNew ? "text-primary" : dirty ? "text-warning" : "text-success"}`}>
+                      {item.isNew ? "New item · not published" : dirty ? "Unsaved changes" : "Published"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">#{Math.max(0, item.order)}</span>
+                </div>
                 <div className="flex items-start gap-3">
-                  <div className={`grid shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted/30 ${kind === "frames" ? "h-24 w-24" : "h-20 w-28"}`}>
+                  <div className={`profile-shop-admin-preview grid shrink-0 place-items-center overflow-hidden rounded-md border border-border ${kind === "frames" ? "is-frame h-28 w-28" : "h-20 w-28"}`}>
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name || `${kind} preview`} className={`h-full w-full ${kind === "frames" ? "object-contain" : "object-cover"}`} />
                     ) : (
@@ -184,7 +196,7 @@ const ProfileShopManager = () => {
                     </div>
                     <label className="block">
                       <span className={label}>Gallery image</span>
-                      <span className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-primary/50 bg-primary/5 px-3 text-[12px] font-semibold text-primary hover:bg-primary/10">
+                       <span className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-primary/60 bg-primary/5 px-3 text-center text-[12px] font-semibold text-primary hover:bg-primary/10">
                         {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                         {isUploading ? "Uploading…" : "Choose from gallery"}
                       </span>
@@ -225,6 +237,27 @@ const ProfileShopManager = () => {
                   </div>
                 </div>
 
+                {kind === "frames" && (
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div><span className="block text-[12px] font-semibold text-foreground">Frame placement</span><span className="text-[10px] text-muted-foreground">Fit the clear opening around the profile photo</span></div>
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px]" onClick={() => patch(item.id, { scale: 126, offsetX: 0, offsetY: 0 })}>Reset</Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {([
+                        ["Size", "scale", 80, 180, "%"],
+                        ["Left / right", "offsetX", -30, 30, "px"],
+                        ["Up / down", "offsetY", -30, 30, "px"],
+                      ] as const).map(([title, key, min, max, unit]) => (
+                        <label key={key} className="block text-[11px] text-muted-foreground">
+                          <span className="mb-1 flex justify-between"><span>{title}</span><strong className="text-foreground">{item[key]}{unit}</strong></span>
+                          <input className="w-full accent-primary" type="range" min={min} max={max} value={item[key]} onChange={(e) => patch(item.id, { [key]: Number(e.target.value) })} />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                   <Button
                     type="button"
@@ -259,7 +292,7 @@ const ProfileShopManager = () => {
                     disabled={savingId === item.id || isUploading || (!dirty && !item.isNew)}
                     className="h-9 min-w-0 px-4 text-[12px]"
                   >
-                    {savingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+                    {savingId === item.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {item.isNew ? "Publish" : "Save changes"}
                   </Button>
                 </div>
               </div>

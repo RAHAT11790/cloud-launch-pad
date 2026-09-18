@@ -11,6 +11,9 @@ export type ShopItem = {
   enabled: boolean;
   tier: string;
   order: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
 };
 
 export type ProfileShop = {
@@ -31,6 +34,9 @@ const normalizeItem = (id: string, raw: any): ShopItem => ({
   enabled: raw?.enabled !== false,
   tier: String(raw?.tier || "Custom"),
   order: Number(raw?.order || 0),
+  scale: Math.min(180, Math.max(80, Number(raw?.scale || 126))),
+  offsetX: Math.min(30, Math.max(-30, Number(raw?.offsetX || 0))),
+  offsetY: Math.min(30, Math.max(-30, Number(raw?.offsetY || 0))),
 });
 
 const parseList = (raw: any): ShopItem[] =>

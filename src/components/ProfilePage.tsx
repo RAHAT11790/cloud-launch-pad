@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
@@ -652,7 +652,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         )}
       </div>
       {selectedShopFrame?.imageUrl && (
-        <img src={selectedShopFrame.imageUrl} alt="" className="profile-frame-artwork" aria-hidden="true" />
+        <img
+          src={selectedShopFrame.imageUrl}
+          alt=""
+          className="profile-frame-artwork"
+          aria-hidden="true"
+          style={{
+            "--frame-scale": `${selectedShopFrame.scale}%`,
+            "--frame-x": `${selectedShopFrame.offsetX}px`,
+            "--frame-y": `${selectedShopFrame.offsetY}px`,
+          } as CSSProperties}
+        />
       )}
       {isPremium && <span className="profile-crown"><Crown className="h-3.5 w-3.5" /></span>}
     </div>
@@ -1742,7 +1752,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <button key={frame.id} type="button" onClick={() => selectOrBuyShopItem("frames", frame)}
                       disabled={buyingFrame === frame.id}
                       className={`profile-frame-card ${equipped ? "is-equipped" : ""}`}>
-                      <span className="profile-frame-demo"><span /><img src={frame.imageUrl} alt="" loading="lazy" /></span>
+                      <span className="profile-frame-demo"><span /><img src={frame.imageUrl} alt="" loading="lazy" style={{ "--frame-scale": `${frame.scale}%`, "--frame-x": `${frame.offsetX}px`, "--frame-y": `${frame.offsetY}px` } as CSSProperties} /></span>
                       <strong>{frame.name}</strong>
                       <small>{frame.tier}</small>
                       <span className="profile-frame-price">
@@ -1881,11 +1891,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
       transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
       <div className="profile-page-inner">
-        <Button type="button" variant="ghost" size="sm" onClick={onClose} className="profile-back-button mb-4 gap-2">
-          <ArrowLeft className="h-4 w-4" /><span>Back</span>
-        </Button>
-
         <section className="profile-identity-panel">
+          <Button type="button" variant="secondary" size="icon" onClick={onClose} className="profile-back-button" aria-label="Back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div className="profile-cover-pattern" aria-hidden="true">
             <img src={selectedShopBackground?.imageUrl || profileAnimeBanner} alt="" width={1536} height={512} />
           </div>
