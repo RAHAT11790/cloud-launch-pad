@@ -321,7 +321,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       transition={{ type: "tween", duration: 0.22, ease: [0.32, 0.72, 0, 1] }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -643,7 +643,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   };
 
   const renderProfileAvatar = (size: "large" | "small" = "large") => (
-    <div className={`profile-avatar-frame ${size === "small" ? "profile-avatar-small" : ""}`}>
+    <div
+      className={`profile-avatar-frame ${size === "small" ? "profile-avatar-small" : ""} ${selectedShopFrame?.imageUrl ? "has-profile-artwork" : ""}`}
+      style={selectedShopFrame?.imageUrl ? {
+        "--frame-scale": `${selectedShopFrame.scale}%`,
+        "--frame-x": `${selectedShopFrame.offsetX}px`,
+        "--frame-y": `${selectedShopFrame.offsetY}px`,
+      } as CSSProperties : undefined}
+    >
       <div className="profile-avatar-core">
         {profilePhoto ? (
           <img src={profilePhoto} alt="Profile" className="h-full w-full rounded-full object-cover" />
@@ -657,11 +664,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           alt=""
           className="profile-frame-artwork"
           aria-hidden="true"
-          style={{
-            "--frame-scale": `${selectedShopFrame.scale}%`,
-            "--frame-x": `${selectedShopFrame.offsetX}px`,
-            "--frame-y": `${selectedShopFrame.offsetY}px`,
-          } as CSSProperties}
         />
       )}
       {isPremium && <span className="profile-crown"><Crown className="h-3.5 w-3.5" /></span>}
@@ -1114,7 +1116,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Settings Panel
   if (activePanel === "settings") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1267,7 +1269,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Language Panel
   if (activePanel === "language") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1290,7 +1292,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Quality Panel
   if (activePanel === "quality") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1453,7 +1455,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     );
 
     return (
-      <motion.div className="fixed inset-0 z-[200] overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] overflow-y-auto pt-0 px-4 pb-24"
         style={{ background: isPremium ? "linear-gradient(180deg, hsl(30,20%,6%) 0%, hsl(215,35%,7%) 100%)" : "hsl(215,35%,7%)" }}
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
@@ -1701,7 +1703,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   if (activePanel === "customize") {
     return (
       <motion.div
-        className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-[70px] ${selectedTheme.className} ${selectedFont.className}`}
+        className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-0 ${selectedTheme.className} ${selectedFont.className}`}
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.26 }}
       >
@@ -1711,7 +1713,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </button>
 
           <section className="profile-studio-preview">
-            <div className="flex items-center gap-4">
+            <div className="profile-studio-preview-row">
               {renderProfileAvatar("small")}
               <div className="min-w-0 flex-1">
                 <p className="profile-eyebrow">LIVE PREVIEW</p>
@@ -1720,7 +1722,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   {isPremium ? "Every collectible is unlocked" : `${coinWallet.coins || 0} coins available`}
                 </p>
               </div>
-              {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+              {isPremium && <span className="profile-premium-badge"><Crown className="h-3.5 w-3.5" /> Premium</span>}
             </div>
           </section>
 
@@ -1852,7 +1854,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     })();
 
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1890,7 +1892,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Main Profile
   return (
-    <motion.div className={`profile-page fixed inset-0 z-[200] overflow-y-auto pb-24 pt-[70px] ${selectedTheme.className} ${selectedFont.className}`}
+    <motion.div className={`profile-page fixed inset-0 z-[200] overflow-x-hidden overflow-y-auto pb-24 ${selectedTheme.className} ${selectedFont.className}`}
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
       transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
       <div className="profile-page-inner">
@@ -1904,9 +1906,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <div className="profile-identity-content">
             {renderProfileAvatar()}
             <div className="profile-identity-copy">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="profile-name-row">
                 <h1>{displayName}</h1>
-                {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+                {isPremium && <span className="profile-premium-badge"><Crown className="h-3.5 w-3.5" /> Premium</span>}
               </div>
               <p>{(() => {
                 try {
@@ -1988,7 +1990,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <p className="text-sm text-secondary-foreground">No watch history yet</p>
           </div>
         ) : (
-          <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="profile-media-rail scrollbar-hide">
             {watchHistory.slice(0, 10).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
@@ -2029,7 +2031,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <p className="text-sm text-secondary-foreground">No items in watchlist</p>
           </div>
         ) : (
-          <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="profile-media-rail scrollbar-hide">
             {watchlist.slice(0, 10).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
@@ -2403,7 +2405,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   }
 
   return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       transition={{ type: "tween", duration: 0.3 }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">

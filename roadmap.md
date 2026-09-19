@@ -11,3 +11,7 @@
 - [ ] Add gallery uploads through ImgBB with editable previews and reliable save states.
 - [ ] Replace generated frame shapes with uploaded transparent frame artwork and correct avatar placement.
 - [ ] Fix profile back-button/banner placement and verify admin/profile views on mobile and desktop.
+- [ ] Align uploaded profile frames precisely with avatar portraits at every size.
+- [ ] Verify backdrop coverage, remove the top gap, and make profile themes visibly affect all surfaces.
+- [ ] Fix name-style premium badge overflow and mobile watchlist/history page overflow.
+- [ ] Validate the complete Profile page on mobile and desktop with the premium test account.
