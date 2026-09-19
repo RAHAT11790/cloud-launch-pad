@@ -2467,6 +2467,11 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-daily-card { border-radius: 10px; background: rgb(var(--pf-surface)); border-color: rgb(var(--pf-line) / .3); }
 .profile-menu-grid { grid-template-columns: 1fr; gap: 8px; }
 .profile-menu-grid > * { min-height: 54px; border-radius: 9px !important; }
+.profile-menu-grid > button:not([class*="destructive"]) {
+  background: rgb(var(--pf-surface)) !important;
+  border: 1px solid rgb(var(--pf-line) / .3) !important;
+  color: rgb(var(--pf-text)) !important;
+}
 
 /* Shop cards show the decoration around a portrait-like center. */
 .profile-frame-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
