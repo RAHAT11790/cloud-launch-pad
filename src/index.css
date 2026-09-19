@@ -2347,9 +2347,10 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: end;
   gap: 14px;
-  padding: 0 16px 18px;
+  padding: 0 20px 18px;
 }
-.profile-identity-content > .profile-avatar-frame { margin-top: -34px; }
+/* Keep ornamental artwork clear of the panel edge and the banner. */
+.profile-identity-content > .profile-avatar-frame { margin: -26px 0 0 8px; }
 .profile-identity-copy { padding-top: 10px; }
 .profile-identity-copy h1 { font-size: 1.24rem; letter-spacing: 0; }
 .profile-identity-copy p { color: rgb(var(--pf-text) / .58); }
