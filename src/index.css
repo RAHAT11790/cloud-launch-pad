@@ -2467,7 +2467,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-daily-card { border-radius: 10px; background: rgb(var(--pf-surface)); border-color: rgb(var(--pf-line) / .3); }
 .profile-menu-grid { grid-template-columns: 1fr; gap: 8px; }
 .profile-menu-grid > * { min-height: 54px; border-radius: 9px !important; }
-.profile-menu-grid > button:not([class*="destructive"]) {
+.profile-menu-grid > div.glass-card {
   background: rgb(var(--pf-surface)) !important;
   border: 1px solid rgb(var(--pf-line) / .3) !important;
   color: rgb(var(--pf-text)) !important;
