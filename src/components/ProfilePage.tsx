@@ -1921,7 +1921,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <User className="h-4 w-4" /> Edit profile
                   </Button>
                 )}
-                <Button type="button" size="sm" variant="outline" onClick={() => setActivePanel("customize")}>
+                <Button type="button" size="sm" variant="outline" className="profile-studio-action" onClick={() => setActivePanel("customize")}>
                   <Sparkles className="h-4 w-4" /> Profile Studio
                 </Button>
               </div>
