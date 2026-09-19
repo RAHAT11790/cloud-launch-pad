@@ -2470,6 +2470,10 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-frame-demo > img { position: absolute; z-index: 4; left: 50%; top: 50%; width: var(--frame-scale, 126%); height: var(--frame-scale, 126%); max-width: none; object-fit: contain; transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px))); filter: drop-shadow(0 3px 4px rgb(0 0 0 / .38)); }
 /* Uploaded artwork replaces the generated silhouette entirely. */
 .profile-frame-demo.has-artwork::before, .profile-frame-demo.has-artwork::after { display: none; content: none; }
+/* The global img background would fill transparent frame artwork with a solid card colour. */
+.profile-frame-demo > img,
+.profile-frame-artwork,
+.profile-shop-admin-preview img { background: transparent !important; }
 
 /* Transparent checkerboard makes frame alpha obvious in the admin preview. */
 .profile-shop-admin-preview { background-color: hsl(var(--muted)); }
