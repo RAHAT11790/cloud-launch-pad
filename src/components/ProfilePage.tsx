@@ -1752,7 +1752,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <button key={frame.id} type="button" onClick={() => selectOrBuyShopItem("frames", frame)}
                       disabled={buyingFrame === frame.id}
                       className={`profile-frame-card ${equipped ? "is-equipped" : ""}`}>
-                      <span className="profile-frame-demo"><span /><img src={frame.imageUrl} alt="" loading="lazy" style={{ "--frame-scale": `${frame.scale}%`, "--frame-x": `${frame.offsetX}px`, "--frame-y": `${frame.offsetY}px` } as CSSProperties} /></span>
+                      <span className="profile-frame-demo has-artwork">
+                        <span>{profilePhoto ? <img src={profilePhoto} alt="" className="h-full w-full rounded-full object-cover" /> : <em>{initial}</em>}</span>
+                        <img src={frame.imageUrl} alt="" loading="lazy" style={{ "--frame-scale": `${frame.scale}%`, "--frame-x": `${frame.offsetX}px`, "--frame-y": `${frame.offsetY}px` } as CSSProperties} />
+                      </span>
                       <strong>{frame.name}</strong>
                       <small>{frame.tier}</small>
                       <span className="profile-frame-price">
@@ -1918,7 +1921,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <User className="h-4 w-4" /> Edit profile
                   </Button>
                 )}
-                <Button type="button" size="sm" variant="outline" onClick={() => setActivePanel("customize")}>
+                <Button type="button" size="sm" variant="outline" className="profile-studio-action" onClick={() => setActivePanel("customize")}>
                   <Sparkles className="h-4 w-4" /> Profile Studio
                 </Button>
               </div>

@@ -2347,14 +2347,22 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: end;
   gap: 14px;
-  padding: 0 16px 18px;
+  padding: 0 20px 18px;
 }
-.profile-identity-content > .profile-avatar-frame { margin-top: -34px; }
+/* Keep ornamental artwork clear of the panel edge and the banner. */
+.profile-identity-content > .profile-avatar-frame { margin: -26px 0 0 8px; }
 .profile-identity-copy { padding-top: 10px; }
 .profile-identity-copy h1 { font-size: 1.24rem; letter-spacing: 0; }
 .profile-identity-copy p { color: rgb(var(--pf-text) / .58); }
 .profile-identity-actions { grid-column: 1 / -1; margin-top: 12px; display: grid; grid-template-columns: 1fr; }
 .profile-identity-actions button { width: 100%; border-radius: 6px; min-height: 38px; }
+/* Outline actions must read on the dark collector surface. */
+.profile-identity-actions button[class*="border-input"],
+.profile-identity-actions .profile-studio-action {
+  background: rgb(var(--pf-surface-raised)) !important;
+  border-color: rgb(var(--pf-line) / .45) !important;
+  color: rgb(var(--pf-text)) !important;
+}
 
 .profile-login-primary {
   min-height: 64px;
@@ -2459,13 +2467,26 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-daily-card { border-radius: 10px; background: rgb(var(--pf-surface)); border-color: rgb(var(--pf-line) / .3); }
 .profile-menu-grid { grid-template-columns: 1fr; gap: 8px; }
 .profile-menu-grid > * { min-height: 54px; border-radius: 9px !important; }
+.profile-menu-grid > div.glass-card {
+  background: rgb(var(--pf-surface)) !important;
+  border: 1px solid rgb(var(--pf-line) / .3) !important;
+  color: rgb(var(--pf-text)) !important;
+}
 
 /* Shop cards show the decoration around a portrait-like center. */
 .profile-frame-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.profile-frame-card { align-items: flex-start; padding: 12px; border-radius: 10px; background: rgb(var(--pf-surface)); }
-.profile-frame-demo { align-self: center; width: 82px; height: 82px; overflow: visible; border-radius: 0; }
-.profile-frame-demo > span { inset: 19%; z-index: 2; border-radius: 50%; animation: none !important; background: linear-gradient(145deg, rgb(var(--frame-main, var(--pf-accent-2))), rgb(var(--pf-surface-raised))); border: 3px solid rgb(var(--pf-surface)); }
+.profile-frame-card { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 12px 12px; border-radius: 12px; background: rgb(var(--pf-surface)); text-align: center; }
+.profile-frame-card > strong, .profile-frame-card > small, .profile-frame-card > .profile-frame-price { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-frame-demo { position: relative; display: block; align-self: center; width: 78px; height: 78px; margin: 6px 0 14px; overflow: visible; border-radius: 0; }
+.profile-frame-demo > span { position: absolute; inset: 17%; z-index: 2; display: grid; place-items: center; overflow: hidden; border-radius: 50%; animation: none !important; background: rgb(var(--pf-surface-raised)); border: 2px solid rgb(var(--pf-surface)); }
+.profile-frame-demo > span em { font-style: normal; font-weight: 800; font-size: .9rem; color: rgb(var(--pf-text) / .75); }
 .profile-frame-demo > img { position: absolute; z-index: 4; left: 50%; top: 50%; width: var(--frame-scale, 126%); height: var(--frame-scale, 126%); max-width: none; object-fit: contain; transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px))); filter: drop-shadow(0 3px 4px rgb(0 0 0 / .38)); }
+/* Uploaded artwork replaces the generated silhouette entirely. */
+.profile-frame-demo.has-artwork::before, .profile-frame-demo.has-artwork::after { display: none; content: none; }
+/* The global img background would fill transparent frame artwork with a solid card colour. */
+.profile-frame-demo > img,
+.profile-frame-artwork,
+.profile-shop-admin-preview img { background: transparent !important; }
 
 /* Transparent checkerboard makes frame alpha obvious in the admin preview. */
 .profile-shop-admin-preview { background-color: hsl(var(--muted)); }
