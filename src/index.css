@@ -2356,6 +2356,13 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-identity-copy p { color: rgb(var(--pf-text) / .58); }
 .profile-identity-actions { grid-column: 1 / -1; margin-top: 12px; display: grid; grid-template-columns: 1fr; }
 .profile-identity-actions button { width: 100%; border-radius: 6px; min-height: 38px; }
+/* Outline actions must read on the dark collector surface. */
+.profile-identity-actions button[class*="border-input"],
+.profile-identity-actions .profile-studio-action {
+  background: rgb(var(--pf-surface-raised)) !important;
+  border-color: rgb(var(--pf-line) / .45) !important;
+  color: rgb(var(--pf-text)) !important;
+}
 
 .profile-login-primary {
   min-height: 64px;
