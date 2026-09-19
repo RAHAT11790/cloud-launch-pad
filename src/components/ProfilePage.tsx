@@ -321,7 +321,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       transition={{ type: "tween", duration: 0.22, ease: [0.32, 0.72, 0, 1] }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1116,7 +1116,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Settings Panel
   if (activePanel === "settings") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1269,7 +1269,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Language Panel
   if (activePanel === "language") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1292,7 +1292,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Quality Panel
   if (activePanel === "quality") {
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1455,7 +1455,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     );
 
     return (
-      <motion.div className="fixed inset-0 z-[200] overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] overflow-y-auto pt-0 px-4 pb-24"
         style={{ background: isPremium ? "linear-gradient(180deg, hsl(30,20%,6%) 0%, hsl(215,35%,7%) 100%)" : "hsl(215,35%,7%)" }}
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
@@ -1703,7 +1703,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   if (activePanel === "customize") {
     return (
       <motion.div
-        className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-[70px] ${selectedTheme.className} ${selectedFont.className}`}
+        className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-0 ${selectedTheme.className} ${selectedFont.className}`}
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.26 }}
       >
@@ -1722,7 +1722,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   {isPremium ? "Every collectible is unlocked" : `${coinWallet.coins || 0} coins available`}
                 </p>
               </div>
-              {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+              {isPremium && <span className="profile-premium-badge"><Crown className="h-3.5 w-3.5" /> Premium</span>}
             </div>
           </section>
 
@@ -1854,7 +1854,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     })();
 
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
         initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
@@ -1908,7 +1908,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <div className="profile-identity-copy">
               <div className="profile-name-row">
                 <h1>{displayName}</h1>
-                {isPremium && <span className="profile-premium-chip"><Crown className="h-3.5 w-3.5" /> Premium</span>}
+                {isPremium && <span className="profile-premium-badge"><Crown className="h-3.5 w-3.5" /> Premium</span>}
               </div>
               <p>{(() => {
                 try {
@@ -2405,7 +2405,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   }
 
   return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
+    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       transition={{ type: "tween", duration: 0.3 }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
