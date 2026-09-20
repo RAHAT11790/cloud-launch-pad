@@ -2043,7 +2043,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
 /* ============ Profile Page — Neon Cyber Anime ============ */
 /* ============ Profile Page — Unified System ============ */
-.profile-page {
+.profile-page,
+.profile-studio {
   --pf-bg: 17 18 20;
   --pf-surface: 30 31 34;
   --pf-surface-raised: 43 45 49;
@@ -2060,14 +2061,14 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 }
 
 /* Themes override accents */
-.profile-page.profile-theme-crimson { --pf-accent: 237 66 69; --pf-accent-2: 240 178 50; }
-.profile-page.profile-theme-akatsuki { --pf-accent: 214 40 57; --pf-accent-2: 120 20 40; }
-.profile-page.profile-theme-gold { --pf-accent: 214 166 60; --pf-accent-2: 255 214 120; }
-.profile-page.profile-theme-ice { --pf-accent: 96 178 255; --pf-accent-2: 168 230 255; }
-.profile-page.profile-theme-violet { --pf-accent: 150 96 255; --pf-accent-2: 220 140 255; }
-.profile-page.profile-theme-emerald { --pf-accent: 46 196 141; --pf-accent-2: 160 240 200; }
-.profile-page.profile-theme-mono { --pf-accent: 190 190 200; --pf-accent-2: 120 120 132; }
-.profile-page.profile-theme-sunset { --pf-accent: 255 118 84; --pf-accent-2: 255 190 90; }
+.profile-theme-crimson { --pf-accent: 237 66 69; --pf-accent-2: 240 178 50; }
+.profile-theme-akatsuki { --pf-accent: 214 40 57; --pf-accent-2: 120 20 40; }
+.profile-theme-gold { --pf-accent: 214 166 60; --pf-accent-2: 255 214 120; }
+.profile-theme-ice { --pf-accent: 96 178 255; --pf-accent-2: 168 230 255; }
+.profile-theme-violet { --pf-accent: 150 96 255; --pf-accent-2: 220 140 255; }
+.profile-theme-emerald { --pf-accent: 46 196 141; --pf-accent-2: 160 240 200; }
+.profile-theme-mono { --pf-accent: 190 190 200; --pf-accent-2: 120 120 132; }
+.profile-theme-sunset { --pf-accent: 255 118 84; --pf-accent-2: 255 190 90; }
 
 .profile-page-inner {
   width: 100%;
@@ -2086,7 +2087,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border: 1px solid rgb(var(--pf-line) / .28);
   background: rgb(var(--pf-surface));
   box-shadow: 0 16px 32px rgb(0 0 0 / .24);
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .profile-cover-pattern {
@@ -2135,12 +2136,22 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 }
 
 .profile-avatar-core {
-  width: 82%;
-  height: 82%;
+  position: absolute;
+  inset: 9%;
+  width: auto;
+  height: auto;
+  aspect-ratio: 1;
   border-radius: 50%;
   overflow: hidden;
   border: 3px solid rgb(var(--pf-surface));
   z-index: 2;
+}
+
+.profile-avatar-core > img,
+.profile-avatar-core > span {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .profile-frame-artwork {
