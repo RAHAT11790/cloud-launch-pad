@@ -2541,7 +2541,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .profile-studio-preview-row > .profile-premium-badge { grid-column: 2; justify-self: start; }
   .profile-studio-tabs button { min-height: 54px; flex-direction: column; gap: 3px; font-size: 10px; }
   .profile-background-grid { grid-template-columns: 1fr; }
-  .profile-name-row { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .profile-name-row { align-items: center; flex-direction: row; gap: 6px; }
   .profile-premium-badge { max-width: 100%; }
 }
 
