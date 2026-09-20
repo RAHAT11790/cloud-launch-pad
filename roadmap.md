@@ -1,5 +1,10 @@
 # Roadmap
 
+- [ ] Align profile photo, name, email, and Premium badge into one polished mobile identity row.
+- [ ] Place Edit Profile and Profile Studio side by side with equal sizing.
+- [ ] Render uploaded profile backdrops in a stable 16:9 area without gaps or vertical drift.
+- [ ] Correct Settings and Logout spacing and alignment.
+- [ ] Live-test the updated profile on mobile and desktop and capture screenshots.
 - [ ] Replace oversized Telegram start payloads with a compact, bot-resolvable request handoff.
 - [ ] Handle Telegram `/start` download payloads in the active bot and verify reply flow.
 - [ ] Remove the visible Telegram URL preview; keep only the Telegram action button.
