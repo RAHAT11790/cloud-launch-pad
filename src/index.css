@@ -2771,3 +2771,57 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   background: rgb(var(--pf-accent-2) / .14) !important;
   color: rgb(var(--pf-accent-2)) !important;
 }
+
+/* ===== Profile: 16:9 backdrop + aligned identity header + menu spacing ===== */
+.profile-page .profile-cover-pattern {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  z-index: 1;
+}
+.profile-page .profile-cover-pattern img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+.profile-page .profile-cover-pattern::after {
+  background: linear-gradient(to bottom, transparent 55%, rgb(var(--pf-surface) / .96));
+}
+.profile-page .profile-identity-content {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 14px;
+  padding: 0 16px 14px;
+  margin-top: clamp(-46px, -8vw, -30px);
+}
+.profile-page .profile-identity-copy { align-self: center; padding-bottom: 0; }
+.profile-page .profile-identity-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  width: 100%;
+  margin-top: 2px;
+}
+.profile-page .profile-identity-actions > button {
+  width: 100%;
+  min-height: 40px;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.profile-menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+.profile-menu-grid > div.glass-card { border-radius: 12px; }

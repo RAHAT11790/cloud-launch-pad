@@ -1917,16 +1917,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
                 } catch { return "Guest Profile"; }
               })()}</p>
-              <div className="profile-identity-actions">
-                {!isGuestUser && (
-                  <Button type="button" size="sm" onClick={() => { setTempName(displayName); setActivePanel("edit"); }}>
-                    <User className="h-4 w-4" /> Edit profile
-                  </Button>
-                )}
-                <Button type="button" size="sm" variant="outline" className="profile-studio-action" onClick={() => setActivePanel("customize")}>
-                  <Sparkles className="h-4 w-4" /> Profile Studio
+            </div>
+            <div className="profile-identity-actions">
+              {!isGuestUser && (
+                <Button type="button" size="sm" onClick={() => { setTempName(displayName); setActivePanel("edit"); }}>
+                  <User className="h-4 w-4" /> Edit profile
                 </Button>
-              </div>
+              )}
+              <Button type="button" size="sm" variant="outline" className="profile-studio-action" onClick={() => setActivePanel("customize")}>
+                <Sparkles className="h-4 w-4" /> Profile Studio
+              </Button>
             </div>
           </div>
         </section>
