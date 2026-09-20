@@ -593,7 +593,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Password</label>
+                  <label className="login-field-label text-xs text-muted-foreground mb-1.5 block">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -601,7 +601,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       placeholder="Enter password"
                       value={googlePw}
                       onChange={e => setGooglePw(e.target.value)}
-                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
+                      className="w-full py-3 pl-10 pr-10 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
                       style={{ boxShadow: "var(--neu-shadow-inset)" }}
                     />
                     <button type="button" onClick={() => setShowGooglePw(!showGooglePw)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -611,7 +611,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">Confirm Password</label>
+                  <label className="login-field-label text-xs text-muted-foreground mb-1.5 block">Confirm Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -619,7 +619,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       placeholder="Re-enter password"
                       value={googlePwConfirm}
                       onChange={e => setGooglePwConfirm(e.target.value)}
-                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
+                      className="w-full py-3 pl-10 pr-10 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
                       style={{ boxShadow: "var(--neu-shadow-inset)" }}
                     />
                     <button type="button" onClick={() => setShowGooglePwConfirm(!showGooglePwConfirm)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -706,22 +706,22 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               {forgotOtpSent ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
+                    <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
                     <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
                       placeholder="6-digit code" maxLength={6}
-                      className="w-full py-3 px-4 rounded-xl bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
+                      className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
                       placeholder="New password (min 4 chars)"
-                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPwConfirm} onChange={e => setForgotNewPwConfirm(e.target.value)}
                       placeholder="Re-enter password"
-                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
                   </div>
                   <motion.button
                     onClick={handleResetPasswordWithOtp}
@@ -744,7 +744,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       placeholder="Enter your email"
                       value={forgotEmail}
                       onChange={e => setForgotEmail(e.target.value)}
-                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
+                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
                       style={{ boxShadow: "var(--neu-shadow-inset)" }}
                     />
                   </div>
@@ -843,18 +843,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               />
               
               <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-                <motion.div
+                <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
                     background: "repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(176,65%,48%,0.02) 2px, hsla(176,65%,48%,0.02) 4px)",
                   }}
                 />
 
-                <motion.div className="text-center mb-6 relative z-10"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                >
+                <div className="text-center mb-6 relative z-10">
                   <img 
                     src={logoSrc} 
                     alt={branding.loginTitle} 
@@ -865,11 +861,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                     {branding.loginTitle}
                   </h1>
                   <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">{branding.loginSubtitle}</p>
-                </motion.div>
+                </div>
 
-                <motion.div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10"
-                  initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.15 }}
-                >
+                <div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10">
                   <button
                     onClick={() => { setIsRegister(false); setDeviceLimitError(null); }}
                     className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${!isRegister ? "gradient-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
@@ -878,7 +872,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                     onClick={() => { setIsRegister(true); setDeviceLimitError(null); }}
                     className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${isRegister ? "gradient-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
                   >Sign Up</button>
-                </motion.div>
+                </div>
 
                 {/* Device Limit Error */}
                 {deviceLimitError && (
@@ -913,43 +907,37 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-3 relative z-10">
-                  <AnimatePresence mode="wait">
-                    {isRegister && (
-                      <motion.div key="email-field"
-                        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                      >
-                        <div className="relative mb-3">
+                  {isRegister && (
+                    <div>
+                      <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <input name="email" type="email" placeholder="Email" defaultValue={email} maxLength={100}
-                            className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  
-                  <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
+                            className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
                     <div className="relative">
                       <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <input name="name" type="text" placeholder={isRegister ? "Username" : "Email or Username"} defaultValue={name} maxLength={100}
-                        className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
+                        className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                     </div>
-                  </motion.div>
-                  
-                  <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 }}>
+                  </div>
+
+                  <div>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <input name="password" type={showPassword ? "text" : "password"} placeholder="Password" defaultValue={password}
-                        className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
+                        className="w-full py-3 pl-10 pr-10 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
                         {showPassword ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
                       </button>
                     </div>
-                  </motion.div>
-                  
+                  </div>
+
                   <motion.button type="submit" disabled={loading}
-                    initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all">
                     {loading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><LogIn className="w-4 h-4" /> {isRegister ? "Create Account" : "Sign In"}</>}
                   </motion.button>

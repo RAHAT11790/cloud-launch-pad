@@ -58,13 +58,28 @@ export const PROFILE_THEMES: ProfileTheme[] = [
 ];
 
 export const PROFILE_FONTS = [
-  { id: "sora", name: "Sora", className: "profile-font-sora" },
+  { id: "sora", name: "Classic Bold", className: "profile-font-sora" },
   { id: "orbitron", name: "Orbitron", className: "profile-font-orbitron" },
   { id: "audiowide", name: "Audiowide", className: "profile-font-audiowide" },
   { id: "rajdhani", name: "Rajdhani", className: "profile-font-rajdhani" },
   { id: "bebas", name: "Bebas Neue", className: "profile-font-bebas" },
   { id: "bungee", name: "Bungee", className: "profile-font-bungee" },
+  { id: "anton", name: "Anton Impact", className: "profile-font-anton" },
+  { id: "kanit", name: "Kanit Sharp", className: "profile-font-kanit" },
+  { id: "teko", name: "Teko Tall", className: "profile-font-teko" },
+  { id: "gold", name: "Gold Legend", className: "profile-font-gold" },
+  { id: "gradient", name: "Aurora Gradient", className: "profile-font-gradient" },
+  { id: "neon", name: "Neon Nights", className: "profile-font-neon" },
+  { id: "outline", name: "Outline Pro", className: "profile-font-outline" },
+  { id: "glow", name: "Soft Glow", className: "profile-font-glow" },
+  { id: "fire", name: "Fire Blaze", className: "profile-font-fire" },
+  { id: "ice", name: "Ice Crystal", className: "profile-font-ice" },
+  { id: "rainbow", name: "Rainbow Pop", className: "profile-font-rainbow" },
+  { id: "retro", name: "Retro Pixel", className: "profile-font-retro" },
+  { id: "marker", name: "Marker Ink", className: "profile-font-marker" },
+  { id: "shadow", name: "Deep Shadow", className: "profile-font-shadow" },
 ] as const;
+
 
 export const DEFAULT_PROFILE_CUSTOMIZATION: ProfileCustomization = {
   frameId: "ember",

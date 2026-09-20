@@ -2541,7 +2541,233 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .profile-studio-preview-row > .profile-premium-badge { grid-column: 2; justify-self: start; }
   .profile-studio-tabs button { min-height: 54px; flex-direction: column; gap: 3px; font-size: 10px; }
   .profile-background-grid { grid-template-columns: 1fr; }
-  .profile-name-row { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .profile-name-row { align-items: center; flex-direction: row; gap: 6px; }
   .profile-premium-badge { max-width: 100%; }
 }
 
+
+/* ===== Profile: Login / Sign Up hero button ===== */
+.profile-login-primary {
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 66px;
+  padding: 12px 14px !important;
+  border: 1px solid rgb(var(--pf-accent-2) / .5) !important;
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgb(var(--pf-accent-2)), #e2a52b 55%, #c98b1c) !important;
+  color: #17120a !important;
+  text-align: left;
+  box-shadow: 0 10px 26px rgb(0 0 0 / .35);
+}
+
+.profile-login-primary:hover { filter: brightness(1.05); }
+
+.profile-login-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgb(0 0 0 / .18);
+  color: #17120a;
+}
+
+.profile-login-primary strong {
+  display: block;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-login-primary small {
+  display: block;
+  overflow: hidden;
+  color: rgb(23 18 10 / .72);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Profile: display-name styles ===== */
+.profile-name-row h1,
+.profile-edit-identity h2,
+.profile-font-grid > button strong {
+  font-family: var(--pf-name-font, 'Poppins', sans-serif);
+  letter-spacing: var(--pf-name-track, 0);
+}
+
+.profile-font-sora { --pf-name-font: 'Poppins', sans-serif; }
+.profile-font-orbitron { --pf-name-font: 'Orbitron', sans-serif; --pf-name-track: .02em; }
+.profile-font-audiowide { --pf-name-font: 'Audiowide', cursive; }
+.profile-font-rajdhani { --pf-name-font: 'Rajdhani', sans-serif; --pf-name-track: .03em; }
+.profile-font-bebas { --pf-name-font: 'Bebas Neue', cursive; --pf-name-track: .05em; }
+.profile-font-bungee { --pf-name-font: 'Bungee', cursive; }
+.profile-font-anton { --pf-name-font: 'Anton', sans-serif; --pf-name-track: .02em; }
+.profile-font-kanit { --pf-name-font: 'Kanit', sans-serif; }
+.profile-font-teko { --pf-name-font: 'Teko', sans-serif; --pf-name-track: .04em; }
+.profile-font-gold { --pf-name-font: 'Alfa Slab One', cursive; }
+.profile-font-gradient { --pf-name-font: 'Poppins', sans-serif; }
+.profile-font-neon { --pf-name-font: 'Monoton', cursive; --pf-name-track: .04em; }
+.profile-font-outline { --pf-name-font: 'Anton', sans-serif; --pf-name-track: .03em; }
+.profile-font-glow { --pf-name-font: 'Righteous', cursive; }
+.profile-font-fire { --pf-name-font: 'Bangers', cursive; --pf-name-track: .04em; }
+.profile-font-ice { --pf-name-font: 'Rajdhani', sans-serif; --pf-name-track: .05em; }
+.profile-font-rainbow { --pf-name-font: 'Bungee', cursive; }
+.profile-font-retro { --pf-name-font: 'Press Start 2P', monospace; font-size: .8em; }
+.profile-font-marker { --pf-name-font: 'Permanent Marker', cursive; }
+.profile-font-shadow { --pf-name-font: 'Staatliches', cursive; --pf-name-track: .05em; }
+
+.profile-font-gold .profile-name-row h1,
+.profile-font-grid > button.profile-font-gold strong,
+.profile-font-gradient .profile-name-row h1,
+.profile-font-grid > button.profile-font-gradient strong,
+.profile-font-fire .profile-name-row h1,
+.profile-font-grid > button.profile-font-fire strong,
+.profile-font-ice .profile-name-row h1,
+.profile-font-grid > button.profile-font-ice strong,
+.profile-font-rainbow .profile-name-row h1,
+.profile-font-grid > button.profile-font-rainbow strong {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.profile-font-gold .profile-name-row h1,
+.profile-font-grid > button.profile-font-gold strong { background-image: linear-gradient(100deg, #f7e18b, #d9a520 45%, #fff3bf); }
+
+.profile-font-gradient .profile-name-row h1,
+.profile-font-grid > button.profile-font-gradient strong { background-image: linear-gradient(100deg, rgb(var(--pf-accent)), rgb(var(--pf-accent-2))); }
+
+.profile-font-fire .profile-name-row h1,
+.profile-font-grid > button.profile-font-fire strong { background-image: linear-gradient(15deg, #ff2d2d, #ff8a00 55%, #ffd93b); }
+
+.profile-font-ice .profile-name-row h1,
+.profile-font-grid > button.profile-font-ice strong { background-image: linear-gradient(100deg, #9be7ff, #2f8fe0 60%, #e8fbff); }
+
+.profile-font-rainbow .profile-name-row h1,
+.profile-font-grid > button.profile-font-rainbow strong { background-image: linear-gradient(100deg, #ff5d5d, #ffd23f, #4ade80, #38bdf8, #c084fc); }
+
+.profile-font-neon .profile-name-row h1,
+.profile-font-grid > button.profile-font-neon strong {
+  color: #7ff4ff;
+  text-shadow: 0 0 6px rgb(127 244 255 / .85), 0 0 16px rgb(127 244 255 / .45);
+}
+
+.profile-font-glow .profile-name-row h1,
+.profile-font-grid > button.profile-font-glow strong {
+  text-shadow: 0 0 10px rgb(var(--pf-accent) / .8), 0 0 22px rgb(var(--pf-accent) / .35);
+}
+
+.profile-font-outline .profile-name-row h1,
+.profile-font-grid > button.profile-font-outline strong {
+  color: transparent;
+  -webkit-text-stroke: 1px rgb(var(--pf-text));
+}
+
+.profile-font-shadow .profile-name-row h1,
+.profile-font-grid > button.profile-font-shadow strong {
+  text-shadow: 2px 2px 0 rgb(var(--pf-accent) / .55), 4px 4px 0 rgb(0 0 0 / .45);
+}
+
+.profile-font-grid > button strong {
+  line-height: 1.25;
+  padding-bottom: 2px;
+}
+
+/* Premium lock/badge inside style cards never spills out. */
+.profile-font-grid > button > svg,
+.profile-theme-grid > button > svg { flex: 0 0 auto; }
+.profile-font-grid > button .profile-premium-badge,
+.profile-theme-grid > button .profile-premium-badge {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+}
+
+/* ===== Login page: readable fields on every theme ===== */
+.login-input {
+  background: #14161b !important;
+  border-color: rgb(255 255 255 / .12) !important;
+  color: #f2f4f8 !important;
+  caret-color: #f2f4f8;
+  font-size: 15px;
+  box-shadow: none !important;
+}
+
+.login-input::placeholder { color: rgb(242 244 248 / .45) !important; }
+.login-input:focus { border-color: hsl(var(--primary)) !important; }
+
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f2f4f8 !important;
+  -webkit-box-shadow: 0 0 0 1000px #14161b inset !important;
+  caret-color: #f2f4f8;
+}
+
+.login-field-label { color: rgb(242 244 248 / .7) !important; }
+
+/* ===== Profile: identity header alignment polish ===== */
+.profile-identity-content { align-items: center; }
+.profile-identity-copy { padding-bottom: 0; display: flex; flex-direction: column; gap: 6px; }
+.profile-name-row { flex-wrap: nowrap; }
+.profile-name-row h1 { line-height: 1.2; margin: 0; }
+.profile-identity-copy > p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: rgb(var(--pf-text-dim, 160 165 175));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-identity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.profile-identity-actions > button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1;
+  padding: 0 12px;
+}
+.profile-font-grid > button strong { font-size: 0.98rem; line-height: 1.35; }
+.profile-font-grid > button.profile-font-neon strong,
+.profile-font-grid > button.profile-font-retro strong,
+.profile-font-grid > button.profile-font-bungee strong { font-size: 0.8rem; }
+
+/* ===== Profile: back control above the banner ===== */
+.profile-page .profile-identity-panel { position: relative; }
+.profile-page .profile-identity-panel > .profile-back-button {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / .16);
+  background: rgb(10 12 16 / .62) !important;
+  color: #fff !important;
+  backdrop-filter: blur(6px);
+}
+.profile-identity-actions > button.profile-studio-action {
+  border: 1px solid rgb(var(--pf-accent-2) / .5) !important;
+  background: rgb(var(--pf-accent-2) / .14) !important;
+  color: rgb(var(--pf-accent-2)) !important;
+}
