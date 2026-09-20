@@ -2163,6 +2163,13 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   height: var(--frame-scale, 120%);
   transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px)));
   pointer-events: none;
+  object-fit: contain;
+  background: transparent !important;
+}
+
+.profile-frame-demo > img,
+.profile-shop-admin-preview img {
+  background: transparent !important;
 }
 
 .profile-identity-copy {
@@ -2444,6 +2451,55 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border-color: rgb(var(--pf-line) / .34) !important;
   background: rgb(var(--pf-surface)) !important;
   color: rgb(var(--pf-text)) !important;
+}
+
+.profile-premium-banner,
+.profile-daily-card {
+  display: flex !important;
+  min-width: 0;
+  overflow: hidden;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px !important;
+  text-align: left;
+}
+
+.profile-premium-banner > span:nth-child(2),
+.profile-daily-card > span:nth-child(2) {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.profile-premium-banner strong,
+.profile-premium-banner span span,
+.profile-daily-card strong,
+.profile-daily-card small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-premium-banner small {
+  display: block;
+  color: rgb(var(--pf-accent-2));
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.profile-premium-emblem,
+.profile-daily-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 7px;
+  background: rgb(var(--pf-accent) / .14);
+  color: rgb(var(--pf-accent));
 }
 
 .profile-premium-banner.is-active {
