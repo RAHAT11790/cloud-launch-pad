@@ -2750,3 +2750,24 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .profile-font-grid > button.profile-font-neon strong,
 .profile-font-grid > button.profile-font-retro strong,
 .profile-font-grid > button.profile-font-bungee strong { font-size: 0.8rem; }
+
+/* ===== Profile: back control above the banner ===== */
+.profile-page .profile-identity-panel { position: relative; }
+.profile-page .profile-identity-panel > .profile-back-button {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 6;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / .16);
+  background: rgb(10 12 16 / .62) !important;
+  color: #fff !important;
+  backdrop-filter: blur(6px);
+}
+.profile-identity-actions > button.profile-studio-action {
+  border: 1px solid rgb(var(--pf-accent-2) / .5) !important;
+  background: rgb(var(--pf-accent-2) / .14) !important;
+  color: rgb(var(--pf-accent-2)) !important;
+}
