@@ -63,6 +63,7 @@ const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "E
 const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
 const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
 const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
+const DownloadManagerPanel = lazySection(() => import("@/components/admin/DownloadManagerPanel"), "Download Manager");
 const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
 const AdsterraAnalytics = lazySection(() => import("@/components/admin/AdsterraAnalytics"), "Adsterra Analytics");
 const BackdropAiReplacer = lazySection(() => import("@/components/admin/BackdropAiReplacer"), "Backdrop AI");
@@ -3335,6 +3336,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "security-center": "Security & Access",
   "task-manager": "Daily Task Manager",
   "tg-download": "Telegram Download",
+  "download-manager": "Download Manager",
   "profile-shop": "Profile Shop",
   
   };
@@ -5397,6 +5399,7 @@ ${tgBulkFooter}
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
  { section: "tg-download", icon: <Send size={16} />, label: "Telegram Download" },
+ { section: "download-manager", icon: <FolderDown size={16} />, label: "Download Manager" },
  { section: "profile-shop", icon: <ScanFace size={16} />, label: "Profile Shop" },
  { section: "fb-analytics", icon: <Database size={16} />, label: "FB Analytics" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
@@ -9062,6 +9065,11 @@ ${tgBulkFooter}
  {/* ==================== TELEGRAM DOWNLOAD ==================== */}
  {activeSection === "tg-download" && (
  <TelegramDownloadConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ )}
+
+ {/* ==================== DOWNLOAD MANAGER ==================== */}
+ {activeSection === "download-manager" && (
+ <DownloadManagerPanel glassCard={glassCard} />
  )}
 
  {/* ==================== PROFILE SHOP ==================== */}

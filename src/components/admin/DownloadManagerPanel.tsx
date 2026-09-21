@@ -115,9 +115,9 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
     title,
     note,
     onToggle,
-    accent,
-  }: { active: boolean; icon: React.ReactNode; title: string; note: string; onToggle: () => void; accent: string }) => (
-    <div className={`rounded-xl border p-3.5 transition-colors ${active ? `border-${accent}-500/40 bg-${accent}-500/[0.07]` : "border-white/10 bg-black/20"}`}>
+    activeClass,
+  }: { active: boolean; icon: React.ReactNode; title: string; note: string; onToggle: () => void; activeClass: string }) => (
+    <div className={`rounded-xl border p-3.5 transition-colors ${active ? activeClass : "border-white/10 bg-black/20"}`}>
       <div className="flex items-start gap-3">
         <div className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center ${active ? "bg-white/10 text-white" : "bg-white/[0.04] text-zinc-500"}`}>
           {icon}
@@ -167,7 +167,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
         <div className="grid gap-3 sm:grid-cols-2">
           <SourceCard
             active={config.telegramEnabled}
-            accent="sky"
+            activeClass="border-sky-500/40 bg-sky-500/[0.07]"
             icon={<Send size={18} />}
             title="Telegram Download"
             note="Delivered by the Telegram bot deep link."
@@ -175,7 +175,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           />
           <SourceCard
             active={config.websiteEnabled}
-            accent="emerald"
+            activeClass="border-emerald-500/40 bg-emerald-500/[0.07]"
             icon={<Globe size={18} />}
             title="Website Download"
             note="Browser download with quality and size details."
