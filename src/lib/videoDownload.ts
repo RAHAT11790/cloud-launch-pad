@@ -3,6 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { buildDirectDownloadLink, getServerDownloadMode } from "@/lib/downloadManagerSettings";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
