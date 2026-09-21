@@ -540,6 +540,15 @@ import { isLegacyAnEntry } from "@/lib/legacyAn";
 import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
 import { usePremium } from "@/hooks/usePremium";
 import { isEpisodeLocked, isSeriesLocked } from "@/lib/premiumAccess";
+import {
+  GUEST_EPISODE_MESSAGE,
+  GUEST_MOVIE_MESSAGE,
+  isEpisodeTimeLocked,
+  isGuestEpisodeBlocked,
+  isGuestVisitor,
+  isMovieContent,
+  isTimeLockedTarget,
+} from "@/lib/contentGating";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1121,6 +1130,26 @@ const Index = () => {
       return false;
     }
 
+    // Admin "Episode Lock" — premium-only until the chosen days pass.
+    if (!userIsPremium && isTimeLockedTarget(lockMeta || anime, sIdx, eIdx)) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
+      return false;
+    }
+
+    // Guest restrictions — movies are members-only, episodes capped at 3.
+    if (isGuestVisitor()) {
+      if (isMovieContent(anime)) {
+        toast.error(GUEST_MOVIE_MESSAGE);
+        setShowLogin(true);
+        return false;
+      }
+      if (isGuestEpisodeBlocked(eIdx)) {
+        toast.error(GUEST_EPISODE_MESSAGE);
+        return false;
+      }
+    }
+
+
     // Guest playback is allowed. Account-level unlock gating applies only to logged-in users.
     if (!isLoggedIn) return true;
 
@@ -1191,7 +1220,10 @@ const Index = () => {
   });
   const showSearch = false;
   const [showProfile, setShowProfile] = useState(() => {
-    try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
+    try {
+      if (window.location.pathname === "/profile") return true;
+      return sessionStorage.getItem("rs_uiLayer") === "profile";
+    } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -2248,6 +2280,25 @@ const Index = () => {
       navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
       return;
     }
+
+    // Admin "Episode Lock" — premium-only until the chosen days pass.
+    if (!userIsPremium && isTimeLockedTarget(seriesLike, sIdx, eIdx)) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+      return;
+    }
+
+    // Guest restrictions — movies members-only, episodes capped at 3.
+    if (isGuestVisitor()) {
+      if (isMovieContent(anime)) {
+        toast.error(GUEST_MOVIE_MESSAGE);
+        setShowLogin(true);
+        return;
+      }
+      if (isGuestEpisodeBlocked(eIdx)) {
+        toast.error(GUEST_EPISODE_MESSAGE);
+        return;
+      }
+    }
     if (!freeAccessLoaded && isLoggedIn && !isAnimeSaltContentEarly) {
       return;
     }
@@ -2890,6 +2941,8 @@ const Index = () => {
     number: ep.episodeNumber,
     title: ep.title,
     active: i === (playerState?.epIdx ?? 0),
+    locked: (!userIsPremium && isEpisodeTimeLocked(ep)) || (isGuestVisitor() && isGuestEpisodeBlocked(i)),
+    lockKind: (!userIsPremium && isEpisodeTimeLocked(ep)) ? "premium" as const : "login" as const,
     onClick: async () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
@@ -3111,6 +3164,7 @@ const Index = () => {
     if (page === "profile") {
       setShowLogin(false);
       setShowProfile(true);
+      if (window.location.pathname !== "/profile") navigate("/profile");
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
@@ -3162,6 +3216,15 @@ const Index = () => {
       setVisualPage(fromPath);
     }
   }, [pathname, isRoutedOverlay, activePage]);
+
+  // /profile is a real route — keep the profile overlay in sync with the URL.
+  useEffect(() => {
+    if (pathname === "/profile") {
+      if (!showProfile) setShowProfile(true);
+      return;
+    }
+    if (showProfile && !isRoutedOverlay) setShowProfile(false);
+  }, [pathname, showProfile, isRoutedOverlay]);
 
   // Set initial position without animation
   useLayoutEffect(() => {
@@ -3622,7 +3685,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <ProfilePage onClose={() => { setShowProfile(false); if (window.location.pathname === "/profile") navigate(MAIN_PAGE_PATH[activePage] || "/"); }} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 

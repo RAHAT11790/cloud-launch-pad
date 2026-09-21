@@ -49,6 +49,8 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
         telegramEnabled: raw?.telegramEnabled !== false,
         websiteEnabled: raw?.websiteEnabled !== false,
         serverModes,
+        activeServerKey: String(raw?.activeServerKey || ""),
+        activeServerDomain: String(raw?.activeServerDomain || ""),
       });
       setLoading(false);
     });
@@ -93,6 +95,14 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
     if (!key) return;
     setConfig((prev) => ({ ...prev, serverModes: { ...prev.serverModes, [key]: mode } }));
     patch({ [`serverModes/${key}`]: mode });
+  };
+
+  const selectActiveServer = (domain: string) => {
+    const trimmed = String(domain || "").trim();
+    const key = trimmed ? serverModeKey(trimmed) : "";
+    setConfig((prev) => ({ ...prev, activeServerKey: key, activeServerDomain: trimmed }));
+    patch({ activeServerKey: key, activeServerDomain: trimmed });
+    toast.success(trimmed ? "Download server selected" : "Using each video's own source server");
   };
 
   const today = useMemo(() => {
@@ -197,9 +207,9 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
             <ServerIcon size={18} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-[15px] font-bold text-white leading-tight">Download server mode</h3>
+            <h3 className="text-[15px] font-bold text-white leading-tight">Download server</h3>
             <p className="mt-1 text-[11px] text-zinc-400">
-              Servers come from Video Servers — nothing is added here.
+              Pick the one server every download is served from. The list comes from Video Servers.
             </p>
           </div>
         </div>
@@ -213,6 +223,31 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           </p>
         </div>
 
+        <div className="mb-3 rounded-xl border border-white/10 bg-black/25 px-3.5 py-3">
+          <p className={label}>Selected download server</p>
+          {config.activeServerDomain ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-mono text-[11.5px] font-semibold text-emerald-300">{config.activeServerDomain}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                (config.serverModes[config.activeServerKey] === "https") ? "bg-emerald-500/15 text-emerald-300" : "bg-sky-500/15 text-sky-300"
+              }`}>
+                {config.serverModes[config.activeServerKey] === "https" ? "https · direct" : "http · proxy"}
+              </span>
+            </div>
+          ) : (
+            <p className="text-[11.5px] text-zinc-400">
+              None selected — every video downloads from its own source link.
+            </p>
+          )}
+          <button
+            onClick={() => selectActiveServer("")}
+            disabled={!config.activeServerDomain}
+            className="mt-2.5 h-8 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-zinc-300 hover:text-white disabled:opacity-40"
+          >
+            Use source server
+          </button>
+        </div>
+
         {servers.length === 0 ? (
           <p className="rounded-xl border border-white/10 bg-black/20 px-3.5 py-6 text-center text-[12px] text-zinc-500">
             No video servers found. Add them in Video Servers first.
@@ -224,11 +259,30 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
               const key = serverModeKey(domain);
               const mode: DownloadServerMode = config.serverModes[key] === "https" ? "https" : "http";
               const directOk = Boolean(buildDirectDownloadLink(`${domain.replace(/\/+$/, "")}/watch/sample.mp4`));
+              const isActive = !!config.activeServerDomain && key === config.activeServerKey;
               return (
-                <div key={`${key}-${idx}`} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                <div
+                  key={`${key}-${idx}`}
+                  className={`rounded-xl border p-3 transition-colors ${isActive ? "border-emerald-500/45 bg-emerald-500/[0.07]" : "border-white/10 bg-black/25"}`}
+                >
                   <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => selectActiveServer(domain)}
+                      aria-label={`Select ${server?.name || domain} as download server`}
+                      className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        isActive ? "border-emerald-400 bg-emerald-400" : "border-zinc-600 hover:border-zinc-400"
+                      }`}
+                    >
+                      {isActive && <span className="h-2 w-2 rounded-full bg-[#101024]" />}
+                    </button>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-bold text-white">{server?.name || domain}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-[13px] font-bold text-white">{server?.name || domain}</p>
+                        <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] font-bold text-zinc-400">#{idx + 1}</span>
+                        {isActive && (
+                          <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300">ACTIVE</span>
+                        )}
+                      </div>
                       <p className="truncate font-mono text-[10.5px] text-zinc-500">{domain}</p>
                     </div>
                     <div className="inline-flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">

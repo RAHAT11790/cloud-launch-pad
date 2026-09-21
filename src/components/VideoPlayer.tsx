@@ -317,7 +317,7 @@ interface VideoPlayerProps {
   onClose: () => void;
   onLanguageChange?: (language: string) => void;
   onNextEpisode?: () => void;
-  episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
+  episodeList?: { number: number; title?: string; active: boolean; onClick: () => void; locked?: boolean; lockKind?: "premium" | "login" }[];
   qualityOptions?: QualityOption[];
   audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   subtitleTracks?: { language?: string; label: string; url: string }[];
@@ -5596,13 +5596,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <button
                         key={ep.number}
                         onClick={ep.onClick}
-                        className={`flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
+                        title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
+                        className={`relative flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
                           ep.active
                             ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60'
-                            : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
+                            : ep.locked
+                              ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
+                              : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
                         }`}
                       >
                         {String(ep.number).padStart(2, '0')}
+                        {ep.locked && (
+                          <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
+                            <Lock className="w-2.5 h-2.5" strokeWidth={3} />
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -5966,13 +5974,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <button
                     key={ep.number}
                     onClick={() => { ep.onClick(); closeInlineSheets(); }}
-                    className={`aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
+                    title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
+                    className={`relative aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
                       ep.active
                         ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-400/70 shadow-[0_0_14px_-2px_hsl(45_95%_55%/0.5)]'
-                        : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
+                        : ep.locked
+                          ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
+                          : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
                     }`}
                   >
                     {String(ep.number).padStart(2, '0')}
+                    {ep.locked && (
+                      <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
+                        <Lock className="w-2.5 h-2.5" strokeWidth={3} />
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

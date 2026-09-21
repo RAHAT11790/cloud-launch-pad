@@ -28,6 +28,7 @@ import {
   type ProfileCustomization,
 } from "@/lib/profileCustomization";
 import { EMPTY_SHOP, equipOrBuyShopItem, subscribeProfileShop, type ProfileShop, type ShopItem, type ShopKind } from "@/lib/profileShop";
+import { GUEST_PROFILE_MESSAGE } from "@/lib/contentGating";
 import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
 
 import VideoPlayer from "@/components/VideoPlayer";
@@ -599,7 +600,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const selectedShopFrame = visibleFrames.find((item) => item.id === customization.frameId);
   const selectedShopBackground = visibleBackgrounds.find((item) => item.id === customization.backgroundId);
 
+  // Guests can look around the studio, but nothing can be changed until they log in.
+  const blockGuestChange = () => {
+    if (!isGuestUser) return false;
+    toast.error(GUEST_PROFILE_MESSAGE);
+    onClose();
+    onLoginClick?.();
+    return true;
+  };
+
   const applyProfileStyle = async (kind: "frameId" | "themeId" | "fontId", value: string) => {
+    if (blockGuestChange()) return;
     if (!userId) return;
     if ((kind === "themeId" || kind === "fontId") && !isPremium) {
       toast.info("Premium members can use every theme and name style for free.");
@@ -616,6 +627,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   };
 
   const selectOrBuyShopItem = async (kind: ShopKind, item: ShopItem) => {
+    if (blockGuestChange()) return;
     if (!userId || buyingFrame) return;
     setBuyingFrame(item.id);
     try {

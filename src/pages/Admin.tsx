@@ -19,6 +19,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays } from "@/lib/contentGating";
 
 import {
  buildAdminContentIndexItem,
@@ -2640,6 +2641,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
  type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string };
  const [mvPartsData, setMvPartsData] = useState<MoviePartEditor[]>([]);
+ const [mvLockPicker, setMvLockPicker] = useState<number | null>(null);
  const [mvPartsJsonImportMode, setMvPartsJsonImportMode] = useState(false);
  const [mvJsonPasteText, setMvJsonPasteText] = useState("");
  const mvJsonFileRef = useRef<HTMLInputElement | null>(null);
@@ -4428,6 +4430,22 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  };
 
+ // ===== Episode Lock (premium-only for N days, then auto-free) =====
+ const setEpisodeLockDays = (sIdx: number, eIdx: number, days: number) => {
+  const until = lockUntilFromDays(days);
+  setSeasonsData(prev => {
+   const copy = Array.isArray(prev) ? [...prev] : [];
+   const rawSeason = copy[sIdx];
+   if (!rawSeason) return prev;
+   const episodes = Array.isArray((rawSeason as any).episodes) ? [...(rawSeason as any).episodes] : [];
+   if (!episodes[eIdx]) return prev;
+   episodes[eIdx] = { ...episodes[eIdx], lockUntil: until };
+   copy[sIdx] = { ...rawSeason, episodes } as any;
+   return copy;
+  });
+  toast.success(until ? `Episode locked for ${days} day${days === 1 ? "" : "s"} (premium only)` : "Episode unlocked for everyone");
+ };
+
  const removeEpisode = (sIdx: number, eIdx: number) => {
  if (!confirm("Remove this episode?")) return;
  setSeasonsData(prev => {
@@ -4721,6 +4739,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    if (!confirm("Remove this part?")) return;
    setMvPartsData(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, partNumber: i + 1 })));
  };
+ const setMoviePartLockDays = (idx: number, days: number) => {
+   const until = lockUntilFromDays(days);
+   setMvPartsData(prev => {
+     const copy = [...prev];
+     if (!copy[idx]) return prev;
+     copy[idx] = { ...(copy[idx] as any), lockUntil: until } as MoviePartEditor;
+     return copy;
+   });
+   toast.success(until ? `Locked for ${days} day${days === 1 ? "" : "s"} (premium only)` : "Unlocked for everyone");
+ };
+
  const updateMoviePartField = (idx: number, field: keyof MoviePartEditor, value: string | number) => {
    setMvPartsData(prev => {
      const copy = [...prev];
@@ -6259,6 +6288,7 @@ ${tgBulkFooter}
           normalizeLanguageValue={normalizeLanguageValue}
           updateSeriesEpisodeLanguageLink={updateSeriesEpisodeLanguageLink}
           removeEpisode={removeEpisode}
+          setEpisodeLockDays={setEpisodeLockDays}
           addSeriesEpisodeAudioTrack={addSeriesEpisodeAudioTrack}
           updateSeriesEpisodeAudioTrack={updateSeriesEpisodeAudioTrack}
           setSeriesEpisodeDefaultAudioTrack={setSeriesEpisodeDefaultAudioTrack}
@@ -7201,12 +7231,44 @@ ${tgBulkFooter}
      </div>
    )}
 
-   {mvPartsData.map((p, pIdx) => (
-     <div key={pIdx} className="bg-black/30 rounded-xl p-3 mb-3 border border-white/5">
-       <div className="flex items-center justify-between mb-3">
-         <span className="text-xs font-semibold text-purple-400">{mvPartsData.length === 1 ? "Main" : `Part ${p.partNumber}`}</span>
-         <button onClick={() => removeMoviePart(pIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={12} /></button>
+    {mvPartsData.map((p, pIdx) => {
+     const partLocked = isEpisodeTimeLocked(p as any);
+     const partLockLeft = formatLockRemaining(episodeLockRemainingMs(p as any));
+     return (
+     <div key={pIdx} className={`rounded-xl p-3 mb-3 border transition-colors ${partLocked ? "border-amber-500/35 bg-amber-500/[0.06]" : "border-white/[0.07] bg-black/30"}`}>
+       <div className="flex items-center justify-between gap-2 mb-3">
+         <div className="flex min-w-0 items-center gap-2">
+           <span className="text-xs font-semibold text-purple-400">{mvPartsData.length === 1 ? "Main" : `Part ${p.partNumber}`}</span>
+           {partLocked && (
+             <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-200">
+               <Crown size={9} /> {partLockLeft}
+             </span>
+           )}
+         </div>
+         <div className="flex shrink-0 items-center gap-1.5">
+           <button onClick={() => setMvLockPicker(prev => (prev === pIdx ? null : pIdx))} aria-label={`Part ${p.partNumber} lock`} title="Premium lock for a number of days"
+             className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${partLocked ? "bg-amber-500/25 text-amber-200 hover:bg-amber-500/40" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}>
+             {partLocked ? <Lock size={12} /> : <Unlock size={12} />}
+           </button>
+           <button onClick={() => removeMoviePart(pIdx)} aria-label={`Delete part ${p.partNumber}`} className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-red-500/15 text-pink-400 hover:bg-red-500/35 hover:text-pink-200 transition-all"><Trash2 size={12} /></button>
+         </div>
        </div>
+       {mvLockPicker === pIdx && (
+         <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-2.5">
+           <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">Premium lock — pick days</p>
+           <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">Premium members only while locked; becomes free automatically when the days end.</p>
+           <div className="mt-2 flex flex-wrap gap-1.5">
+             {[1, 2, 3, 5, 7, 14, 30].map((d) => (
+               <button key={d} onClick={() => { setMoviePartLockDays(pIdx, d); setMvLockPicker(null); }}
+                 className="h-7 rounded-lg border border-amber-400/30 bg-amber-500/15 px-2.5 text-[11px] font-bold text-amber-100 hover:bg-amber-500/30">{d}d</button>
+             ))}
+             <button onClick={() => { const v = prompt("Lock for how many days?", "7"); const d = Number(v); if (!Number.isFinite(d) || d <= 0) return; setMoviePartLockDays(pIdx, d); setMvLockPicker(null); }}
+               className="h-7 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[11px] font-bold text-zinc-200 hover:bg-white/10">Custom</button>
+             <button onClick={() => { setMoviePartLockDays(pIdx, 0); setMvLockPicker(null); }} disabled={!partLocked}
+               className="h-7 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-40">Unlock now</button>
+           </div>
+         </div>
+       )}
        <div className="grid grid-cols-1 gap-2 mb-2">
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
            className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
@@ -7228,9 +7290,10 @@ ${tgBulkFooter}
            </div>
          ))}
        </div>
-     </div>
-   ))}
- </div>
+      </div>
+    );
+    })}
+  </div>
 
  <div className="flex gap-2">
  <button onClick={saveMovie} className={`${btnPrimary} flex-1 py-4 text-[15px] font-semibold flex items-center justify-center gap-2`}>
@@ -12427,13 +12490,14 @@ const SortableSeasonItem = memo(({
   wsSeasonJsonFileRef, setWsSeasonJsonTarget, setWsSeasonPasteTarget, setWsSeasonPasteText,
   setExpandedSeasons, expandedSeasons, wsSeasonPasteTarget, wsSeasonPasteText,
   wsImportJsonToSeason, addEpisode, episodeRenderLimits, setEpisodeRenderLimits,
-  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode,
+  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
   removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
   comboSelection, setComboSelection, isComboMode, moveSeason
 }: any) => {
 
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
+  const [lockPicker, setLockPicker] = useState<number | null>(null);
 
   return (
     <div className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
@@ -12540,14 +12604,75 @@ const SortableSeasonItem = memo(({
                     link4k: ep.link4k ?? "",
                   };
 
-                  return (
-                    <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold text-purple-400">Episode {ep.episodeNumber}</span>
-                        <button onClick={() => removeEpisode(sIdx, eIdx)} className="bg-red-500/20 text-pink-500 p-1.5 rounded-lg hover:bg-red-500/40 transition-all">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                  const lockedNow = isEpisodeTimeLocked(ep);
+                  const lockLeft = formatLockRemaining(episodeLockRemainingMs(ep));
+
+                   return (
+                     <div key={eIdx} className={`mb-3 rounded-xl border px-3 py-3 transition-colors ${lockedNow ? "border-amber-500/35 bg-amber-500/[0.06]" : "border-white/[0.07] bg-white/[0.03]"}`}>
+                       <div className="mb-2.5 flex items-center justify-between gap-2">
+                         <div className="flex min-w-0 items-center gap-2">
+                           <span className="inline-flex h-6 min-w-[26px] items-center justify-center rounded-md bg-purple-500/15 px-1.5 text-[11px] font-bold text-purple-300">{ep.episodeNumber}</span>
+                           <span className="truncate text-[12px] font-semibold text-zinc-200">{ep.title || `Episode ${ep.episodeNumber}`}</span>
+                           {lockedNow && (
+                             <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-200">
+                               <Crown size={9} /> {lockLeft}
+                             </span>
+                           )}
+                         </div>
+                         <div className="flex shrink-0 items-center gap-1.5">
+                           <button
+                             onClick={() => setLockPicker((prev: any) => (prev === eIdx ? null : eIdx))}
+                             aria-label={`Episode ${ep.episodeNumber} lock`}
+                             title="Premium lock for a number of days"
+                             className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${lockedNow ? "bg-amber-500/25 text-amber-200 hover:bg-amber-500/40" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}
+                           >
+                             {lockedNow ? <Lock size={12} /> : <Unlock size={12} />}
+                           </button>
+                           <button onClick={() => removeEpisode(sIdx, eIdx)} aria-label={`Delete episode ${ep.episodeNumber}`} className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-red-500/15 text-pink-400 hover:bg-red-500/35 hover:text-pink-200 transition-all">
+                             <Trash2 size={12} />
+                           </button>
+                         </div>
+                       </div>
+
+                       {lockPicker === eIdx && (
+                         <div className="mb-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-2.5">
+                           <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">Premium lock — pick days</p>
+                           <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">
+                             Only premium members can watch while locked. It becomes free automatically when the days end.
+                           </p>
+                           <div className="mt-2 flex flex-wrap gap-1.5">
+                             {[1, 2, 3, 5, 7, 14, 30].map((d) => (
+                               <button
+                                 key={d}
+                                 onClick={() => { setEpisodeLockDays(sIdx, eIdx, d); setLockPicker(null); }}
+                                 className="h-7 rounded-lg border border-amber-400/30 bg-amber-500/15 px-2.5 text-[11px] font-bold text-amber-100 hover:bg-amber-500/30"
+                               >
+                                 {d}d
+                               </button>
+                             ))}
+                             <button
+                               onClick={() => {
+                                 const value = prompt("Lock for how many days?", "7");
+                                 const days = Number(value);
+                                 if (!Number.isFinite(days) || days <= 0) return;
+                                 setEpisodeLockDays(sIdx, eIdx, days);
+                                 setLockPicker(null);
+                               }}
+                               className="h-7 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[11px] font-bold text-zinc-200 hover:bg-white/10"
+                             >
+                               Custom
+                             </button>
+                             <button
+                               onClick={() => { setEpisodeLockDays(sIdx, eIdx, 0); setLockPicker(null); }}
+                               disabled={!lockedNow}
+                               className="h-7 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-40"
+                             >
+                               Unlock now
+                             </button>
+                           </div>
+                         </div>
+                       )}
+
 
                       {isAnSeries ? (
                         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">

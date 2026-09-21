@@ -94,6 +94,7 @@ const App = () => (
 
           {/* Main tab routes — all render Index, which syncs activePage from pathname */}
           <Route path="/" element={<Index />} />
+          <Route path="/profile" element={<Index />} />
           <Route path="/series" element={<Index />} />
           <Route path="/movies" element={<Index />} />
           <Route path="/live-tv" element={<Index />} />

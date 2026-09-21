@@ -23,12 +23,18 @@ export type DownloadManagerConfig = {
   telegramEnabled: boolean;
   websiteEnabled: boolean;
   serverModes: Record<string, DownloadServerMode>;
+  /** Firebase-safe key of the server chosen to serve every download. */
+  activeServerKey: string;
+  /** Domain/base URL of that server, e.g. https://dl3.example.com */
+  activeServerDomain: string;
 };
 
 export const DEFAULT_DOWNLOAD_MANAGER_CONFIG: DownloadManagerConfig = {
   telegramEnabled: true,
   websiteEnabled: true,
   serverModes: {},
+  activeServerKey: "",
+  activeServerDomain: "",
 };
 
 const CACHE_KEY = "rs_download_manager_config_v1";
@@ -43,6 +49,8 @@ const parseConfig = (raw: any): DownloadManagerConfig => {
     telegramEnabled: raw?.telegramEnabled !== false,
     websiteEnabled: raw?.websiteEnabled !== false,
     serverModes,
+    activeServerKey: String(raw?.activeServerKey || ""),
+    activeServerDomain: String(raw?.activeServerDomain || ""),
   };
 };
 
@@ -101,6 +109,49 @@ export const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServ
   const key = serverModeKey(domainOrUrl);
   if (!key) return "http";
   return config.serverModes[key] === "https" ? "https" : "http";
+};
+
+// ---------------------------------------------------------------------------
+// Active download server
+// ---------------------------------------------------------------------------
+
+/** The server the admin selected to serve every download ("" = keep source). */
+export const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
+  const domain = String(config.activeServerDomain || "").trim();
+  if (!domain) return null;
+  const key = config.activeServerKey || serverModeKey(domain);
+  return { key, domain, mode: config.serverModes[key] === "https" ? "https" : "http" };
+};
+
+/**
+ * Rewrites a media URL so it is served by the selected download server while
+ * keeping the original file path intact. Returns the input unchanged when no
+ * active server is configured or the URL cannot be parsed.
+ */
+export const applyActiveDownloadServer = (url: string): string => {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  const active = getActiveDownloadServer();
+  if (!active) return raw;
+  const base = active.domain.replace(/\/+$/, "");
+  const baseWithScheme = /^https?:\/\//i.test(base) ? base : `${active.mode === "https" ? "https" : "http"}://${base}`;
+  try {
+    const source = new URL(raw);
+    const target = new URL(baseWithScheme);
+    const basePath = target.pathname.replace(/\/+$/, "");
+    const out = new URL(source.pathname + source.search, `${target.protocol}//${target.host}`);
+    out.pathname = `${basePath}${source.pathname}`.replace(/\/{2,}/g, "/");
+    return out.toString();
+  } catch {
+    return raw;
+  }
+};
+
+/** Download mode for a URL after the active-server override is applied. */
+export const getEffectiveDownloadMode = (url: string): DownloadServerMode => {
+  const active = getActiveDownloadServer();
+  if (active) return active.mode;
+  return getServerDownloadMode(url);
 };
 
 // ---------------------------------------------------------------------------
