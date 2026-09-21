@@ -1,32 +1,44 @@
-# Profile mobile layout correction plan
+# Download Manager (Admin + User) — Plan
 
-## What will be fixed
+## 1. Admin panel: new "Download Manager" section
+New sidebar button + page with four blocks:
 
-### 1. Profile identity layout
-- Keep the profile picture, name, email, and Premium badge visually aligned as one compact identity row.
-- Move the identity content slightly upward without covering the backdrop or frame artwork.
-- Place **Edit profile** and **Profile Studio** side by side with equal height, balanced width, and consistent spacing.
+**a) Download sources toggle**
+- `Telegram download` on/off
+- `Website download` on/off
+- Both off -> user sees only "Download not available".
 
-### 2. Exact 16:9 backdrop presentation
-- Give the uploaded backdrop a stable 16:9 display area instead of the current shallow/cropped strip.
-- Fit every uploaded backdrop consistently inside that area, preventing vertical drifting, black gaps, or unintended top-only cropping.
-- Keep the back button readable without making it distort or cover the main profile composition.
+**b) Download mode (per video server)**
+- Server list is NOT managed here; it is read live from the existing Video Servers data.
+- Each server row gets a mode switch: `HTTP (proxy)` or `HTTPS (direct)`.
+- HTTP: current behaviour — proxy path + file renaming + progress overlay.
+- HTTPS: no proxy, direct download URL built by stripping the `/watch` segment from the play URL. No renaming (accepted).
 
-### 3. Settings and Logout spacing
-- Separate the Settings and Logout rows with an even, intentional gap.
-- Keep both rows equal in width, height, icon alignment, and corner treatment.
+**c) Statistics**
+- Counters written on every download event: source (telegram / website), day bucket.
+- Status bars: today, last 7 days, last 30 days.
+- Only totals: number of files / URLs requested and number of Telegram hand-offs. No anime titles, no series breakdown.
 
-### 4. Responsive checks
-- Preserve the corrected composition on the supplied mobile size and on desktop.
-- Check long names/emails, Premium badge containment, frame-to-avatar alignment, and page scrolling.
+**d) UI**
+- Same dark admin palette as the rebuilt Premium Users / Telegram Download cards: consistent card, label, field and button atoms, aligned stat tiles, no text/box mismatch.
 
-### 5. Final confirmation
-- Run type-check, focused tests, and build verification.
-- Live-test the complete profile page at mobile and desktop sizes using the real account.
-- Capture screenshots of the corrected identity area, 16:9 backdrop, and Settings/Logout rows before reporting completion.
+## 2. User panel: download button behaviour
+- Click Download -> chooser sheet:
+  - Both enabled: two buttons, `Telegram` and `Website`.
+  - One enabled: that single button.
+  - None enabled: "Download not available" message only.
+- Website path respects the server's HTTP/HTTPS mode (proxy+rename vs direct link).
+- Telegram path keeps the existing deep-link builder.
+- Each completed action logs one statistics event.
 
-## Technical details (for reference)
-- Update the profile identity grid so the avatar and identity text share a predictable row and action buttons use a two-column layout.
-- Replace the variable-height cover strip with an aspect-ratio-driven 16:9 media region and consistent image fitting.
-- Add explicit profile menu spacing rather than relying on adjacent card margins.
-- Do not modify profile purchasing, premium rules, uploads, or unrelated pages.
+## 3. Technical notes
+- Settings stored in Firebase under `settings/downloadManager`: `{ telegram: bool, website: bool, serverModes: { [serverId]: "http" | "https" } }`.
+- Stats stored under `stats/downloads/{YYYY-MM-DD}`: `{ telegram, website, total }`, incremented client-side on trigger.
+- Direct URL derivation: remove `/watch` (and `/watch/`) from the source URL; validate it is `https://` before offering direct mode.
+- Reuse `src/lib/videoDownload.ts` / `downloadManager.ts` for the proxy+rename path; add a direct branch instead of duplicating logic.
+
+## 4. Verification before reporting done
+- Build, typecheck, existing tests.
+- Live admin check with PIN: toggle each source off/on, switch a server to HTTPS, confirm the user-side chooser reacts (two buttons / one button / "Download not available").
+- Live user check: one HTTP download (proxy + rename) and one HTTPS download (direct link).
+- Admin panel screenshots attached in the report.
