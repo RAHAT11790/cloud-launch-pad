@@ -49,6 +49,7 @@ interface VideoServerOption {
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
+import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { wrapWithIosProtection } from "@/lib/iosProtection";
@@ -793,6 +794,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [sharePanelEpisodeIdx, setSharePanelEpisodeIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadMode, setDownloadMode] = useState<"choose" | "website" | "telegram">("choose");
+  const downloadManager = useDownloadManagerConfig();
+  const telegramDownloadEnabled = downloadManager.telegramEnabled;
+  const websiteDownloadEnabled = downloadManager.websiteEnabled;
+  const downloadSourceCount = (telegramDownloadEnabled ? 1 : 0) + (websiteDownloadEnabled ? 1 : 0);
   const [tgSelectedEpisodes, setTgSelectedEpisodes] = useState<Set<number>>(new Set());
   const [tgSelectedQualities, setTgSelectedQualities] = useState<string[]>(["720P"]);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
@@ -1478,7 +1483,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadLanguageLabel(currentLangLabel);
       setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setSelectedDownloadQuality(preferredDownloadQuality);
-      setDownloadMode("choose");
+      const cfg = getDownloadManagerConfig();
+      const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
+      const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
+      setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
       setTgSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setTgSelectedQualities(["720P"]);
     }
@@ -6123,7 +6131,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               .map((candidate) => unwrapManagedVideoUrl(candidate) || candidate)
               .filter((candidate) => isDirectDownloadCandidate(candidate));
             const started = triggerBackgroundVideoDownload(directMovieUrl, buildDownloadFileName(movieLabel, quality), directFallbacks);
-            if (started) toast.success("Download sent to browser");
+            if (started) { recordDownloadEvent("website", 1); toast.success("Download sent to browser"); }
             else toast.error("Could not start the download");
             closePanel();
           };
@@ -6156,6 +6164,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               });
             }
             const startedCount = triggerBulkBackgroundDownloads(browserBatch);
+            if (startedCount > 0) recordDownloadEvent("website", startedCount);
             closePanel();
             if (startedCount === 0) toast.error("No free downloadable links found for this selection");
             else toast.success(`Sent ${startedCount} download${startedCount > 1 ? "s" : ""} to browser`);
@@ -6216,11 +6225,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
 
                   {/* ============ Step 1 — pick a download source ============ */}
-                  {downloadMode === "choose" && (
+                  {downloadMode === "choose" && downloadSourceCount === 0 && (
+                    <div className="px-5 py-10 flex flex-col items-center text-center gap-2">
+                      <span className="h-12 w-12 rounded-full bg-white/[0.06] flex items-center justify-center">
+                        <Download className="w-5 h-5 text-white/40" />
+                      </span>
+                      <p className="text-[14px] font-bold text-white">Download not available</p>
+                      <p className="text-[11.5px] text-white/50 leading-relaxed max-w-[260px]">
+                        Downloads are turned off right now. Please try again later.
+                      </p>
+                    </div>
+                  )}
+
+                  {downloadMode === "choose" && downloadSourceCount > 0 && (
                     <div className="px-4 py-5 flex flex-col gap-3">
                       <p className="text-[12px] text-white/55 leading-snug">
                         Choose how you want to get this {hasMultiEpisodes ? "episode" : "movie"}.
                       </p>
+                      {telegramDownloadEnabled && (
                       <button
                         onClick={() => setDownloadMode("telegram")}
                         className="w-full rounded-[14px] border border-sky-400/30 bg-gradient-to-r from-sky-500/20 to-blue-600/15 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
@@ -6234,6 +6256,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         </span>
                         <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
                       </button>
+                      )}
+                      {websiteDownloadEnabled && (
                       <button
                         onClick={() => setDownloadMode("website")}
                         className="w-full rounded-[14px] border border-emerald-400/25 bg-gradient-to-r from-emerald-500/15 to-cyan-500/10 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
@@ -6247,11 +6271,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         </span>
                         <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
                       </button>
+                      )}
                     </div>
                   )}
 
                   {/* ============ Telegram download ============ */}
-                  {downloadMode === "telegram" && (() => {
+                  {downloadMode === "telegram" && telegramDownloadEnabled && (() => {
                     const botUrl = getTelegramBotUrl();
                     const seasonNumber = (() => {
                       const raw = String(panelSeason?.name || "");
@@ -6293,7 +6318,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           <div className="rounded-[10px] border border-sky-400/20 bg-sky-400/[0.06] p-3">
                             <div className="flex items-center justify-between gap-2">
                               <h4 className="text-[11px] font-bold text-sky-200/90 uppercase tracking-wider">Telegram — free for everyone</h4>
-                              <button onClick={() => setDownloadMode("choose")} className="text-[11px] text-white/50 underline underline-offset-2">Back</button>
+                              {downloadSourceCount > 1 && (<button onClick={() => setDownloadMode("choose")} className="text-[11px] text-white/50 underline underline-offset-2">Back</button>)}
                             </div>
                             {hasMultiEpisodes && (
                               <button onClick={() => { openInlineSheet("season", "download"); }} className="mt-2.5 h-10 w-full rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
@@ -6357,6 +6382,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                 return;
                               }
                               try { fireAdOnly("download-start", isPremium); } catch {}
+                              recordDownloadEvent("telegram", Math.max(1, chosenEpisodes.length));
                               window.open(telegramUrl, "_blank", "noopener,noreferrer");
                             }}
                             className={`w-full h-11 rounded-[10px] text-[13px] font-semibold flex items-center justify-center gap-2 px-3 ${telegramUrl ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white active:scale-[0.98]' : 'bg-white/[0.07] text-white/35'}`}
@@ -6377,7 +6403,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   })()}
 
                   {/* Picker body */}
-                  {downloadMode === "website" && (
+                  {downloadMode === "website" && websiteDownloadEnabled && (
 
                   <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
                     <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
@@ -6522,7 +6548,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-                  {downloadMode === "website" && (() => {
+                  {downloadMode === "website" && websiteDownloadEnabled && (() => {
                     const fmtSize = (bytes: number) => {
                       if (!bytes || bytes <= 0) return "";
                       const mb = bytes / (1024 * 1024);

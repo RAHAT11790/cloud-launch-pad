@@ -13,7 +13,7 @@ import {
  Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
  Shield, LogOut, Search, Save, ChevronDown, ChevronUp, Send, Link, ChevronLeft, ChevronRight,
  Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
- Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud, GripVertical, Layers, ScanFace
+ Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud, GripVertical, Layers, ScanFace, FolderDown
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -63,6 +63,7 @@ const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "E
 const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
 const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
 const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
+const DownloadManagerPanel = lazySection(() => import("@/components/admin/DownloadManagerPanel"), "Download Manager");
 const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
 const AdsterraAnalytics = lazySection(() => import("@/components/admin/AdsterraAnalytics"), "Adsterra Analytics");
 const BackdropAiReplacer = lazySection(() => import("@/components/admin/BackdropAiReplacer"), "Backdrop AI");
@@ -195,7 +196,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "profile-shop";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "download-manager" | "profile-shop";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -1998,7 +1999,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
     "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
     "egd-manager", "cf-manager", "fb-analytics", "adsterra", "backdrop-ai",
-    "security-center", "task-manager", "tg-download", "profile-shop"
+    "security-center", "task-manager", "tg-download", "download-manager", "profile-shop"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
   const routeNavigate = useNavigate();
@@ -3335,6 +3336,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   "security-center": "Security & Access",
   "task-manager": "Daily Task Manager",
   "tg-download": "Telegram Download",
+  "download-manager": "Download Manager",
   "profile-shop": "Profile Shop",
   
   };
@@ -5397,6 +5399,7 @@ ${tgBulkFooter}
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
  { section: "tg-download", icon: <Send size={16} />, label: "Telegram Download" },
+ { section: "download-manager", icon: <FolderDown size={16} />, label: "Download Manager" },
  { section: "profile-shop", icon: <ScanFace size={16} />, label: "Profile Shop" },
  { section: "fb-analytics", icon: <Database size={16} />, label: "FB Analytics" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
@@ -9062,6 +9065,11 @@ ${tgBulkFooter}
  {/* ==================== TELEGRAM DOWNLOAD ==================== */}
  {activeSection === "tg-download" && (
  <TelegramDownloadConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ )}
+
+ {/* ==================== DOWNLOAD MANAGER ==================== */}
+ {activeSection === "download-manager" && (
+ <DownloadManagerPanel glassCard={glassCard} />
  )}
 
  {/* ==================== PROFILE SHOP ==================== */}

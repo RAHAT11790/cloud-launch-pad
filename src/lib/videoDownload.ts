@@ -3,6 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { buildDirectDownloadLink, getServerDownloadMode } from "@/lib/downloadManagerSettings";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -228,6 +229,13 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     if (!inner) return [];
     const rebuilt = buildVideoDownloadUrlCandidates(inner, rawFileName, unique([...targets.slice(1), ...fallbackUrls]));
     return unique([...rebuilt, trimmedUrl]);
+  }
+
+  // Admin "HTTPS (direct)" mode for this server: skip the proxy entirely and
+  // hand the browser the raw file link (no renaming, by design).
+  if (getServerDownloadMode(trimmedUrl) === "https") {
+    const direct = buildDirectDownloadLink(trimmedUrl);
+    if (direct) return [direct];
   }
 
   const bases = unique([overrideBaseUrl].filter(Boolean) as string[]);
