@@ -7,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
-import PremiumUsersManager from "@/components/admin/PremiumUsersManager";
 import { toast } from "sonner";
 import {
  LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -40,31 +39,42 @@ const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
 
-import EgdManager from "@/components/admin/EgdManager";
-import CloudflareManager from "@/components/admin/CloudflareManager";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
-import AdsterraConfig from "@/components/admin/AdsterraConfig";
-import TelegramDownloadConfig from "@/components/admin/TelegramDownloadConfig";
-import ProfileShopManager from "@/components/admin/ProfileShopManager";
-import AdsterraAnalytics from "@/components/admin/AdsterraAnalytics";
-import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
-import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
-import FirebaseAnalyzer from "@/components/admin/FirebaseAnalyzer";
-import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
-import TelegramWelcomeManager from "@/components/admin/TelegramWelcomeManager";
-import VideoServersManager from "@/components/admin/VideoServersManager";
-import LiveTvManager from "@/components/admin/LiveTvManager";
-import TgUrlChangerManager from "@/components/admin/TgUrlChangerManager";
-import UrlChangerManager from "@/components/admin/UrlChangerManager";
-
-import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName, subscribeGlobalLogout } from "@/lib/securityGuard";
 
 // Heavy admin sections are lazy-loaded so the main Admin shell stays responsive.
+const lazySection = (loader: () => Promise<{ default: any }>, label: string) => {
+ const Inner = lazy(loader);
+ const Wrapped = (props: any) => (
+  <Suspense fallback={<AdminSectionLoader label={label} />}>
+   <Inner {...props} />
+  </Suspense>
+ );
+ return Wrapped;
+};
+
 const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisodeManager"));
 
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
 const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"));
+
+const PremiumUsersManager = lazySection(() => import("@/components/admin/PremiumUsersManager"), "Premium Users");
+const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "Edge Function Manager");
+const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
+const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
+const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
+const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
+const AdsterraAnalytics = lazySection(() => import("@/components/admin/AdsterraAnalytics"), "Adsterra Analytics");
+const BackdropAiReplacer = lazySection(() => import("@/components/admin/BackdropAiReplacer"), "Backdrop AI");
+const ApkDownloadCenter = lazySection(() => import("@/components/admin/ApkDownloadCenter"), "APK Center");
+const FirebaseAnalyzer = lazySection(() => import("@/components/admin/FirebaseAnalyzer"), "Firebase Analyzer");
+const AnimeNameExporter = lazySection(() => import("@/components/admin/AnimeNameExporter"), "Name Exporter");
+const TelegramWelcomeManager = lazySection(() => import("@/components/admin/TelegramWelcomeManager"), "Telegram Welcome");
+const VideoServersManager = lazySection(() => import("@/components/admin/VideoServersManager"), "Video Servers");
+const LiveTvManager = lazySection(() => import("@/components/admin/LiveTvManager"), "Live TV");
+const TgUrlChangerManager = lazySection(() => import("@/components/admin/TgUrlChangerManager"), "TG URL Changer");
+const UrlChangerManager = lazySection(() => import("@/components/admin/UrlChangerManager"), "URL Changer");
+const SecurityCenter = lazySection(() => import("@/components/admin/SecurityCenter"), "Security Center");
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
