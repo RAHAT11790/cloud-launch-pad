@@ -3,7 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
-import { buildDirectDownloadLink, getServerDownloadMode } from "@/lib/downloadManagerSettings";
+import { applyActiveDownloadServer, buildDirectDownloadLink, getEffectiveDownloadMode } from "@/lib/downloadManagerSettings";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -231,16 +231,21 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
-  // Admin "HTTPS (direct)" mode for this server: skip the proxy entirely and
+  // The admin picks ONE download server in Download Manager. Every download is
+  // served from that server (same file path, new host). When no server is
+  // selected the original source URL is used as before.
+  const servedUrl = applyActiveDownloadServer(trimmedUrl) || trimmedUrl;
+
+  // Admin "HTTPS (direct)" mode for that server: skip the proxy entirely and
   // hand the browser the raw file link (no renaming, by design).
-  if (getServerDownloadMode(trimmedUrl) === "https") {
-    const direct = buildDirectDownloadLink(trimmedUrl);
+  if (getEffectiveDownloadMode(servedUrl) === "https") {
+    const direct = buildDirectDownloadLink(servedUrl);
     if (direct) return [direct];
   }
 
   const bases = unique([overrideBaseUrl].filter(Boolean) as string[]);
-  const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
-  const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
+  const mirrorUrls = unique([servedUrl, trimmedUrl, ...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)].filter((u) => u && u !== servedUrl));
+  const proxied = bases.map((base) => buildDownloadProxyUrl(base, servedUrl, rawFileName, mirrorUrls));
 
   // Every Firebase/admin-stored media link should go through the download
   // proxy first so HTTP sources work inside the HTTPS/PWA app and filename
@@ -248,6 +253,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   // fallback; raw HTTP is never handed back to the browser from the web app.
   return unique([
     ...proxied,
+    /^https:\/\//i.test(servedUrl) ? servedUrl : "",
     /^https:\/\//i.test(trimmedUrl) ? trimmedUrl : "",
   ]);
 }
