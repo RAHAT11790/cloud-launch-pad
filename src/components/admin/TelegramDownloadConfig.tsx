@@ -89,8 +89,9 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
   const hash = telegramTitleHash(testTitle);
   const payloadOk = Boolean(payload) && payload.length <= 64;
 
-  const card = glassCard || "rounded-2xl border border-border bg-card p-5";
-  const input = inputClass || "w-full h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground";
+  const card = `${glassCard || "rounded-2xl border border-white/10 bg-[#16162A]"} p-4`;
+  const input = "w-full h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-[12.5px] text-white placeholder:text-zinc-500 focus:border-sky-500 focus:outline-none";
+  const label = "block text-[10.5px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5";
 
   const copyPreview = async () => {
     if (!preview) return;
