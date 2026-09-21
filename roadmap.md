@@ -26,3 +26,5 @@
 - [x] Telegram Download config UI rebuilt (dark admin palette, consistent fields/labels/buttons).
 - [x] Admin panel lag reduced: 16 heavy admin sections now code-split with lazy loading.
 - [x] Live verified with Admin PIN, screenshots captured, build OK / typecheck clean / 15 tests pass.
+
+- [x] Download Manager: admin page, Telegram/Website toggles, HTTP proxy vs HTTPS direct mode, daily/7d/30d stats, player gating (live verified)
