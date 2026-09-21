@@ -89,8 +89,9 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
   const hash = telegramTitleHash(testTitle);
   const payloadOk = Boolean(payload) && payload.length <= 64;
 
-  const card = glassCard || "rounded-2xl border border-border bg-card p-5";
-  const input = inputClass || "w-full h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground";
+  const card = `${glassCard || "rounded-2xl border border-white/10 bg-[#16162A]"} p-4`;
+  const input = "w-full h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-[12.5px] text-white placeholder:text-zinc-500 focus:border-sky-500 focus:outline-none";
+  const label = "block text-[10.5px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5";
 
   const copyPreview = async () => {
     if (!preview) return;
@@ -102,68 +103,66 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
   };
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="flex flex-col gap-3.5 max-w-3xl pb-32">
       {/* Bot link */}
       <div className={card}>
-        <div className="mb-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 shrink-0 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
-              <Bot size={18} />
-            </div>
-            <h3 className="flex-1 min-w-0 text-[15px] font-bold text-foreground leading-snug truncate">
-              Telegram Download Bot
-            </h3>
-            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide ${botUrl ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
-              {loading ? "…" : botUrl ? "ACTIVE" : "OFF"}
-            </span>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+            <Bot size={18} />
           </div>
-          <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-            Only the bot link is needed. Deep links are generated automatically and never shown to users.
-          </p>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[14px] font-bold text-white leading-tight truncate">Telegram Download Bot</h3>
+            <p className="text-[11px] text-zinc-400 leading-snug mt-0.5">Only the bot link is needed — deep links build automatically.</p>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[9.5px] font-bold tracking-wide ${botUrl ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
+            {loading ? "…" : botUrl ? "ACTIVE" : "OFF"}
+          </span>
         </div>
 
-        <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Bot link</label>
-        <div className="flex flex-col sm:flex-row gap-2.5">
-          <div className="relative flex-1">
-            <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={botUrl}
-              onChange={(e) => setBotUrl(e.target.value)}
-              placeholder="https://t.me/RS_ANIME_03_BOT"
-              disabled={loading}
-              className={`${input} pl-9`}
-            />
+        <div className="mt-4">
+          <label className={label}>Bot link</label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={botUrl}
+                onChange={(e) => setBotUrl(e.target.value)}
+                placeholder="https://t.me/RS_ANIME_03_BOT"
+                disabled={loading}
+                className={`${input} pl-9`}
+              />
+            </div>
+            <button
+              onClick={save}
+              disabled={saving || loading}
+              className="h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[12.5px] font-bold inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "Saving…" : "Save"}
+            </button>
           </div>
-          <button
-            onClick={save}
-            disabled={saving || loading}
-            className={`${btnPrimary || "h-11 px-5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm"} inline-flex items-center justify-center gap-2 shrink-0`}
-          >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {saving ? "Saving…" : "Save"}
-          </button>
         </div>
       </div>
 
       {/* Admin-only test bench */}
       <div className={card}>
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="h-9 w-9 rounded-xl bg-violet-500/15 text-violet-400 flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-xl bg-violet-500/15 text-violet-400 flex items-center justify-center">
             <FlaskConical size={17} />
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-foreground">Link tester (admin only)</h4>
-            <p className="text-[11px] text-muted-foreground">Check any title, season, episodes and quality before users use it.</p>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-[13.5px] font-bold text-white leading-tight">Link tester</h4>
+            <p className="text-[11px] text-zinc-400 leading-snug mt-0.5">Admin only — check a title before users use it.</p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Anime title</label>
+            <label className={label}>Anime title</label>
             <input value={testTitle} onChange={(e) => setTestTitle(e.target.value)} className={input} />
           </div>
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Season</label>
+            <label className={label}>Season</label>
             <input
               type="number"
               min={1}
@@ -173,30 +172,32 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
             />
           </div>
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Episodes</label>
+            <label className={label}>Episodes</label>
             <input value={testEpisodes} onChange={(e) => setTestEpisodes(e.target.value)} placeholder="5 or 1-24 or 2,4-6,9" className={input} />
           </div>
         </div>
 
-        <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-4 mb-2">Qualities</label>
-        <div className="flex flex-wrap gap-2">
-          {TELEGRAM_FREE_QUALITIES.map((q) => {
-            const on = testQualities.includes(q);
-            return (
-              <button
-                key={q}
-                onClick={() => setTestQualities((prev) => (on ? prev.filter((x) => x !== q) : [...prev, q]))}
-                className={`h-9 px-4 rounded-xl text-xs font-bold border transition-colors ${on ? "bg-sky-500 text-white border-sky-500" : "bg-transparent text-muted-foreground border-border"}`}
-              >
-                {normalizeTelegramQuality(q)}
-              </button>
-            );
-          })}
+        <div className="mt-4">
+          <label className={label}>Qualities</label>
+          <div className="flex flex-wrap gap-2">
+            {TELEGRAM_FREE_QUALITIES.map((q) => {
+              const on = testQualities.includes(q);
+              return (
+                <button
+                  key={q}
+                  onClick={() => setTestQualities((prev) => (on ? prev.filter((x) => x !== q) : [...prev, q]))}
+                  className={`h-9 px-3.5 rounded-lg text-[12px] font-bold border transition-colors ${on ? "bg-sky-500 text-white border-sky-500" : "bg-white/[0.04] text-zinc-300 border-white/10 hover:bg-white/[0.08]"}`}
+                >
+                  {normalizeTelegramQuality(q)}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-border bg-muted/30 p-3.5 space-y-2.5">
+        <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-3.5 flex flex-col gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Generated deep link</span>
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">Generated deep link</span>
             <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${payloadOk ? "text-emerald-400" : "text-amber-400"}`}>
               {payloadOk ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
               {payloadOk ? `${payload.length}/64 OK` : "Invalid"}
@@ -205,22 +206,22 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
           <p className="font-mono text-[11px] leading-relaxed break-all text-sky-400">
             {preview || "Save a valid bot link and pick episodes/qualities to see the link."}
           </p>
-          <div className="grid grid-cols-2 gap-2 text-[10.5px] text-muted-foreground">
-            <span>Payload: <span className="font-mono text-foreground">{payload || "—"}</span></span>
-            <span>Title hash: <span className="font-mono text-foreground">{hash || "—"}</span></span>
+          <div className="grid gap-1 sm:grid-cols-2 text-[10.5px] text-zinc-400">
+            <span className="truncate">Payload: <span className="font-mono text-white">{payload || "—"}</span></span>
+            <span className="truncate">Title hash: <span className="font-mono text-white">{hash || "—"}</span></span>
           </div>
           <div className="flex gap-2 pt-1">
             <button
               onClick={copyPreview}
               disabled={!preview}
-              className="h-9 px-3.5 rounded-xl border border-border text-xs font-semibold text-foreground inline-flex items-center gap-1.5 disabled:opacity-40"
+              className="h-9 px-3.5 rounded-lg border border-white/10 bg-white/[0.04] text-[12px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-40 hover:bg-white/[0.08] transition-colors"
             >
               {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}{copied ? "Copied" : "Copy"}
             </button>
             <button
               onClick={() => preview && window.open(preview, "_blank", "noopener,noreferrer")}
               disabled={!preview}
-              className="h-9 px-3.5 rounded-xl bg-sky-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-40"
+              className="h-9 px-3.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-bold inline-flex items-center gap-1.5 disabled:opacity-40 transition-colors"
             >
               <Send size={13} /> Test in Telegram
             </button>
@@ -230,8 +231,8 @@ const TelegramDownloadConfig = ({ glassCard = "", inputClass = "", btnPrimary = 
 
       {/* Format reference */}
       <div className={card}>
-        <h4 className="text-sm font-bold text-foreground mb-2.5">Link format</h4>
-        <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-all text-muted-foreground bg-muted/40 rounded-xl p-3.5">
+        <h4 className="text-[13px] font-bold text-white mb-2.5">Link format</h4>
+        <pre className="text-[10.5px] leading-relaxed whitespace-pre-wrap break-all text-zinc-400 bg-black/30 border border-white/[0.06] rounded-xl p-3.5">
 {`{BOT_LINK}?start=ep_{season}_{episodes}_{qualities}_{title_hash}
 
 season      -> 2 digits                     01, 02, 12

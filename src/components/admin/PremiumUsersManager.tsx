@@ -174,143 +174,152 @@ const PremiumUsersManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
     { label: "Banned", value: bans.length + users.filter((u) => u.banned).length, icon: Ban, tone: "text-rose-300" },
   ];
 
+  // Local UI atoms — kept independent of the shared admin button classes so
+  // padding/height never fights with the compact row layout.
+  const chip = "h-9 px-3 rounded-lg text-[12px] font-semibold inline-flex items-center justify-center gap-1.5 border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] transition-colors disabled:opacity-50";
+  const chipPrimary = "h-9 px-3.5 rounded-lg text-[12px] font-bold inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50";
+  const field = "h-9 rounded-lg border border-white/10 bg-black/30 px-3 text-[12px] text-white placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none";
+
   return (
-    <div className="flex flex-col gap-4 pb-32">
-      <div className="grid grid-cols-3 gap-2">
+    <div className="flex flex-col gap-3.5 pb-32">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2.5">
         {stats.map((s) => (
-          <div key={s.label} className={`${glassCard} p-3`}>
-            <div className={`flex items-center gap-2 ${s.tone}`}>
-              <s.icon size={15} />
-              <span className="text-lg font-bold">{s.value}</span>
+          <div key={s.label} className={`${glassCard} p-3.5 flex flex-col gap-1.5`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`h-8 w-8 rounded-xl bg-white/[0.06] flex items-center justify-center ${s.tone}`}>
+                <s.icon size={15} />
+              </span>
+              <span className="text-xl font-bold leading-none text-white">{s.value}</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">{s.label}</p>
+            <p className="text-[10.5px] font-medium uppercase tracking-wide text-zinc-400 leading-snug">{s.label}</p>
           </div>
         ))}
       </div>
 
-      <div className={`${glassCard} p-3 flex flex-col gap-3`}>
-        <div className="flex gap-2">
-          {(["premium", "all", "banned"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${tab === t ? "bg-primary/20 border-primary/40 text-primary" : "border-border text-muted-foreground"}`}
-            >
-              {t === "premium" ? "Premium List" : t === "all" ? "All Users" : "Bans"}
-            </button>
-          ))}
-          <button onClick={refreshBans} className={`${btnSecondary} ml-auto px-2.5`} title="Refresh">
+      {/* Tabs + search */}
+      <div className={`${glassCard} p-3.5 flex flex-col gap-3`}>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 min-w-0 gap-1.5 rounded-xl border border-white/10 bg-black/25 p-1">
+            {(["premium", "all", "banned"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 h-8 rounded-lg text-[12px] font-semibold transition-colors ${tab === t ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-white"}`}
+              >
+                {t === "premium" ? "Premium" : t === "all" ? "All Users" : "Bans"}
+              </button>
+            ))}
+          </div>
+          <button onClick={refreshBans} className={`${chip} w-9 px-0 shrink-0`} title="Refresh">
             <RefreshCw size={14} />
           </button>
         </div>
 
         {tab !== "banned" && (
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={inputClass + " pl-9"}
-              placeholder="Search by name, email or user id…"
+              className={`${field} w-full pl-9 h-10`}
+              placeholder="Search name, email or user id…"
             />
           </div>
         )}
       </div>
 
       {tab === "banned" ? (
-        <div className={`${glassCard} p-3 flex flex-col gap-3`}>
+        <div className={`${glassCard} p-3.5 flex flex-col gap-3`}>
           <div className="flex gap-2">
             <input
               value={manualBan}
               onChange={(e) => setManualBan(e.target.value)}
-              className={inputClass}
+              className={`${field} flex-1 h-10`}
               placeholder="Email or device id to ban"
             />
-            <button onClick={addManualBan} className={btnPrimary}><Plus size={14} /> Ban</button>
+            <button onClick={addManualBan} className={`${chipPrimary} h-10 shrink-0`}><Plus size={14} /> Ban</button>
           </div>
           {bans.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-6 text-center">No bans yet.</p>
+            <p className="text-[12px] text-zinc-400 py-8 text-center">No bans yet.</p>
           ) : bans.map((b) => (
-            <div key={b.kind + b.key} className="flex items-center gap-3 rounded-xl border border-border p-3">
-              <Ban size={15} className="text-rose-400 shrink-0" />
+            <div key={b.kind + b.key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <span className="h-8 w-8 shrink-0 rounded-lg bg-rose-500/15 text-rose-300 flex items-center justify-center"><Ban size={14} /></span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold truncate">{b.kind === "email" ? String(b.key).replace(/,/g, ".") : b.key}</p>
-                <p className="text-[10px] text-muted-foreground">{b.kind} · {fmt(b.at)} {b.reason ? `· ${b.reason}` : ""}</p>
+                <p className="text-[12.5px] font-semibold text-white truncate">{b.kind === "email" ? String(b.key).replace(/,/g, ".") : b.key}</p>
+                <p className="text-[10.5px] text-zinc-400 truncate">{b.kind} · {fmt(b.at)}{b.reason ? ` · ${b.reason}` : ""}</p>
               </div>
-              <button onClick={() => liftBan(b)} className={btnSecondary}>Unban</button>
+              <button onClick={() => liftBan(b)} className={`${chip} shrink-0`}><ShieldCheck size={13} /> Unban</button>
             </div>
           ))}
         </div>
       ) : loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" /></div>
+        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-indigo-400" /></div>
       ) : visible.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-10 text-center">No users found.</p>
+        <p className="text-[12px] text-zinc-400 py-12 text-center">No users found.</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {visible.map((u) => {
             const active = u.premium?.active && Number(u.premium?.expiresAt || 0) > Date.now();
             return (
-              <div key={u.id} className={`${glassCard} p-3`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${u.banned ? "bg-rose-500/15 text-rose-300" : active ? "bg-amber-500/15 text-amber-300" : "bg-muted text-muted-foreground"}`}>
-                    {u.banned ? <Ban size={16} /> : <Crown size={16} />}
+              <div key={u.id} className={`${glassCard} p-3.5`}>
+                {/* Identity row */}
+                <div className="flex items-start gap-3">
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${u.banned ? "bg-rose-500/15 text-rose-300" : active ? "bg-amber-500/15 text-amber-300" : "bg-white/[0.06] text-zinc-400"}`}>
+                    {u.banned ? <Ban size={17} /> : <Crown size={17} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold truncate">
-                      {u.name}
-                      {u.banned && <span className="ml-2 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300">Banned</span>}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground truncate">{u.email || u.id}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="text-[13px] font-bold text-white truncate">{u.name}</p>
+                      {u.banned && <span className="shrink-0 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300">Banned</span>}
+                    </div>
+                    <p className="text-[11px] text-zinc-400 truncate mt-0.5">{u.email || u.id}</p>
                   </div>
                   {active && (
-                    <div className="text-right shrink-0">
-                      <p className="text-[10px] text-amber-300 font-semibold flex items-center gap-1"><Clock size={11} />{leftLabel(u.premium?.expiresAt)}</p>
-                      <p className="text-[9px] text-muted-foreground">{fmt(u.premium?.expiresAt)}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 px-2 py-1 text-[10.5px] font-bold text-amber-300">
+                        <Clock size={11} />{leftLabel(u.premium?.expiresAt)}
+                      </p>
+                      <p className="mt-1 text-[9.5px] text-zinc-500">{fmt(u.premium?.expiresAt)}</p>
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 mt-3">
+                {/* Actions */}
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
                   <input
                     value={days[u.id] || ""}
                     onChange={(e) => setDays((p) => ({ ...p, [u.id]: e.target.value.replace(/\D/g, "") }))}
-                    className={inputClass + " w-20 py-1.5 text-xs"}
+                    className={`${field} w-16 text-center`}
                     placeholder="days"
                     inputMode="numeric"
                   />
-                  <button
-                    disabled={busy === u.id}
-                    onClick={() => grant(u, Number(days[u.id] || 0))}
-                    className={btnPrimary + " text-xs py-1.5"}
-                  >
-                    {busy === u.id ? <Loader2 size={13} className="animate-spin" /> : <Crown size={13} />} {active ? "Extend" : "Give Premium"}
+                  <button disabled={busy === u.id} onClick={() => grant(u, Number(days[u.id] || 0))} className={chipPrimary}>
+                    {busy === u.id ? <Loader2 size={13} className="animate-spin" /> : <Crown size={13} />}
+                    {active ? "Extend" : "Give Premium"}
                   </button>
                   {[7, 30].map((d) => (
-                    <button key={d} onClick={() => grant(u, d)} className={btnSecondary + " text-xs py-1.5"}>+{d}d</button>
+                    <button key={d} onClick={() => grant(u, d)} className={chip}>+{d}d</button>
                   ))}
-                  <button onClick={() => toggleDevices(u)} className={btnSecondary + " text-xs py-1.5"}>
-                    <Smartphone size={13} /> Devices
-                  </button>
+                  <button onClick={() => toggleDevices(u)} className={chip}><Smartphone size={13} /> Devices</button>
                   {active && (
-                    <button onClick={() => revoke(u)} className={btnSecondary + " text-xs py-1.5 text-rose-300"}>
-                      <Trash2 size={13} /> Revoke
-                    </button>
+                    <button onClick={() => revoke(u)} className={`${chip} text-rose-300`}><Trash2 size={13} /> Revoke</button>
                   )}
-                  <button onClick={() => toggleBan(u)} className={btnSecondary + " text-xs py-1.5 " + (u.banned ? "text-emerald-300" : "text-rose-300")}>
+                  <button onClick={() => toggleBan(u)} className={`${chip} ${u.banned ? "text-emerald-300" : "text-rose-300"}`}>
                     {u.banned ? <><ShieldCheck size={13} /> Unban</> : <><Ban size={13} /> Ban</>}
                   </button>
                 </div>
 
                 {expanded === u.id && (
-                  <div className="mt-3 border-t border-border pt-3 flex flex-col gap-2">
+                  <div className="mt-3 rounded-xl border border-white/[0.08] bg-black/20 p-3 flex flex-col gap-2">
                     {(devices[u.id] || []).length === 0 ? (
-                      <p className="text-[11px] text-muted-foreground">No registered devices.</p>
+                      <p className="text-[11px] text-zinc-400">No registered devices.</p>
                     ) : (devices[u.id] || []).map((d: any) => (
-                      <div key={d.id} className="flex items-center gap-2 text-[11px]">
-                        <Smartphone size={12} className="text-muted-foreground" />
+                      <div key={d.id} className="flex items-center gap-2 text-[11px] text-white">
+                        <Smartphone size={12} className="text-zinc-500 shrink-0" />
                         <span className="truncate flex-1">{d.name || d.id}</span>
-                        <span className="text-muted-foreground">{fmt(d.lastSeen || d.registeredAt)}</span>
-                        <button onClick={() => dropDevice(u, d.id)} className="text-rose-300"><Trash2 size={12} /></button>
+                        <span className="text-zinc-500 shrink-0">{fmt(d.lastSeen || d.registeredAt)}</span>
+                        <button onClick={() => dropDevice(u, d.id)} className="text-rose-300 shrink-0"><Trash2 size={12} /></button>
                       </div>
                     ))}
                   </div>

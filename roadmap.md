@@ -20,3 +20,9 @@
 - [x] Verify backdrop coverage, remove the top gap, and make profile themes visibly affect all surfaces.
 - [x] Fix name-style premium badge overflow and mobile watchlist/history page overflow.
 - [x] Validate the complete Profile page on mobile and desktop with the premium test account.
+
+## Admin UI + performance (2026-09-21)
+- [x] Premium Users manager UI rebuilt (aligned stat cards, segmented tabs, compact action rows).
+- [x] Telegram Download config UI rebuilt (dark admin palette, consistent fields/labels/buttons).
+- [x] Admin panel lag reduced: 16 heavy admin sections now code-split with lazy loading.
+- [x] Live verified with Admin PIN, screenshots captured, build OK / typecheck clean / 15 tests pass.
