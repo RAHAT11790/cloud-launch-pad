@@ -230,6 +230,13 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     return unique([...rebuilt, trimmedUrl]);
   }
 
+  // Admin "HTTPS (direct)" mode for this server: skip the proxy entirely and
+  // hand the browser the raw file link (no renaming, by design).
+  if (getServerDownloadMode(trimmedUrl) === "https") {
+    const direct = buildDirectDownloadLink(trimmedUrl);
+    if (direct) return [direct];
+  }
+
   const bases = unique([overrideBaseUrl].filter(Boolean) as string[]);
   const mirrorUrls = unique([...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)]);
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName, mirrorUrls));
