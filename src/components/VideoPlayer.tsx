@@ -49,6 +49,7 @@ interface VideoServerOption {
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
+import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { wrapWithIosProtection } from "@/lib/iosProtection";
@@ -793,6 +794,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [sharePanelEpisodeIdx, setSharePanelEpisodeIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadMode, setDownloadMode] = useState<"choose" | "website" | "telegram">("choose");
+  const downloadManager = useDownloadManagerConfig();
+  const telegramDownloadEnabled = downloadManager.telegramEnabled;
+  const websiteDownloadEnabled = downloadManager.websiteEnabled;
+  const downloadSourceCount = (telegramDownloadEnabled ? 1 : 0) + (websiteDownloadEnabled ? 1 : 0);
   const [tgSelectedEpisodes, setTgSelectedEpisodes] = useState<Set<number>>(new Set());
   const [tgSelectedQualities, setTgSelectedQualities] = useState<string[]>(["720P"]);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
@@ -1478,7 +1483,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadLanguageLabel(currentLangLabel);
       setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setSelectedDownloadQuality(preferredDownloadQuality);
-      setDownloadMode("choose");
+      const cfg = getDownloadManagerConfig();
+      const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
+      const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
+      setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
       setTgSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setTgSelectedQualities(["720P"]);
     }
