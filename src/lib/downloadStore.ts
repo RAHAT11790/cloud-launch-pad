@@ -14,6 +14,14 @@ export interface DownloadedVideo {
   size: number;
   downloadedAt: number;
   blob?: Blob;
+  // Grouping + offline-player metadata (Android app "Download Manager")
+  seriesTitle?: string;
+  episodeLabel?: string;
+  episodeNumber?: number;
+  kind?: "rs" | "an";
+  mimeType?: string;
+  // HLS/AN downloads keep every audio track so the offline player can switch.
+  audioTracks?: { label: string; lang?: string; blob?: Blob }[];
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -71,7 +79,10 @@ export async function getAllDownloads(): Promise<DownloadedVideo[]> {
     const tx = db.transaction(STORE_NAME, "readonly");
     const req = tx.objectStore(STORE_NAME).getAll();
     req.onsuccess = () => {
-      const items = (req.result as DownloadedVideo[]).map(({ blob, ...rest }) => rest);
+      const items = (req.result as DownloadedVideo[]).map(({ blob, audioTracks, ...rest }) => ({
+        ...rest,
+        audioTracks: (audioTracks || []).map(({ blob: _b, ...track }) => track),
+      }));
       items.sort((a, b) => b.downloadedAt - a.downloadedAt);
       resolve(items);
     };
@@ -126,4 +137,11 @@ export async function downloadWithProgress(
   }
 
   return new Blob(chunks as unknown as BlobPart[], { type: "video/mp4" });
+}
+
+export async function getAudioTrackBlobs(id: string): Promise<{ label: string; lang?: string; blob: Blob }[]> {
+  const item = await getDownload(id);
+  return (item?.audioTracks || [])
+    .filter((track) => !!track.blob)
+    .map((track) => ({ label: track.label, lang: track.lang, blob: track.blob as Blob }));
 }
