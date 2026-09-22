@@ -5,6 +5,7 @@ import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { isNativeApp } from "@/lib/nativeRuntime";
+import { canUseNativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
