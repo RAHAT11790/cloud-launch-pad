@@ -8,6 +8,11 @@ let cachedNative: boolean | null = null;
 export const isNativeApp = (): boolean => {
   if (cachedNative !== null) return cachedNative;
   try {
+    // Dev-only preview simulation so the native flows can be verified in a browser.
+    if (import.meta.env.DEV && typeof localStorage !== "undefined" && localStorage.getItem("rs_native_sim") === "1") {
+      cachedNative = true;
+      return true;
+    }
     const cap = (globalThis as any)?.Capacitor;
     cachedNative = Boolean(cap?.isNativePlatform?.() ?? cap?.isNative);
   } catch {
