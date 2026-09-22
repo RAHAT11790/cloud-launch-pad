@@ -16,10 +16,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            storeFile file('../keystore/rsanime03.jks')
+            storePassword System.getenv("RS_KEYSTORE_PASSWORD") ?: "RSanime03Key"
+            keyAlias System.getenv("RS_KEY_ALIAS") ?: "rsanime03"
+            keyPassword System.getenv("RS_KEY_PASSWORD") ?: "RSanime03Key"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }
