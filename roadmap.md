@@ -30,18 +30,18 @@
 - [x] Download Manager: admin page, Telegram/Website toggles, HTTP proxy vs HTTPS direct mode, daily/7d/30d stats, player gating (live verified)
 
 ## Android app v2 — real native app, NOT WebView (noted 2026-09-22, work in next chat)
-- [ ] Signed release APK with a proper keystore so Google/Play Protect stops flagging it as unauthorized/unknown.
-- [ ] Ship a real native Android app shell: app must keep working even if the domain is banned/deleted (bundled app assets + native APIs, no remote-URL WebView, remove any capacitor server.url).
+- [x] Signed release APK with a proper keystore so Google/Play Protect stops flagging it as unauthorized/unknown.
+- [x] Ship a real native Android app shell: app must keep working even if the domain is banned/deleted (bundled app assets + native APIs, no remote-URL WebView, remove any capacitor server.url).
 - [ ] Google login must work inside the app (native/in-app auth), not open Chrome to a blank white page.
-- [ ] Hide the phone status/notification bar + navigation bar (true immersive fullscreen).
-- [ ] Video player: real fullscreen button, no black side borders, auto-rotate to landscape on fullscreen.
-- [ ] HTTP video servers must play reliably inside the app.
-- [ ] Swipe gestures must control the phone's real system volume and real screen brightness (not just in-app volume).
-- [ ] Request + handle runtime permissions: notifications, storage, and audio/volume control, with user allow flow.
-- [ ] Profile page must have a visible Download button opening the in-app Download Manager.
-- [ ] Downloads must run natively inside the app — never hand off to Chrome.
+- [x] Hide the phone status/notification bar + navigation bar (true immersive fullscreen).
+- [x] Video player: real fullscreen button, no black side borders, auto-rotate to landscape on fullscreen.
+- [x] HTTP video servers must play reliably inside the app.
+- [x] Swipe gestures must control the phone's real system volume and real screen brightness (not just in-app volume).
+- [x] Request + handle runtime permissions: notifications, storage, and audio/volume control, with user allow flow.
+- [x] Profile page must have a visible Download button opening the in-app Download Manager.
+- [x] Downloads must run natively inside the app — never hand off to Chrome.
 - [ ] Ongoing download notification with anime backdrop image + live progress (episode X of Y).
-- [ ] Add a Download button for AN / HLS videos too (currently missing).
+- [x] Add a Download button for AN / HLS videos too (currently missing).
 - [ ] Offline: app opens offline, offline player + downloaded library fully usable, multi-audio track selection.
 - [ ] Professional UI polish across player, download manager and offline library.
 - [ ] Verify with signed APK install on device + screenshots.
