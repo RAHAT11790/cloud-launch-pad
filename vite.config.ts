@@ -19,10 +19,10 @@ export default defineConfig(({ mode }) => ({
   ].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
       ...(isAndroidTarget
         ? { "@/pages/Admin": path.resolve(__dirname, "./src/pages/AdminUnavailable.tsx") }
         : {}),
+      "@": path.resolve(__dirname, "./src"),
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
