@@ -2166,6 +2166,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       {/* Menu Items */}
       <div className="profile-menu-grid">
+        <div onClick={() => setActivePanel("downloads")}
+          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
+          <Download className="w-5 h-5 text-primary" />
+          <span className="flex-1 text-[13px] font-medium">My Downloads</span>
+          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+        </div>
         <div onClick={() => setActivePanel("settings")}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <Settings className="w-5 h-5 text-primary" />

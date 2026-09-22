@@ -336,6 +336,25 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   clickAnchorDownload(finalUrl, fileName);
 }
 
+/**
+ * Android app: downloads NEVER leave the app. Every request is handed to the
+ * in-app native queue (progress notification + offline library) instead of the
+ * system/Chrome download manager.
+ */
+function queueNativeDownload(url: string, fileName: string) {
+  void (async () => {
+    const { nativeDownloads } = await import("@/lib/nativeDownloadEngine");
+    const clean = String(fileName || "video").replace(/\.[a-z0-9]{2,4}$/i, "");
+    const [seriesPart, episodePart] = clean.split(" - ");
+    nativeDownloads.enqueue({
+      id: `${clean}-${Date.now()}`,
+      url,
+      title: seriesPart || clean,
+      episodeLabel: episodePart || undefined,
+    });
+  })();
+}
+
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) {
@@ -343,6 +362,10 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
+  if (isNativeApp()) {
+    queueNativeDownload(unwrapManagedVideoUrl(trimmedUrl) || trimmedUrl, fileName);
+    return true;
+  }
   const proxiedUrls = isManagedVideoDownloadUrl(trimmedUrl)
     ? [trimmedUrl]
     : buildVideoDownloadUrlCandidates(trimmedUrl, fileName, fallbackUrls);
@@ -382,6 +405,21 @@ export function triggerBulkBackgroundDownloads(
   items: Array<{ url: string; fileName: string; fallbackUrls?: string[] }>,
 ): number {
   if (!Array.isArray(items) || items.length === 0) return 0;
+
+  if (isNativeApp()) {
+    // In-app queue, one episode after another — no browser hand-off.
+    let queued = 0;
+    items.forEach((it) => {
+      const u = unwrapManagedVideoUrl(String(it?.url || "").trim());
+      if (!u || !isHttpUrl(u)) return;
+      queueNativeDownload(u, buildSafeFileName(it?.fileName || "video"));
+      queued += 1;
+    });
+    if (queued === 0) toast.error("No downloadable links found");
+    return queued;
+  }
+
+
 
   const seen = new Set<string>();
   const valid = items

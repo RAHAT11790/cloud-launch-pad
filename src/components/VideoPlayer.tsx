@@ -55,6 +55,8 @@ import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverPr
 import { wrapWithIosProtection } from "@/lib/iosProtection";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
+import { applyImmersive, lockLandscape, nativeSystemAvailable, setSystemBrightness, setSystemVolume, unlockOrientation } from "@/lib/nativeSystem";
+import { isNativeApp } from "@/lib/nativeRuntime";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -280,7 +282,10 @@ const isDirectDownloadCandidate = (url: string): boolean => {
   const value = String(url || "").trim().toLowerCase();
   if (!value) return false;
   if (!(value.startsWith("http://") || value.startsWith("https://"))) return false;
-  if (value.includes(".m3u8") || value.includes(".mpd")) return false;
+  // Android app: HLS (.m3u8) IS downloadable — the native engine merges the
+  // segments and keeps every audio track for offline playback.
+  if (value.includes(".m3u8") && !isNativeApp()) return false;
+  if (value.includes(".mpd")) return false;
   if (value.includes("/embed/") || value.includes("iframe")) return false;
   return true;
 };
@@ -4492,16 +4497,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
     if (!el) return;
+    const native = nativeSystemAvailable();
     try {
       if (document.fullscreenElement) {
         try { (screen.orientation as any).unlock?.(); } catch {}
+        if (native) unlockOrientation();
         await document.exitFullscreen();
       } else {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-        try { await (screen.orientation as any).lock?.('landscape'); } catch {}
+        // Android app: real landscape rotation + bars stay hidden.
+        if (native) { lockLandscape(); applyImmersive(); }
+        else { try { await (screen.orientation as any).lock?.('landscape'); } catch {} }
       }
-    } catch (e) { console.log('Fullscreen not supported'); }
+    } catch (e) {
+      // Even if the browser fullscreen API is unavailable, the Android app can
+      // still rotate to landscape and stay immersive.
+      if (native) { lockLandscape(); applyImmersive(); }
+    }
   }, []);
 
   toggleFullscreenRef.current = toggleFullscreen;
@@ -4806,10 +4819,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (swipeState.type === "volume") {
       const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
       applyPlayerVolume(newBoosted, false);
+      // Android app: move the phone's REAL media volume, not just the element.
+      if (nativeSystemAvailable()) void setSystemVolume(Math.min(1, Math.max(0, newBoosted / 100)));
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
       const newBr = Math.min(1.5, Math.max(0.3, brightness - dy * 0.003));
       setBrightness(newBr);
+      // Android app: drive the REAL screen brightness (0.3–1.5 → 0.02–1.0).
+      if (nativeSystemAvailable()) {
+        void setSystemBrightness(Math.min(1, Math.max(0.02, (newBr - 0.3) / 1.2)));
+      }
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
   }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerInteractiveTarget, isFullscreen, toggleFullscreen]);
