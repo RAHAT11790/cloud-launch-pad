@@ -144,7 +144,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     setLoading(true);
     setDeviceLimitError(null);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      // Android app: native Google account sheet (stays inside the app).
+      // Website: normal Firebase popup.
+      const result = canUseNativeGoogleSignIn()
+        ? await (await import("@/lib/nativeGoogleAuth")).nativeGoogleSignIn()
+        : await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const gEmail = user.email || "";
       const gName = user.displayName || gEmail.split("@")[0];
