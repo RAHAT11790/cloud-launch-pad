@@ -4,11 +4,17 @@ import LoginPage from "@/components/LoginPage";
 import { isNativeApp } from "@/lib/nativeRuntime";
 import { supabase } from "@/integrations/supabase/client";
 
+const isGuestRecord = (raw: any) =>
+  Boolean(raw?.guest) ||
+  Boolean(raw?.isGuest) ||
+  String(raw?.id || "").startsWith("guest_") ||
+  String(raw?.email || "").toLowerCase() === "guest@rsanime.com";
+
 const readLocalUser = () => {
   try {
     const raw = JSON.parse(localStorage.getItem("rsanime_user") || "null");
     // Guest records are never a valid session inside the Android app.
-    if (raw?.id && !raw?.isGuest && raw?.email) return raw;
+    if (raw?.id && raw?.email && !isGuestRecord(raw)) return raw;
   } catch {}
   return null;
 };
@@ -30,7 +36,7 @@ const NativeAuthGate = ({ children }: { children: React.ReactNode }) => {
     // Clear any guest leftovers so the login screen is always first.
     try {
       const raw = JSON.parse(localStorage.getItem("rsanime_user") || "null");
-      if (raw?.isGuest) localStorage.removeItem("rsanime_user");
+      if (isGuestRecord(raw)) localStorage.removeItem("rsanime_user");
     } catch {}
 
     const sync = async () => {
