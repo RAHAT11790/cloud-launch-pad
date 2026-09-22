@@ -965,6 +965,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 </motion.button>
 
                 {/* Continue as Guest — hidden in the Android app (accounts only) */}
+                {!isNativeApp() && (
                 <motion.button
                   type="button"
                   onClick={() => { ensureGuestUser(); onGuest?.(); }}
@@ -974,6 +975,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 >
                   Continue as Guest
                 </motion.button>
+                )}
+
 
                 {/* Footer Links */}
                 {!isRegister && (
