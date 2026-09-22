@@ -1,4 +1,6 @@
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload } from "./videoDownload";
+import { isNativeApp } from "./nativeRuntime";
+import { nativeDownloads } from "./nativeDownloadEngine";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
@@ -102,6 +104,7 @@ const isAbortError = (error: unknown) => {
 
 class DownloadManager {
   private downloads = new Map<string, ActiveDownload>();
+  private nativeBridged = false;
   private listeners = new Set<Subscriber>();
   private queue: string[] = [];
   private activeIds = new Set<string>();
@@ -109,6 +112,54 @@ class DownloadManager {
   private timers = new Map<string, ItemTimers>();
   private controllers = new Map<string, AbortController>();
   private sequence = 0;
+
+  /**
+   * Android app: every download is handled by the native engine (direct source,
+   * one-by-one queue, ongoing notification, HLS/AN support). Its state is
+   * mirrored here so all existing progress UIs keep working unchanged.
+   */
+  private bridgeNative() {
+    if (this.nativeBridged || !isNativeApp()) return;
+    this.nativeBridged = true;
+    nativeDownloads.subscribe((state) => {
+      const live = state.tasks.filter((task) => task.status !== "cancelled");
+      state.tasks.forEach((task, index) => {
+        this.downloads.set(task.id, {
+          id: task.id,
+          url: task.url,
+          title: task.title,
+          subtitle: task.episodeLabel,
+          poster: task.poster,
+          quality: task.quality || "Auto",
+          percent: task.percent,
+          loadedMB: task.loadedMB,
+          totalMB: task.totalMB,
+          status: task.status === "downloading" ? "downloading" : task.status,
+          sequence: index + 1,
+          queueIndex: Math.max(1, live.indexOf(task) + 1),
+          totalInBatch: Math.max(1, live.length),
+          error: task.error,
+        });
+      });
+      this.lastStartedId = state.activeId;
+      this.emit();
+    });
+  }
+
+  private routeToNative(params: DownloadParams): boolean {
+    if (!isNativeApp()) return false;
+    this.bridgeNative();
+    nativeDownloads.enqueue({
+      id: params.id,
+      url: params.url,
+      title: params.title,
+      episodeLabel: params.subtitle,
+      episodeNumber: Number(/(\d+)/.exec(String(params.subtitle || ""))?.[1] || 0) || undefined,
+      poster: params.poster,
+      quality: params.quality,
+    });
+    return true;
+  }
 
   private isProxyDownloadUrl(url: string) {
     return /\/functions\/v1\/(video-download|video-proxy)\?/i.test(String(url || ""));
@@ -413,6 +464,7 @@ class DownloadManager {
   }
 
   cancelDownload(id: string) {
+    if (isNativeApp()) { nativeDownloads.cancel(id); return; }
     if (this.activeIds.has(id)) {
       this.abortItem(id);
       this.settleItem(id, "cancelled", { percent: 0, loadedMB: 0, totalMB: 0 });
@@ -427,6 +479,7 @@ class DownloadManager {
   }
 
   clearFinished() {
+    if (isNativeApp()) { nativeDownloads.clearFinished(); }
     Array.from(this.downloads.entries()).forEach(([id, item]) => {
       if (["complete", "cancelled", "error"].includes(item.status)) this.downloads.delete(id);
     });
@@ -434,6 +487,7 @@ class DownloadManager {
   }
 
   async startDownload(params: DownloadParams) {
+    if (this.routeToNative(params)) return;
     const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
     this.sequence += 1;
     this.downloads.set(params.id, {
@@ -459,6 +513,7 @@ class DownloadManager {
   }
 
   async enqueueDownload(params: DownloadParams) {
+    if (this.routeToNative(params)) return;
     const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
     const batchSize = this.queue.length + this.activeIds.size + 1;
     this.sequence += 1;
@@ -489,6 +544,7 @@ class DownloadManager {
    */
   enqueueBatch(items: DownloadParams[]) {
     if (!items || items.length === 0) return;
+    if (isNativeApp()) { items.forEach((params) => this.routeToNative(params)); return; }
     const total = items.length;
     items.forEach((params, idx) => {
       const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
