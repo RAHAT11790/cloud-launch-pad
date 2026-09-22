@@ -4,6 +4,7 @@ import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowL
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
+import { isNativeApp } from "@/lib/nativeRuntime";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -963,7 +964,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   Continue with Google
                 </motion.button>
 
-                {/* Continue as Guest */}
+                {/* Continue as Guest — hidden in the Android app (accounts only) */}
                 <motion.button
                   type="button"
                   onClick={() => { ensureGuestUser(); onGuest?.(); }}

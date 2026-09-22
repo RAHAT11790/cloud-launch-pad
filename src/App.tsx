@@ -13,6 +13,7 @@ import PremiumBuyPage from "./pages/PremiumBuyPage";
 import DailyTasksPage from "./pages/DailyTasksPage";
 import { startVisitTracker, captureReferralFromUrl, checkReferralUpgrade } from "@/lib/dailyTasks";
 
+import NativeAuthGate from "./components/NativeAuthGate";
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
 
@@ -79,6 +80,7 @@ const App = () => (
         
         <Toaster />
         <Sonner />
+        <NativeAuthGate>
         <Routes>
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/admin/:section" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
@@ -100,6 +102,7 @@ const App = () => (
           <Route path="/live-tv" element={<Index />} />
           <Route path="*" element={<Index />} />
         </Routes>
+        </NativeAuthGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

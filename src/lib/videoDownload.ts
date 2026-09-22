@@ -3,6 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { isNativeApp } from "@/lib/nativeRuntime";
 import { applyActiveDownloadServer, buildDirectDownloadLink, getEffectiveDownloadMode } from "@/lib/downloadManagerSettings";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -260,6 +261,8 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
 
 export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
   const trimmedUrl = String(rawUrl || "").trim();
+  // Android app: http:// media plays directly, so never wrap it in a proxy.
+  if (isNativeApp()) return [];
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
   // Playback proxy is only for insecure http:// media rescue. HTTPS media hosts
   // must stay direct in the browser/video tag and must not be routed through
