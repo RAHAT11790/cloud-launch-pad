@@ -58,7 +58,7 @@ const lazyWithReload = <T extends React.ComponentType<any>>(factory: () => Promi
     throw err;
   }));
 
-const Admin = lazyWithReload(() => import("./pages/Admin"));
+const Admin = lazyWithReload(() => import("@/pages/Admin"));
 const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
 const queryClient = new QueryClient();
 

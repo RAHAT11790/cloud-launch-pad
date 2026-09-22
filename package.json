@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:android": "APP_TARGET=android vite build && cap sync android",
+    "apk:debug": "APP_TARGET=android vite build && cap sync android && cd android && ./gradlew assembleDebug",
+    "apk:release": "APP_TARGET=android vite build && cap sync android && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
