@@ -4453,6 +4453,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ===== Episode Lock (premium-only for N days, then auto-free) =====
+ /** Whole-series premium lock. days <= 0 unlocks, -1 means permanent. */
+ const setSeriesLockDays = (days: number) => {
+  const until = days < 0 ? PERMANENT_LOCK_UNTIL : lockUntilFromDays(days);
+  setSeriesForm((prev: any) => ({ ...(prev || {}), lockUntil: until }));
+  toast.success(
+   !until ? "Series unlocked for everyone"
+    : days < 0 ? "Series locked permanently (premium only)"
+    : `Series locked for ${days} day${days === 1 ? "" : "s"} (premium only)`,
+  );
+ };
+
  const setEpisodeLockDays = (sIdx: number, eIdx: number, days: number) => {
   const until = lockUntilFromDays(days);
   setSeasonsData(prev => {
