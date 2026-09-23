@@ -1122,6 +1122,19 @@ const Index = () => {
     navigate("/unlock-required");
   }, [navigate]);
 
+  // In-player premium wall (next button / episode list / season switch) so a
+  // locked episode never throws the user out of the video player.
+  const [playerLockNotice, setPlayerLockNotice] = useState<{ title?: string; episodeLabel?: string; remainingText?: string } | null>(null);
+
+  const showPlayerPremiumLock = useCallback((anime: any, sIdx: number, eIdx: number) => {
+    const remaining = Math.max(targetLockRemainingMs(anime, sIdx, eIdx), seriesLockRemainingMs(anime));
+    setPlayerLockNotice({
+      title: anime?.title,
+      episodeLabel: isSeriesTimeLocked(anime) ? "This series" : `Episode ${Math.max(0, Number(eIdx || 0)) + 1}`,
+      remainingText: formatLockRemaining(remaining),
+    });
+  }, []);
+
   const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number, opts?: { inPlayer?: boolean }): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     const sIdx = seasonIdx ?? 0;
