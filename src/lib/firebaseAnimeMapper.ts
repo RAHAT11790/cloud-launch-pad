@@ -100,6 +100,7 @@ export const buildEpisodeLockIndex = (item: any): Record<string, number> | undef
   });
   const movieUntil = Number(item?.lockUntil || 0) || 0;
   if (movieUntil > Date.now()) map.movie = movieUntil;
+  if (movieUntil > Date.now()) map.series = movieUntil;
   return Object.keys(map).length ? map : undefined;
 };
 

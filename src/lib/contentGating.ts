@@ -17,6 +17,12 @@ export const GUEST_EPISODE_LIMIT = 3;
 
 export const DAY_MS = 86_400_000;
 
+/** Sentinel used for "locked forever" (year 2100). */
+export const PERMANENT_LOCK_UNTIL = 4_102_444_800_000;
+
+export const isPermanentLockValue = (until?: number | null): boolean =>
+  Number(until || 0) >= PERMANENT_LOCK_UNTIL - DAY_MS;
+
 export const episodeLockUntil = (episode: any): number => {
   const raw = Number(episode?.lockUntil || 0);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
@@ -29,9 +35,10 @@ export const episodeLockRemainingMs = (episode: any): number => {
   return until > Date.now() ? until - Date.now() : 0;
 };
 
-/** "3d 4h" / "5h 20m" / "18m" */
+/** "Permanent" / "3d 4h" / "5h 20m" / "18m" */
 export const formatLockRemaining = (ms: number): string => {
   if (ms <= 0) return "unlocked";
+  if (ms >= PERMANENT_LOCK_UNTIL - Date.now() - DAY_MS) return "Permanent";
   const totalMinutes = Math.ceil(ms / 60_000);
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
@@ -67,6 +74,7 @@ export const isTimeLockedByIndex = (anime: any, seasonIdx = 0, episodeIdx = 0): 
   const index = anime?.episodeLocks;
   if (!index || typeof index !== "object") return false;
   const now = Date.now();
+  if (Number(index.series || 0) > now) return true;
   const direct = Number(index[lockKeyFor(anime, seasonIdx, episodeIdx)] || 0);
   if (direct > now) return true;
   if (isMovieContent(anime) || anime?.type === "movie") {
@@ -98,6 +106,20 @@ export const targetLockRemainingMs = (anime: any, seasonIdx = 0, episodeIdx = 0)
     episodeLockUntil((Array.isArray(anime?.parts) ? anime.parts : [])[episodeIdx]),
   ];
   const until = Math.max(...candidates, 0);
+  return until > Date.now() ? until - Date.now() : 0;
+};
+
+/** Whole-title lock (admin "Lock full series"): `lockUntil` on the item root. */
+export const seriesLockUntil = (anime: any): number => {
+  const candidates = [Number(anime?.lockUntil || 0), Number(anime?.episodeLocks?.series || 0)];
+  const until = Math.max(...candidates, 0);
+  return Number.isFinite(until) && until > 0 ? until : 0;
+};
+
+export const isSeriesTimeLocked = (anime: any): boolean => seriesLockUntil(anime) > Date.now();
+
+export const seriesLockRemainingMs = (anime: any): number => {
+  const until = seriesLockUntil(anime);
   return until > Date.now() ? until - Date.now() : 0;
 };
 

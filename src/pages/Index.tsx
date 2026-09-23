@@ -552,7 +552,12 @@ import {
   isGuestVisitor,
   isMovieContent,
   isTimeLockedTarget,
+  isSeriesTimeLocked,
+  seriesLockRemainingMs,
+  targetLockRemainingMs,
+  formatLockRemaining,
 } from "@/lib/contentGating";
+import { PlayerPremiumLock } from "@/components/premium/PremiumLockVisuals";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1122,7 +1127,20 @@ const Index = () => {
     navigate("/unlock-required");
   }, [navigate]);
 
-  const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
+  // In-player premium wall (next button / episode list / season switch) so a
+  // locked episode never throws the user out of the video player.
+  const [playerLockNotice, setPlayerLockNotice] = useState<{ title?: string; episodeLabel?: string; remainingText?: string } | null>(null);
+
+  const showPlayerPremiumLock = useCallback((anime: any, sIdx: number, eIdx: number) => {
+    const remaining = Math.max(targetLockRemainingMs(anime, sIdx, eIdx), seriesLockRemainingMs(anime));
+    setPlayerLockNotice({
+      title: anime?.title,
+      episodeLabel: isSeriesTimeLocked(anime) ? "This series" : `Episode ${Math.max(0, Number(eIdx || 0)) + 1}`,
+      remainingText: formatLockRemaining(remaining),
+    });
+  }, []);
+
+  const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number, opts?: { inPlayer?: boolean }): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     const sIdx = seasonIdx ?? 0;
     const eIdx = epIdx ?? 0;
@@ -1139,13 +1157,21 @@ const Index = () => {
       lockMeta = { ...(anime || {}), ...(fullItem || {}), ...(anMeta || {}) };
     }
     if (lockMeta && (isSeriesLocked(lockMeta as any) || isEpisodeLocked(lockMeta as any, sIdx, eIdx)) && !userIsPremium) {
+      if (opts?.inPlayer) {
+        showPlayerPremiumLock(lockMeta || anime, sIdx, eIdx);
+        return false;
+      }
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
 
-    // Admin "Episode Lock" — premium-only until the chosen days pass.
-    // Guests never have premium, so they are blocked by the same rule.
+    // Admin "Episode Lock" / "Full series lock" — premium-only until the chosen
+    // days pass. Guests never have premium, so the same rule blocks them.
     if ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(lockMeta || anime, sIdx, eIdx)) {
+      if (opts?.inPlayer) {
+        showPlayerPremiumLock(lockMeta || anime, sIdx, eIdx);
+        return false;
+      }
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
@@ -2165,6 +2191,13 @@ const Index = () => {
       return;
     }
 
+    // Timed lock (episode or full series) — blocks free users and guests.
+    if ((!userIsPremium || isGuestVisitor())
+      && isTimeLockedTarget(preflightAnime as any, routeTarget.seasonIdx ?? 0, routeTarget.epIdx ?? 0)) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+      return;
+    }
+
     const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
     if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
       const fromRoutedOverlay = isSearchRoute;
@@ -2339,6 +2372,20 @@ const Index = () => {
         const fullDefaultTarget = getDefaultWatchTarget(anime);
         resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
         resolvedEpIdx = resolvedEpIdx ?? fullDefaultTarget.epIdx;
+      }
+    }
+
+    // Re-check the premium lock with the fully hydrated item. Card items are
+    // lightweight, so a lock saved on the episode only shows up after this
+    // hydration — without this check a locked episode could start playing.
+    {
+      const fSIdx = resolvedSeasonIdx ?? 0;
+      const fEIdx = resolvedEpIdx ?? 0;
+      const fullLocked = isSeriesLocked(anime as any) || isEpisodeLocked(anime as any, fSIdx, fEIdx);
+      if ((fullLocked && !userIsPremium)
+        || ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(anime as any, fSIdx, fEIdx))) {
+        navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+        return;
       }
     }
 
@@ -2961,7 +3008,7 @@ const Index = () => {
     onClick: async () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
-      const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i);
+      const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i, { inPlayer: true });
       if (!hasAccess) return;
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
@@ -3010,7 +3057,7 @@ const Index = () => {
     const season = playerState.anime.seasons[newSeasonIdx];
     if (!season?.episodes?.length) return;
     const ep = season.episodes[0];
-      const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
+      const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0, { inPlayer: true });
     if (!hasAccess) return;
     let nextSrc = getEpisodeSrc(ep);
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
@@ -3491,7 +3538,7 @@ const Index = () => {
                   const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
-                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
+                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx, { inPlayer: true });
                   if (!hasAccess) return;
                   let nextSrc = getEpisodeSrc(nextEp);
                   let qOpts = getEpisodeQualityOptions(nextEp);
@@ -3629,6 +3676,15 @@ const Index = () => {
           }}
           suggestedAnime={suggestedAnimeImmediate}
         />
+        {playerLockNotice && (
+          <PlayerPremiumLock
+            title={playerLockNotice.title}
+            episodeLabel={playerLockNotice.episodeLabel}
+            remainingText={playerLockNotice.remainingText}
+            onUpgrade={() => { setPlayerLockNotice(null); navigate("/premium"); }}
+            onDismiss={() => setPlayerLockNotice(null)}
+          />
+        )}
       </div>
     );
   }

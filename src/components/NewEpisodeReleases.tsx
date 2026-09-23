@@ -6,7 +6,8 @@ import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import { isTimeLockedTarget } from "@/lib/contentGating";
+import { isTimeLockedTarget, isSeriesTimeLocked } from "@/lib/contentGating";
+import { PremiumCardFrame } from "@/components/premium/PremiumLockVisuals";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
@@ -349,8 +350,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // disappear by themselves the moment the lock window expires.
             const lockSeasonIdx = snNum && snNum > 0 ? snNum - 1 : 0;
             const lockEpIdx = Math.max(0, (minEp ?? epNum ?? 1) - 1);
-            const premiumOnly = !!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx);
+            const seriesLocked = !!content && isSeriesTimeLocked(content as any);
+            const premiumOnly = seriesLocked || (!!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx));
             const lockedEpText = (() => {
+              if (seriesLocked) return "Full Series";
               const lo = minEp ?? epNum;
               const hi = maxEp ?? epNum;
               if (!hi) return "New Episode";
@@ -379,12 +382,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   </div>
                   <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
-                  {premiumOnly && (
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ background: "linear-gradient(to top, rgba(120,53,15,0.62) 0%, rgba(250,204,21,0.12) 55%, transparent 100%)" }}
-                    />
-                  )}
+                  {premiumOnly && <PremiumCardFrame />}
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                     {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>

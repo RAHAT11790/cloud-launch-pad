@@ -3,6 +3,8 @@ import { Star, Heart, Crown } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { hasActiveTimeLock, isSeriesTimeLocked } from "@/lib/contentGating";
+import { PremiumCardFrame } from "@/components/premium/PremiumLockVisuals";
 
 const watchlistCacheByUser = new Map<string, Set<string>>();
 const watchlistLoadByUser = new Map<string, Promise<Set<string>>>();
@@ -126,6 +128,9 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   }, [anime]);
 
   const isPremium = !!(anime as any).premium;
+  // Timed premium lock (whole series or any episode) — golden premium card.
+  const seriesLocked = isSeriesTimeLocked(anime as any);
+  const timeLocked = seriesLocked || hasActiveTimeLock(anime as any);
   const lockedEpisodes = useMemo(() => {
     const eps = (anime as any).premiumEpisodes || {};
     return Object.values(eps).filter(Boolean).length;
@@ -137,13 +142,15 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       role="button"
       tabIndex={0}
       className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0 transition-transform duration-150 ease-out active:scale-[0.94] active:brightness-90 ${
-        isPremium ? "premium-card-glow ring-1 ring-amber-400/50" : ""
+        timeLocked ? "rs-premium-lock-card" : isPremium ? "premium-card-glow ring-1 ring-amber-400/50" : ""
       }`}
       onClick={() => onClick(anime)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(anime); } }}
       onPointerDown={() => { try { (window as any).__rsPrefetchAnime?.(anime); } catch {} }}
       style={{
-        boxShadow: isPremium ? "0 6px 24px -6px rgba(251,191,36,0.45)" : "var(--neu-shadow-sm)",
+        boxShadow: timeLocked
+          ? "0 0 0 1.5px rgba(250,204,21,0.9), 0 10px 28px -8px rgba(251,191,36,0.55)"
+          : isPremium ? "0 6px 24px -6px rgba(251,191,36,0.45)" : "var(--neu-shadow-sm)",
         background: "linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%)",
       }}
     >
@@ -155,6 +162,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         decoding="async"
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
+      {timeLocked && <PremiumCardFrame size="sm" label={seriesLocked ? "Premium Only" : "Premium Episodes"} />}
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
           isInWatchlist

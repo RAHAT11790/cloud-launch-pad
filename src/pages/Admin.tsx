@@ -19,7 +19,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
-import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays } from "@/lib/contentGating";
+import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 
 import {
  buildAdminContentIndexItem,
@@ -4453,6 +4453,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ===== Episode Lock (premium-only for N days, then auto-free) =====
+ /** Whole-series premium lock. days <= 0 unlocks, -1 means permanent. */
+ const setSeriesLockDays = (days: number) => {
+  const until = days < 0 ? PERMANENT_LOCK_UNTIL : lockUntilFromDays(days);
+  setSeriesForm((prev: any) => ({ ...(prev || {}), lockUntil: until }));
+  toast.success(
+   !until ? "Series unlocked for everyone"
+    : days < 0 ? "Series locked permanently (premium only)"
+    : `Series locked for ${days} day${days === 1 ? "" : "s"} (premium only)`,
+  );
+ };
+
  const setEpisodeLockDays = (sIdx: number, eIdx: number, days: number) => {
   const until = lockUntilFromDays(days);
   setSeasonsData(prev => {
@@ -6296,6 +6307,70 @@ ${tgBulkFooter}
   {/* Hidden file input for per-season JSON import */}
   <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
   
+  {/* ===== Full series premium lock ===== */}
+  {(() => {
+    const until = Number(seriesForm?.lockUntil || 0) || 0;
+    const remaining = seriesLockRemainingMs(seriesForm || {});
+    const active = remaining > 0;
+    const permanent = active && isPermanentLockValue(until);
+    return (
+      <div className="mb-4 overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/[0.12] to-amber-900/[0.08] p-3.5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-amber-200">
+              <Crown className="h-3.5 w-3.5" /> Premium lock — full series
+            </p>
+            <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">
+              Locks every season and episode. Only premium members can watch. Free users and guests get the premium screen everywhere.
+            </p>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${active ? "bg-amber-400 text-amber-950" : "bg-white/10 text-zinc-300"}`}>
+            {active ? (permanent ? "PERMANENT" : formatLockRemaining(remaining)) : "FREE"}
+          </span>
+        </div>
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {[1, 2, 3, 5, 7, 14, 30].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setSeriesLockDays(d)}
+              className="h-7 rounded-lg border border-amber-400/30 bg-amber-500/15 px-2.5 text-[11px] font-bold text-amber-100 hover:bg-amber-500/30"
+            >
+              {d}d
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              const value = prompt("Lock full series for how many days?", "7");
+              const days = Number(value);
+              if (!Number.isFinite(days) || days <= 0) return;
+              setSeriesLockDays(days);
+            }}
+            className="h-7 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[11px] font-bold text-zinc-200 hover:bg-white/10"
+          >
+            Custom
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeriesLockDays(-1)}
+            className="h-7 rounded-lg border border-amber-300/40 bg-amber-400/25 px-2.5 text-[11px] font-black text-amber-50 hover:bg-amber-400/40"
+          >
+            Permanent
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeriesLockDays(0)}
+            disabled={!active}
+            className="h-7 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-40"
+          >
+            Unlock now
+          </button>
+        </div>
+      </div>
+    );
+  })()}
+
       {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
         return <SortableSeasonItem 
           key={`season-${sIdx}`}

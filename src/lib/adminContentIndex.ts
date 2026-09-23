@@ -76,6 +76,7 @@ const buildLockIndex = (item: any): Record<string, number> => {
   });
   const own = Number(item?.lockUntil || 0) || 0;
   if (own > now) map.movie = own;
+  if (own > now) map.series = own;
   return map;
 };
 
