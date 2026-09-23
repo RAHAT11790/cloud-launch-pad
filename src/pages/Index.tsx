@@ -2368,6 +2368,20 @@ const Index = () => {
       }
     }
 
+    // Re-check the premium lock with the fully hydrated item. Card items are
+    // lightweight, so a lock saved on the episode only shows up after this
+    // hydration — without this check a locked episode could start playing.
+    {
+      const fSIdx = resolvedSeasonIdx ?? 0;
+      const fEIdx = resolvedEpIdx ?? 0;
+      const fullLocked = isSeriesLocked(anime as any) || isEpisodeLocked(anime as any, fSIdx, fEIdx);
+      if ((fullLocked && !userIsPremium)
+        || ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(anime as any, fSIdx, fEIdx))) {
+        navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+        return;
+      }
+    }
+
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
