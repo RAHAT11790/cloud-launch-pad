@@ -390,7 +390,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   </div>
                   <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
-                  {premiumOnly && <PremiumCardFrame label={seriesLocked ? "Full Series • Premium" : `${lockedEpText} • Premium`} />}
+                  {premiumOnly && <PremiumCardFrame size="sm" label={seriesLocked ? "Full Series • Premium" : `${lockedEpText} • Premium`} />}
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                     {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>

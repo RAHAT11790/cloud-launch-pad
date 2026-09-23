@@ -6744,6 +6744,7 @@ ${tgBulkFooter}
         const until = Number(item?.lockUntil || 0) || 0;
         if (until > 0 && episodeNumber >= range.startEp && episodeNumber <= range.endEp) {
           lockMap[`s${range.seasonIdxNum - 1}e${episodeIndex}`] = until;
+          lockMap[`s${range.seasonIdxNum - 1}e${Math.max(0, episodeNumber - 1)}`] = until;
         }
       });
     });
