@@ -183,6 +183,7 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     dubType: item?.dubType || "official",
     premium: !!item?.premium,
     premiumEpisodes: item?.premiumEpisodes || {},
+    episodeLocks: buildEpisodeLockIndex(item),
     seasons,
     episodeCount: opts.full ? undefined : countBestEpisodes(item),
     trailer: item?.trailer || undefined,
