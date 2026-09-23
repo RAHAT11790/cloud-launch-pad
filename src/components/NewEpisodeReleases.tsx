@@ -369,13 +369,22 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 onClick={() => handleClick(release, minEp)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(release, minEp); } }}
               >
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
+                  <div
+                    className={`relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md ${premiumOnly ? "rs-premium-lock-card" : ""}`}
+                    style={premiumOnly ? { boxShadow: "0 0 0 2px rgba(250,204,21,0.85), 0 10px 26px rgba(250,204,21,0.25)" } : undefined}
+                  >
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
                   <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
+                  {premiumOnly && (
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: "linear-gradient(to top, rgba(120,53,15,0.62) 0%, rgba(250,204,21,0.12) 55%, transparent 100%)" }}
+                    />
+                  )}
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                     {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
@@ -384,6 +393,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
                   {/* Bottom info bar — title + rating left, EP badge bottom-right corner */}
                   <div className="absolute bottom-0 left-0 right-0 p-2">
+                    {premiumOnly && (
+                      <div
+                        className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-[2px] text-[8.5px] font-black uppercase tracking-tight rs-premium-lock-badge"
+                        style={{
+                          background: "linear-gradient(90deg, #f59e0b 0%, #fde047 50%, #f59e0b 100%)",
+                          color: "#3b2400",
+                          boxShadow: "0 2px 8px rgba(250,204,21,0.45)",
+                        }}
+                      >
+                        <Crown className="w-2.5 h-2.5 shrink-0" />
+                        <span className="truncate">{lockedEpText} • Premium Only</span>
+                      </div>
+                    )}
                     <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white pr-1" style={{ ...getAnimeTitleStyle(title), textShadow: "0 2px 6px rgba(0,0,0,0.9)" }}>
                       {title}
                     </p>
