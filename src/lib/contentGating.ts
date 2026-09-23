@@ -74,6 +74,7 @@ export const isTimeLockedByIndex = (anime: any, seasonIdx = 0, episodeIdx = 0): 
   const index = anime?.episodeLocks;
   if (!index || typeof index !== "object") return false;
   const now = Date.now();
+  if (Number(index.series || 0) > now) return true;
   const direct = Number(index[lockKeyFor(anime, seasonIdx, episodeIdx)] || 0);
   if (direct > now) return true;
   if (isMovieContent(anime) || anime?.type === "movie") {
