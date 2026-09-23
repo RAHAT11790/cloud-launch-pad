@@ -100,6 +100,8 @@ export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminCon
   dubType: String(item?.dubType || "official"),
   premium: !!item?.premium,
   premiumEpisodes: item?.premiumEpisodes || {},
+  episodeLocks: buildLockIndex(item),
+  lockUntil: Number(item?.lockUntil || 0) || 0,
   seasonCount: kind === "webseries" ? countSeasons(item) : 0,
   episodeCount: kind === "webseries" ? countEpisodes(item) : 0,
   createdAt: Number(item?.createdAt || 0),
