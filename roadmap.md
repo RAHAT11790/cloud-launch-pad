@@ -53,4 +53,5 @@
 - [x] Golden "Episode N • Premium Only" badge + glow on locked New Release cards, removed automatically on unlock.
 - [x] Telegram post quality now lists only the newly added episode's qualities, ordered 480p → 720p → 1080p → 4K.
 - [x] Resolve TS2686 by moving the JSX-free mobile hook from `.tsx` to `.ts`.
-- [ ] Re-verify the first locked New Episode Release card visually and test every guest/free playback path.
+- [x] Re-verify the first locked New Episode Release card visually and test guest/free direct entry paths.
+- [ ] Verify in-player Next, episode-list, and season-switch lock walls against a real playable title.
