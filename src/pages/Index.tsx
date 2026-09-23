@@ -552,7 +552,12 @@ import {
   isGuestVisitor,
   isMovieContent,
   isTimeLockedTarget,
+  isSeriesTimeLocked,
+  seriesLockRemainingMs,
+  targetLockRemainingMs,
+  formatLockRemaining,
 } from "@/lib/contentGating";
+import { PlayerPremiumLock } from "@/components/premium/PremiumLockVisuals";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
 
