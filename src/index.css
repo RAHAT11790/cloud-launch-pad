@@ -2857,7 +2857,10 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   0%, 100% { opacity: 0.82; filter: drop-shadow(0 0 3px rgba(250,204,21,0.35)); }
   50% { opacity: 1; filter: drop-shadow(0 0 9px rgba(250,204,21,0.6)); }
 }
-.rs-premium-frame-img { animation: rsPremiumFramePulse 3.2s ease-in-out infinite; }
+.rs-premium-frame-img {
+  background: transparent !important;
+  animation: rsPremiumFramePulse 3.2s ease-in-out infinite;
+}
 .rs-premium-lock-badge {
   background-size: 200% 100% !important;
   animation: rsPremiumLockShine 2.4s linear infinite;
