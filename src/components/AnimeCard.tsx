@@ -3,6 +3,8 @@ import { Star, Heart, Crown } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { hasActiveTimeLock, isSeriesTimeLocked } from "@/lib/contentGating";
+import { PremiumCardFrame } from "@/components/premium/PremiumLockVisuals";
 
 const watchlistCacheByUser = new Map<string, Set<string>>();
 const watchlistLoadByUser = new Map<string, Promise<Set<string>>>();
@@ -126,6 +128,9 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   }, [anime]);
 
   const isPremium = !!(anime as any).premium;
+  // Timed premium lock (whole series or any episode) — golden premium card.
+  const seriesLocked = isSeriesTimeLocked(anime as any);
+  const timeLocked = seriesLocked || hasActiveTimeLock(anime as any);
   const lockedEpisodes = useMemo(() => {
     const eps = (anime as any).premiumEpisodes || {};
     return Object.values(eps).filter(Boolean).length;
