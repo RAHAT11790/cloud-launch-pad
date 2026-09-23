@@ -189,6 +189,25 @@ const normalizeTelegramBaseHashtags = (tags: string) => {
  .join(" ")
  .trim();
  return cleaned || DEFAULT_TG_HASHTAGS;
+ };
+
+/**
+ * Telegram post quality tracking.
+ * Reads the qualities that ACTUALLY exist on the given episodes/parts only
+ * (never the whole series) and always returns them low → high:
+ * 480p → 720p → 1080p → 4K.
+ */
+const TG_QUALITY_ORDER = ["480p", "720p", "1080p", "4K"] as const;
+const collectQualityLabels = (items: any[]): string[] => {
+  const found = new Set<string>();
+  const hasLink = (v: any) => typeof v === "string" && v.trim().length > 0;
+  (Array.isArray(items) ? items : []).forEach((item: any) => {
+    if (hasLink(item?.link480)) found.add("480p");
+    if (hasLink(item?.link720)) found.add("720p");
+    if (hasLink(item?.link1080)) found.add("1080p");
+    if (hasLink(item?.link4k)) found.add("4K");
+  });
+  return TG_QUALITY_ORDER.filter((q) => found.has(q));
 };
 const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_TG_BUTTON_TEXT)
  .replace(/𝐖𝐀𝐓𝐂𝐇\s*𝐀𝐍𝐃\s*𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃/g, "WATCH AND DOWNLOAD")
@@ -4163,7 +4182,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  audioTracks: resolvedAudioTracks,
  defaultAudio,
  subtitleTracks: Array.isArray(episode?.subtitleTracks) ? episode.subtitleTracks : [],
- };
+ // Episode Lock must survive every editor load/save round-trip, otherwise the
+ // premium window silently disappears and free users can watch the episode.
+ lockUntil: Number(episode?.lockUntil || 0) || 0,
+ } as Episode;
  }, [normalizeAudioTrackList]);
 
  const cloneSeasonList = useCallback((seasons?: Season[]) => {
@@ -5272,32 +5294,47 @@ ${tgBulkFooter}
  }
  }
 
- // Get quality info from content
- const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
- ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
- let qualities: string[] = [];
- if (contentType === "webseries") {
- const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
- if (ws?.seasons) {
- ws.seasons.forEach((s: any) => {
- s.episodes?.forEach((ep: any) => {
- if (ep.link480) qualities.push("480p");
- if (ep.link720) qualities.push("720p");
- if (ep.link1080) qualities.push("1080p");
- if (ep.link4k) qualities.push("4K");
- });
- });
- }
- } else if (contentType === "movie") {
- const mv = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
- if (mv?.link480) qualities.push("480p");
- if (mv?.link720) qualities.push("720p");
- if (mv?.link1080) qualities.push("1080p");
- if (mv?.link4k) qualities.push("4K");
- }
- if (qualities.length > 0) {
- setTgQuality([...new Set(qualities)].join(","));
- }
+  // Quality tracking — ONLY the episodes/parts included in THIS release.
+  // Scanning the whole series made every post show 480p,720p,1080p,4K.
+  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
+  ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
+  let qualities: string[] = [];
+  if (contentType === "webseries") {
+  const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
+  const seasonIdx = Math.max(0, Number(release.episodeInfo?.seasonNumber || 1) - 1);
+  const epList = (ws?.seasons?.[seasonIdx]?.episodes || []) as any[];
+  const startEp = Number(release.episodeInfo?.episodeNumber || 0);
+  const endEp = Number(release.episodeInfo?.episodeNumberEnd || startEp || 0);
+  const scoped = startEp > 0
+  ? epList.filter((ep: any) => {
+    const num = Number(ep?.episodeNumber || 0);
+    return num >= startEp && num <= Math.max(startEp, endEp);
+  })
+  : epList.slice(-1);
+  qualities = collectQualityLabels(scoped);
+  } else if (contentType === "movie") {
+  const mv: any = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
+  const partStart = Number(release.episodeInfo?.partStart || 0);
+  const partEnd = Number(release.episodeInfo?.partEnd || partStart || 0);
+  const parts = (mv?.parts || []) as any[];
+  const scopedParts = partStart > 0
+  ? parts.filter((p: any) => {
+    const num = Number(p?.partNumber || 0);
+    return num >= partStart && num <= Math.max(partStart, partEnd);
+  })
+  : [];
+  qualities = scopedParts.length
+  ? collectQualityLabels(scopedParts)
+  : collectQualityLabels([{
+    link480: mv?.link480 || mv?.movieLink480,
+    link720: mv?.link720 || mv?.movieLink720,
+    link1080: mv?.link1080 || mv?.movieLink1080,
+    link4k: mv?.link4k || mv?.movieLink4k,
+  }]);
+  }
+  if (qualities.length > 0) {
+  setTgQuality(qualities.join(","));
+  }
  // Count total episodes per-season using TMDB
  if (contentType === "webseries") {
  const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
@@ -6691,19 +6728,19 @@ ${tgBulkFooter}
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   } catch {}
- // Get quality info
- const quals: string[] = [];
-  let scannedEpisodes = 0;
-  ctxSeasons.some((s: any) => (s.episodes || []).some((ep: any) => {
-  scannedEpisodes += 1;
- if (ep.link480) quals.push("480p");
- if (ep.link720) quals.push("720p");
- if (ep.link1080) quals.push("1080p");
- if (ep.link4k) quals.push("4K");
-  return scannedEpisodes > 250 || new Set(quals).size >= 4;
-  }));
+ // Quality tracking — ONLY the episodes published in this release.
+ // Older episodes already had their own post, so their qualities must never
+ // leak into the new post. Output is always sorted 480p → 720p → 1080p → 4K.
+ const newEpisodesForQuality = rangesToPublish.flatMap((r) => {
+ const list = ctxSeasons[r.seasonIdxNum - 1]?.episodes || [];
+ return list.filter((ep: any) => {
+ const num = Number(ep?.episodeNumber || 0);
+ return num >= r.startEp && num <= r.endEp;
+ });
+ });
+ const quals = collectQualityLabels(newEpisodesForQuality.length ? newEpisodesForQuality : (episode ? [episode] : []));
   startTransition(() => {
-  if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
+  if (quals.length > 0) setTgQuality(quals.join(","));
   setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode))));
   setTgSelectedAnimeId(String(ctxSeriesId));
   });

@@ -311,6 +311,10 @@ const loadAnimeSaltPremiumMeta = async (anime: AnimeItem): Promise<Partial<Anime
       premium: !!row.premium,
       premiumEpisodes: row.premiumEpisodes || {},
       dubType: row.dubType || anime.dubType,
+      // Timed Episode Lock must travel with the premium meta, otherwise a free
+      // user could start an AN episode that admin locked for N days.
+      episodeLocks: row.episodeLocks || buildEpisodeLockIndex(row),
+      lockUntil: Number(row.lockUntil || 0) || undefined,
     } as Partial<AnimeItem>;
   } catch {
     return null;
@@ -535,7 +539,7 @@ import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
+import { buildEpisodeLockIndex, mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { isLegacyAnEntry } from "@/lib/legacyAn";
 import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
 import { usePremium } from "@/hooks/usePremium";
@@ -1122,19 +1126,30 @@ const Index = () => {
     // Returns true if access is granted, false if ad-gate shown
     const sIdx = seasonIdx ?? 0;
     const eIdx = epIdx ?? 0;
-    const lockMeta = anime?.source === "animesalt" || String(anime?.id || "").startsWith("an_") || String(anime?.id || "").startsWith("as_")
-      ? { ...(anime || {}), ...((anime ? await loadAnimeSaltPremiumMeta(anime) : null) || {}) }
-      : anime;
+    // Build the lock metadata from the REAL stored item, not just the card.
+    // Home/New-Release cards are lightweight, so a free user used to slip past
+    // the timed Episode Lock before the full row had loaded.
+    const isAnItem = anime?.source === "animesalt" || String(anime?.id || "").startsWith("an_") || String(anime?.id || "").startsWith("as_");
+    let lockMeta: any = anime;
+    if (anime) {
+      const [anMeta, fullItem] = await Promise.all([
+        isAnItem ? loadAnimeSaltPremiumMeta(anime).catch(() => null) : Promise.resolve(null),
+        loadFullFirebaseAnimeItemWithTimeout(anime, 1800).catch(() => null),
+      ]);
+      lockMeta = { ...(anime || {}), ...(fullItem || {}), ...(anMeta || {}) };
+    }
     if (lockMeta && (isSeriesLocked(lockMeta as any) || isEpisodeLocked(lockMeta as any, sIdx, eIdx)) && !userIsPremium) {
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
 
     // Admin "Episode Lock" — premium-only until the chosen days pass.
-    if (!userIsPremium && isTimeLockedTarget(lockMeta || anime, sIdx, eIdx)) {
+    // Guests never have premium, so they are blocked by the same rule.
+    if ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(lockMeta || anime, sIdx, eIdx)) {
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
+
 
     // Guest restrictions — movies are members-only, episodes capped at 3.
     if (isGuestVisitor()) {
@@ -2282,7 +2297,7 @@ const Index = () => {
     }
 
     // Admin "Episode Lock" — premium-only until the chosen days pass.
-    if (!userIsPremium && isTimeLockedTarget(seriesLike, sIdx, eIdx)) {
+    if ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(seriesLike, sIdx, eIdx)) {
       navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
       return;
     }
