@@ -100,6 +100,15 @@ export interface AnimeItem {
   cast?: { name: string; character?: string; photo?: string }[];
   premium?: boolean;
   premiumEpisodes?: Record<string, boolean>;
+  /**
+   * Lightweight timed-lock index so cards and the play gate can enforce the
+   * admin "Episode Lock" without loading the full item.
+   * Keys: `s{seasonIdx}e{episodeIdx}` for series, `p{partIdx}` for movie parts,
+   * `movie` for the main movie file. Values: epoch ms.
+   */
+  episodeLocks?: Record<string, number>;
+  /** Epoch ms — whole title is premium-only until this moment. */
+  lockUntil?: number;
   logo?: string;
 }
 
