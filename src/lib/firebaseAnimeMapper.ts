@@ -190,6 +190,7 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     premium: !!item?.premium,
     premiumEpisodes: item?.premiumEpisodes || {},
     episodeLocks: buildEpisodeLockIndex(item),
+    lockUntil: Number(item?.lockUntil || 0) || undefined,
     seasons,
     episodeCount: opts.full ? undefined : countBestEpisodes(item),
     trailer: item?.trailer || undefined,

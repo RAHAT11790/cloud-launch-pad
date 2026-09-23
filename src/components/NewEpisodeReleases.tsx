@@ -355,8 +355,11 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // Release rows carry a lock snapshot as well as the home index.
             // This prevents a newly-published card painting as free while the
             // lightweight content index is still refreshing.
+            // Once live content is available it is authoritative. Never merge an
+            // old release snapshot into it: an admin may unlock the title after
+            // publishing, and stale release keys must not keep a false gold card.
             const lockSource = content
-              ? { ...(release as any), ...(content as any), episodeLocks: { ...((release as any).episodeLocks || {}), ...((content as any).episodeLocks || {}) } }
+              ? { ...(content as any), lockUntil: Number((content as any).lockUntil || 0), episodeLocks: (content as any).episodeLocks || {} }
               : release;
             const seriesLocked = isSeriesTimeLocked(lockSource as any);
             const premiumOnly = seriesLocked || isTimeLockedTarget(lockSource as any, lockSeasonIdx, lockEpIdx);

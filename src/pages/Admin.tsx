@@ -21,6 +21,7 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
+import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
  buildAdminContentIndexItem,
@@ -3946,6 +3947,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  year: content.year || "N/A", rating: content.rating || "N/A",
  visibility: content.visibility || "public",
  episodeInfo, timestamp: Date.now(), active: true,
+  lockUntil: Number(content.lockUntil || 0) || 0,
+  episodeLocks: buildEpisodeLockIndex(content) || {},
  weeklyEnabled: content.weeklyEnabled === true,
  weeklyEveryDays: Math.max(1, Number(content.weeklyEveryDays) || 7)
  };
@@ -7519,6 +7522,8 @@ ${tgBulkFooter}
    : { type: "movie", seasonName: "Movie", label: releaseLabel },
  timestamp: Date.now(),
  active: true,
+  lockUntil: Number(ctxForm.lockUntil || 0) || 0,
+  episodeLocks: buildEpisodeLockIndex(ctxForm) || {},
  };
  await set(push(ref(db, "newEpisodeReleases")), newRelease);
  setAdminBusyTask(null);
