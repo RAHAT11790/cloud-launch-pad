@@ -2191,6 +2191,13 @@ const Index = () => {
       return;
     }
 
+    // Timed lock (episode or full series) — blocks free users and guests.
+    if ((!userIsPremium || isGuestVisitor())
+      && isTimeLockedTarget(preflightAnime as any, routeTarget.seasonIdx ?? 0, routeTarget.epIdx ?? 0)) {
+      navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
+      return;
+    }
+
     const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
     if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
       const fromRoutedOverlay = isSearchRoute;
