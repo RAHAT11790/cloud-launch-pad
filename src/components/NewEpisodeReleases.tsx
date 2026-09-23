@@ -350,8 +350,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // disappear by themselves the moment the lock window expires.
             const lockSeasonIdx = snNum && snNum > 0 ? snNum - 1 : 0;
             const lockEpIdx = Math.max(0, (minEp ?? epNum ?? 1) - 1);
-            const premiumOnly = !!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx);
+            const seriesLocked = !!content && isSeriesTimeLocked(content as any);
+            const premiumOnly = seriesLocked || (!!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx));
             const lockedEpText = (() => {
+              if (seriesLocked) return "Full Series";
               const lo = minEp ?? epNum;
               const hi = maxEp ?? epNum;
               if (!hi) return "New Episode";
