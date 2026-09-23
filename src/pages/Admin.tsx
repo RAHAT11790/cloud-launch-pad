@@ -189,6 +189,25 @@ const normalizeTelegramBaseHashtags = (tags: string) => {
  .join(" ")
  .trim();
  return cleaned || DEFAULT_TG_HASHTAGS;
+ };
+
+/**
+ * Telegram post quality tracking.
+ * Reads the qualities that ACTUALLY exist on the given episodes/parts only
+ * (never the whole series) and always returns them low → high:
+ * 480p → 720p → 1080p → 4K.
+ */
+const TG_QUALITY_ORDER = ["480p", "720p", "1080p", "4K"] as const;
+const collectQualityLabels = (items: any[]): string[] => {
+  const found = new Set<string>();
+  const hasLink = (v: any) => typeof v === "string" && v.trim().length > 0;
+  (Array.isArray(items) ? items : []).forEach((item: any) => {
+    if (hasLink(item?.link480)) found.add("480p");
+    if (hasLink(item?.link720)) found.add("720p");
+    if (hasLink(item?.link1080)) found.add("1080p");
+    if (hasLink(item?.link4k)) found.add("4K");
+  });
+  return TG_QUALITY_ORDER.filter((q) => found.has(q));
 };
 const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_TG_BUTTON_TEXT)
  .replace(/𝐖𝐀𝐓𝐂𝐇\s*𝐀𝐍𝐃\s*𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃/g, "WATCH AND DOWNLOAD")
