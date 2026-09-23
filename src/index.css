@@ -2840,3 +2840,23 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   padding: 0 12px;
 }
 .profile-menu-grid > div.glass-card { border-radius: 12px; }
+
+/* Timed Episode Lock — golden "Premium Only" treatment on New Release cards.
+   The animation is removed automatically once the lock window expires because
+   the card stops rendering these classes. */
+@keyframes rsPremiumLockGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.15); }
+}
+@keyframes rsPremiumLockShine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.rs-premium-lock-card { animation: rsPremiumLockGlow 2.6s ease-in-out infinite; }
+.rs-premium-lock-badge {
+  background-size: 200% 100% !important;
+  animation: rsPremiumLockShine 2.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-premium-lock-card, .rs-premium-lock-badge { animation: none; }
+}
