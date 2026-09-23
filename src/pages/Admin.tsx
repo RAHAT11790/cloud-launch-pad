@@ -6732,6 +6732,23 @@ ${tgBulkFooter}
  episodeNumberEnd: r.endEp,
  seasonName: r.seasonName,
  },
+  lockUntil: Number(ctxForm.lockUntil || 0) || 0,
+  episodeLocks: (() => {
+    const lockMap: Record<string, number> = {};
+    const seriesUntil = Number(ctxForm.lockUntil || 0) || 0;
+    if (seriesUntil > 0) lockMap.series = seriesUntil;
+    rangesToPublish.forEach((range) => {
+      const episodes = ctxSeasons[range.seasonIdxNum - 1]?.episodes || [];
+      episodes.forEach((item: any, episodeIndex: number) => {
+        const episodeNumber = Number(item?.episodeNumber || episodeIndex + 1);
+        const until = Number(item?.lockUntil || 0) || 0;
+        if (until > 0 && episodeNumber >= range.startEp && episodeNumber <= range.endEp) {
+          lockMap[`s${range.seasonIdxNum - 1}e${episodeIndex}`] = until;
+        }
+      });
+    });
+    return lockMap;
+  })(),
  timestamp: Date.now(),
  active: true,
  weeklyEnabled: ctxForm.weeklyEnabled === true,
