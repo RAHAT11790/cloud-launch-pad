@@ -133,6 +133,7 @@ const mapMovieParts = (parts: any): MoviePart[] | undefined => {
       link720: p?.link720 || p?.movieLink720 || undefined,
       link1080: p?.link1080 || p?.movieLink1080 || undefined,
       link4k: p?.link4k || p?.movieLink4k || undefined,
+      lockUntil: Number(p?.lockUntil || 0) || undefined,
     }))
     .filter((p) => p.link || p.link480 || p.link720 || p.link1080 || p.link4k)
     .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
