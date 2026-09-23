@@ -162,6 +162,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         decoding="async"
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
+      {timeLocked && <PremiumCardFrame size="sm" label={seriesLocked ? "Premium Only" : "Premium Episodes"} />}
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
           isInWatchlist
