@@ -35,6 +35,8 @@ export interface MoviePart {
   link720?: string;
   link1080?: string;
   link4k?: string;
+  /** Epoch ms — premium-only until this moment, then free for everyone. */
+  lockUntil?: number;
 }
 
 export interface Episode {
@@ -47,6 +49,8 @@ export interface Episode {
   link4k?: string;
   audioTracks?: AudioTrack[];
   subtitleTracks?: SubtitleTrack[];
+  /** Epoch ms — premium-only until this moment, then free for everyone. */
+  lockUntil?: number;
 }
 
 export interface Season {
