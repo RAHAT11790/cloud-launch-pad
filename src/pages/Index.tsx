@@ -2297,7 +2297,7 @@ const Index = () => {
     }
 
     // Admin "Episode Lock" — premium-only until the chosen days pass.
-    if (!userIsPremium && isTimeLockedTarget(seriesLike, sIdx, eIdx)) {
+    if ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(seriesLike, sIdx, eIdx)) {
       navigate(`/premium-required?from=${encodeURIComponent(anime.id || "")}`);
       return;
     }
