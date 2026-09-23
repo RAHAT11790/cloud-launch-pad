@@ -3655,6 +3655,15 @@ const Index = () => {
           }}
           suggestedAnime={suggestedAnimeImmediate}
         />
+        {playerLockNotice && (
+          <PlayerPremiumLock
+            title={playerLockNotice.title}
+            episodeLabel={playerLockNotice.episodeLabel}
+            remainingText={playerLockNotice.remainingText}
+            onUpgrade={() => { setPlayerLockNotice(null); navigate("/premium"); }}
+            onDismiss={() => setPlayerLockNotice(null)}
+          />
+        )}
       </div>
     );
   }
