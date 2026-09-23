@@ -1,11 +1,12 @@
 import { useState, useEffect, forwardRef, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Zap, ChevronRight, X } from "lucide-react";
+import { Zap, ChevronRight, X, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { isTimeLockedTarget } from "@/lib/contentGating";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
