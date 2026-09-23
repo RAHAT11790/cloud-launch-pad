@@ -108,6 +108,20 @@ export const targetLockRemainingMs = (anime: any, seasonIdx = 0, episodeIdx = 0)
   return until > Date.now() ? until - Date.now() : 0;
 };
 
+/** Whole-title lock (admin "Lock full series"): `lockUntil` on the item root. */
+export const seriesLockUntil = (anime: any): number => {
+  const candidates = [Number(anime?.lockUntil || 0), Number(anime?.episodeLocks?.series || 0)];
+  const until = Math.max(...candidates, 0);
+  return Number.isFinite(until) && until > 0 ? until : 0;
+};
+
+export const isSeriesTimeLocked = (anime: any): boolean => seriesLockUntil(anime) > Date.now();
+
+export const seriesLockRemainingMs = (anime: any): number => {
+  const until = seriesLockUntil(anime);
+  return until > Date.now() ? until - Date.now() : 0;
+};
+
 /** True when ANY episode/part of the title is still inside its premium window. */
 export const hasActiveTimeLock = (anime: any): boolean => {
   const now = Date.now();
