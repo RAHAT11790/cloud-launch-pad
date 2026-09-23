@@ -55,15 +55,64 @@ export const getEpisodeAt = (anime: any, seasonIdx = 0, episodeIdx = 0): any => 
   return episodes[episodeIdx] || null;
 };
 
+/** Lock key used by the lightweight `episodeLocks` index on list payloads. */
+export const lockKeyFor = (anime: any, seasonIdx = 0, episodeIdx = 0): string =>
+  isMovieContent(anime) ? `p${Math.max(0, Number(episodeIdx || 0))}` : `s${Math.max(0, Number(seasonIdx || 0))}e${Math.max(0, Number(episodeIdx || 0))}`;
+
+/**
+ * Timed lock read from the lightweight index that every card payload carries,
+ * so the gate works even before the full item (with per-episode data) loads.
+ */
+export const isTimeLockedByIndex = (anime: any, seasonIdx = 0, episodeIdx = 0): boolean => {
+  const index = anime?.episodeLocks;
+  if (!index || typeof index !== "object") return false;
+  const now = Date.now();
+  const direct = Number(index[lockKeyFor(anime, seasonIdx, episodeIdx)] || 0);
+  if (direct > now) return true;
+  if (isMovieContent(anime) || anime?.type === "movie") {
+    if (Number(index.movie || 0) > now) return true;
+    if (Number(index.p0 || 0) > now && Math.max(0, Number(episodeIdx || 0)) === 0) return true;
+  }
+  return false;
+};
+
 /** Timed lock for a series episode (or a movie part). */
 export const isTimeLockedTarget = (anime: any, seasonIdx = 0, episodeIdx = 0): boolean => {
-  if (anime?.type === "movie") {
+  if (isTimeLockedByIndex(anime, seasonIdx, episodeIdx)) return true;
+  if (isEpisodeTimeLocked(anime)) return true;
+  if (anime?.type === "movie" || isMovieContent(anime)) {
     const parts = Array.isArray(anime?.parts) ? anime.parts : [];
     const part = parts[episodeIdx] || parts[0];
     if (isEpisodeTimeLocked(part)) return true;
-    return isEpisodeTimeLocked(anime);
+    return false;
   }
   return isEpisodeTimeLocked(getEpisodeAt(anime, seasonIdx, episodeIdx));
+};
+
+/** Remaining lock time for a target, using both the index and full data. */
+export const targetLockRemainingMs = (anime: any, seasonIdx = 0, episodeIdx = 0): number => {
+  const candidates = [
+    Number(anime?.episodeLocks?.[lockKeyFor(anime, seasonIdx, episodeIdx)] || 0),
+    Number(anime?.lockUntil || 0),
+    episodeLockUntil(getEpisodeAt(anime, seasonIdx, episodeIdx)),
+    episodeLockUntil((Array.isArray(anime?.parts) ? anime.parts : [])[episodeIdx]),
+  ];
+  const until = Math.max(...candidates, 0);
+  return until > Date.now() ? until - Date.now() : 0;
+};
+
+/** True when ANY episode/part of the title is still inside its premium window. */
+export const hasActiveTimeLock = (anime: any): boolean => {
+  const now = Date.now();
+  if (Number(anime?.lockUntil || 0) > now) return true;
+  const index = anime?.episodeLocks;
+  if (index && typeof index === "object") {
+    if (Object.values(index).some((v) => Number(v || 0) > now)) return true;
+  }
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
+  if (seasons.some((s: any) => (Array.isArray(s?.episodes) ? s.episodes : []).some((ep: any) => isEpisodeTimeLocked(ep)))) return true;
+  const parts = Array.isArray(anime?.parts) ? anime.parts : [];
+  return parts.some((p: any) => isEpisodeTimeLocked(p));
 };
 
 export const isMovieContent = (anime: any): boolean =>
