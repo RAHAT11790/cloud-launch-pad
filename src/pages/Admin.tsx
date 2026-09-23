@@ -4163,7 +4163,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  audioTracks: resolvedAudioTracks,
  defaultAudio,
  subtitleTracks: Array.isArray(episode?.subtitleTracks) ? episode.subtitleTracks : [],
- };
+ // Episode Lock must survive every editor load/save round-trip, otherwise the
+ // premium window silently disappears and free users can watch the episode.
+ lockUntil: Number(episode?.lockUntil || 0) || 0,
+ } as Episode;
  }, [normalizeAudioTrackList]);
 
  const cloneSeasonList = useCallback((seasons?: Season[]) => {
