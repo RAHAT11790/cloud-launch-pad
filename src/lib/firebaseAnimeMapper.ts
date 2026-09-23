@@ -76,7 +76,7 @@ const mapSeasons = (seasons: any): Season[] | undefined => {
  * otherwise a free user taps a New Release card and playback starts before the
  * full item (which carries per-episode `lockUntil`) has loaded.
  */
-const buildEpisodeLockIndex = (item: any): Record<string, number> | undefined => {
+export const buildEpisodeLockIndex = (item: any): Record<string, number> | undefined => {
   const map: Record<string, number> = {};
   const collectSeasons = (seasons: any) => {
     values(seasons).forEach((season: any, sIdx: number) => {
