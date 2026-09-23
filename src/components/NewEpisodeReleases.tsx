@@ -6,7 +6,8 @@ import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import { isTimeLockedTarget } from "@/lib/contentGating";
+import { isTimeLockedTarget, isSeriesTimeLocked } from "@/lib/contentGating";
+import { PremiumCardFrame } from "@/components/premium/PremiumLockVisuals";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
