@@ -311,6 +311,10 @@ const loadAnimeSaltPremiumMeta = async (anime: AnimeItem): Promise<Partial<Anime
       premium: !!row.premium,
       premiumEpisodes: row.premiumEpisodes || {},
       dubType: row.dubType || anime.dubType,
+      // Timed Episode Lock must travel with the premium meta, otherwise a free
+      // user could start an AN episode that admin locked for N days.
+      episodeLocks: row.episodeLocks || buildEpisodeLockIndex(row),
+      lockUntil: Number(row.lockUntil || 0) || undefined,
     } as Partial<AnimeItem>;
   } catch {
     return null;
