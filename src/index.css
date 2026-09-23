@@ -2853,10 +2853,15 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   100% { background-position: 200% 50%; }
 }
 .rs-premium-lock-card { animation: rsPremiumLockGlow 2.6s ease-in-out infinite; }
+@keyframes rsPremiumFramePulse {
+  0%, 100% { opacity: 0.82; filter: drop-shadow(0 0 3px rgba(250,204,21,0.35)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 9px rgba(250,204,21,0.6)); }
+}
+.rs-premium-frame-img { animation: rsPremiumFramePulse 3.2s ease-in-out infinite; }
 .rs-premium-lock-badge {
   background-size: 200% 100% !important;
   animation: rsPremiumLockShine 2.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .rs-premium-lock-card, .rs-premium-lock-badge { animation: none; }
+  .rs-premium-lock-card, .rs-premium-lock-badge, .rs-premium-frame-img { animation: none; }
 }
