@@ -45,6 +45,40 @@ const countSeasons = (item: any) => {
 };
 
 
+/**
+ * Timed "Episode Lock" index carried on the lightweight card payload.
+ * Without this, a free user could tap a New Release card and playback started
+ * before the full item (which holds per-episode `lockUntil`) had loaded.
+ * Keys: `s{seasonIdx}e{episodeIdx}` | `p{partIdx}` | `movie`. Values: epoch ms.
+ */
+const buildLockIndex = (item: any): Record<string, number> => {
+  const map: Record<string, number> = {};
+  const now = Date.now();
+  const collectSeasons = (seasons: any) => {
+    values(seasons).forEach((season: any, sIdx: number) => {
+      values(season?.episodes)
+        .slice()
+        .sort((a: any, b: any) => Number(a?.episodeNumber || 0) - Number(b?.episodeNumber || 0))
+        .forEach((ep: any, eIdx: number) => {
+          const until = Number(ep?.lockUntil || 0) || 0;
+          if (until > now) map[`s${sIdx}e${eIdx}`] = until;
+        });
+    });
+  };
+  collectSeasons(item?.seasons);
+  collectSeasons(item?.customSeasons);
+  if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
+    Object.values(item.seasonsByLanguage).forEach((seasons) => collectSeasons(seasons));
+  }
+  values(item?.parts).forEach((part: any, idx: number) => {
+    const until = Number(part?.lockUntil || 0) || 0;
+    if (until > now) map[`p${idx}`] = until;
+  });
+  const own = Number(item?.lockUntil || 0) || 0;
+  if (own > now) map.movie = own;
+  return map;
+};
+
 export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminContentKind) => ({
   id,
   title: String(item?.title || "Untitled"),
