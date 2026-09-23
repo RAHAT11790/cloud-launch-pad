@@ -17,6 +17,12 @@ export const GUEST_EPISODE_LIMIT = 3;
 
 export const DAY_MS = 86_400_000;
 
+/** Sentinel used for "locked forever" (year 2100). */
+export const PERMANENT_LOCK_UNTIL = 4_102_444_800_000;
+
+export const isPermanentLockValue = (until?: number | null): boolean =>
+  Number(until || 0) >= PERMANENT_LOCK_UNTIL - DAY_MS;
+
 export const episodeLockUntil = (episode: any): number => {
   const raw = Number(episode?.lockUntil || 0);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
@@ -29,9 +35,10 @@ export const episodeLockRemainingMs = (episode: any): number => {
   return until > Date.now() ? until - Date.now() : 0;
 };
 
-/** "3d 4h" / "5h 20m" / "18m" */
+/** "Permanent" / "3d 4h" / "5h 20m" / "18m" */
 export const formatLockRemaining = (ms: number): string => {
   if (ms <= 0) return "unlocked";
+  if (ms >= PERMANENT_LOCK_UNTIL - Date.now() - DAY_MS) return "Permanent";
   const totalMinutes = Math.ceil(ms / 60_000);
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
