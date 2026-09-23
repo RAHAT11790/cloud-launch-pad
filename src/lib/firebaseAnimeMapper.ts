@@ -227,6 +227,8 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
     dubType: item?.dubType || "official",
     premium: !!item?.premium,
     premiumEpisodes: item?.premiumEpisodes || {},
+    episodeLocks: buildEpisodeLockIndex(item),
+    lockUntil: Number(item?.lockUntil || 0) || undefined,
     movieLink: item?.movieLink || "",
     movieLink480: item?.movieLink480 || undefined,
     movieLink720: item?.movieLink720 || undefined,
