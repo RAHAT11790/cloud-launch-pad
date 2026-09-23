@@ -142,13 +142,15 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       role="button"
       tabIndex={0}
       className={`relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0 transition-transform duration-150 ease-out active:scale-[0.94] active:brightness-90 ${
-        isPremium ? "premium-card-glow ring-1 ring-amber-400/50" : ""
+        timeLocked ? "rs-premium-lock-card" : isPremium ? "premium-card-glow ring-1 ring-amber-400/50" : ""
       }`}
       onClick={() => onClick(anime)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(anime); } }}
       onPointerDown={() => { try { (window as any).__rsPrefetchAnime?.(anime); } catch {} }}
       style={{
-        boxShadow: isPremium ? "0 6px 24px -6px rgba(251,191,36,0.45)" : "var(--neu-shadow-sm)",
+        boxShadow: timeLocked
+          ? "0 0 0 1.5px rgba(250,204,21,0.9), 0 10px 28px -8px rgba(251,191,36,0.55)"
+          : isPremium ? "0 6px 24px -6px rgba(251,191,36,0.45)" : "var(--neu-shadow-sm)",
         background: "linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%)",
       }}
     >
