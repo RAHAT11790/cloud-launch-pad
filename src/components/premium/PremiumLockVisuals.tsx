@@ -22,8 +22,17 @@ export const PremiumCardFrame = ({ label, size = "md" }: { label?: string; size?
       height={1536}
       className="pointer-events-none absolute inset-0 z-[13] h-full w-full select-none object-fill rs-premium-frame-img"
     />
+    <div className="rs-premium-frame-edge pointer-events-none absolute inset-[3px] z-[14]" aria-hidden="true">
+      <span className="rs-premium-corner rs-premium-corner-tl" />
+      <span className="rs-premium-corner rs-premium-corner-tr" />
+      <span className="rs-premium-corner rs-premium-corner-bl" />
+      <span className="rs-premium-corner rs-premium-corner-br" />
+    </div>
+    <div className="rs-premium-crown-seal pointer-events-none absolute right-2 bottom-2 z-[16] flex h-7 w-7 items-center justify-center rounded-full" aria-hidden="true">
+      <Crown className="h-3.5 w-3.5" />
+    </div>
     {label ? (
-      <div className="pointer-events-none absolute left-0 right-0 top-[38%] z-[14] flex justify-center px-2">
+      <div className="pointer-events-none absolute left-0 right-0 top-[38%] z-[16] flex justify-center px-2">
         <span
           className={`rs-premium-lock-badge inline-flex max-w-full items-center gap-1 rounded-full px-2 py-[3px] font-black uppercase tracking-tight ${size === "sm" ? "text-[7.5px]" : "text-[8.5px]"}`}
           style={{

@@ -33,6 +33,8 @@ interface EpisodeRelease {
   active?: boolean;
   weeklyEnabled?: boolean;
   weeklyEveryDays?: number;
+  lockUntil?: number;
+  episodeLocks?: Record<string, number>;
 }
 
 interface NewEpisodeReleasesProps {
@@ -350,8 +352,14 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // disappear by themselves the moment the lock window expires.
             const lockSeasonIdx = snNum && snNum > 0 ? snNum - 1 : 0;
             const lockEpIdx = Math.max(0, (minEp ?? epNum ?? 1) - 1);
-            const seriesLocked = !!content && isSeriesTimeLocked(content as any);
-            const premiumOnly = seriesLocked || (!!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx));
+            // Release rows carry a lock snapshot as well as the home index.
+            // This prevents a newly-published card painting as free while the
+            // lightweight content index is still refreshing.
+            const lockSource = content
+              ? { ...(release as any), ...(content as any), episodeLocks: { ...((release as any).episodeLocks || {}), ...((content as any).episodeLocks || {}) } }
+              : release;
+            const seriesLocked = isSeriesTimeLocked(lockSource as any);
+            const premiumOnly = seriesLocked || isTimeLockedTarget(lockSource as any, lockSeasonIdx, lockEpIdx);
             const lockedEpText = (() => {
               if (seriesLocked) return "Full Series";
               const lo = minEp ?? epNum;
@@ -382,7 +390,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   </div>
                   <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
-                  {premiumOnly && <PremiumCardFrame />}
+                  {premiumOnly && <PremiumCardFrame label={seriesLocked ? "Full Series • Premium" : `${lockedEpText} • Premium`} />}
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                     {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
