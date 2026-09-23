@@ -55,5 +55,5 @@
 - [x] Resolve TS2686 by moving the JSX-free mobile hook from `.tsx` to `.ts`.
 - [x] Re-verify the first locked New Episode Release card visually and test guest/free direct entry paths.
 - [ ] Verify in-player Next, episode-list, and season-switch lock walls against a real playable title.
-- [ ] Correct New Release premium state so only the actually locked episode/title gets a Golden card.
-- [ ] Verify the Golden card on the hosted Lovable Preview, not only localhost.
+- [x] Correct New Release premium state so only the actually locked episode/title gets a Golden card.
+- [ ] Verify the Golden card on the hosted Lovable Preview (blocked here by Lovable editor sign-in; mobile local Preview verified).
