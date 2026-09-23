@@ -5275,32 +5275,47 @@ ${tgBulkFooter}
  }
  }
 
- // Get quality info from content
- const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
- ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
- let qualities: string[] = [];
- if (contentType === "webseries") {
- const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
- if (ws?.seasons) {
- ws.seasons.forEach((s: any) => {
- s.episodes?.forEach((ep: any) => {
- if (ep.link480) qualities.push("480p");
- if (ep.link720) qualities.push("720p");
- if (ep.link1080) qualities.push("1080p");
- if (ep.link4k) qualities.push("4K");
- });
- });
- }
- } else if (contentType === "movie") {
- const mv = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
- if (mv?.link480) qualities.push("480p");
- if (mv?.link720) qualities.push("720p");
- if (mv?.link1080) qualities.push("1080p");
- if (mv?.link4k) qualities.push("4K");
- }
- if (qualities.length > 0) {
- setTgQuality([...new Set(qualities)].join(","));
- }
+  // Quality tracking — ONLY the episodes/parts included in THIS release.
+  // Scanning the whole series made every post show 480p,720p,1080p,4K.
+  const [contentId, contentType] = (release.contentId + "|" + release.contentType).split("|").length >= 2 
+  ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
+  let qualities: string[] = [];
+  if (contentType === "webseries") {
+  const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
+  const seasonIdx = Math.max(0, Number(release.episodeInfo?.seasonNumber || 1) - 1);
+  const epList = (ws?.seasons?.[seasonIdx]?.episodes || []) as any[];
+  const startEp = Number(release.episodeInfo?.episodeNumber || 0);
+  const endEp = Number(release.episodeInfo?.episodeNumberEnd || startEp || 0);
+  const scoped = startEp > 0
+  ? epList.filter((ep: any) => {
+    const num = Number(ep?.episodeNumber || 0);
+    return num >= startEp && num <= Math.max(startEp, endEp);
+  })
+  : epList.slice(-1);
+  qualities = collectQualityLabels(scoped);
+  } else if (contentType === "movie") {
+  const mv: any = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
+  const partStart = Number(release.episodeInfo?.partStart || 0);
+  const partEnd = Number(release.episodeInfo?.partEnd || partStart || 0);
+  const parts = (mv?.parts || []) as any[];
+  const scopedParts = partStart > 0
+  ? parts.filter((p: any) => {
+    const num = Number(p?.partNumber || 0);
+    return num >= partStart && num <= Math.max(partStart, partEnd);
+  })
+  : [];
+  qualities = scopedParts.length
+  ? collectQualityLabels(scopedParts)
+  : collectQualityLabels([{
+    link480: mv?.link480 || mv?.movieLink480,
+    link720: mv?.link720 || mv?.movieLink720,
+    link1080: mv?.link1080 || mv?.movieLink1080,
+    link4k: mv?.link4k || mv?.movieLink4k,
+  }]);
+  }
+  if (qualities.length > 0) {
+  setTgQuality(qualities.join(","));
+  }
  // Count total episodes per-season using TMDB
  if (contentType === "webseries") {
  const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
