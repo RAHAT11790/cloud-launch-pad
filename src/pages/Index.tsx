@@ -1122,7 +1122,7 @@ const Index = () => {
     navigate("/unlock-required");
   }, [navigate]);
 
-  const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
+  const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number, opts?: { inPlayer?: boolean }): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     const sIdx = seasonIdx ?? 0;
     const eIdx = epIdx ?? 0;
