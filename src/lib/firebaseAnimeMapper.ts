@@ -272,6 +272,8 @@ export const mapAnimeSaltSelectedItem = (slug: string, item: any): AnimeItem => 
     dubType: item?.dubType || "official",
     premium: !!item?.premium,
     premiumEpisodes: item?.premiumEpisodes || {},
+    episodeLocks: buildEpisodeLockIndex(item),
+    lockUntil: Number(item?.lockUntil || 0) || undefined,
     createdAt: item?.createdAt || item?.addedAt || 0,
     updatedAt: item?.updatedAt || item?.addedAt || 0,
     episodeCount: countBestEpisodes(item),
