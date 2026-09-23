@@ -317,7 +317,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
         </div>
 
         <div data-no-swipe="true" className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
-          {groupedReleases.slice(0, 10).map(({ latest: release, minEp, maxEp }) => {
+          {groupedReleases.slice(0, 10).map(({ latest: release, all: releaseGroup, minEp, maxEp }) => {
             const content = getContent(release.contentId);
             const poster = content?.poster || release.poster || "";
             const title = content?.title || release.title || "Unknown";
@@ -350,8 +350,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // Timed Episode Lock — golden "Premium Only" treatment.
             // The 60s tick re-renders this list, so the badge and its glow
             // disappear by themselves the moment the lock window expires.
-            const lockSeasonIdx = snNum && snNum > 0 ? snNum - 1 : 0;
-            const lockEpIdx = Math.max(0, (minEp ?? epNum ?? 1) - 1);
             // Release rows carry a lock snapshot as well as the home index.
             // This prevents a newly-published card painting as free while the
             // lightweight content index is still refreshing.
@@ -362,11 +360,29 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               ? { ...(content as any), lockUntil: Number((content as any).lockUntil || 0), episodeLocks: (content as any).episodeLocks || {} }
               : release;
             const seriesLocked = isSeriesTimeLocked(lockSource as any);
-            const premiumOnly = seriesLocked || isTimeLockedTarget(lockSource as any, lockSeasonIdx, lockEpIdx);
+            // A card can combine several release rows (for example EP 1 and EP 2).
+            // Check every episode represented by the group. Checking only minEp
+            // made a newly locked EP 2 look free whenever EP 1 was grouped with it.
+            const lockedEpisodeNumbers = new Set<number>();
+            releaseGroup.forEach((groupRelease) => {
+              const groupSource = content
+                ? lockSource
+                : groupRelease;
+              const groupSeasonIdx = Math.max(0, (getSeason(groupRelease) ?? snNum ?? 1) - 1);
+              const start = getEpStart(groupRelease) ?? epNum ?? 1;
+              const end = Math.max(start, getEpEnd(groupRelease) ?? start);
+              for (let episodeNumber = start; episodeNumber <= end; episodeNumber += 1) {
+                if (isTimeLockedTarget(groupSource as any, groupSeasonIdx, Math.max(0, episodeNumber - 1))) {
+                  lockedEpisodeNumbers.add(episodeNumber);
+                }
+              }
+            });
+            const premiumOnly = seriesLocked || lockedEpisodeNumbers.size > 0;
             const lockedEpText = (() => {
               if (seriesLocked) return "Full Series";
-              const lo = minEp ?? epNum;
-              const hi = maxEp ?? epNum;
+              const locked = Array.from(lockedEpisodeNumbers).sort((a, b) => a - b);
+              const lo = locked[0];
+              const hi = locked[locked.length - 1];
               if (!hi) return "New Episode";
               return lo && hi && lo !== hi ? `Episode ${lo}-${hi}` : `Episode ${hi}`;
             })();

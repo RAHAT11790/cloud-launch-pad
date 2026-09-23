@@ -58,3 +58,5 @@
 - [x] Correct New Release premium state so only the actually locked episode/title gets a Golden card.
 - [x] Make current content lock state authoritative so stale release snapshots cannot show false Premium cards.
 - [ ] Verify the Golden card on the hosted Lovable Preview (blocked here by Lovable editor sign-in; mobile local Preview verified).
+- [x] Fix grouped New Release cards so any newly locked episode (not the oldest episode) activates the Golden card.
+- [ ] Verify the grouped Golden card on both the hosted Preview and published domain after publishing the current build.
