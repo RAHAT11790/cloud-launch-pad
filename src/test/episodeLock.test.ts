@@ -36,3 +36,25 @@ describe("timed Episode Lock", () => {
     expect(isTimeLockedTarget(movie, 0, 0)).toBe(true);
   });
 });
+
+describe("full series lock", () => {
+  it("blocks every episode when the series root lock is active", async () => {
+    const { isSeriesTimeLocked, isTimeLockedTarget, isPermanentLockValue, PERMANENT_LOCK_UNTIL } = await import("@/lib/contentGating");
+    const series: any = {
+      type: "webseries",
+      lockUntil: Date.now() + 86_400_000,
+      seasons: [{ name: "Season 1", episodes: [{ episodeNumber: 1 }, { episodeNumber: 2 }] }],
+    };
+    expect(isSeriesTimeLocked(series)).toBe(true);
+    expect(isTimeLockedTarget(series, 0, 0)).toBe(true);
+    expect(isTimeLockedTarget(series, 0, 1)).toBe(true);
+    expect(isSeriesTimeLocked({ ...series, lockUntil: Date.now() - 1000 })).toBe(false);
+    expect(isPermanentLockValue(PERMANENT_LOCK_UNTIL)).toBe(true);
+  });
+
+  it("treats a series lock carried on the card index as locked", async () => {
+    const { isTimeLockedTarget } = await import("@/lib/contentGating");
+    const card: any = { type: "webseries", episodeLocks: { series: Date.now() + 60_000 } };
+    expect(isTimeLockedTarget(card, 3, 7)).toBe(true);
+  });
+});
