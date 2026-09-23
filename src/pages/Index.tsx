@@ -539,7 +539,7 @@ import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
+import { buildEpisodeLockIndex, mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { isLegacyAnEntry } from "@/lib/legacyAn";
 import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
 import { usePremium } from "@/hooks/usePremium";
