@@ -344,6 +344,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               return snNum && snNum > 1 ? `S${snNum} · ${epStr}` : epStr;
             })();
 
+            // Timed Episode Lock — golden "Premium Only" treatment.
+            // The 60s tick re-renders this list, so the badge and its glow
+            // disappear by themselves the moment the lock window expires.
+            const lockSeasonIdx = snNum && snNum > 0 ? snNum - 1 : 0;
+            const lockEpIdx = Math.max(0, (minEp ?? epNum ?? 1) - 1);
+            const premiumOnly = !!content && isTimeLockedTarget(content as any, lockSeasonIdx, lockEpIdx);
+            const lockedEpText = (() => {
+              const lo = minEp ?? epNum;
+              const hi = maxEp ?? epNum;
+              if (!hi) return "New Episode";
+              return lo && hi && lo !== hi ? `Episode ${lo}-${hi}` : `Episode ${hi}`;
+            })();
+
             return (
               <div
                 key={release.id}
