@@ -6694,19 +6694,19 @@ ${tgBulkFooter}
   if (genres.length > 0) setTgGenres(genres.join(", "));
   if (rating) setTgRating(rating);
   } catch {}
- // Get quality info
- const quals: string[] = [];
-  let scannedEpisodes = 0;
-  ctxSeasons.some((s: any) => (s.episodes || []).some((ep: any) => {
-  scannedEpisodes += 1;
- if (ep.link480) quals.push("480p");
- if (ep.link720) quals.push("720p");
- if (ep.link1080) quals.push("1080p");
- if (ep.link4k) quals.push("4K");
-  return scannedEpisodes > 250 || new Set(quals).size >= 4;
-  }));
+ // Quality tracking — ONLY the episodes published in this release.
+ // Older episodes already had their own post, so their qualities must never
+ // leak into the new post. Output is always sorted 480p → 720p → 1080p → 4K.
+ const newEpisodesForQuality = rangesToPublish.flatMap((r) => {
+ const list = ctxSeasons[r.seasonIdxNum - 1]?.episodes || [];
+ return list.filter((ep: any) => {
+ const num = Number(ep?.episodeNumber || 0);
+ return num >= r.startEp && num <= r.endEp;
+ });
+ });
+ const quals = collectQualityLabels(newEpisodesForQuality.length ? newEpisodesForQuality : (episode ? [episode] : []));
   startTransition(() => {
-  if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
+  if (quals.length > 0) setTgQuality(quals.join(","));
   setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode))));
   setTgSelectedAnimeId(String(ctxSeriesId));
   });
