@@ -1139,13 +1139,21 @@ const Index = () => {
       lockMeta = { ...(anime || {}), ...(fullItem || {}), ...(anMeta || {}) };
     }
     if (lockMeta && (isSeriesLocked(lockMeta as any) || isEpisodeLocked(lockMeta as any, sIdx, eIdx)) && !userIsPremium) {
+      if (opts?.inPlayer) {
+        showPlayerPremiumLock(lockMeta || anime, sIdx, eIdx);
+        return false;
+      }
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
 
-    // Admin "Episode Lock" — premium-only until the chosen days pass.
-    // Guests never have premium, so they are blocked by the same rule.
+    // Admin "Episode Lock" / "Full series lock" — premium-only until the chosen
+    // days pass. Guests never have premium, so the same rule blocks them.
     if ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(lockMeta || anime, sIdx, eIdx)) {
+      if (opts?.inPlayer) {
+        showPlayerPremiumLock(lockMeta || anime, sIdx, eIdx);
+        return false;
+      }
       navigate(`/premium-required?from=${encodeURIComponent(anime?.id || "")}`);
       return false;
     }
