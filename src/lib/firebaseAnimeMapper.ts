@@ -54,6 +54,7 @@ const mapEpisode = (ep: any): Episode => ({
   link720: ep?.link720 || undefined,
   link1080: ep?.link1080 || undefined,
   link4k: ep?.link4k || undefined,
+  lockUntil: Number(ep?.lockUntil || 0) || undefined,
   subtitleTracks: mapSubtitleTracks(ep?.subtitleTracks),
   audioTracks: mapAudioTracks(ep?.audioTracks),
 });
@@ -69,6 +70,39 @@ const mapSeasons = (seasons: any): Season[] | undefined => {
     .filter((season) => season.name || season.episodes.length);
   return list.length ? list : undefined;
 };
+
+/**
+ * Timed locks must be enforceable from the lightweight home/card payload too,
+ * otherwise a free user taps a New Release card and playback starts before the
+ * full item (which carries per-episode `lockUntil`) has loaded.
+ */
+const buildEpisodeLockIndex = (item: any): Record<string, number> | undefined => {
+  const map: Record<string, number> = {};
+  const collectSeasons = (seasons: any) => {
+    values(seasons).forEach((season: any, sIdx: number) => {
+      values(season?.episodes)
+        .slice()
+        .sort((a: any, b: any) => (Number(a?.episodeNumber || 0)) - (Number(b?.episodeNumber || 0)))
+        .forEach((ep: any, eIdx: number) => {
+          const until = Number(ep?.lockUntil || 0) || 0;
+          if (until > Date.now()) map[`s${sIdx}e${eIdx}`] = until;
+        });
+    });
+  };
+  collectSeasons(item?.seasons);
+  collectSeasons(item?.customSeasons);
+  if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
+    Object.values(item.seasonsByLanguage).forEach((seasons) => collectSeasons(seasons));
+  }
+  values(item?.parts).forEach((part: any, idx: number) => {
+    const until = Number(part?.lockUntil || 0) || 0;
+    if (until > Date.now()) map[`p${idx}`] = until;
+  });
+  const movieUntil = Number(item?.lockUntil || 0) || 0;
+  if (movieUntil > Date.now()) map.movie = movieUntil;
+  return Object.keys(map).length ? map : undefined;
+};
+
 
 const countEpisodes = (seasons: any): number | undefined => {
   const total = values(seasons).reduce((sum, season: any) => sum + values(season?.episodes).length, 0);
