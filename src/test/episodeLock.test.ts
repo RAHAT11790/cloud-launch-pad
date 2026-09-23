@@ -31,6 +31,15 @@ describe("timed Episode Lock", () => {
     expect(index?.s0e0).toBeUndefined();
   });
 
+  it("indexes a non-sequential episode by both list position and episode number", () => {
+    const until = Date.now() + DAY;
+    const index = buildEpisodeLockIndex({
+      seasons: [{ episodes: [{ episodeNumber: 2, lockUntil: until }] }],
+    });
+    expect(index?.s0e0).toBe(until);
+    expect(index?.s0e1).toBe(until);
+  });
+
   it("locks movies via the movie key", () => {
     const movie: any = { id: "an_mv_x", type: "movie", episodeLocks: { movie: Date.now() + DAY } };
     expect(isTimeLockedTarget(movie, 0, 0)).toBe(true);

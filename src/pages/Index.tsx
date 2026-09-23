@@ -991,7 +991,7 @@ const Index = () => {
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-  const { isPremium: userIsPremium } = usePremium();
+  const { isPremium: userIsPremium, loaded: premiumLoaded } = usePremium();
 
   // Device limit enforcement for already logged-in users
   const [deviceLimitWarning, setDeviceLimitWarning] = useState<{
@@ -2347,7 +2347,9 @@ const Index = () => {
         return;
       }
     }
-    if (!freeAccessLoaded && isLoggedIn && !isAnimeSaltContentEarly) {
+    // Never begin playback while entitlement state is unresolved. Otherwise a
+    // free account can briefly enter a locked source during initial hydration.
+    if ((!premiumLoaded || !freeAccessLoaded) && isLoggedIn) {
       return;
     }
 
@@ -3003,8 +3005,8 @@ const Index = () => {
     number: ep.episodeNumber,
     title: ep.title,
     active: i === (playerState?.epIdx ?? 0),
-    locked: (!userIsPremium && isEpisodeTimeLocked(ep)) || (isGuestVisitor() && isGuestEpisodeBlocked(i)),
-    lockKind: (!userIsPremium && isEpisodeTimeLocked(ep)) ? "premium" as const : "login" as const,
+    locked: ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(playerState?.anime, playerState?.seasonIdx ?? 0, i)) || (isGuestVisitor() && isGuestEpisodeBlocked(i)),
+    lockKind: ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(playerState?.anime, playerState?.seasonIdx ?? 0, i)) ? "premium" as const : "login" as const,
     onClick: async () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];

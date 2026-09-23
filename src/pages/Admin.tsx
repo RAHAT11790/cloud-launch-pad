@@ -20,6 +20,7 @@ import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_I
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
+import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
 
 import {
  buildAdminContentIndexItem,
@@ -191,24 +192,6 @@ const normalizeTelegramBaseHashtags = (tags: string) => {
  return cleaned || DEFAULT_TG_HASHTAGS;
  };
 
-/**
- * Telegram post quality tracking.
- * Reads the qualities that ACTUALLY exist on the given episodes/parts only
- * (never the whole series) and always returns them low → high:
- * 480p → 720p → 1080p → 4K.
- */
-const TG_QUALITY_ORDER = ["480p", "720p", "1080p", "4K"] as const;
-const collectQualityLabels = (items: any[]): string[] => {
-  const found = new Set<string>();
-  const hasLink = (v: any) => typeof v === "string" && v.trim().length > 0;
-  (Array.isArray(items) ? items : []).forEach((item: any) => {
-    if (hasLink(item?.link480)) found.add("480p");
-    if (hasLink(item?.link720)) found.add("720p");
-    if (hasLink(item?.link1080)) found.add("1080p");
-    if (hasLink(item?.link4k)) found.add("4K");
-  });
-  return TG_QUALITY_ORDER.filter((q) => found.has(q));
-};
 const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_TG_BUTTON_TEXT)
  .replace(/𝐖𝐀𝐓𝐂𝐇\s*𝐀𝐍𝐃\s*𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃/g, "WATCH AND DOWNLOAD")
  .replace(/𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥(?:\s*𝐝𝐮𝐛)?|𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛|Official\s*Dub|Official/gi, TG_DUB_TAGS.official)
@@ -5322,7 +5305,7 @@ ${tgBulkFooter}
     return num >= startEp && num <= Math.max(startEp, endEp);
   })
   : epList.slice(-1);
-  qualities = collectQualityLabels(scoped);
+  qualities = collectTelegramEpisodeQualities(scoped);
   } else if (contentType === "movie") {
   const mv: any = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
   const partStart = Number(release.episodeInfo?.partStart || 0);
@@ -5335,8 +5318,8 @@ ${tgBulkFooter}
   })
   : [];
   qualities = scopedParts.length
-  ? collectQualityLabels(scopedParts)
-  : collectQualityLabels([{
+  ? collectTelegramEpisodeQualities(scopedParts)
+  : collectTelegramEpisodeQualities([{
     link480: mv?.link480 || mv?.movieLink480,
     link720: mv?.link720 || mv?.movieLink720,
     link1080: mv?.link1080 || mv?.movieLink1080,
@@ -6749,6 +6732,24 @@ ${tgBulkFooter}
  episodeNumberEnd: r.endEp,
  seasonName: r.seasonName,
  },
+  lockUntil: Number(ctxForm.lockUntil || 0) || 0,
+  episodeLocks: (() => {
+    const lockMap: Record<string, number> = {};
+    const seriesUntil = Number(ctxForm.lockUntil || 0) || 0;
+    if (seriesUntil > 0) lockMap.series = seriesUntil;
+    rangesToPublish.forEach((range) => {
+      const episodes = ctxSeasons[range.seasonIdxNum - 1]?.episodes || [];
+      episodes.forEach((item: any, episodeIndex: number) => {
+        const episodeNumber = Number(item?.episodeNumber || episodeIndex + 1);
+        const until = Number(item?.lockUntil || 0) || 0;
+        if (until > 0 && episodeNumber >= range.startEp && episodeNumber <= range.endEp) {
+          lockMap[`s${range.seasonIdxNum - 1}e${episodeIndex}`] = until;
+          lockMap[`s${range.seasonIdxNum - 1}e${Math.max(0, episodeNumber - 1)}`] = until;
+        }
+      });
+    });
+    return lockMap;
+  })(),
  timestamp: Date.now(),
  active: true,
  weeklyEnabled: ctxForm.weeklyEnabled === true,
@@ -6813,7 +6814,7 @@ ${tgBulkFooter}
  return num >= r.startEp && num <= r.endEp;
  });
  });
- const quals = collectQualityLabels(newEpisodesForQuality.length ? newEpisodesForQuality : (episode ? [episode] : []));
+ const quals = collectTelegramEpisodeQualities(newEpisodesForQuality.length ? newEpisodesForQuality : (episode ? [episode] : []));
   startTransition(() => {
   if (quals.length > 0) setTgQuality(quals.join(","));
   setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), getEpisodeIndexForShare(season, episode?.episodeNumber, parseInt(wsNotifyEpisode))));

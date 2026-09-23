@@ -61,7 +61,11 @@ const buildLockIndex = (item: any): Record<string, number> => {
         .sort((a: any, b: any) => Number(a?.episodeNumber || 0) - Number(b?.episodeNumber || 0))
         .forEach((ep: any, eIdx: number) => {
           const until = Number(ep?.lockUntil || 0) || 0;
-          if (until > now) map[`s${sIdx}e${eIdx}`] = until;
+          if (until > now) {
+            map[`s${sIdx}e${eIdx}`] = until;
+            const numberedIdx = Number(ep?.episodeNumber || 0) - 1;
+            if (numberedIdx >= 0) map[`s${sIdx}e${numberedIdx}`] = until;
+          }
         });
     });
   };
