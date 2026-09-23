@@ -2987,7 +2987,7 @@ const Index = () => {
     onClick: async () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
-      const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i);
+      const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i, { inPlayer: true });
       if (!hasAccess) return;
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
@@ -3036,7 +3036,7 @@ const Index = () => {
     const season = playerState.anime.seasons[newSeasonIdx];
     if (!season?.episodes?.length) return;
     const ep = season.episodes[0];
-      const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
+      const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0, { inPlayer: true });
     if (!hasAccess) return;
     let nextSrc = getEpisodeSrc(ep);
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
@@ -3517,7 +3517,7 @@ const Index = () => {
                   const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
-                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
+                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx, { inPlayer: true });
                   if (!hasAccess) return;
                   let nextSrc = getEpisodeSrc(nextEp);
                   let qOpts = getEpisodeQualityOptions(nextEp);
