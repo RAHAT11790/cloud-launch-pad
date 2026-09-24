@@ -141,8 +141,8 @@ export const isMovieContent = (anime: any): boolean =>
   anime?.type === "movie" || String(anime?.id || "").startsWith("an_mv_");
 
 /** Guests may only watch the first 3 episodes of any series (RS or AN). */
-export const isGuestEpisodeBlocked = (episodeIdx?: number | null): boolean =>
-  Math.max(0, Number(episodeIdx || 0)) >= GUEST_EPISODE_LIMIT;
+// Guest limits removed: guests can watch every episode like before.
+export const isGuestEpisodeBlocked = (_episodeIdx?: number | null): boolean => false;
 
 export const GUEST_EPISODE_MESSAGE = `Guests can watch only the first ${GUEST_EPISODE_LIMIT} episodes. Please log in to continue.`;
 export const GUEST_MOVIE_MESSAGE = "Movies are for logged-in members only. Please log in to watch.";
