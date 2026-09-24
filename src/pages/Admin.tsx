@@ -322,6 +322,21 @@ const filterAdminMovieList = (items: any[], query: string) => {
 
 const yieldAdminFrame = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
+// Keep existing New Release rows in sync with the latest lock state, so a
+// normal Save (without Notify) still turns the card golden / back to normal.
+const syncReleaseLockSnapshot = async (contentId: string, data: any) => {
+  if (!contentId) return;
+  try {
+    const snap = await get(query(ref(db, "newEpisodeReleases"), orderByChild("contentId"), equalTo(contentId)));
+    const rows = snap.val() || {};
+    const episodeLocks = buildEpisodeLockIndex({ ...data, id: contentId });
+    await Promise.all(Object.keys(rows).map((key) => update(ref(db, `newEpisodeReleases/${key}`), {
+      lockUntil: Number(data?.lockUntil || 0) || 0,
+      episodeLocks,
+    })));
+  } catch {}
+};
+
 const AdminSectionLoader = ({ label }: { label: string }) => (
  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-zinc-400">
   <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-purple-400" />
@@ -3582,6 +3597,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    await set(saveRef, data);
    upsertAdminContentListItem("webseries", newId, data);
    await upsertAdminContentIndex("webseries", newId, data).catch(() => {});
+   void syncReleaseLockSnapshot(newId, data);
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
   startTransition(() => { setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list"); setEpisodeRenderLimits({}); });
@@ -3786,6 +3802,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   await set(saveRef, data);
   upsertAdminContentListItem("movies", newMovieId, data);
   await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
+  void syncReleaseLockSnapshot(newMovieId, data);
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
   startTransition(() => { setMovieForm(null); setMovieCast([]); setMvPartsData([]); mvPartsBaselineRef.current = new Set(); setMovieEditId(""); setMoviesTab("mv-list"); });
   return newMovieId;
