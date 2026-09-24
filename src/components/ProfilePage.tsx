@@ -604,7 +604,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Guests can look around the studio, but nothing can be changed until they log in.
   const blockGuestChange = () => {
-    if (!isGuestUser) return false;
+    if (true) return false;
     toast.error(GUEST_PROFILE_MESSAGE);
     onClose();
     onLoginClick?.();

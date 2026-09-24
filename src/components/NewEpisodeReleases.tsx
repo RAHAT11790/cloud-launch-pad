@@ -94,6 +94,25 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return map;
   }, [allAnime]);
 
+  // Live lock data straight from the admin index — authoritative for the
+  // golden card, independent of cached home payloads that may lack locks.
+  const [liveLocks, setLiveLocks] = useState<Record<string, { lockUntil: number; episodeLocks: Record<string, number> }>>({});
+  useEffect(() => {
+    const merge = (kind: string) => onValue(ref(db, `adminContentIndex/${kind}`), (snap) => {
+      const val = snap.val() || {};
+      setLiveLocks((prev) => {
+        const next = { ...prev };
+        Object.entries(val).forEach(([id, item]: [string, any]) => {
+          next[id] = { lockUntil: Number(item?.lockUntil || 0), episodeLocks: item?.episodeLocks || {} };
+        });
+        return next;
+      });
+    });
+    const u1 = merge("webseries");
+    const u2 = merge("movies");
+    return () => { u1(); u2(); };
+  }, []);
+
   // Filter active releases within 36h - only RS Anime content (no AnimeSalt).
   // Fresh releases can arrive before the home index refreshes, so don't hide or
   // block a card just because allAnime does not contain it yet.
@@ -356,16 +375,20 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             // Once live content is available it is authoritative. Never merge an
             // old release snapshot into it: an admin may unlock the title after
             // publishing, and stale release keys must not keep a false gold card.
-            const lockSource = content
-              ? { ...(content as any), lockUntil: Number((content as any).lockUntil || 0), episodeLocks: (content as any).episodeLocks || {} }
-              : release;
+            const live = liveLocks[release.contentId];
+            const baseSource: any = content || release;
+            const lockSource = live
+              ? { ...baseSource, lockUntil: live.lockUntil, episodeLocks: live.episodeLocks }
+              : content
+                ? { ...(content as any), lockUntil: Number((content as any).lockUntil || 0), episodeLocks: (content as any).episodeLocks || {} }
+                : release;
             const seriesLocked = isSeriesTimeLocked(lockSource as any);
             // A card can combine several release rows (for example EP 1 and EP 2).
             // Check every episode represented by the group. Checking only minEp
             // made a newly locked EP 2 look free whenever EP 1 was grouped with it.
             const lockedEpisodeNumbers = new Set<number>();
             releaseGroup.forEach((groupRelease) => {
-              const groupSource = content
+              const groupSource = (live || content)
                 ? lockSource
                 : groupRelease;
               const groupSeasonIdx = Math.max(0, (getSeason(groupRelease) ?? snNum ?? 1) - 1);
