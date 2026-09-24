@@ -327,8 +327,10 @@ const yieldAdminFrame = () => new Promise<void>((resolve) => window.setTimeout(r
 const syncReleaseLockSnapshot = async (contentId: string, data: any) => {
   if (!contentId) return;
   try {
-    const snap = await get(query(ref(db, "newEpisodeReleases"), orderByChild("contentId"), equalTo(contentId)));
-    const rows = snap.val() || {};
+    const snap = await get(query(ref(db, "newEpisodeReleases"), limitToLast(300)));
+    const all = snap.val() || {};
+    const rows: Record<string, any> = {};
+    Object.entries(all).forEach(([k, v]: [string, any]) => { if (v?.contentId === contentId) rows[k] = v; });
     const episodeLocks = buildEpisodeLockIndex({ ...data, id: contentId });
     await Promise.all(Object.keys(rows).map((key) => update(ref(db, `newEpisodeReleases/${key}`), {
       lockUntil: Number(data?.lockUntil || 0) || 0,
