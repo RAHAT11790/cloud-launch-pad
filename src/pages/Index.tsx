@@ -1178,7 +1178,7 @@ const Index = () => {
 
 
     // Guest restrictions — movies are members-only, episodes capped at 3.
-    if (isGuestVisitor()) {
+    if (false as boolean) {
       if (isMovieContent(anime)) {
         toast.error(GUEST_MOVIE_MESSAGE);
         setShowLogin(true);
@@ -2336,7 +2336,7 @@ const Index = () => {
     }
 
     // Guest restrictions — movies members-only, episodes capped at 3.
-    if (isGuestVisitor()) {
+    if (false as boolean) {
       if (isMovieContent(anime)) {
         toast.error(GUEST_MOVIE_MESSAGE);
         setShowLogin(true);
