@@ -20,6 +20,7 @@ import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
 import animeSearchBotSrc from "../../cloudflare-workers/anime-search-bot.js?raw";
 import adShieldSrc from "../../cloudflare-workers/ad-shield.js?raw";
+import secureGatewaySrc from "../../cloudflare-workers/rs-secure-gateway.js?raw";
 import httpsProtectionSrc from "../../cloudflare-workers/https-protection.js?raw";
 
 
@@ -60,6 +61,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("rs-secure-gateway", "Secure Admin Gateway", "🛡️ ADMIN GATEWAY — admin writes to Firebase only after login + admin email + PIN check (server-side), rate-limited, audit-logged to securityLogs/adminWrites. Required before locking Firebase rules.", secureGatewaySrc, ['FIREBASE_SERVICE_ACCOUNT_KEY', 'FIREBASE_API_KEY', 'FIREBASE_DB_URL', 'ADMIN_EMAILS', 'ADMIN_PIN', 'ALLOWED_ORIGINS'], { isNew: true, badgeText: "SECURITY · NEW", badgeTone: "amber" }),
   entry("https-protection", "HTTPS Protection", "🔐 Encrypted one-viewer play links for HTTPS servers — hides the real server domain, blocks other websites, IP-bound, auto-expiring. Secret: PROTECT_KEY (any long random text). Paste the Worker URL into Video Servers → HTTPS Protection.", httpsProtectionSrc, ["PROTECT_KEY"], { isNew: true, badgeText: "SECURITY · NEW", badgeTone: "amber" }),
   entry("video-proxy",     "Video Proxy",     "⚡ v9 CLOUDFLARE-NATIVE FAST PATH — https ranges pass through untouched (no extra edge hop on seek), only http mirrors are windowed (8MB), CF edge cache for segments, same-origin-Referer-first + 7s header timeout so dead mirrors fail over instantly. Tuned ONLY for Cloudflare — do not mirror the Supabase build here.", videoProxySrc, [], { isNew: true, badgeText: "v9 · CF", badgeTone: "amber" }),
 

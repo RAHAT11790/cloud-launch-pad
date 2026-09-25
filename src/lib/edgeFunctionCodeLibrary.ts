@@ -26,7 +26,8 @@ import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw"
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 import iosProtectionSource from "../../supabase/functions/ios-protection/index.ts?raw";
 import adShieldSource from "../../supabase/functions/ad-shield/index.ts?raw";
-import httpsProtectionSource from "../../supabase/functions/https-protection/index.ts?raw";
+import secureGatewaySource from "../../self-hosted/supabase/rs-secure-gateway/index.ts?raw";
+import httpsProtectionSource from "../../self-hosted/supabase/https-protection/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
@@ -89,6 +90,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
+  entry("rs-secure-gateway", "Secure Admin Gateway", "🛡️ ADMIN GATEWAY — admin writes to Firebase only after login + admin email + PIN check (server-side), rate-limited, audit-logged to securityLogs/adminWrites. Required before locking Firebase rules.", secureGatewaySource, ['FIREBASE_SERVICE_ACCOUNT_KEY', 'FIREBASE_API_KEY', 'FIREBASE_DB_URL', 'ADMIN_EMAILS', 'ADMIN_PIN', 'ALLOWED_ORIGINS'], { isNew: true, badgeText: "SECURITY · NEW", badgeTone: "amber" }),
   entry("https-protection", "HTTPS Protection", "🔐 Hides your HTTPS video servers: every Play creates an encrypted, viewer-bound, short-lived link. Real server URL/domain is never shown, links refuse to play on other websites or for other viewers, and expire automatically. Paste the URL into Video Servers → HTTPS Protection.", httpsProtectionSource, ["PROTECT_KEY"], { isNew: true, badgeText: "SECURITY · NEW", badgeTone: "amber" }),
   entry("video-proxy",    "Video Proxy",    "⚡ v9 ADAPTIVE-WINDOW BUILD (Supabase/Deno) — 1MB first window for instant start, 6MB steady (12MB on https), 7s header timeout, same-origin-Referer-first so HTTP mirrors answer on the first try. Fixes 'proxy down / video never loads'. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
   entry("ad-shield",      "Ad Shield",      "🛡️ ANTI-ADBLOCK GATEWAY — first-party relay for every ad script/asset (/s, /t), unblockable control probe (/probe, /px) and edge-side reachability oracle (/check) that exposes AdGuard DNS / NextDNS / Pi-hole / Brave / AdBlock browsers. The home-page Ad-Blocker Gate uses this to prove a block instead of guessing. Attach the URL here and the whole anti-adblock system switches on.", adShieldSource, [], { isNew: true, badgeText: "AD SHIELD · NEW", badgeTone: "amber" }),
