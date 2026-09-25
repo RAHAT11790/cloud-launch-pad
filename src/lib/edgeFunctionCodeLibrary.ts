@@ -26,8 +26,8 @@ import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw"
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 import iosProtectionSource from "../../supabase/functions/ios-protection/index.ts?raw";
 import adShieldSource from "../../supabase/functions/ad-shield/index.ts?raw";
-import secureGatewaySource from "../../supabase/functions/rs-secure-gateway/index.ts?raw";
-import httpsProtectionSource from "../../supabase/functions/https-protection/index.ts?raw";
+import secureGatewaySource from "../../self-hosted/supabase/rs-secure-gateway/index.ts?raw";
+import httpsProtectionSource from "../../self-hosted/supabase/https-protection/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
