@@ -16,7 +16,8 @@
 // bound to the viewer's IP, expires after LINK_TTL_SEC, and refuses to play
 // when embedded on a foreign website (Referer / Origin check).
 //
-// Secrets:  SIGNING_SECRET   (required — any long random string)
+// Deploy to YOUR OWN Supabase project (EGD Manager) — not Lovable Cloud.
+// Secrets:  PROTECT_KEY      (required — any long random string)
 // Optional: ALLOWED_ORIGINS  comma list, e.g. "https://rsanime03.lovable.app"
 //           ALLOWED_HOSTS    comma list of your video server hosts (sign allow-list)
 //           LINK_TTL_SEC     default 14400 (4h)
@@ -168,7 +169,7 @@ async function handle(req: Request, env: any) {
 }
 
 const envObj = () => ({
-  PROTECT_KEY: Deno.env.get("SIGNING_SECRET"),
+  PROTECT_KEY: Deno.env.get("PROTECT_KEY") || Deno.env.get("SIGNING_SECRET"),
   ALLOWED_ORIGINS: Deno.env.get("ALLOWED_ORIGINS") || "",
   ALLOWED_HOSTS: Deno.env.get("ALLOWED_HOSTS") || "",
   LINK_TTL_SEC: Deno.env.get("LINK_TTL_SEC") || "14400",
