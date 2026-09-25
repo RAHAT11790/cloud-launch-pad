@@ -60,3 +60,12 @@
 - [ ] Verify the Golden card on the hosted Lovable Preview (blocked here by Lovable editor sign-in; mobile local Preview verified).
 - [x] Fix grouped New Release cards so any newly locked episode (not the oldest episode) activates the Golden card.
 - [ ] Verify the grouped Golden card on both the hosted Preview and published domain after publishing the current build.
+
+## Security Day (2026-09-25)
+- [x] HTTPS Protection gateway (Lovable Cloud + Cloudflare), in both code managers, per-server field in Video Servers, player wiring. Live-tested: own site 206, foreign site 403, foreign signing 403, tampered 403, real domain not in link.
+- [x] Firebase rules phase-1 draft (security/firebase-rules.phase1.draft.json).
+- [ ] Move OTP / password reset / redeem / unlock / bKash / coin + premium writes to backend functions (needed before rules go live).
+- [ ] Admin Gateway: admin writes via backend with login + PIN check.
+- [ ] Move video links out of public catalog into a private node resolved server-side.
+- [ ] Owner applies rules in Firebase Console, then live test all flows + Android app.
+- [ ] Remove hardcoded PIN/owner data from client, security headers, security scan fixes.

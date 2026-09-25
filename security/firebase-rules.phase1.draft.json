@@ -1,0 +1,37 @@
+{
+  "//": "DRAFT — phase 1 of the Security Day plan. Do NOT paste into Firebase yet: OTP, redeem, unlock and bKash flows must move to the backend first.",
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "webseries":          { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "movies":             { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "categories":         { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "newEpisodeReleases": { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "adminContentIndex":  { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "weeklySchedule":     { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "liveTvChannels":     { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "liveTvCategories":   { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "maintenance":        { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "settings":           { ".read": true, ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "coins":   { ".write": false },
+        "premium": { ".write": false }
+      }
+    },
+    "comments": { ".read": true, "$c": { ".write": "auth != null" } },
+
+    "adminAccess":   { ".read": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')", ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "egdManager":    { ".read": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')", ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "cfManager":     { ".read": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')", ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "bkashSettings": { ".read": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')", ".write": "auth != null && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')" },
+    "otpCodes":       { ".read": false, ".write": false },
+    "passwordResets": { ".read": false, ".write": false },
+    "redeemCodes":    { ".read": false, ".write": false },
+    "unlockTokens":   { ".read": false, ".write": false }
+  }
+}
