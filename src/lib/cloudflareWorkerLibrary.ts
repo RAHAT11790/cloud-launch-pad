@@ -20,6 +20,7 @@ import anPlaybackSrc    from "../../cloudflare-workers/an-playback.js?raw";
 import verifyAdminPinSrc from "../../cloudflare-workers/verify-admin-pin.js?raw";
 import animeSearchBotSrc from "../../cloudflare-workers/anime-search-bot.js?raw";
 import adShieldSrc from "../../cloudflare-workers/ad-shield.js?raw";
+import httpsProtectionSrc from "../../cloudflare-workers/https-protection.js?raw";
 
 
 export type CfLibraryEntry = {
@@ -59,6 +60,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("https-protection", "HTTPS Protection", "🔐 Encrypted one-viewer play links for HTTPS servers — hides the real server domain, blocks other websites, IP-bound, auto-expiring. Secret: PROTECT_KEY (any long random text). Paste the Worker URL into Video Servers → HTTPS Protection.", httpsProtectionSrc, ["PROTECT_KEY"], { isNew: true, badgeText: "SECURITY · NEW", badgeTone: "amber" }),
   entry("video-proxy",     "Video Proxy",     "⚡ v9 CLOUDFLARE-NATIVE FAST PATH — https ranges pass through untouched (no extra edge hop on seek), only http mirrors are windowed (8MB), CF edge cache for segments, same-origin-Referer-first + 7s header timeout so dead mirrors fail over instantly. Tuned ONLY for Cloudflare — do not mirror the Supabase build here.", videoProxySrc, [], { isNew: true, badgeText: "v9 · CF", badgeTone: "amber" }),
 
   entry("ad-shield",       "Ad Shield",       "🛡️ ANTI-ADBLOCK GATEWAY (Cloudflare build) — relays ad scripts/assets through YOUR worker domain (/s, /t) so DNS blockers and filter lists have nothing to match, plus /probe, /px and the /check reachability oracle used by the home-page Ad-Blocker Gate. Deploy and paste the URL into EGD Router → ad-shield.", adShieldSrc, [], { isNew: true, badgeText: "AD SHIELD · NEW", badgeTone: "amber" }),
