@@ -44,6 +44,8 @@ interface VideoServerOption {
   domain: string;
   /** Per-server proxy. Empty => this server plays direct (HTTPS servers). */
   proxy?: string;
+  /** HTTPS Protection gateway. Set => real url hidden, encrypted play links only. */
+  protect?: string;
   locked?: boolean;
 }
 
