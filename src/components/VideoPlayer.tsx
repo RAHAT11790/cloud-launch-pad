@@ -52,6 +52,7 @@ import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, n
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
+import { getProtectedUrlSync, prefetchProtectedUrls, expandAcrossServers } from "@/lib/httpsProtection";
 import { wrapWithIosProtection } from "@/lib/iosProtection";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,6 +127,7 @@ const normalizeVideoServersValue = (val: unknown): VideoServerOption[] => {
     name: String(server.name || "").trim(),
     domain: String(server.domain || "").trim(),
     proxy: String((server as any).proxy || "").trim(),
+    protect: String((server as any).protect || "").trim(),
     locked: !!server.locked,
   })).filter((server) => !!server.domain);
 };
@@ -216,6 +218,14 @@ const isBypassSource = (url: string): boolean => {
 
   if (isBypassSource(url)) {
     addCandidate(url);
+    return candidates;
+  }
+
+  // HTTPS PROTECTION: protected servers only ever play their encrypted,
+  // viewer-bound link. Never the real url (not signed yet → no candidate).
+  const protectedLink = getProtectedUrlSync(url);
+  if (protectedLink !== null) {
+    if (protectedLink) addCandidate(protectedLink);
     return candidates;
   }
 
@@ -755,6 +765,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const finalUrl = resolveServerProxyForUrl(src || "");
       setProxyUrl(finalUrl);
       setProxyApiKey('');
+      const protectTargets = expandAcrossServers([src || "", ...((qualityOptions || []) as any[]).map((q: any) => String(q?.src || ""))]);
+      if (protectTargets.some((u) => getProtectedUrlSync(u) !== null)) {
+        void prefetchProtectedUrls(protectTargets).finally(() => { if (!cancelled) setPlaybackRouteReady(true); });
+        return;
+      }
       setPlaybackRouteReady(true);
       try {
         if (finalUrl) localStorage.setItem(VIDEO_PROXY_CACHE_KEY, finalUrl);
