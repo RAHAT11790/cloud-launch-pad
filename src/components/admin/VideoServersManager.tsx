@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-type Server = { name: string; domain: string; proxy?: string; locked?: boolean };
+type Server = { name: string; domain: string; proxy?: string; protect?: string; locked?: boolean };
 
 interface Props {
   glassCard: string;
@@ -39,6 +39,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [editName, setEditName] = useState("");
   const [editDomain, setEditDomain] = useState("");
   const [editProxy, setEditProxy] = useState("");
+  const [editProtect, setEditProtect] = useState("");
 
   // Track whether user is mid-edit / mid-typing so Firebase snapshots
   // don't yank the panel out from under them (this is what caused the
@@ -131,6 +132,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setEditName(srv.name || "");
     setEditDomain(srv.domain || "");
     setEditProxy(srv.proxy || "");
+    setEditProtect(srv.protect || "");
   };
 
   const cancelEdit = () => {
@@ -138,6 +140,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setEditName("");
     setEditDomain("");
     setEditProxy("");
+    setEditProtect("");
   };
 
   const saveEdit = () => {
@@ -153,6 +156,7 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
       name: editName.trim() || `Server ${editIdx + 1}`,
       domain,
       proxy: editProxy.trim(),
+      protect: editProtect.trim(),
     };
     saveServers(updated);
     cancelEdit();
@@ -219,6 +223,15 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
                       <p className="text-[10px] text-zinc-500 -mt-1">
                         Leave empty for HTTPS servers. This server will play ONLY through this proxy.
                       </p>
+                      <input
+                        value={editProtect}
+                        onChange={(e) => setEditProtect(e.target.value)}
+                        className={inputClass}
+                        placeholder="HTTPS Protection URL (optional, for https:// servers)"
+                      />
+                      <p className="text-[10px] text-zinc-500 -mt-1">
+                        When set, this server's real address is hidden and every viewer gets an encrypted, expiring play link.
+                      </p>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={saveEdit}
@@ -256,6 +269,9 @@ const VideoServersManager = ({ glassCard, inputClass, btnPrimary }: Props) => {
                         <span className={`text-[9.5px] block truncate ${srv.proxy ? "text-emerald-400" : "text-zinc-600"}`}>
                           {srv.proxy ? `proxy: ${srv.proxy}` : "proxy: direct (none)"}
                         </span>
+                        {srv.protect && (
+                          <span className="text-[9.5px] block truncate text-amber-400">🔐 HTTPS Protection on</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <button
