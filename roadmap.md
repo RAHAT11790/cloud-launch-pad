@@ -64,6 +64,9 @@
 ## Security Day (2026-09-25)
 - [x] HTTPS Protection gateway (Lovable Cloud + Cloudflare), in both code managers, per-server field in Video Servers, player wiring. Live-tested: own site 206, foreign site 403, foreign signing 403, tampered 403, real domain not in link.
 - [x] Firebase rules phase-1 draft (security/firebase-rules.phase1.draft.json).
+- [x] HTTPS Protection deployed to owner's own Supabase via EGD deployer; curl live test: own 206, foreign 403, foreign sign 403, tampered 403.
+- [ ] Deploy rs-secure-gateway (blocked: owner must supply FIREBASE_SERVICE_ACCOUNT_KEY, FIREBASE_API_KEY, ADMIN_PIN).
+- [ ] Lock EGD deployer (currently accepts deploy requests from anyone).
 - [ ] Move OTP / password reset / redeem / unlock / bKash / coin + premium writes to backend functions (needed before rules go live).
 - [ ] Admin Gateway: admin writes via backend with login + PIN check.
 - [ ] Move video links out of public catalog into a private node resolved server-side.
