@@ -15,7 +15,6 @@ export interface ProxyServerEntry {
   name?: string;
   domain: string;
   proxy?: string;
-  protect?: string;
   locked?: boolean;
 }
 
@@ -41,7 +40,6 @@ export const normalizeProxyServers = (val: unknown): ProxyServerEntry[] => {
       name: String(s.name || "").trim(),
       domain: String(s.domain || "").trim(),
       proxy: String(s.proxy || "").trim(),
-      protect: String(s.protect || "").trim(),
       locked: !!s.locked,
     }))
     .filter((s) => !!s.domain);
