@@ -3260,6 +3260,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // episode.audioTracks, so relying on propAudioTracks hid the button on the
   // initial Hindi source.
   useEffect(() => {
+    // The in-browser MKV engine owns the list while it is driving playback:
+    // its embedded tracks ARE the languages of this exact file.
+    if (mkvAudioReady && mkvAudioOptionsRef.current.length > 1) {
+      setAudioTrackOptions(mkvAudioOptionsRef.current);
+      return;
+    }
     const tracks: AudioTrackOption[] = normalizedLanguageTracks.map((track) => ({
       language: track.language,
       label: track.label,
