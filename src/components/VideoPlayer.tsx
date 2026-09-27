@@ -3435,6 +3435,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const selectAudioTrack = useCallback((track: AudioTrackOption) => {
     const label = track.label || track.language || "";
+    // Embedded MKV audio always switches inside the current file.
+    if (track.mkvTrackNumber !== undefined) {
+      switchAudioTrack(track);
+      return;
+    }
     // RS language variants are complete episode sources. Let the parent resolve
     // the matching seasons/episode while VideoPlayer remains mounted; this keeps
     // the selected server index and avoids treating a language as a server swap.
