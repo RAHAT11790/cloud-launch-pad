@@ -4195,6 +4195,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch { return false; }
     };
     const onError = () => {
+      // MKV engine owns this element; it reports its own failures and falls
+      // back to native playback. Reloading v.src here would kill the engine.
+      if (mkvOwnsRef.current) return;
       const errSrc = currentSrc;
       const savedTimeForRetry = preserveResumePoint(lastKnownTime || v?.currentTime || 0);
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
