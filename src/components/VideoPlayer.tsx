@@ -2224,7 +2224,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (v) {
       try {
         v.pause();
-        if (v.src !== resolved) v.src = resolved;
+        // While the MKV engine drives <video> via MediaSource, never overwrite
+        // the blob source here — the engine re-attaches on the new source.
+        if (!mkvOwnsRef.current && v.src !== resolved) v.src = resolved;
         v.load();
         if (savedTime > 0) {
           const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
