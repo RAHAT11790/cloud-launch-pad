@@ -2259,6 +2259,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    // MKV engine playback recovers itself (and falls back to native on failure).
+    if (mkvOwnsRef.current) return false;
     if (isAnimeSaltContent) {
       // Do NOT immediately show "Link expired" on AN — the synthetic HLS master
       // with separate audio/video playlists can throw transient network errors
