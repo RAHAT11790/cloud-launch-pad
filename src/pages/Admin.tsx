@@ -1,3 +1,4 @@
+import LinkSourceSwitch from "@/components/admin/LinkSourceSwitch";
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
@@ -7408,7 +7409,8 @@ ${tgBulkFooter}
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
            className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
        </div>
-       <div className="space-y-2">
+        <LinkSourceSwitch link={p.link || ""} onAbyssLinkChange={v => updateMoviePartField(pIdx, "link", v)}>
+        <div className="space-y-2">
          <div>
            <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default link <span className="text-purple-500">*</span></span>
            <textarea value={p.link || ""} onChange={e => updateMoviePartField(pIdx, "link", e.target.value)}
@@ -7424,7 +7426,8 @@ ${tgBulkFooter}
                placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
            </div>
          ))}
-       </div>
+        </div>
+        </LinkSourceSwitch>
       </div>
     );
     })}
@@ -12812,6 +12815,7 @@ const SortableSeasonItem = memo(({
 
 
                       {isAnSeries ? (
+                        <LinkSourceSwitch link={ep.link ?? ""} onAbyssLinkChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", v, baseLanguage)}>
                         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
                           <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
                           <div className="mt-2 space-y-2.5">
@@ -12831,7 +12835,9 @@ const SortableSeasonItem = memo(({
                             ))}
                           </div>
                         </div>
+                        </LinkSourceSwitch>
                       ) : (
+                        <LinkSourceSwitch link={currentLanguageFields.link || ""} onAbyssLinkChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", v, selectedAdminLanguage)}>
                         <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
                           <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
                           <div className="mt-2 space-y-2.5">
@@ -12849,6 +12855,7 @@ const SortableSeasonItem = memo(({
                             ))}
                           </div>
                         </div>
+                        </LinkSourceSwitch>
                       )}
 
                       {isAnSeries && (

@@ -48,6 +48,7 @@ interface VideoServerOption {
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { getAbyssSlug, resolveAbyss, type AbyssResolved } from "@/lib/abyss";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
@@ -6756,4 +6757,45 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   );
 };
 
-export default memo(VideoPlayer);
+const MemoVideoPlayer = memo(VideoPlayer);
+
+// Abyss links resolve to direct MP4 qualities first, then play in OUR player.
+const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
+  const abyssSlug = getAbyssSlug(props.src);
+  const [resolved, setResolved] = useState<AbyssResolved | null>(null);
+  useEffect(() => {
+    if (!abyssSlug) { setResolved(null); return; }
+    let alive = true;
+    setResolved(null);
+    resolveAbyss(props.src).then((r) => { if (alive) setResolved(r); });
+    return () => { alive = false; };
+  }, [abyssSlug, props.src]);
+
+  if (!abyssSlug) return <MemoVideoPlayer {...props} />;
+  if (!resolved) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 bg-background" role="status" aria-label="Loading video">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/25 border-t-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Preparing video…</p>
+        <button onClick={props.onClose} className="mt-2 rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Close</button>
+      </div>
+    );
+  }
+  if (!resolved.ok) {
+    return <MemoVideoPlayer {...props} src={resolved.embed} forceEmbedMode noProxy noServerSwitch hideDownload />;
+  }
+  const sorted = [...resolved.sources].sort((a, b) => parseInt(b.label) - parseInt(a.label));
+  const preferred = sorted.find((s) => s.label === "720p") || sorted[0];
+  return (
+    <MemoVideoPlayer
+      {...props}
+      src={preferred.url}
+      qualityOptions={sorted.map((s) => ({ label: s.label, src: s.url }))}
+      noProxy
+      noServerSwitch
+      forceEmbedMode={false}
+    />
+  );
+};
+
+export default AbyssAwareVideoPlayer;
