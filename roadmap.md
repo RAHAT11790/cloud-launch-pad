@@ -60,3 +60,9 @@
 - [ ] Verify the Golden card on the hosted Lovable Preview (blocked here by Lovable editor sign-in; mobile local Preview verified).
 - [x] Fix grouped New Release cards so any newly locked episode (not the oldest episode) activates the Golden card.
 - [ ] Verify the grouped Golden card on both the hosted Preview and published domain after publishing the current build.
+
+## MKV multi-audio player (2026-09-27)
+- [x] In-browser MKV demux + fMP4 remux engine (video + selected audio + embedded subtitles).
+- [x] Player audio menu lists every embedded language; switching keeps the position.
+- [x] Automatic fallback to native playback for single-audio / unsupported-codec files.
+- [ ] Confirm on a real phone/desktop Chrome that the language switch plays (sandbox Chromium has no H.264 decoder).
