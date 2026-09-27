@@ -3321,6 +3321,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     if (!v) return;
     const detectNativeTracks = () => {
+      if (mkvOwnsRef.current) return; // MKV engine already published the real tracks
       const audioTracks = (v as any).audioTracks;
       if (audioTracks && audioTracks.length > 1) {
         const nativeTracks: AudioTrackOption[] = [];
