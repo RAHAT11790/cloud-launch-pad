@@ -57,6 +57,7 @@ import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/li
 import { supabase } from "@/integrations/supabase/client";
 import { applyImmersive, lockLandscape, nativeSystemAvailable, setSystemBrightness, setSystemVolume, unlockOrientation } from "@/lib/nativeSystem";
 import { isNativeApp } from "@/lib/nativeRuntime";
+import { canRunMkvEngine, isLikelyMatroskaUrl, MkvMultiAudioEngine, type MkvTrackInfo } from "@/lib/mkv/mkvMultiAudio";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -302,6 +303,7 @@ interface AudioTrackOption {
   src4k?: string;
   nativeIndex?: number; // If set, switch native audio track
   hlsAudioIndex?: number; // If set, switch hls.js audio track
+  mkvTrackNumber?: number; // If set, switch track inside the in-browser MKV engine
 }
 
 interface HlsSubtitleOption {
@@ -2467,6 +2469,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
 
+  // ===== In-browser MKV engine (multi audio) =====
+  // Matroska files carry Hindi/English/Japanese audio in ONE file, but the
+  // browser only decodes the first track. When a .mkv source really has more
+  // than one supported audio track we take over playback through MSE so the
+  // languages become switchable; anything else keeps native playback.
+  const MKV_SUBTITLE_ID_BASE = 90000;
+  const mkvEngineRef = useRef<MkvMultiAudioEngine | null>(null);
+  const mkvOwnsRef = useRef(false);
+  const mkvAudioOptionsRef = useRef<AudioTrackOption[]>([]);
+  const mkvSubtitleCuesRef = useRef<Map<number, Array<{ start: number; end: number; text: string }>>>(new Map());
+  const [mkvAudioReady, setMkvAudioReady] = useState(false);
+  const [mkvDisabledSrc, setMkvDisabledSrc] = useState("");
+  const [currentMkvAudio, setCurrentMkvAudio] = useState(-1);
+  const mkvCandidateSrc = useMemo(() => {
+    if (!currentSrc || isHlsSrc || isEmbedPlayback) return "";
+    if (!isLikelyMatroskaUrl(currentSrc) || !canRunMkvEngine()) return "";
+    return currentSrc;
+  }, [currentSrc, isEmbedPlayback, isHlsSrc]);
+  const mkvEngineOwnsVideo = !!mkvCandidateSrc && mkvDisabledSrc !== mkvCandidateSrc;
+  mkvOwnsRef.current = mkvEngineOwnsVideo;
+
   const externalSubtitleOptions = useMemo<HlsSubtitleOption[]>(() => {
     return (propSubtitleTracks || [])
       .map((track, index) => ({
@@ -3068,6 +3091,115 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [currentSrc, isHlsSrc, isEmbedPlayback, buildReliableHlsSource, preserveResumePoint]);
 
+
+  // ===== MKV engine attachment =====
+  // Probe the .mkv header first. Only when it really exposes 2+ playable audio
+  // tracks do we hand playback to the engine; single-audio files, unsupported
+  // codecs (AC3/DTS) or any read failure fall straight back to <video src>.
+  useEffect(() => {
+    const v = videoRef.current;
+    mkvAudioOptionsRef.current = [];
+    mkvSubtitleCuesRef.current = new Map();
+    setMkvAudioReady(false);
+    setCurrentMkvAudio(-1);
+    if (mkvEngineRef.current) {
+      try { mkvEngineRef.current.destroy(); } catch { /* ignore */ }
+      mkvEngineRef.current = null;
+    }
+    if (!v || !mkvCandidateSrc || mkvDisabledSrc === mkvCandidateSrc) return;
+
+    let cancelled = false;
+    const resumeAt = Math.max(0, Number(pendingSeek.current || 0), lastPlaybackPositionRef.current || 0);
+    const giveUp = (reason: string) => {
+      if (cancelled) return;
+      console.log("[mkv] falling back to native playback:", reason);
+      setMkvAudioReady(false);
+      setMkvDisabledSrc(mkvCandidateSrc);
+      try { mkvEngineRef.current?.destroy(); } catch { /* ignore */ }
+      mkvEngineRef.current = null;
+      const target = videoRef.current;
+      if (target) {
+        try {
+          const keep = target.currentTime || resumeAt;
+          target.src = mkvCandidateSrc;
+          target.load();
+          if (keep > 1) pendingSeek.current = keep;
+          if (userPlaybackIntentRef.current && !adGateActiveRef.current) target.play().catch(() => {});
+        } catch { /* ignore */ }
+      }
+    };
+
+    const engine = new MkvMultiAudioEngine(mkvCandidateSrc, {
+      onError: (error) => giveUp(error.message),
+      onSubtitleCue: (cue) => {
+        const list = mkvSubtitleCuesRef.current.get(cue.trackNumber) || [];
+        list.push({ start: cue.startMs / 1000, end: cue.endMs / 1000, text: cue.text });
+        mkvSubtitleCuesRef.current.set(cue.trackNumber, list);
+      },
+      onStateChange: (state) => {
+        if (cancelled) return;
+        if (state === "buffering") setIsBuffering(true);
+        if (state === "ready") setIsBuffering(false);
+      },
+    });
+
+    (async () => {
+      const probe = await engine.probe();
+      if (cancelled) { engine.destroy(); return; }
+      if (!probe.ok || probe.audio.length < 2) {
+        engine.destroy();
+        giveUp(probe.reason || `only ${probe.audio.length} audio track(s)`);
+        return;
+      }
+      const preferredLabel = String(selectedLanguageLabel || selectedLanguage || anime?.language || "").toLowerCase();
+      const preferred = probe.audio.find((track: MkvTrackInfo) => {
+        const label = `${track.label} ${track.language}`.toLowerCase();
+        return !!preferredLabel && (label.includes(preferredLabel) || preferredLabel.includes(track.label.toLowerCase()));
+      });
+      const attached = await engine.attach(v, preferred?.number);
+      if (cancelled) { engine.destroy(); return; }
+      if (!attached) { engine.destroy(); giveUp("engine could not attach"); return; }
+
+      mkvEngineRef.current = engine;
+      const options: AudioTrackOption[] = probe.audio.map((track: MkvTrackInfo, index: number) => ({
+        language: track.language,
+        label: track.label || `Audio ${index + 1}`,
+        mkvTrackNumber: track.number,
+      }));
+      mkvAudioOptionsRef.current = options;
+      setAudioTrackOptions(options);
+      setCurrentMkvAudio(engine.selectedAudioNumber);
+      const active = options.find((option) => option.mkvTrackNumber === engine.selectedAudioNumber) || options[0];
+      setCurrentAudioTrack(active?.label || "");
+      setActivePlaybackLanguage(active?.label || "");
+      setMkvAudioReady(true);
+      if (probe.subtitles.length) {
+        const subs: HlsSubtitleOption[] = probe.subtitles.map((track) => ({
+          id: MKV_SUBTITLE_ID_BASE + track.number,
+          label: track.label || `Subtitle ${track.number}`,
+          language: track.language,
+          external: true,
+        }));
+        hlsSubtitleMetaRef.current = subs;
+        setHlsSubtitleOptions(subs);
+      }
+      if (resumeAt > 1) {
+        try { v.currentTime = resumeAt; } catch { /* ignore */ }
+      }
+      if (userPlaybackIntentRef.current && !adGateActiveRef.current) {
+        v.play().catch(() => {});
+      }
+    })().catch((error) => giveUp(String(error?.message || error)));
+
+    return () => {
+      cancelled = true;
+      try { engine.destroy(); } catch { /* ignore */ }
+      if (mkvEngineRef.current === engine) mkvEngineRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mkvCandidateSrc, mkvDisabledSrc]);
+
+
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
   useEffect(() => {
@@ -3190,6 +3322,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const switchAudioTrack = useCallback((track: AudioTrackOption) => {
     const v = videoRef.current;
+    // In-browser MKV engine: swap the embedded audio track, keep the position.
+    if (track.mkvTrackNumber !== undefined && mkvEngineRef.current) {
+      const label = track.label || track.language || "Audio";
+      setCurrentAudioTrack(label);
+      setActivePlaybackLanguage(label);
+      setCurrentMkvAudio(track.mkvTrackNumber);
+      setIsBuffering(true);
+      setShowAudioPanel(false);
+      setShowCcPanel(false);
+      void mkvEngineRef.current.selectAudio(track.mkvTrackNumber).finally(() => setIsBuffering(false));
+      return;
+    }
     if (!v) return;
     const savedTime = v.currentTime;
     const wasPlaying = !v.paused;
