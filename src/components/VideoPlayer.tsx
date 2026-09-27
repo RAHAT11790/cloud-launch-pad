@@ -2747,6 +2747,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
+    // Subtitles embedded in the MKV file: the engine streams cues into
+    // mkvSubtitleCuesRef while it demuxes, so just point the overlay at them.
+    if (selectedIdx >= MKV_SUBTITLE_ID_BASE) {
+      const trackNumber = selectedIdx - MKV_SUBTITLE_ID_BASE;
+      const readCues = () => {
+        subtitleCueListRef.current = mkvSubtitleCuesRef.current.get(trackNumber) || [];
+        syncSubtitleOverlay();
+      };
+      readCues();
+      setSubtitleCueVersion((value) => value + 1);
+      setSubtitleStatusTone("success");
+      setSubtitleStatusMessage("Subtitles are working.");
+      clearSubtitlePolling();
+      subtitlePollTimerRef.current = setInterval(readCues, 250);
+      return;
+    }
+
     const targetMeta = hlsSubtitleMetaRef.current.find((track) => track.id === selectedIdx);
     if (!targetMeta?.url) {
       subtitleCueListRef.current = [];
