@@ -80,7 +80,7 @@ export function extractSlug(input: string): string {
 
 async function resolve(slug: string, streamPrefix: string) {
   const res = await fetch(`${PLAYER_ORIGIN}/${slug}`, {
-    headers: { "User-Agent": UA, Referer: "https://abyss.to/", Accept: "text/html" },
+    headers: { "User-Agent": UA, Referer: "https://abyss.to/", Accept: "text/html" }, signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`player page ${res.status}`);
   const html = await res.text();
@@ -106,7 +106,7 @@ async function resolve(slug: string, streamPrefix: string) {
   const checked = await Promise.all(
     out.map(async (s) => {
       try {
-        const r = await fetch(s.url, { headers: { "User-Agent": UA, Referer: `${PLAYER_ORIGIN}/`, Range: "bytes=0-1" } });
+        const r = await fetch(s.url, { headers: { "User-Agent": UA, Referer: `${PLAYER_ORIGIN}/`, Range: "bytes=0-1" }, signal: AbortSignal.timeout(8000) });
         try { await r.body?.cancel(); } catch { /* ignore */ }
         return r.status === 206 || r.status === 200 ? s : null;
       } catch { return null; }
