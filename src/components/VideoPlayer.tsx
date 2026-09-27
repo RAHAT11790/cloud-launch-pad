@@ -3297,7 +3297,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCurrentAudioTrack("");
       setActivePlaybackLanguage("");
     }
-  }, [anime?.language, normalizedLanguageTracks, selectedLanguage, selectedLanguageLabel]);
+  }, [anime?.language, mkvAudioReady, normalizedLanguageTracks, selectedLanguage, selectedLanguageLabel]);
 
   // Detect native audio tracks when video loads
   useEffect(() => {
