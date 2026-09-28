@@ -6,13 +6,13 @@
 //                                     the Abyss CDN requires, so the file plays
 //                                     inside OUR player — no iframe, no ads).
 // ============================================================
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PLAYER_ORIGIN = "https://player.abyssplayer.com";
-const cors = {
-  ...corsHeaders,
+const cors: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type",
 };
@@ -71,7 +71,7 @@ const fromB64u = (s: string) => {
   return decodeURIComponent(escape(atob(p + "=".repeat((4 - (p.length % 4)) % 4))));
 };
 
-export function extractSlug(input: string): string {
+function extractSlug(input: string): string {
   const v = String(input || "").trim();
   const m = v.match(/abyss(?:player|cdn)?\.(?:com|to)\/(?:\?v=)?([A-Za-z0-9_-]{6,})/i) || v.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
   if (m) return m[1];
@@ -138,7 +138,7 @@ async function stream(req: Request, target: string) {
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, headers: h });
 }
 
-Deno.serve(async (req) => {
+async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   try {
     const url = new URL(req.url);
@@ -161,4 +161,6 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ ok: false, error: String((e as Error)?.message || e) }, 502);
   }
-});
+}
+
+Deno.serve(handler);

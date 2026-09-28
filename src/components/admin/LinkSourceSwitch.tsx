@@ -1,76 +1,91 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState } from "react";
 import { CheckCircle2, Loader2, Send, Server, XCircle } from "lucide-react";
 import { isAbyssLink, normalizeAbyssInput, resolveAbyss } from "@/lib/abyss";
 
-interface Props {
-  link: string;
-  /** Called with the cleaned Abyss link (goes into the episode/part `link`). */
-  onAbyssLinkChange: (value: string) => void;
-  /** Existing Telegram / quality fields. */
-  children: ReactNode;
-}
+export type LinkSection = "telegram" | "abyss";
 
 /**
- * Per-episode source switch: "Telegram" keeps the 4 quality boxes,
- * "Abyss" shows ONE link box (that link already carries every quality).
+ * Editor-level switch shown ABOVE the season list. Telegram and Abyss are two
+ * completely separate link sets: each episode stores `link*` (Telegram) and
+ * `abyssLink` (Abyss) in different fields, so one never leaks into the other.
  */
-export default function LinkSourceSwitch({ link, onAbyssLinkChange, children }: Props) {
-  const [mode, setMode] = useState<"telegram" | "abyss">(isAbyssLink(link) ? "abyss" : "telegram");
-  const [check, setCheck] = useState<{ state: "idle" | "loading" | "ok" | "fail"; text?: string }>({ state: "idle" });
-
-  useEffect(() => {
-    if (isAbyssLink(link)) setMode("abyss");
-  }, [link]);
-
-  const runCheck = async () => {
-    if (!isAbyssLink(link)) { setCheck({ state: "fail", text: "Not an Abyss link" }); return; }
-    setCheck({ state: "loading" });
-    const r = await resolveAbyss(link);
-    setCheck(r.ok
-      ? { state: "ok", text: `${r.sources.map((s) => s.label).join(" · ")}${r.title ? ` — ${r.title}` : ""}` }
-      : { state: "fail", text: r.error || "No playable quality found (will use embed fallback)" });
+export function LinkSectionTabs({
+  value, onChange, telegramCount, abyssCount, total,
+}: { value: LinkSection; onChange: (v: LinkSection) => void; telegramCount: number; abyssCount: number; total: number }) {
+  const tab = (m: LinkSection, label: string, hint: string, count: number, Icon: typeof Send) => {
+    const active = value === m;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(m)}
+        aria-pressed={active}
+        className={`flex flex-1 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all ${
+          active
+            ? m === "abyss"
+              ? "border-cyan-400/60 bg-cyan-500/15 shadow-lg shadow-cyan-500/10"
+              : "border-sky-400/60 bg-sky-500/15 shadow-lg shadow-sky-500/10"
+            : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"
+        }`}
+      >
+        <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? (m === "abyss" ? "bg-cyan-400/25 text-cyan-100" : "bg-sky-400/25 text-sky-100") : "bg-white/[0.06] text-zinc-400"}`}>
+          <Icon size={15} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block text-[12px] font-bold ${active ? "text-white" : "text-zinc-300"}`}>{label}</span>
+          <span className="block truncate text-[9.5px] text-zinc-500">{hint}</span>
+        </span>
+        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/15 text-white" : "bg-white/[0.06] text-zinc-400"}`}>
+          {count}/{total}
+        </span>
+      </button>
+    );
   };
-
-  const tab = (m: "telegram" | "abyss", label: string, Icon: typeof Send) => (
-    <button
-      type="button"
-      onClick={() => { setMode(m); setCheck({ state: "idle" }); }}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-        mode === m ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      <Icon className="h-3.5 w-3.5" /> {label}
-    </button>
-  );
-
   return (
-    <div className="space-y-2">
-      <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
-        {tab("telegram", "Telegram link", Send)}
-        {tab("abyss", "Abyss link", Server)}
+    <div className="mb-4 rounded-2xl border border-white/[0.07] bg-black/30 p-2.5">
+      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Video links</p>
+      <div className="flex gap-2">
+        {tab("telegram", "Telegram", "Quality links + audio", telegramCount, Send)}
+        {tab("abyss", "Abyss", "One URL per episode", abyssCount, Server)}
       </div>
-      {mode === "telegram" ? (
-        children
-      ) : (
-        <div className="space-y-1.5 rounded-lg border border-primary/25 bg-primary/5 p-2.5">
-          <span className="block text-[10px] font-medium text-foreground/80">Abyss URL (all qualities & audio in one link)</span>
-          <textarea
-            value={link || ""}
-            onChange={(e) => { onAbyssLinkChange(normalizeAbyssInput(e.target.value)); setCheck({ state: "idle" }); }}
-            rows={2}
-            placeholder="https://player.abyssplayer.com/xxxxxxxxxx  (or paste the <iframe> code)"
-            className="min-h-[44px] w-full resize-none break-all rounded-md border border-border bg-background px-2.5 py-2 text-[10px] text-foreground outline-none focus:border-primary"
-          />
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={runCheck} disabled={check.state === "loading"}
-              className="rounded-md bg-primary/15 px-2.5 py-1 text-[10px] font-semibold text-primary hover:bg-primary/25 disabled:opacity-50">
-              {check.state === "loading" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Check link"}
-            </button>
-            {check.state === "ok" && <span className="flex min-w-0 items-center gap-1 text-[10px] text-primary"><CheckCircle2 className="h-3 w-3 shrink-0" /><span className="truncate">{check.text}</span></span>}
-            {check.state === "fail" && <span className="flex min-w-0 items-center gap-1 text-[10px] text-destructive"><XCircle className="h-3 w-3 shrink-0" /><span className="truncate">{check.text}</span></span>}
-          </div>
-        </div>
-      )}
+    </div>
+  );
+}
+
+/** Single Abyss URL box for one episode / part — completely separate field. */
+export function AbyssLinkField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [check, setCheck] = useState<{ state: "idle" | "loading" | "ok" | "fail"; text?: string }>({ state: "idle" });
+  const runCheck = async () => {
+    if (!isAbyssLink(value)) { setCheck({ state: "fail", text: "Not an Abyss link" }); return; }
+    setCheck({ state: "loading" });
+    const r = await resolveAbyss(value, { fresh: true });
+    setCheck(r.ok
+      ? { state: "ok", text: r.sources.map((s) => s.label).join(" · ") }
+      : { state: "fail", text: r.error || "No playable quality found" });
+  };
+  const invalid = !!value && !isAbyssLink(value);
+  return (
+    <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/[0.06] p-2.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-200">
+          <Server size={11} /> Abyss URL
+        </span>
+        {value && !invalid && <span className="rounded bg-cyan-400/15 px-1.5 py-0.5 text-[9px] font-bold text-cyan-200">All qualities + audio</span>}
+      </div>
+      <input
+        value={value || ""}
+        onChange={(e) => { onChange(normalizeAbyssInput(e.target.value)); setCheck({ state: "idle" }); }}
+        placeholder="https://abyss.to/… or player link / <iframe> code"
+        className={`h-9 w-full rounded-lg border bg-black/40 px-2.5 text-[11px] text-white outline-none placeholder:text-zinc-600 focus:border-cyan-400 ${invalid ? "border-red-500/60" : "border-white/10"}`}
+      />
+      <div className="mt-2 flex min-h-[24px] items-center gap-2">
+        <button type="button" onClick={runCheck} disabled={!value || check.state === "loading"}
+          className="inline-flex h-6 items-center gap-1 rounded-md bg-cyan-500/20 px-2.5 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-40">
+          {check.state === "loading" ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Check link
+        </button>
+        {invalid && <span className="text-[10px] text-red-300">Paste an Abyss link</span>}
+        {check.state === "ok" && <span className="flex min-w-0 items-center gap-1 text-[10px] text-emerald-300"><CheckCircle2 className="h-3 w-3 shrink-0" /><span className="truncate">{check.text}</span></span>}
+        {check.state === "fail" && <span className="flex min-w-0 items-center gap-1 text-[10px] text-red-300"><XCircle className="h-3 w-3 shrink-0" /><span className="truncate">{check.text}</span></span>}
+      </div>
     </div>
   );
 }
