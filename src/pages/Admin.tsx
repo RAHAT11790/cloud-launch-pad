@@ -1,4 +1,5 @@
-import LinkSourceSwitch from "@/components/admin/LinkSourceSwitch";
+import { LinkSectionTabs, AbyssLinkField, type LinkSection } from "@/components/admin/LinkSourceSwitch";
+import { isAbyssLink } from "@/lib/abyss";
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
@@ -2337,6 +2338,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Expanded episodes
  const [expandedSeasons, setExpandedSeasons] = useState<Record<number, boolean>>({});
+ const [linkSection, setLinkSection] = useState<LinkSection>("telegram");
   const [episodeRenderLimits, setEpisodeRenderLimits] = useState<Record<number, number>>({});
 
  // JSON import for Web Series
@@ -2660,7 +2662,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts?: any[]; addedParts?: number[] } | null>(null);
 
  // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
- type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string };
+type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string; abyssLink?: string };
  const [mvPartsData, setMvPartsData] = useState<MoviePartEditor[]>([]);
  const [mvLockPicker, setMvLockPicker] = useState<number | null>(null);
  const [mvPartsJsonImportMode, setMvPartsJsonImportMode] = useState(false);
@@ -3760,8 +3762,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
   {
-    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k));
-    if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a default link"); return; }
+    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.abyssLink));
+     if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a Telegram or Abyss link"); return; }
   }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
@@ -3774,8 +3776,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   : [],
   // Movie Parts: drop empty entries, keep only parts that have at least one URL
   parts: (mvPartsData || [])
-    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k))
-    .map((p, i) => ({ partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "" })),
+    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.abyssLink))
+    .map((p, i) => ({ ...((p as any).lockUntil ? { lockUntil: (p as any).lockUntil } : {}), partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "", abyssLink: p.abyssLink || "" })),
   type: "movie",
   visibility: movieForm.visibility === "private" ? "private" : "public",
   telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
@@ -3842,7 +3844,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
      .map((p: any, i: number) => ({
        partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
        title: p?.title || "",
-       link: p?.link || "",
+       ...(p?.lockUntil ? { lockUntil: p.lockUntil } : {}),
+       link: isAbyssLink(p?.link) ? "" : (p?.link || ""),
+       abyssLink: p?.abyssLink || (isAbyssLink(p?.link) ? p.link : ""),
        link480: p?.link480 || "",
        link720: p?.link720 || "",
        link1080: p?.link1080 || "",
@@ -4165,7 +4169,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   isDefault: defaultAudioIndex >= 0 ? idx === defaultAudioIndex : idx === 0,
  }));
  const defaultAudio = resolvedAudioTracks.find((track: any) => track?.isDefault) || resolvedAudioTracks[0] || null;
- const link = String(episode?.link || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
+ // Telegram (`link*`) and Abyss (`abyssLink`) are separate fields. Legacy rows
+ // that stored an Abyss URL inside `link` are moved to `abyssLink` here.
+ const rawLink = String(episode?.link || "").trim();
+ const legacyAbyss = isAbyssLink(rawLink) ? rawLink : "";
+ const abyssLink = String(episode?.abyssLink || legacyAbyss || "").trim();
+ const link = String((legacyAbyss ? "" : rawLink) || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
  const link480 = String(episode?.link480 || episode?.qualityLinks?.p480 || "").trim();
  const link720 = String(episode?.link720 || episode?.qualityLinks?.p720 || "").trim();
  const link1080 = String(episode?.link1080 || episode?.qualityLinks?.p1080 || link || "").trim();
@@ -4178,6 +4187,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  link720,
  link1080,
  link4k,
+ abyssLink,
  qualityLinks: {
  default: link || link1080 || link720 || link480 || "",
  p480: link480,
@@ -6377,9 +6387,22 @@ ${tgBulkFooter}
     );
   })()}
 
+      {(() => {
+        const all = (Array.isArray(seasonsData) ? seasonsData : []).flatMap((s: any) => (Array.isArray(s?.episodes) ? s.episodes : []));
+        return (
+          <LinkSectionTabs
+            value={linkSection}
+            onChange={setLinkSection}
+            total={all.length}
+            telegramCount={all.filter((ep: any) => [ep?.link, ep?.link480, ep?.link720, ep?.link1080, ep?.link4k].some((u) => String(u || "").trim())).length}
+            abyssCount={all.filter((ep: any) => String(ep?.abyssLink || "").trim()).length}
+          />
+        );
+      })()}
       {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
         return <SortableSeasonItem 
           key={`season-${sIdx}`}
+          linkSection={linkSection}
           id={`season-${sIdx}`}
           sIdx={sIdx}
           rawSeason={rawSeason}
@@ -7367,6 +7390,13 @@ ${tgBulkFooter}
      </div>
    )}
 
+    <LinkSectionTabs
+      value={linkSection}
+      onChange={setLinkSection}
+      total={mvPartsData.length}
+      telegramCount={mvPartsData.filter((p) => [p.link, p.link480, p.link720, p.link1080, p.link4k].some((u) => String(u || "").trim())).length}
+      abyssCount={mvPartsData.filter((p) => String(p.abyssLink || "").trim()).length}
+    />
     {mvPartsData.map((p, pIdx) => {
      const partLocked = isEpisodeTimeLocked(p as any);
      const partLockLeft = formatLockRemaining(episodeLockRemainingMs(p as any));
@@ -7409,8 +7439,10 @@ ${tgBulkFooter}
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
            className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
        </div>
-        <LinkSourceSwitch link={p.link || ""} onAbyssLinkChange={v => updateMoviePartField(pIdx, "link", v)}>
-        <div className="space-y-2">
+         {linkSection === "abyss" ? (
+          <AbyssLinkField value={p.abyssLink || ""} onChange={v => updateMoviePartField(pIdx, "abyssLink", v)} />
+         ) : (
+         <div className="space-y-2">
          <div>
            <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default link <span className="text-purple-500">*</span></span>
            <textarea value={p.link || ""} onChange={e => updateMoviePartField(pIdx, "link", e.target.value)}
@@ -7425,9 +7457,9 @@ ${tgBulkFooter}
                className={`${inputClass} w-full !py-2 !text-[10px] min-h-[40px] resize-none break-all`}
                placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
            </div>
-         ))}
-        </div>
-        </LinkSourceSwitch>
+          ))}
+         </div>
+         )}
       </div>
     );
     })}
@@ -12633,7 +12665,7 @@ const SortableSeasonItem = memo(({
   seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
   removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
-  comboSelection, setComboSelection, isComboMode, moveSeason
+  comboSelection, setComboSelection, isComboMode, moveSeason, linkSection
 }: any) => {
 
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
@@ -12814,8 +12846,9 @@ const SortableSeasonItem = memo(({
                        )}
 
 
-                      {isAnSeries ? (
-                        <LinkSourceSwitch link={ep.link ?? ""} onAbyssLinkChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", v, baseLanguage)}>
+                      {linkSection === "abyss" ? (
+                        <AbyssLinkField value={(ep as any).abyssLink || ""} onChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "abyssLink", v, isAnSeries ? baseLanguage : selectedAdminLanguage)} />
+                      ) : isAnSeries ? (
                         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
                           <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
                           <div className="mt-2 space-y-2.5">
@@ -12835,9 +12868,7 @@ const SortableSeasonItem = memo(({
                             ))}
                           </div>
                         </div>
-                        </LinkSourceSwitch>
                       ) : (
-                        <LinkSourceSwitch link={currentLanguageFields.link || ""} onAbyssLinkChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", v, selectedAdminLanguage)}>
                         <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
                           <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
                           <div className="mt-2 space-y-2.5">
@@ -12855,10 +12886,9 @@ const SortableSeasonItem = memo(({
                             ))}
                           </div>
                         </div>
-                        </LinkSourceSwitch>
                       )}
 
-                      {isAnSeries && (
+                      {isAnSeries && linkSection !== "abyss" && (
                         <div className="mt-3 rounded-xl border-2 border-amber-500/35 bg-gradient-to-b from-amber-500/10 to-orange-500/5 p-3">
                           <div className="mb-3 flex items-start justify-between gap-2">
                             <p className="text-[12px] font-black uppercase text-amber-100">🎧 AUDIO ROOMS</p>
