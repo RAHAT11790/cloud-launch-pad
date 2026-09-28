@@ -35,6 +35,8 @@ export interface MoviePart {
   link720?: string;
   link1080?: string;
   link4k?: string;
+  /** Abyss URL — separate from Telegram links, resolved by the `abyss` server. */
+  abyssLink?: string;
   /** Epoch ms — premium-only until this moment, then free for everyone. */
   lockUntil?: number;
 }
@@ -47,6 +49,8 @@ export interface Episode {
   link720?: string;
   link1080?: string;
   link4k?: string;
+  /** Abyss URL — separate from Telegram links, resolved by the `abyss` server. */
+  abyssLink?: string;
   audioTracks?: AudioTrack[];
   subtitleTracks?: SubtitleTrack[];
   /** Epoch ms — premium-only until this moment, then free for everyone. */
