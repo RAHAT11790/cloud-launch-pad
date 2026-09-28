@@ -346,6 +346,8 @@ interface VideoPlayerProps {
   onInfoClick?: () => void;
   onLibraryClick?: (animeId?: string) => void;
   preferProxy?: boolean;
+  /** Extra, non-RS servers (e.g. Abyss) shown in the same Server panel. */
+  extraServers?: { id: string; label: string; active: boolean; onSelect: () => void }[];
 }
 
 type DownloadEpisodeOption = {
@@ -470,7 +472,7 @@ const normalizeDownloadQualityKey = (label: string) => {
   return value || "default";
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [] }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -5176,7 +5178,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <Server className="w-3.5 h-3.5" />
                     <span className="text-[11px] font-semibold">HLS</span>
                   </button>
-                ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
+                ) : (effectiveVideoServers.length >= 1 && !noServerSwitch) || extraServers.length > 0 ? (
                   <div className="relative">
                     <button
                       onPointerDown={toggleServerPanelFast}
@@ -5184,7 +5186,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
+                      <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{extraServers.find((x) => x.active)?.label || effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
                   </div>
                 ) : null}
@@ -5307,12 +5309,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showServerPanel && effectiveVideoServers.length >= 1 && !noServerSwitch && (
+          {!isEmbedPlayback && showServerPanel && ((effectiveVideoServers.length >= 1 && !noServerSwitch) || extraServers.length > 0) && (
             <div data-player-panel="true" className={`absolute top-14 right-3 ${panelBaseClass} min-w-[152px] max-w-[86vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
               {effectiveVideoServers.map((srv, idx) => {
                 const isLocked = srv.locked && !isPremium;
-                const isActive = activeServerIndex === idx;
+                const isActive = activeServerIndex === idx && !extraServers.some((x) => x.active);
                 return (
                   <button
                     key={`${srv.name || "server"}-${idx}`}
@@ -5330,6 +5332,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </button>
                 );
               })}
+              {extraServers.map((x) => (
+                <button
+                  key={`extra-${x.id}`}
+                  onClick={() => { setShowServerPanel(false); if (!x.active) x.onSelect(); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-1 ${x.active ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}
+                >
+                  <span className="flex items-center gap-1.5"><Server className="w-3 h-3" />{x.label}</span>
+                  {x.active && <Check className="w-3 h-3" />}
+                </button>
+              ))}
             </div>
           )}
 
@@ -6759,19 +6771,77 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 const MemoVideoPlayer = memo(VideoPlayer);
 
-// Abyss links resolve to direct MP4 qualities first, then play in OUR player.
+// ============================================================
+// Abyss-aware wrapper
+//  • Telegram-only item  → normal RS player (unchanged).
+//  • Abyss-only item     → Abyss resolved to direct MP4 qualities, OUR player.
+//  • Both links present  → RS servers + an extra "Abyss Server" in the same
+//    Server panel; switching keeps the playback position.
+// Links are re-resolved when they expire (stream error → fresh resolve).
+// ============================================================
+const ABYSS_PREF_KEY = "rs_prefer_abyss_server";
+
+const findAbyssForSrc = (props: VideoPlayerProps): string => {
+  const src = String(props.src || "");
+  if (getAbyssSlug(src)) return src;
+  const same = (it: any) => [it?.link, it?.link480, it?.link720, it?.link1080, it?.link4k].some((u) => u && u === src);
+  const seasons: any[] = (props.anime as any)?.seasons || props.seasons || [];
+  if (typeof props.currentSeasonIdx === "number" && typeof props.currentEpisodeIdx === "number") {
+    const ep = seasons?.[props.currentSeasonIdx]?.episodes?.[props.currentEpisodeIdx];
+    if (ep && same(ep) && ep.abyssLink) return ep.abyssLink;
+  }
+  for (const s of seasons) for (const ep of (s?.episodes || [])) if (same(ep) && ep?.abyssLink) return ep.abyssLink;
+  for (const p of ((props.anime as any)?.parts || [])) if (same(p) && p?.abyssLink) return p.abyssLink;
+  return "";
+};
+
 const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
-  const abyssSlug = getAbyssSlug(props.src);
+  const abyssLink = useMemo(() => findAbyssForSrc(props), [props.src, props.anime, props.seasons, props.currentSeasonIdx, props.currentEpisodeIdx]);
+  const telegramSrc = getAbyssSlug(props.src) ? "" : props.src;
+  const hasBoth = !!telegramSrc && !!abyssLink;
+  const [useAbyss, setUseAbyss] = useState<boolean>(() => !telegramSrc || (hasBoth && localStorage.getItem(ABYSS_PREF_KEY) === "1"));
   const [resolved, setResolved] = useState<AbyssResolved | null>(null);
+  const [retry, setRetry] = useState(0);
+  const lastTimeRef = useRef<number>(props.initialSeekTime || 0);
+  const [seekOnSwitch, setSeekOnSwitch] = useState<number | undefined>(undefined);
+
+  // New episode → pick the source again (Abyss-only forces Abyss).
   useEffect(() => {
-    if (!abyssSlug) { setResolved(null); return; }
+    setUseAbyss(!telegramSrc || (!!abyssLink && localStorage.getItem(ABYSS_PREF_KEY) === "1"));
+    setSeekOnSwitch(undefined);
+    lastTimeRef.current = props.initialSeekTime || 0;
+  }, [props.src]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const playAbyss = useAbyss && !!abyssLink;
+  useEffect(() => {
+    if (!playAbyss) { setResolved(null); return; }
     let alive = true;
     setResolved(null);
-    resolveAbyss(props.src).then((r) => { if (alive) setResolved(r); });
+    resolveAbyss(abyssLink, { fresh: retry > 0 }).then((r) => { if (alive) setResolved(r); });
     return () => { alive = false; };
-  }, [abyssSlug, props.src]);
+  }, [playAbyss, abyssLink, retry]);
 
-  if (!abyssSlug) return <MemoVideoPlayer {...props} />;
+  const switchTo = useCallback((abyss: boolean) => {
+    setSeekOnSwitch(lastTimeRef.current || undefined);
+    try { localStorage.setItem(ABYSS_PREF_KEY, abyss ? "1" : "0"); } catch { /* ignore */ }
+    setUseAbyss(abyss);
+  }, []);
+
+  const onSaveProgress = useCallback((t: number, d: number) => {
+    lastTimeRef.current = t;
+    props.onSaveProgress?.(t, d);
+  }, [props.onSaveProgress]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const extraServers = hasBoth
+    ? playAbyss
+      ? [{ id: "rs", label: "RS Server", active: false, onSelect: () => switchTo(false) }, { id: "abyss", label: "Abyss Server", active: true, onSelect: () => {} }]
+      : [{ id: "abyss", label: "Abyss Server", active: false, onSelect: () => switchTo(true) }]
+    : [];
+  const initialSeekTime = seekOnSwitch ?? props.initialSeekTime;
+
+  if (!playAbyss) {
+    return <MemoVideoPlayer {...props} onSaveProgress={onSaveProgress} initialSeekTime={initialSeekTime} extraServers={extraServers} />;
+  }
   if (!resolved) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 bg-background" role="status" aria-label="Loading video">
@@ -6782,18 +6852,34 @@ const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
     );
   }
   if (!resolved.ok) {
-    return <MemoVideoPlayer {...props} src={resolved.embed} forceEmbedMode noProxy noServerSwitch hideDownload />;
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-3 bg-background px-6 text-center" role="alert">
+        <Server className="h-9 w-9 text-muted-foreground" />
+        <p className="text-sm font-semibold text-foreground">This video could not be loaded right now</p>
+        <p className="max-w-xs text-xs text-muted-foreground">{resolved.error || "The Abyss server did not return a playable quality."}</p>
+        <div className="mt-2 flex gap-2">
+          <button onClick={() => setRetry((n) => n + 1)} className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground">Try again</button>
+          {telegramSrc && <button onClick={() => switchTo(false)} className="rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Use RS Server</button>}
+          <button onClick={props.onClose} className="rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Close</button>
+        </div>
+      </div>
+    );
   }
-  const sorted = [...resolved.sources].sort((a, b) => parseInt(b.label) - parseInt(a.label));
-  const preferred = sorted.find((s) => s.label === "720p") || sorted[0];
+  const sorted = [...resolved.sources].sort((a, b) => parseInt(a.label) - parseInt(b.label));
+  const preferred = sorted.find((s) => s.label === "720p") || sorted[sorted.length - 1];
   return (
     <MemoVideoPlayer
+      key={`abyss-${resolved.slug}-${retry}`}
       {...props}
       src={preferred.url}
       qualityOptions={sorted.map((s) => ({ label: s.label, src: s.url }))}
+      audioTracks={undefined}
       noProxy
       noServerSwitch
       forceEmbedMode={false}
+      onSaveProgress={onSaveProgress}
+      initialSeekTime={initialSeekTime}
+      extraServers={extraServers}
     />
   );
 };
