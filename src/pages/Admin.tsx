@@ -4512,7 +4512,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   // Only fields ACTUALLY PRESENT (non-empty) in the JSON overwrite existing values.
   // Missing / empty fields leave existing links untouched → paste a 480p-only JSON
   // and every other quality (720p/1080p/4K) stays intact.
-  const QUALITY_FIELDS = ['title', 'link', 'link480', 'link720', 'link1080', 'link4k'] as const;
+  const QUALITY_FIELDS = ['title', 'link', 'link480', 'link720', 'link1080', 'link4k', 'abyssLink'] as const;
   const hasVal = (v: any) => v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
 
   const mergeEpisodeSmart = (existing: any, incoming: any) => {
@@ -4540,6 +4540,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
       link720: raw?.link720 || '',
       link1080: raw?.link1080 || '',
       link4k: raw?.link4k || '',
+      abyssLink: raw?.abyssLink || '',
       qualityLinks: raw?.qualityLinks || {},
       audioTracks: normalizeAudioTrackList(raw?.audioTracks),
     };
@@ -6581,6 +6582,7 @@ ${tgBulkFooter}
  if (ep.link720) epData.link720 = ep.link720;
  if (ep.link1080) epData.link1080 = ep.link1080;
  if (ep.link4k) epData.link4k = ep.link4k;
+ if ((ep as any).abyssLink) epData.abyssLink = (ep as any).abyssLink;
  if ((ep as any).qualityLinks) epData.qualityLinks = (ep as any).qualityLinks;
  if ((ep as any).audioTracks?.length) epData.audioTracks = (ep as any).audioTracks;
  if ((ep as any).defaultAudio) epData.defaultAudio = (ep as any).defaultAudio;
