@@ -184,7 +184,7 @@ const normalizeAnAudioTracks = (
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
-  // Telegram links first; an Abyss-only episode plays through the Abyss server.
+  // Telegram links first; a Direct-only episode plays its direct URL.
   return [ep.link, ep.link1080, ep.link720, ep.link480, ep.link4k, ep.directLink].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 

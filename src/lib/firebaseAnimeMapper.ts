@@ -54,7 +54,7 @@ const mapEpisode = (ep: any): Episode => ({
   link720: ep?.link720 || undefined,
   link1080: ep?.link1080 || undefined,
   link4k: ep?.link4k || undefined,
-  directLink: ep?.directLink || (/abyss(?:player|cdn)?\.(?:com|to)\//i.test(String(ep?.link || "")) ? ep.link : undefined),
+  directLink: ep?.directLink || undefined,
   lockUntil: Number(ep?.lockUntil || 0) || undefined,
   subtitleTracks: mapSubtitleTracks(ep?.subtitleTracks),
   audioTracks: mapAudioTracks(ep?.audioTracks),

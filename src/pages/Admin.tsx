@@ -3844,8 +3844,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
        partNumber: Number(p?.partNumber || p?.number || i + 1) || i + 1,
        title: p?.title || "",
        ...(p?.lockUntil ? { lockUntil: p.lockUntil } : {}),
-       link: isAbyssLink(p?.link) ? "" : (p?.link || ""),
-       directLink: p?.directLink || (isAbyssLink(p?.link) ? p.link : ""),
+       link: p?.link || "",
+       directLink: p?.directLink || "",
        link480: p?.link480 || "",
        link720: p?.link720 || "",
        link1080: p?.link1080 || "",
@@ -4168,12 +4168,10 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   isDefault: defaultAudioIndex >= 0 ? idx === defaultAudioIndex : idx === 0,
  }));
  const defaultAudio = resolvedAudioTracks.find((track: any) => track?.isDefault) || resolvedAudioTracks[0] || null;
- // Telegram (`link*`) and Abyss (`directLink`) are separate fields. Legacy rows
- // that stored an Abyss URL inside `link` are moved to `directLink` here.
+ // Telegram (`link*`) and Direct (`directLink`) are separate fields.
  const rawLink = String(episode?.link || "").trim();
- const legacyAbyss = isAbyssLink(rawLink) ? rawLink : "";
- const directLink = String(episode?.directLink || legacyAbyss || "").trim();
- const link = String((legacyAbyss ? "" : rawLink) || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
+ const directLink = String(episode?.directLink || "").trim();
+ const link = String(rawLink || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
  const link480 = String(episode?.link480 || episode?.qualityLinks?.p480 || "").trim();
  const link720 = String(episode?.link720 || episode?.qualityLinks?.p720 || "").trim();
  const link1080 = String(episode?.link1080 || episode?.qualityLinks?.p1080 || link || "").trim();
