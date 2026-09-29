@@ -54,7 +54,7 @@ const mapEpisode = (ep: any): Episode => ({
   link720: ep?.link720 || undefined,
   link1080: ep?.link1080 || undefined,
   link4k: ep?.link4k || undefined,
-  abyssLink: ep?.abyssLink || (/abyss(?:player|cdn)?\.(?:com|to)\//i.test(String(ep?.link || "")) ? ep.link : undefined),
+  directLink: ep?.directLink || undefined,
   lockUntil: Number(ep?.lockUntil || 0) || undefined,
   subtitleTracks: mapSubtitleTracks(ep?.subtitleTracks),
   audioTracks: mapAudioTracks(ep?.audioTracks),
@@ -139,10 +139,10 @@ const mapMovieParts = (parts: any): MoviePart[] | undefined => {
       link720: p?.link720 || p?.movieLink720 || undefined,
       link1080: p?.link1080 || p?.movieLink1080 || undefined,
       link4k: p?.link4k || p?.movieLink4k || undefined,
-      abyssLink: p?.abyssLink || undefined,
+      directLink: p?.directLink || undefined,
       lockUntil: Number(p?.lockUntil || 0) || undefined,
     }))
-    .filter((p) => p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.abyssLink)
+    .filter((p) => p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.directLink)
     .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
   return list.length ? list : undefined;
 };

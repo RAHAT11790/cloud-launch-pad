@@ -3441,6 +3441,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setVideoError(false);
   }, [activeServerIndex, effectiveVideoServers.length, getServerScopedSource, playbackRouteReady, resolvePlaybackSrc, src, videoServerFingerprint]);
 
+  // Slow ≠ dead. Before the startup watchdogs switch servers, ping the current
+  // URL: if it answers we keep waiting (up to ~3 extra rounds of 12s); only a
+  // 404/5xx/unreachable server triggers the failover chain.
+  const healthProbeSrcRef = useRef<string>("");
+  const failoverIfServerDead = useCallback((srcAtStart: string, time: number) => {
+    if (!srcAtStart || healthProbeSrcRef.current === srcAtStart) return;
+    healthProbeSrcRef.current = srcAtStart;
+    const stillCurrent = () => {
+      const v = videoRef.current;
+      return !!v && (v.currentSrc === srcAtStart || v.src === srcAtStart);
+    };
+    const check = async (attempt: number) => {
+      const v = videoRef.current;
+      if (!stillCurrent() || !v || v.readyState >= 2) { healthProbeSrcRef.current = ""; return; }
+      const state = await probeMediaServer(srcAtStart);
+      if (!stillCurrent() || (videoRef.current?.readyState ?? 0) >= 2) { healthProbeSrcRef.current = ""; return; }
+      if (state === "dead" || attempt >= 3) {
+        console.log(`[RS] server ${state === "dead" ? "offline" : "no data after long wait"} → failover`, srcAtStart);
+        healthProbeSrcRef.current = "";
+        tryNextPlaybackRoute(time);
+        return;
+      }
+      console.log(`[RS] server ${state}, still loading — waiting (round ${attempt + 1})`);
+      window.setTimeout(() => { void check(attempt + 1); }, 12000);
+    };
+    void check(0);
+  }, [tryNextPlaybackRoute]);
+  const failoverIfServerDeadRef = useRef(failoverIfServerDead);
+  failoverIfServerDeadRef.current = failoverIfServerDead;
+
   useEffect(() => {
     if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
     // AN/HLS startup can legitimately take longer while hls.js mounts the
@@ -3458,11 +3488,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
       if (activeSeekTargetRef.current !== null && isCurrentPlaybackSourceValid()) return;
       if (v.readyState < 2) {
-        tryNextPlaybackRoute(v.currentTime || 0);
+        failoverIfServerDead(currentSrc, v.currentTime || 0);
       }
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [activeServerIndex, adGateActive, currentSrc, getServerScopedSource, isAnimeSaltContent, isEmbedPlayback, isHlsSrc, playbackRouteReady, src, tryNextPlaybackRoute]);
+  }, [activeServerIndex, adGateActive, currentSrc, failoverIfServerDead, getServerScopedSource, isAnimeSaltContent, isEmbedPlayback, isHlsSrc, playbackRouteReady, src]);
 
   // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
   // can fail with a quick 502 while the video element waits much longer before
@@ -4105,7 +4135,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (v.readyState >= 2 || !v.paused) return;
         // User paused intentionally — don't yank the source.
         if (!userPlaybackIntentRef.current) return;
-        tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
+        failoverIfServerDeadRef.current(srcNow, lastKnownTime || v.currentTime || 0);
       }, STARTUP_TIMEOUT_MS);
     };
 
@@ -6768,6 +6798,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     </div>
   );
 };
+
+/**
+ * Server health probe used before any automatic server failover.
+ *  - "alive":  server answered (200/206/opaque) → keep waiting, it's just slow
+ *  - "dead":   404/410/5xx or connection refused → switch server
+ *  - "unknown": probe timed out → caller decides (counts as slow, not dead)
+ */
+export async function probeMediaServer(url: string, timeoutMs = 7000): Promise<"alive" | "dead" | "unknown"> {
+  if (!/^https?:\/\//i.test(url || "")) return "unknown";
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" }, signal: ac.signal, cache: "no-store" });
+    try { res.body?.cancel(); } catch { /* ignore */ }
+    if (res.status === 404 || res.status === 410 || res.status >= 500) return "dead";
+    return "alive";
+  } catch (err) {
+    if ((err as any)?.name === "AbortError") return "unknown";
+    // CORS-blocked servers still prove they are reachable via an opaque request.
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors", signal: ac.signal, cache: "no-store" });
+      return "alive";
+    } catch (e2) {
+      return (e2 as any)?.name === "AbortError" ? "unknown" : "dead";
+    }
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 const MemoVideoPlayer = memo(VideoPlayer);
 
