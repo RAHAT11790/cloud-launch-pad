@@ -1,5 +1,4 @@
-import { LinkSectionTabs, AbyssLinkField, type LinkSection } from "@/components/admin/LinkSourceSwitch";
-import { isAbyssLink } from "@/lib/abyss";
+import { LinkSectionTabs, DirectLinkField, type LinkSection } from "@/components/admin/LinkSourceSwitch";
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
@@ -2662,7 +2661,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const mvNotifyContextRef = useRef<{ movieId: string; form: any; parts?: any[]; addedParts?: number[] } | null>(null);
 
  // ===== Movie PARTS state (mirrors seasons/episodes UX from Web Series) =====
-type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string; abyssLink?: string };
+type MoviePartEditor = { partNumber: number; title?: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string; directLink?: string };
  const [mvPartsData, setMvPartsData] = useState<MoviePartEditor[]>([]);
  const [mvLockPicker, setMvLockPicker] = useState<number | null>(null);
  const [mvPartsJsonImportMode, setMvPartsJsonImportMode] = useState(false);
@@ -3762,8 +3761,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  if (!movieForm.title) { toast.error("Please enter title"); return; }
  if (!movieForm.category) { toast.error("Please select category"); return; }
   {
-    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.abyssLink));
-     if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a Telegram or Abyss link"); return; }
+    const nonEmptyParts = (mvPartsData || []).filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.directLink));
+     if (nonEmptyParts.length === 0) { toast.error("Please add at least one part with a Telegram or Direct link"); return; }
   }
   setAdminBusyTask("Saving movie…");
   await yieldAdminFrame();
@@ -3776,8 +3775,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   : [],
   // Movie Parts: drop empty entries, keep only parts that have at least one URL
   parts: (mvPartsData || [])
-    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.abyssLink))
-    .map((p, i) => ({ ...((p as any).lockUntil ? { lockUntil: (p as any).lockUntil } : {}), partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "", abyssLink: p.abyssLink || "" })),
+    .filter(p => (p.link || p.link480 || p.link720 || p.link1080 || p.link4k || p.directLink))
+    .map((p, i) => ({ ...((p as any).lockUntil ? { lockUntil: (p as any).lockUntil } : {}), partNumber: Number(p.partNumber) || i + 1, title: p.title || `Part ${i + 1}`, link: p.link || "", link480: p.link480 || "", link720: p.link720 || "", link1080: p.link1080 || "", link4k: p.link4k || "", directLink: p.directLink || "" })),
   type: "movie",
   visibility: movieForm.visibility === "private" ? "private" : "public",
   telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
@@ -3846,7 +3845,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
        title: p?.title || "",
        ...(p?.lockUntil ? { lockUntil: p.lockUntil } : {}),
        link: isAbyssLink(p?.link) ? "" : (p?.link || ""),
-       abyssLink: p?.abyssLink || (isAbyssLink(p?.link) ? p.link : ""),
+       directLink: p?.directLink || (isAbyssLink(p?.link) ? p.link : ""),
        link480: p?.link480 || "",
        link720: p?.link720 || "",
        link1080: p?.link1080 || "",
@@ -4169,11 +4168,11 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   isDefault: defaultAudioIndex >= 0 ? idx === defaultAudioIndex : idx === 0,
  }));
  const defaultAudio = resolvedAudioTracks.find((track: any) => track?.isDefault) || resolvedAudioTracks[0] || null;
- // Telegram (`link*`) and Abyss (`abyssLink`) are separate fields. Legacy rows
- // that stored an Abyss URL inside `link` are moved to `abyssLink` here.
+ // Telegram (`link*`) and Abyss (`directLink`) are separate fields. Legacy rows
+ // that stored an Abyss URL inside `link` are moved to `directLink` here.
  const rawLink = String(episode?.link || "").trim();
  const legacyAbyss = isAbyssLink(rawLink) ? rawLink : "";
- const abyssLink = String(episode?.abyssLink || legacyAbyss || "").trim();
+ const directLink = String(episode?.directLink || legacyAbyss || "").trim();
  const link = String((legacyAbyss ? "" : rawLink) || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
  const link480 = String(episode?.link480 || episode?.qualityLinks?.p480 || "").trim();
  const link720 = String(episode?.link720 || episode?.qualityLinks?.p720 || "").trim();
@@ -4187,7 +4186,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  link720,
  link1080,
  link4k,
- abyssLink,
+ directLink,
  qualityLinks: {
  default: link || link1080 || link720 || link480 || "",
  p480: link480,
@@ -4512,7 +4511,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   // Only fields ACTUALLY PRESENT (non-empty) in the JSON overwrite existing values.
   // Missing / empty fields leave existing links untouched → paste a 480p-only JSON
   // and every other quality (720p/1080p/4K) stays intact.
-  const QUALITY_FIELDS = ['title', 'link', 'link480', 'link720', 'link1080', 'link4k', 'abyssLink'] as const;
+  const QUALITY_FIELDS = ['title', 'link', 'link480', 'link720', 'link1080', 'link4k', 'directLink'] as const;
   const hasVal = (v: any) => v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
 
   const mergeEpisodeSmart = (existing: any, incoming: any) => {
@@ -4540,7 +4539,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
       link720: raw?.link720 || '',
       link1080: raw?.link1080 || '',
       link4k: raw?.link4k || '',
-      abyssLink: raw?.abyssLink || '',
+      directLink: raw?.directLink || '',
       qualityLinks: raw?.qualityLinks || {},
       audioTracks: normalizeAudioTrackList(raw?.audioTracks),
     };
@@ -6396,7 +6395,7 @@ ${tgBulkFooter}
             onChange={setLinkSection}
             total={all.length}
             telegramCount={all.filter((ep: any) => [ep?.link, ep?.link480, ep?.link720, ep?.link1080, ep?.link4k].some((u) => String(u || "").trim())).length}
-            abyssCount={all.filter((ep: any) => String(ep?.abyssLink || "").trim()).length}
+            directCount={all.filter((ep: any) => String(ep?.directLink || "").trim()).length}
           />
         );
       })()}
@@ -6582,7 +6581,7 @@ ${tgBulkFooter}
  if (ep.link720) epData.link720 = ep.link720;
  if (ep.link1080) epData.link1080 = ep.link1080;
  if (ep.link4k) epData.link4k = ep.link4k;
- if ((ep as any).abyssLink) epData.abyssLink = (ep as any).abyssLink;
+ if ((ep as any).directLink) epData.directLink = (ep as any).directLink;
  if ((ep as any).qualityLinks) epData.qualityLinks = (ep as any).qualityLinks;
  if ((ep as any).audioTracks?.length) epData.audioTracks = (ep as any).audioTracks;
  if ((ep as any).defaultAudio) epData.defaultAudio = (ep as any).defaultAudio;
@@ -7397,7 +7396,7 @@ ${tgBulkFooter}
       onChange={setLinkSection}
       total={mvPartsData.length}
       telegramCount={mvPartsData.filter((p) => [p.link, p.link480, p.link720, p.link1080, p.link4k].some((u) => String(u || "").trim())).length}
-      abyssCount={mvPartsData.filter((p) => String(p.abyssLink || "").trim()).length}
+      directCount={mvPartsData.filter((p) => String(p.directLink || "").trim()).length}
     />
     {mvPartsData.map((p, pIdx) => {
      const partLocked = isEpisodeTimeLocked(p as any);
@@ -7441,8 +7440,8 @@ ${tgBulkFooter}
          <input value={p.title || ""} onChange={e => updateMoviePartField(pIdx, "title", e.target.value)}
            className={`${inputClass} !py-2 !text-xs`} placeholder={mvPartsData.length === 1 ? "Title (optional)" : `Part ${p.partNumber} title (optional)`} />
        </div>
-         {linkSection === "abyss" ? (
-          <AbyssLinkField value={p.abyssLink || ""} onChange={v => updateMoviePartField(pIdx, "abyssLink", v)} />
+         {linkSection === "direct" ? (
+          <DirectLinkField value={p.directLink || ""} onChange={v => updateMoviePartField(pIdx, "directLink", v)} />
          ) : (
          <div className="space-y-2">
          <div>
@@ -12848,8 +12847,8 @@ const SortableSeasonItem = memo(({
                        )}
 
 
-                      {linkSection === "abyss" ? (
-                        <AbyssLinkField value={(ep as any).abyssLink || ""} onChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "abyssLink", v, isAnSeries ? baseLanguage : selectedAdminLanguage)} />
+                      {linkSection === "direct" ? (
+                        <DirectLinkField value={(ep as any).directLink || ""} onChange={v => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "directLink", v, isAnSeries ? baseLanguage : selectedAdminLanguage)} />
                       ) : isAnSeries ? (
                         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
                           <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
@@ -12890,7 +12889,7 @@ const SortableSeasonItem = memo(({
                         </div>
                       )}
 
-                      {isAnSeries && linkSection !== "abyss" && (
+                      {isAnSeries && linkSection !== "direct" && (
                         <div className="mt-3 rounded-xl border-2 border-amber-500/35 bg-gradient-to-b from-amber-500/10 to-orange-500/5 p-3">
                           <div className="mb-3 flex items-start justify-between gap-2">
                             <p className="text-[12px] font-black uppercase text-amber-100">🎧 AUDIO ROOMS</p>

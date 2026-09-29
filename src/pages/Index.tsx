@@ -185,7 +185,7 @@ const normalizeAnAudioTracks = (
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
   // Telegram links first; an Abyss-only episode plays through the Abyss server.
-  return [ep.link, ep.link1080, ep.link720, ep.link480, ep.link4k, ep.abyssLink].find((url) => !isInvalidPlaybackUrl(url)) || "";
+  return [ep.link, ep.link1080, ep.link720, ep.link480, ep.link4k, ep.directLink].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
 const getMovieSrc = (anime: AnimeItem): string => {
@@ -196,7 +196,7 @@ const hasMovieParts = (anime: AnimeItem): boolean =>
   anime.type === "movie" && Array.isArray(anime.parts) && anime.parts.length > 0;
 
 const getMoviePartSrc = (part: any): string =>
-  [part?.link, part?.link1080, part?.link720, part?.link480, part?.link4k, part?.abyssLink].find((url) => !isInvalidPlaybackUrl(url)) || "";
+  [part?.link, part?.link1080, part?.link720, part?.link480, part?.link4k, part?.directLink].find((url) => !isInvalidPlaybackUrl(url)) || "";
 
 const getMoviePartQualityOptions = (part: any): { label: string; src: string }[] => {
   const q: { label: string; src: string }[] = [];
