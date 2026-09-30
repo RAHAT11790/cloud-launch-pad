@@ -653,25 +653,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
   // → window blurs). This mirrors AN's own controls open/close behaviour.
+  // Every tap inside the iframe moves focus into it. We detect that (window
+  // blur + a light poll as a safety net), reveal our buttons, then hand focus
+  // back to the page so the NEXT tap is detectable too. Buttons always
+  // auto-hide 3s after the last interaction — same as the RS controller,
+  // including in fullscreen.
   useEffect(() => {
     if (!isEmbedPlayback) return;
     setShowAnOverlay(true);
     scheduleAnOverlayHide();
-    const onBlur = () => {
-      setTimeout(() => {
-        if (document.activeElement?.tagName === "IFRAME") {
-          toggleAnOverlay();
-          (document.activeElement as HTMLElement)?.blur?.();
-          window.focus();
-        }
-      }, 0);
+    const onIframeTap = () => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el?.tagName !== "IFRAME") return;
+      setShowAnOverlay(true);
+      scheduleAnOverlayHide();
+      try { el.blur(); } catch { /* ignore */ }
+      try { window.focus(); } catch { /* ignore */ }
     };
+    const onBlur = () => { setTimeout(onIframeTap, 0); };
     window.addEventListener("blur", onBlur);
+    const poll = window.setInterval(onIframeTap, 400);
+    const onFs = () => { setShowAnOverlay(true); scheduleAnOverlayHide(); };
+    document.addEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs as EventListener);
     return () => {
       window.removeEventListener("blur", onBlur);
+      window.clearInterval(poll);
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs as EventListener);
       if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current);
     };
-  }, [isEmbedPlayback, scheduleAnOverlayHide, toggleAnOverlay]);
+  }, [isEmbedPlayback, scheduleAnOverlayHide]);
 
   // Throttle React state updates from the iframe → ~1 update/sec
   const lastEmbedSyncRef = useRef(0);
@@ -5147,8 +5159,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {isEmbedPlayback && !locked && (
             <div
               className={`absolute top-2 inset-x-2 z-30 flex items-center justify-between transition-opacity duration-200 ${showAnOverlay ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-              onMouseEnter={() => { if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
-              onMouseLeave={scheduleAnOverlayHide}
+              onPointerEnter={(e) => { if (e.pointerType === "mouse" && anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
+              onPointerLeave={(e) => { if (e.pointerType === "mouse") scheduleAnOverlayHide(); }}
+              onPointerUpCapture={() => { if (!showServerPanel) scheduleAnOverlayHide(); }}
             >
               <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleBackPress(); }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
                 <ArrowLeft className="w-4 h-4 text-white" />
