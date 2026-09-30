@@ -48,7 +48,6 @@ interface VideoServerOption {
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
-import { getAbyssSlug, resolveAbyss, type AbyssResolved } from "@/lib/abyss";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
@@ -346,7 +345,7 @@ interface VideoPlayerProps {
   onInfoClick?: () => void;
   onLibraryClick?: (animeId?: string) => void;
   preferProxy?: boolean;
-  /** Extra, non-RS servers (e.g. Abyss) shown in the same Server panel. */
+  /** Extra, non-RS servers (e.g. Direct Link) shown in the same Server panel. */
   extraServers?: { id: string; label: string; active: boolean; onSelect: () => void }[];
 }
 
@@ -6831,59 +6830,48 @@ export async function probeMediaServer(url: string, timeoutMs = 7000): Promise<"
 const MemoVideoPlayer = memo(VideoPlayer);
 
 // ============================================================
-// Abyss-aware wrapper
-//  • Telegram-only item  → normal RS player (unchanged).
-//  • Abyss-only item     → Abyss resolved to direct MP4 qualities, OUR player.
-//  • Both links present  → RS servers + an extra "Abyss Server" in the same
+// Direct-Link-aware wrapper
+//  • Telegram-only item → normal RS player (unchanged).
+//  • Direct-only item   → plays the Direct Link (MP4/M3U8, or iframe embed).
+//  • Both links present → RS servers + an extra "Direct Server" in the same
 //    Server panel; switching keeps the playback position.
-// Links are re-resolved when they expire (stream error → fresh resolve).
 // ============================================================
-const ABYSS_PREF_KEY = "rs_prefer_abyss_server";
+const DIRECT_PREF_KEY = "rs_prefer_direct_server";
+const extractIframeSrc = (v: string) => String(v || "").trim().match(/<iframe[^>]*src=["']([^"']+)["']/i)?.[1] || String(v || "").trim();
+const isDirectMedia = (u: string) => /\.(mp4|m3u8|webm|mkv|mov)(?:$|[?#])/i.test(u);
 
-const findAbyssForSrc = (props: VideoPlayerProps): string => {
+const findDirectForSrc = (props: VideoPlayerProps): string => {
   const src = String(props.src || "");
-  if (getAbyssSlug(src)) return src;
-  const same = (it: any) => [it?.link, it?.link480, it?.link720, it?.link1080, it?.link4k].some((u) => u && u === src);
+  const same = (it: any) => [it?.link, it?.link480, it?.link720, it?.link1080, it?.link4k, it?.directLink].some((u) => u && u === src);
   const seasons: any[] = (props.anime as any)?.seasons || props.seasons || [];
   if (typeof props.currentSeasonIdx === "number" && typeof props.currentEpisodeIdx === "number") {
     const ep = seasons?.[props.currentSeasonIdx]?.episodes?.[props.currentEpisodeIdx];
-    if (ep && same(ep) && ep.abyssLink) return ep.abyssLink;
+    if (ep && same(ep) && ep.directLink) return ep.directLink;
   }
-  for (const s of seasons) for (const ep of (s?.episodes || [])) if (same(ep) && ep?.abyssLink) return ep.abyssLink;
-  for (const p of ((props.anime as any)?.parts || [])) if (same(p) && p?.abyssLink) return p.abyssLink;
+  for (const s of seasons) for (const ep of (s?.episodes || [])) if (same(ep) && ep?.directLink) return ep.directLink;
+  for (const p of ((props.anime as any)?.parts || [])) if (same(p) && p?.directLink) return p.directLink;
   return "";
 };
 
-const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
-  const abyssLink = useMemo(() => findAbyssForSrc(props), [props.src, props.anime, props.seasons, props.currentSeasonIdx, props.currentEpisodeIdx]);
-  const telegramSrc = getAbyssSlug(props.src) ? "" : props.src;
-  const hasBoth = !!telegramSrc && !!abyssLink;
-  const [useAbyss, setUseAbyss] = useState<boolean>(() => !telegramSrc || (hasBoth && localStorage.getItem(ABYSS_PREF_KEY) === "1"));
-  const [resolved, setResolved] = useState<AbyssResolved | null>(null);
-  const [retry, setRetry] = useState(0);
+const DirectAwareVideoPlayer = (props: VideoPlayerProps) => {
+  const directLink = useMemo(() => extractIframeSrc(findDirectForSrc(props)), [props.src, props.anime, props.seasons, props.currentSeasonIdx, props.currentEpisodeIdx]);
+  const telegramSrc = directLink && props.src === directLink ? "" : props.src;
+  const hasBoth = !!telegramSrc && !!directLink;
+  const pref = () => { try { return localStorage.getItem(DIRECT_PREF_KEY) === "1"; } catch { return false; } };
+  const [useDirect, setUseDirect] = useState<boolean>(() => !telegramSrc || (hasBoth && pref()));
   const lastTimeRef = useRef<number>(props.initialSeekTime || 0);
   const [seekOnSwitch, setSeekOnSwitch] = useState<number | undefined>(undefined);
 
-  // New episode → pick the source again (Abyss-only forces Abyss).
   useEffect(() => {
-    setUseAbyss(!telegramSrc || (!!abyssLink && localStorage.getItem(ABYSS_PREF_KEY) === "1"));
+    setUseDirect(!telegramSrc || (!!directLink && pref()));
     setSeekOnSwitch(undefined);
     lastTimeRef.current = props.initialSeekTime || 0;
   }, [props.src]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const playAbyss = useAbyss && !!abyssLink;
-  useEffect(() => {
-    if (!playAbyss) { setResolved(null); return; }
-    let alive = true;
-    setResolved(null);
-    resolveAbyss(abyssLink, { fresh: retry > 0 }).then((r) => { if (alive) setResolved(r); });
-    return () => { alive = false; };
-  }, [playAbyss, abyssLink, retry]);
-
-  const switchTo = useCallback((abyss: boolean) => {
+  const switchTo = useCallback((direct: boolean) => {
     setSeekOnSwitch(lastTimeRef.current || undefined);
-    try { localStorage.setItem(ABYSS_PREF_KEY, abyss ? "1" : "0"); } catch { /* ignore */ }
-    setUseAbyss(abyss);
+    try { localStorage.setItem(DIRECT_PREF_KEY, direct ? "1" : "0"); } catch { /* ignore */ }
+    setUseDirect(direct);
   }, []);
 
   const onSaveProgress = useCallback((t: number, d: number) => {
@@ -6891,51 +6879,26 @@ const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
     props.onSaveProgress?.(t, d);
   }, [props.onSaveProgress]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const playDirect = useDirect && !!directLink;
   const extraServers = hasBoth
-    ? playAbyss
-      ? [{ id: "rs", label: "RS Server", active: false, onSelect: () => switchTo(false) }, { id: "abyss", label: "Abyss Server", active: true, onSelect: () => {} }]
-      : [{ id: "abyss", label: "Abyss Server", active: false, onSelect: () => switchTo(true) }]
+    ? playDirect
+      ? [{ id: "rs", label: "RS Server", active: false, onSelect: () => switchTo(false) }, { id: "direct", label: "Direct Server", active: true, onSelect: () => {} }]
+      : [{ id: "direct", label: "Direct Server", active: false, onSelect: () => switchTo(true) }]
     : [];
   const initialSeekTime = seekOnSwitch ?? props.initialSeekTime;
 
-  if (!playAbyss) {
+  if (!playDirect) {
     return <MemoVideoPlayer {...props} onSaveProgress={onSaveProgress} initialSeekTime={initialSeekTime} extraServers={extraServers} />;
   }
-  if (!resolved) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4 bg-background" role="status" aria-label="Loading video">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/25 border-t-primary" />
-        <p className="text-sm font-medium text-muted-foreground">Preparing video…</p>
-        <button onClick={props.onClose} className="mt-2 rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Close</button>
-      </div>
-    );
-  }
-  if (!resolved.ok) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-3 bg-background px-6 text-center" role="alert">
-        <Server className="h-9 w-9 text-muted-foreground" />
-        <p className="text-sm font-semibold text-foreground">This video could not be loaded right now</p>
-        <p className="max-w-xs text-xs text-muted-foreground">{resolved.error || "The Abyss server did not return a playable quality."}</p>
-        <div className="mt-2 flex gap-2">
-          <button onClick={() => setRetry((n) => n + 1)} className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground">Try again</button>
-          {telegramSrc && <button onClick={() => switchTo(false)} className="rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Use RS Server</button>}
-          <button onClick={props.onClose} className="rounded-full border border-border px-4 py-1.5 text-xs text-foreground">Close</button>
-        </div>
-      </div>
-    );
-  }
-  const sorted = [...resolved.sources].sort((a, b) => parseInt(a.label) - parseInt(b.label));
-  const preferred = sorted.find((s) => s.label === "720p") || sorted[sorted.length - 1];
+  const media = isDirectMedia(directLink);
   return (
     <MemoVideoPlayer
-      key={`abyss-${resolved.slug}-${retry}`}
+      key={`direct-${directLink}`}
       {...props}
-      src={preferred.url}
-      qualityOptions={sorted.map((s) => ({ label: s.label, src: s.url }))}
-      audioTracks={undefined}
-      noProxy
+      src={directLink}
+      qualityOptions={undefined}
       noServerSwitch
-      forceEmbedMode={false}
+      forceEmbedMode={!media}
       onSaveProgress={onSaveProgress}
       initialSeekTime={initialSeekTime}
       extraServers={extraServers}
@@ -6943,4 +6906,4 @@ const AbyssAwareVideoPlayer = (props: VideoPlayerProps) => {
   );
 };
 
-export default AbyssAwareVideoPlayer;
+export default DirectAwareVideoPlayer;

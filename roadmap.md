@@ -60,3 +60,8 @@
 - [ ] Verify the Golden card on the hosted Lovable Preview (blocked here by Lovable editor sign-in; mobile local Preview verified).
 - [x] Fix grouped New Release cards so any newly locked episode (not the oldest episode) activates the Golden card.
 - [ ] Verify the grouped Golden card on both the hosted Preview and published domain after publishing the current build.
+
+## Direct Link (replaces Abyss)
+- [x] Remove Abyss fully (server code, router row, both managers, player, empty DB fields).
+- [x] Direct Link field in Series/Movie editors; "Direct Server" in player when both links exist.
+- [ ] Movie editor screenshot + real in-player playback proof on a real phone/Chrome (sandbox browser can't decode H.264).
