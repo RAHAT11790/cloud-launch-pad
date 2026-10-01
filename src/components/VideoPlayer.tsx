@@ -1210,6 +1210,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         title: ep.title || `Episode ${ep.episodeNumber || index + 1}`,
         metaText: ep.title ? ep.title : `Episode ${ep.episodeNumber || index + 1}`,
         qualityLinks,
+        directLink: ep.directLink || "",
       };
     });
   }, [currentDownloadLanguageLabel, downloadPanelSeasonIdx, getEpisodeDownloadLinksForLanguage, seasons]);
@@ -6374,7 +6375,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     const animeTitle = String((anime as any)?.title || title || "").trim();
                     // Only real data: qualities that actually exist and episodes that have them.
                     const epTgQuals = (ep: any) => {
-                      const keys = Object.keys(ep?.qualityLinks || {}).filter((q) => String(ep.qualityLinks[q] || "").trim()).map((q) => normalizeTelegramQuality(q));
+                      // Only RS/Telegram-saved links can be sent by the bot — skip Direct/Abyss links.
+                      const direct = String(ep?.directLink || "").trim();
+                      const keys = Object.keys(ep?.qualityLinks || {}).filter((q) => {
+                        const v = String(ep.qualityLinks[q] || "").trim();
+                        return v && v !== direct && !isAbyssLink(v);
+                      }).map((q) => normalizeTelegramQuality(q));
                       return TELEGRAM_FREE_QUALITIES.filter((label) => keys.includes(normalizeTelegramQuality(label)));
                     };
                     const tgEpisodeList = hasMultiEpisodes ? panelEpisodes.filter((ep) => epTgQuals(ep).length > 0) : [];
