@@ -97,6 +97,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "an-playback",
   "verify-admin-pin",
   "abyss",
+  "share-preview",
 ]);
 
 const KNOWN_FUNCTION_NAMES = new Set([

@@ -27,3 +27,6 @@ verify_jwt = false
 
 [functions.abyss]
 verify_jwt = false
+
+[functions.share-preview]
+verify_jwt = false
