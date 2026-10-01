@@ -169,10 +169,22 @@ export function useFirebaseData() {
       );
     });
 
+    // Live: card counters/metadata update the moment admin saves.
+    const liveApply = (setter: typeof setWebseries, key: string) => (snapshot: any) => {
+      const data = snapshot.val();
+      if (!data || cancelled) return;
+      const items = Object.entries(data).map(([id, item]: [string, any]) => ({ ...item, id }));
+      setter((prev) => { const merged = mergeById(prev, items as any[]); writeCache(key, merged); return merged; });
+    };
+    const unsubLiveWs = onValue(ref(db, "adminContentIndex/webseries"), liveApply(setWebseries, LS_WS), () => {});
+    const unsubLiveMov = onValue(ref(db, "adminContentIndex/movies"), liveApply(setMovies, LS_MOV), () => {});
+
     return () => {
       cancelled = true;
       cancelIdle();
       unsubCats();
+      unsubLiveWs();
+      unsubLiveMov();
     };
   }, []);
 
