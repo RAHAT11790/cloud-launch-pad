@@ -5664,6 +5664,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     All
                   </button>
                   <div
+                    ref={(row) => {
+                      // Keep the selected episode in view (player remounts on episode change).
+                      if (!row) return;
+                      const el = row.querySelector<HTMLElement>('[data-ep-active="1"]');
+                      if (!el) return;
+                      const left = el.offsetLeft - 76 - 8;
+                      if (Math.abs(row.scrollLeft - left) > 4 && (el.offsetLeft < row.scrollLeft + 76 || el.offsetLeft + el.offsetWidth > row.scrollLeft + row.clientWidth)) {
+                        row.scrollLeft = Math.max(0, left);
+                      }
+                    }}
+                    key={`ep-row-${activeEpisodeIdx}`}
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
                     style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
                   >
@@ -5671,6 +5682,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <button
                         key={ep.number}
                         onClick={ep.onClick}
+                        data-ep-active={ep.active ? "1" : undefined}
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
                         className={`relative flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
                           ep.active
