@@ -49,7 +49,7 @@ const newestFirst = (a: AnimeItem, b: AnimeItem) => (b.updatedAt || b.createdAt 
 const mergeById = (cached: AnimeItem[], fresh: AnimeItem[]) => {
   const map = new Map<string, AnimeItem>();
   cached.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
-  fresh.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, item); });
+  fresh.forEach((item) => { if (item?.id && !isLegacyAnEntry(item)) map.set(item.id, { ...(map.get(item.id) || {}), ...item } as AnimeItem); });
   return Array.from(map.values()).sort(newestFirst).slice(0, BACKFILL_CACHE_LIMIT);
 };
 
