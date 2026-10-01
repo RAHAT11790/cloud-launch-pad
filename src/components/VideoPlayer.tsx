@@ -6956,21 +6956,43 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
   if (!best) {
     const err = state.link === abyssLink && state.err;
     return (
-      <div className="rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center">
-      <div className="relative w-full max-w-5xl aspect-video bg-black flex flex-col items-center justify-center gap-3">
-        <button aria-label="Back" onClick={props.onClose} className="absolute left-3 top-3 h-9 w-9 rounded-full bg-background/40 text-foreground flex items-center justify-center">
+      <div className="rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center overflow-y-auto">
+      <div className="relative w-full max-w-5xl aspect-video bg-black flex flex-col items-center justify-center gap-3 overflow-hidden">
+        {(props.poster || props.anime?.backdrop || props.anime?.poster) && (
+          <img src={props.poster || props.anime?.backdrop || props.anime?.poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[2px]" />
+        )}
+        <button aria-label="Back" onClick={props.onClose} className="absolute z-10 left-3 top-3 h-9 w-9 rounded-full bg-background/40 text-foreground flex items-center justify-center">
           <ArrowLeft className="w-5 h-5" />
         </button>
+        <div className="relative z-10 flex flex-col items-center gap-3">
         {err ? (
           <>
-            <p className="text-sm text-muted-foreground">Video is temporarily unavailable</p>
+            <p className="text-sm text-foreground">Video is temporarily unavailable</p>
             <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => { invalidateAbyss(abyssLink); load(true); }}>Try again</button>
           </>
         ) : (
           <>
             <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            <p className="text-xs font-medium tracking-wide text-muted-foreground">Episode loading…</p>
+            <p className="text-xs font-medium tracking-wide text-foreground/80">Episode loading…</p>
           </>
+        )}
+        </div>
+      </div>
+      <div className="w-full max-w-5xl px-4 py-3">
+        <h2 className="text-base font-semibold text-foreground line-clamp-1">{props.title}</h2>
+        {props.subtitle && <p className="text-xs text-muted-foreground mt-0.5">{props.subtitle}</p>}
+        {props.episodeList && props.episodeList.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Episodes</p>
+            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+              {props.episodeList.map((ep) => (
+                <button key={ep.number} onClick={ep.onClick}
+                  className={`h-10 rounded-lg text-sm font-medium border transition ${ep.active ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:border-primary"}`}>
+                  {ep.number}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
       </div>
