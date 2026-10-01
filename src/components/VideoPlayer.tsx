@@ -6355,7 +6355,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14px] font-bold text-white">Telegram Download</span>
-                          <span className="block text-[11px] text-white/60 mt-0.5">Free 480P, 720P & 1080P — delivered by our Telegram bot.</span>
+                          <span className="block text-[11px] text-white/60 mt-0.5">Free download — delivered by our Telegram bot.</span>
                         </span>
                         <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
                       </button>
@@ -6388,7 +6388,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       return Number.isFinite(parsed) && parsed > 0 ? parsed : downloadPanelSeasonIdx + 1;
                     })();
                     const animeTitle = String((anime as any)?.title || title || "").trim();
-                    const tgEpisodeList = hasMultiEpisodes ? panelEpisodes : [];
+                    // Only real data: qualities that actually exist and episodes that have them.
+                    const epTgQuals = (ep: any) => {
+                      const keys = Object.keys(ep?.qualityLinks || {}).filter((q) => String(ep.qualityLinks[q] || "").trim()).map((q) => normalizeTelegramQuality(q));
+                      return TELEGRAM_FREE_QUALITIES.filter((label) => keys.includes(normalizeTelegramQuality(label)));
+                    };
+                    const tgEpisodeList = hasMultiEpisodes ? panelEpisodes.filter((ep) => epTgQuals(ep).length > 0) : [];
+                    const tgAvailableQualities = hasMultiEpisodes
+                      ? TELEGRAM_FREE_QUALITIES.filter((label) => tgEpisodeList.some((ep) => epTgQuals(ep).includes(label)))
+                      : TELEGRAM_FREE_QUALITIES.filter((label) => availableDownloadQualities.some((q) => normalizeTelegramQuality(q) === normalizeTelegramQuality(label)));
+                    const effectiveTgQualities = (() => {
+                      const kept = tgSelectedQualities.filter((q) => tgAvailableQualities.includes(q));
+                      return kept.length ? kept : tgAvailableQualities.slice(-1);
+                    })();
                     const chosenEpisodes = hasMultiEpisodes
                       ? tgEpisodeList.filter((ep) => tgSelectedEpisodes.has(ep.index)).map((ep) => Number(ep.episodeNumber) || 0).filter(Boolean)
                       : [1];
@@ -6397,7 +6409,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       title: animeTitle,
                       season: seasonNumber,
                       episodes: chosenEpisodes,
-                      qualities: tgSelectedQualities,
+                      qualities: effectiveTgQualities,
                     });
                     const toggleTgEpisode = (idx: number) => {
                       setTgSelectedEpisodes((prev) => {
@@ -6411,9 +6423,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       setTgSelectedEpisodes(allTgSelected ? new Set() : new Set(tgEpisodeList.map((ep) => ep.index)));
                     };
                     const toggleTgQuality = (label: string) => {
-                      setTgSelectedQualities((prev) => (
-                        prev.includes(label) ? prev.filter((q) => q !== label) : [...prev, label]
-                      ));
+                      const base = effectiveTgQualities;
+                      setTgSelectedQualities(base.includes(label) ? base.filter((q) => q !== label) : [...base, label]);
                     };
                     return (
                       <>
@@ -6431,9 +6442,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             )}
                             <div className="mt-2.5 border-t border-white/10 pt-2.5">
                               <p className="text-[10px] text-white/50 mb-1.5">Select one or more qualities</p>
-                              <div className="grid grid-cols-3 gap-2">
-                                {TELEGRAM_FREE_QUALITIES.map((label) => {
-                                  const isOn = tgSelectedQualities.includes(label);
+                              <div className={`grid gap-2 ${tgAvailableQualities.length >= 3 ? 'grid-cols-3' : tgAvailableQualities.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                {tgAvailableQualities.length === 0 && (<p className="text-[11px] text-white/50">No Telegram quality available.</p>)}
+                                {tgAvailableQualities.map((label) => {
+                                  const isOn = effectiveTgQualities.includes(label);
                                   return (
                                     <button
                                       key={`tg-${label}`}
