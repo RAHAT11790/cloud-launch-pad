@@ -8,7 +8,6 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
-import { triggerApkDownload } from "@/lib/apkDownload";
 import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
