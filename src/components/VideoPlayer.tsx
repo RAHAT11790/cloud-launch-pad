@@ -354,6 +354,7 @@ type DownloadEpisodeOption = {
   title: string;
   metaText: string;
   qualityLinks: Record<string, string>;
+  directLink?: string;
 };
 
 const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
