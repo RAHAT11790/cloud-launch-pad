@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
