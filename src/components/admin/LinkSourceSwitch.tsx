@@ -69,7 +69,7 @@ export function DirectLinkField({ value, onChange }: { value: string; onChange: 
   const invalid = !!value && !/^https?:\/\//i.test(value);
   const runCheck = async () => {
     if (invalid) { setCheck({ state: "fail", text: "Link must start with http(s)://" }); return; }
-    if (!isDirectMediaUrl(value)) { setCheck({ state: "ok", text: "Embed link — plays in iframe player" }); return; }
+    if (!isDirectMediaUrl(value)) { setCheck({ state: "ok", text: /abyss(player|cdn)?\.(com|to)\//i.test(value) ? "Abyss link — plays ad-free in RS player" : "Embed link — plays in iframe player" }); return; }
     setCheck({ state: "loading" });
     const v = document.createElement("video");
     v.preload = "metadata"; v.muted = true;
@@ -91,7 +91,7 @@ export function DirectLinkField({ value, onChange }: { value: string; onChange: 
         </span>
         {value && !invalid && (
           <span className="rounded bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-200">
-            {isDirectMediaUrl(value) ? "Direct player" : "Iframe player"}
+            {isDirectMediaUrl(value) ? "Direct player" : /abyss(player|cdn)?\.(com|to)\//i.test(value) ? "RS player · ad-free" : "Iframe player"}
           </span>
         )}
       </div>
