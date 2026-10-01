@@ -29,22 +29,8 @@
 
 - [x] Download Manager: admin page, Telegram/Website toggles, HTTP proxy vs HTTPS direct mode, daily/7d/30d stats, player gating (live verified)
 
-## Android app v2 — real native app, NOT WebView (noted 2026-09-22, work in next chat)
-- [x] Signed release APK with a proper keystore so Google/Play Protect stops flagging it as unauthorized/unknown.
-- [x] Ship a real native Android app shell: app must keep working even if the domain is banned/deleted (bundled app assets + native APIs, no remote-URL WebView, remove any capacitor server.url).
-- [~] Google login: native in-app Google sheet implemented (@capgo/capacitor-social-login + Firebase credential). BLOCKED: owner must add signing SHA-1 848E0CA9D5A050BAE82F028810358A757A23D035 to the Firebase Android app and drop google-services.json into android/app/.
-- [x] Hide the phone status/notification bar + navigation bar (true immersive fullscreen).
-- [x] Video player: real fullscreen button, no black side borders, auto-rotate to landscape on fullscreen.
-- [x] HTTP video servers must play reliably inside the app.
-- [x] Swipe gestures must control the phone's real system volume and real screen brightness (not just in-app volume).
-- [x] Request + handle runtime permissions: notifications, storage, and audio/volume control, with user allow flow.
-- [x] Profile page must have a visible Download button opening the in-app Download Manager.
-- [x] Downloads must run natively inside the app — never hand off to Chrome.
-- [x] Ongoing download notification with anime backdrop image + live progress (episode X of Y).
-- [x] Add a Download button for AN / HLS videos too (currently missing).
-- [x] Offline: app opens offline, offline player + downloaded library fully usable, multi-audio track selection.
-- [ ] Professional UI polish across player, download manager and offline library.
-- [ ] Verify with signed APK install on device + screenshots.
+## Android app — removed (2026-10-01)
+- [x] All Android/native app code, files and packages deleted; website only.
 
 ## Website — Premium Episode Lock + Telegram quality (verification in progress)
 - [x] Fix root cause: episode/part `lockUntil` was stripped on save/load, so timed locks never reached the user panel.
@@ -65,3 +51,11 @@
 - [x] Remove Abyss fully (server code, router row, both managers, player, empty DB fields).
 - [x] Direct Link field in Series/Movie editors; "Direct Server" in player when both links exist.
 - [ ] Movie editor screenshot + real in-player playback proof on a real phone/Chrome (sandbox browser can't decode H.264).
+
+## Master fix (2026-10-01)
+- [x] Abyss episode switch never shows the previous episode; in-player "Episode loading…" loader; 2h link cache.
+- [x] Episode strip stays on the selected episode.
+- [x] Telegram downloader shows only real qualities/episodes.
+- [x] Editor Telegram/Direct Link switch redesigned.
+- [x] Home cards update episode count live.
+- [x] Profile app download buttons removed; junk files removed.
