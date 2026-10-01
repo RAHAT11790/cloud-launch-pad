@@ -27,6 +27,7 @@ import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/inde
 import iosProtectionSource from "../../supabase/functions/ios-protection/index.ts?raw";
 import adShieldSource from "../../supabase/functions/ad-shield/index.ts?raw";
 import abyssSource from "../../supabase/functions/abyss/index.ts?raw";
+import sharePreviewSource from "../../supabase/functions/share-preview/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
@@ -90,6 +91,7 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("abyss",          "Abyss Server",   "🎬 Abyss link resolver + MP4 stream relay. Turns an Abyss iframe link into direct 480p/720p/1080p files that play inside the RS player — no iframe, no Abyss ads. Paste the URL into EGD Router → abyss (or hit Default).", abyssSource, [], { isNew: true, badgeText: "ABYSS · NEW", badgeTone: "cyan" }),
+  entry("share-preview",  "Share Preview",  "🖼️ Share link preview — Telegram/WhatsApp/Facebook show the anime LOGO on a 16:9 card, visitors are redirected to the episode. Paste the URL into EGD Router → share-preview (or hit Default).", sharePreviewSource, [], { isNew: true, badgeText: "SHARE · NEW", badgeTone: "cyan" }),
   entry("video-proxy",    "Video Proxy",    "⚡ v9 ADAPTIVE-WINDOW BUILD (Supabase/Deno) — 1MB first window for instant start, 6MB steady (12MB on https), 7s header timeout, same-origin-Referer-first so HTTP mirrors answer on the first try. Fixes 'proxy down / video never loads'. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
   entry("ad-shield",      "Ad Shield",      "🛡️ ANTI-ADBLOCK GATEWAY — first-party relay for every ad script/asset (/s, /t), unblockable control probe (/probe, /px) and edge-side reachability oracle (/check) that exposes AdGuard DNS / NextDNS / Pi-hole / Brave / AdBlock browsers. The home-page Ad-Blocker Gate uses this to prove a block instead of guessing. Attach the URL here and the whole anti-adblock system switches on.", adShieldSource, [], { isNew: true, badgeText: "AD SHIELD · NEW", badgeTone: "amber" }),
   entry("ios-protection", "iOS Protection", "🍏 iPhone / iPad / Safari playback gateway. Fixes wrong MIME types, serves '.mkv' files whose real container is MP4 as video/mp4 so Safari plays them natively, normalises byte-range responses, rewrites HLS playlists, and reports true Matroska with 415 so the player fails over instantly. Attach it once here — the player uses it for EVERY video server on iOS only.", iosProtectionSource, [], { isNew: true, badgeText: "iOS · NEW", badgeTone: "cyan" }),

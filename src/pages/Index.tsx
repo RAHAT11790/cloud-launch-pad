@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
@@ -7,11 +8,19 @@ import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
+// Share links go through the EGD Router `share-preview` row (when enabled) so
+// Telegram/WhatsApp show the anime logo card; otherwise the plain watch link.
+let sharePreviewBase = "";
+getEdgeFunctionUrl("share-preview").then((u) => { sharePreviewBase = (u || "").replace(/\/+$/, ""); }).catch(() => {});
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
   if (seasonIdx !== undefined) params.set("s", String(seasonIdx + 1));
   if (epIdx !== undefined) params.set("e", String(epIdx + 1));
   const qs = params.toString();
+  if (sharePreviewBase) {
+    params.set("o", window.location.origin);
+    return `${sharePreviewBase}/watch/${encodeURIComponent(animeId)}?${params.toString()}`;
+  }
   return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
+import { triggerApkDownload } from "@/lib/apkDownload";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import AboutPage from "./AboutPage";
@@ -539,6 +540,23 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [customizeTab, setCustomizeTab] = useState<"frames" | "backgrounds" | "themes" | "fonts">("frames");
   const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
   const [profileShop, setProfileShop] = useState<ProfileShop>(EMPTY_SHOP);
+
+  // User APK download — admin sets settings/apk/userEnabled + settings/apk/userUrl.
+  const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
+  const [userApkUrl, setUserApkUrl] = useState<string>("");
+  useEffect(() => {
+    const u1 = onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
+      const v = snap.val();
+      setUserApkEnabled(v === undefined || v === null ? true : !!v);
+    });
+    const u2 = onValue(ref(db, "settings/apk/userUrl"), (snap) => setUserApkUrl(String(snap.val() || "")));
+    return () => { u1(); u2(); };
+  }, []);
+  const handleDownloadUserApk = () => {
+    const url = (userApkUrl || "").trim();
+    if (!url) { toast.error("Download link is not configured yet"); return; }
+    if (!triggerApkDownload(url, `${brandingCfg.siteName}.apk`)) toast.error("Download could not be started");
+  };
 
   const getUserId = (): string | null => {
     try {
@@ -2163,6 +2181,21 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           Join Our Telegram Channel
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
+
+        {userApkEnabled && userApkUrl ? (
+          <>
+            <button
+              onClick={handleDownloadUserApk}
+              className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-semibold text-sm transition-all mt-1 bg-primary text-primary-foreground"
+            >
+              <Download className="w-4 h-4" />
+              Download App
+            </button>
+            <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">
+              Install {brandingCfg.siteName} as an app on your phone
+            </p>
+          </>
+        ) : null}
 
 
       </div>
