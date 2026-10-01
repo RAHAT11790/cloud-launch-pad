@@ -6927,28 +6927,38 @@ const DirectAwareVideoPlayer = (props: VideoPlayerProps) => {
 // Abyss iframe, so none of their ads can run). Expired links re-resolve.
 const abyssLabelRank = (l: string) => parseInt(String(l).replace(/\D/g, ""), 10) || 0;
 const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLink: string }) => {
-  const [state, setState] = useState<{ srcs: QualityOption[]; err: string; nonce: number }>({ srcs: [], err: "", nonce: 0 });
-  const retries = useRef(0);
+  // State is keyed by the link so a previous episode's sources can never be
+  // rendered while the next episode is still resolving.
+  const [state, setState] = useState<{ link: string; srcs: QualityOption[]; err: string; nonce: number }>({ link: "", srcs: [], err: "", nonce: 0 });
   const load = useCallback((fresh: boolean) => {
-    setState((s) => ({ ...s, err: "" }));
-    resolveAbyss(abyssLink, { fresh }).then((r) => {
-      if (!r.ok) { setState((s) => ({ ...s, srcs: [], err: r.error || "Video not available" })); return; }
-      const srcs = [...r.sources].sort((a, b) => abyssLabelRank(a.label) - abyssLabelRank(b.label)).map((x) => ({ label: x.label, src: x.url }));
-      setState((s) => ({ srcs, err: "", nonce: s.nonce + 1 }));
+    const link = abyssLink;
+    setState((s) => ({ link, srcs: [], err: "", nonce: s.nonce }));
+    resolveAbyss(link, { fresh }).then((r) => {
+      setState((s) => {
+        if (link !== abyssLink) return s;
+        if (!r.ok) return { link, srcs: [], err: r.error || "Video not available", nonce: s.nonce };
+        const srcs = [...r.sources].sort((a, b) => abyssLabelRank(a.label) - abyssLabelRank(b.label)).map((x) => ({ label: x.label, src: x.url }));
+        return { link, srcs, err: "", nonce: s.nonce + 1 };
+      });
     });
   }, [abyssLink]);
-  useEffect(() => { retries.current = 0; load(false); }, [load]);
-  const best = state.srcs.find((q) => /720/.test(q.label)) || state.srcs[state.srcs.length - 1];
+  useEffect(() => { load(false); }, [load]);
+  const srcs = state.link === abyssLink ? state.srcs : [];
+  const best = srcs.find((q) => /720/.test(q.label)) || srcs[srcs.length - 1];
   if (!best) {
+    const err = state.link === abyssLink && state.err;
     return (
-      <div className="relative w-full aspect-video bg-background flex flex-col items-center justify-center gap-3 rounded-lg">
-        {state.err ? (
+      <div className="relative w-full aspect-video bg-background flex flex-col items-center justify-center gap-3">
+        {err ? (
           <>
             <p className="text-sm text-muted-foreground">Video is temporarily unavailable</p>
-            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => load(true)}>Try again</button>
+            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => { invalidateAbyss(abyssLink); load(true); }}>Try again</button>
           </>
         ) : (
-          <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <>
+            <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <p className="text-xs font-medium tracking-wide text-muted-foreground">Episode loading…</p>
+          </>
         )}
       </div>
     );
@@ -6958,8 +6968,9 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
       key={`abyss-${abyssLink}-${state.nonce}`}
       {...props}
       src={best.src}
-      qualityOptions={state.srcs}
+      qualityOptions={srcs}
       noServerSwitch
+      onError={() => { invalidateAbyss(abyssLink); load(true); }}
     />
   );
 };
