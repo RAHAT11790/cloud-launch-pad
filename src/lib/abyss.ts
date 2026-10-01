@@ -5,6 +5,7 @@
 // the built-in backend function), so the Abyss iframe/ads never load.
 // ============================================================
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { db, ref, get, set, remove } from "@/lib/firebase";
 
 export interface AbyssSource { label: string; url: string; size: number }
 export interface AbyssResolved { ok: boolean; slug: string; title?: string; sources: AbyssSource[]; embed: string; error?: string }
@@ -43,7 +44,7 @@ const writeLs = (slug: string, v: AbyssResolved | null) => { try { const all = r
 
 export function invalidateAbyss(link: string) {
   const slug = getAbyssSlug(link);
-  if (slug) { cache.delete(slug); writeLs(slug, null); }
+  if (slug) { cache.delete(slug); writeLs(slug, null); remove(ref(db, `abyssCache/${slug}`)).catch(() => {}); }
 }
 
 export function resolveAbyss(link: string, opts: { fresh?: boolean } = {}): Promise<AbyssResolved> {
@@ -56,13 +57,27 @@ export function resolveAbyss(link: string, opts: { fresh?: boolean } = {}): Prom
   if (!opts.fresh) { const st = readLs()[slug]; if (st && Date.now() - st.at < TTL && st.v?.ok) { const p0 = Promise.resolve(st.v); cache.set(slug, { at: st.at, p: p0 }); return p0; } }
   const p = (async () => {
     try {
+      // Shared cache: one viewer's resolved links serve every viewer for 2h.
+      if (!opts.fresh) {
+        try {
+          const snap = await get(ref(db, `abyssCache/${slug}`));
+          const s = snap.val();
+          if (s?.at && Date.now() - s.at < TTL && s.v?.ok && Array.isArray(s.v.sources) && s.v.sources.length) {
+            writeLs(slug, s.v);
+            return s.v as AbyssResolved;
+          }
+        } catch { /* ignore */ }
+      }
       const base = await getBase();
       if (!base) throw new Error("Abyss server not set (Admin → EGD Router → abyss)");
       const r = await fetch(`${base}/resolve?id=${encodeURIComponent(slug)}`, { cache: "no-store" });
       const j = await r.json();
       if (!j?.ok) cache.delete(slug);
-      const out = { ok: !!j?.ok && Array.isArray(j.sources) && j.sources.length > 0, slug, title: j?.title, sources: j?.sources || [], embed, error: j?.error } as AbyssResolved;
-      if (out.ok) writeLs(slug, out);
+      const out = { ok: !!j?.ok && Array.isArray(j.sources) && j.sources.length > 0, slug, title: j?.title || "", sources: j?.sources || [], embed, error: j?.error || "" } as AbyssResolved;
+      if (out.ok) {
+        writeLs(slug, out);
+        set(ref(db, `abyssCache/${slug}`), { at: Date.now(), v: out }).catch(() => {});
+      }
       return out;
     } catch (e) {
       cache.delete(slug);
