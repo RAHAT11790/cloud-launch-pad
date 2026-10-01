@@ -541,33 +541,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
   const [profileShop, setProfileShop] = useState<ProfileShop>(EMPTY_SHOP);
 
-  // User-side APK download — admin sets URL + ON/OFF toggle from APK DW.
-  // Paths: settings/apk/userEnabled (bool), settings/apk/userUrl (string).
-  const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
-  const [userApkUrl, setUserApkUrl] = useState<string>("");
-  useEffect(() => {
-    const u1 = onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
-      const v = snap.val();
-      setUserApkEnabled(v === undefined || v === null ? true : !!v);
-    });
-    const u2 = onValue(ref(db, "settings/apk/userUrl"), (snap) => {
-      setUserApkUrl(String(snap.val() || ""));
-    });
-    return () => { u1(); u2(); };
-  }, []);
-  const handleDownloadUserApk = () => {
-    const url = (userApkUrl || "").trim();
-    if (!url) {
-      toast.error("Download link is not configured yet");
-      return;
-    }
-
-    const ok = triggerApkDownload(url, `${brandingCfg.siteName}.apk`);
-    if (!ok) {
-      toast.error("Download could not be started");
-    }
-  };
-
   const getUserId = (): string | null => {
     try {
       const user = localStorage.getItem("rsanime_user");
@@ -2162,12 +2135,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       {/* Menu Items */}
       <div className="profile-menu-grid">
-        <div onClick={() => setActivePanel("downloads")}
-          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
-          <Download className="w-5 h-5 text-primary" />
-          <span className="flex-1 text-[13px] font-medium">My Downloads</span>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
         <div onClick={() => setActivePanel("settings")}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <Settings className="w-5 h-5 text-primary" />
@@ -2198,23 +2165,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
 
-        {/* Download APK — User panel install button.
-            Hidden if admin disabled it via APK DW > User Panel Download Button. */}
-        {userApkEnabled && userApkUrl ? (
-          <>
-            <button
-              onClick={handleDownloadUserApk}
-              className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-semibold text-sm transition-all mt-1"
-              style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
-            >
-              <Download className="w-4 h-4" />
-              Download App
-            </button>
-            <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">
-              Install {brandingCfg.siteName} as an app on your phone
-            </p>
-          </>
-        ) : null}
 
       </div>
       </div>
