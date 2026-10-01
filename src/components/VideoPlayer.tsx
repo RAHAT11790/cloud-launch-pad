@@ -6960,7 +6960,11 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
   if (!best) {
     const err = state.link === abyssLink && state.err;
     return (
-      <div className="relative w-full aspect-video bg-background flex flex-col items-center justify-center gap-3">
+      <div className="rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center">
+      <div className="relative w-full max-w-5xl aspect-video bg-black flex flex-col items-center justify-center gap-3">
+        <button aria-label="Back" onClick={props.onClose} className="absolute left-3 top-3 h-9 w-9 rounded-full bg-background/40 text-foreground flex items-center justify-center">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
         {err ? (
           <>
             <p className="text-sm text-muted-foreground">Video is temporarily unavailable</p>
@@ -6972,6 +6976,7 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
             <p className="text-xs font-medium tracking-wide text-muted-foreground">Episode loading…</p>
           </>
         )}
+      </div>
       </div>
     );
   }
