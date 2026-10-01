@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
@@ -6903,6 +6904,9 @@ const DirectAwareVideoPlayer = (props: VideoPlayerProps) => {
   if (!playDirect) {
     return <MemoVideoPlayer {...props} onSaveProgress={onSaveProgress} initialSeekTime={initialSeekTime} extraServers={extraServers} />;
   }
+  if (isAbyssLink(directLink)) {
+    return <AbyssDirectPlayer {...props} abyssLink={directLink} onSaveProgress={onSaveProgress} initialSeekTime={initialSeekTime} extraServers={extraServers} />;
+  }
   const media = isDirectMedia(directLink);
   return (
     <MemoVideoPlayer
@@ -6915,6 +6919,48 @@ const DirectAwareVideoPlayer = (props: VideoPlayerProps) => {
       onSaveProgress={onSaveProgress}
       initialSeekTime={initialSeekTime}
       extraServers={extraServers}
+    />
+  );
+};
+
+// Abyss link → resolved MP4 qualities played in the RS player (never the
+// Abyss iframe, so none of their ads can run). Expired links re-resolve.
+const abyssLabelRank = (l: string) => parseInt(String(l).replace(/\D/g, ""), 10) || 0;
+const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLink: string }) => {
+  const [state, setState] = useState<{ srcs: QualityOption[]; err: string; nonce: number }>({ srcs: [], err: "", nonce: 0 });
+  const retries = useRef(0);
+  const load = useCallback((fresh: boolean) => {
+    setState((s) => ({ ...s, err: "" }));
+    resolveAbyss(abyssLink, { fresh }).then((r) => {
+      if (!r.ok) { setState((s) => ({ ...s, srcs: [], err: r.error || "Video not available" })); return; }
+      const srcs = [...r.sources].sort((a, b) => abyssLabelRank(a.label) - abyssLabelRank(b.label)).map((x) => ({ label: x.label, src: x.url }));
+      setState((s) => ({ srcs, err: "", nonce: s.nonce + 1 }));
+    });
+  }, [abyssLink]);
+  useEffect(() => { retries.current = 0; load(false); }, [load]);
+  const best = state.srcs.find((q) => /720/.test(q.label)) || state.srcs[state.srcs.length - 1];
+  if (!best) {
+    return (
+      <div className="relative w-full aspect-video bg-background flex flex-col items-center justify-center gap-3 rounded-lg">
+        {state.err ? (
+          <>
+            <p className="text-sm text-muted-foreground">Video is temporarily unavailable</p>
+            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => load(true)}>Try again</button>
+          </>
+        ) : (
+          <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        )}
+      </div>
+    );
+  }
+  return (
+    <MemoVideoPlayer
+      key={`abyss-${abyssLink}-${state.nonce}`}
+      {...props}
+      src={best.src}
+      qualityOptions={state.srcs}
+      noServerSwitch
+      onError={() => { if (retries.current++ < 2) { invalidateAbyss(abyssLink); load(true); } }}
     />
   );
 };
