@@ -6960,7 +6960,6 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
       src={best.src}
       qualityOptions={state.srcs}
       noServerSwitch
-      onError={() => { if (retries.current++ < 2) { invalidateAbyss(abyssLink); load(true); } }}
     />
   );
 };
