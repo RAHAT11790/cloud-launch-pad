@@ -14,8 +14,6 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { isNativeApp } from "@/lib/nativeRuntime";
-import NativeDownloadsPanel from "@/components/offline/OfflineDownloadsPanel";
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { getTodayRemaining } from "@/lib/premiumAccess";
@@ -1706,9 +1704,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Downloads Panel
   if (activePanel === "downloads") {
-    return isNativeApp()
-      ? <NativeDownloadsPanel onBack={() => setActivePanel("main")} />
-      : <DownloadsPanel onBack={() => setActivePanel("main")} />;
+    return <DownloadsPanel onBack={() => setActivePanel("main")} />;
   }
 
   // Change Password Panel

@@ -4,8 +4,6 @@ import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowL
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
-import { isNativeApp } from "@/lib/nativeRuntime";
-import { canUseNativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -145,11 +143,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     setLoading(true);
     setDeviceLimitError(null);
     try {
-      // Android app: native Google account sheet (stays inside the app).
-      // Website: normal Firebase popup.
-      const result = canUseNativeGoogleSignIn()
-        ? await (await import("@/lib/nativeGoogleAuth")).nativeGoogleSignIn()
-        : await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const gEmail = user.email || "";
       const gName = user.displayName || gEmail.split("@")[0];
@@ -969,8 +963,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   Continue with Google
                 </motion.button>
 
-                {/* Continue as Guest — hidden in the Android app (accounts only) */}
-                {!isNativeApp() && (
+                {/* Continue as Guest */}
+                {(
                 <motion.button
                   type="button"
                   onClick={() => { ensureGuestUser(); onGuest?.(); }}

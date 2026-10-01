@@ -7,7 +7,6 @@ import "@fontsource/manrope/400.css";
 import "@fontsource/manrope/500.css";
 import "@fontsource/manrope/600.css";
 import { setupTvNavigation } from "@/hooks/useTvNavigation";
-import { bootNativeApp } from "@/lib/nativeBoot";
 
 // Theme
 const savedTheme = localStorage.getItem("rs_theme");
@@ -34,6 +33,5 @@ if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-s
 })();
 
 setupTvNavigation();
-bootNativeApp();
 
 createRoot(document.getElementById("root")!).render(<App />);
