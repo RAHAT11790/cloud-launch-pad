@@ -56,8 +56,6 @@ import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverPr
 import { wrapWithIosProtection } from "@/lib/iosProtection";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 import { supabase } from "@/integrations/supabase/client";
-import { applyImmersive, lockLandscape, nativeSystemAvailable, setSystemBrightness, setSystemVolume, unlockOrientation } from "@/lib/nativeSystem";
-import { isNativeApp } from "@/lib/nativeRuntime";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -285,7 +283,7 @@ const isDirectDownloadCandidate = (url: string): boolean => {
   if (!(value.startsWith("http://") || value.startsWith("https://"))) return false;
   // Android app: HLS (.m3u8) IS downloadable — the native engine merges the
   // segments and keeps every audio track for offline playback.
-  if (value.includes(".m3u8") && !isNativeApp()) return false;
+  if (value.includes(".m3u8")) return false;
   if (value.includes(".mpd")) return false;
   if (value.includes("/embed/") || value.includes("iframe")) return false;
   return true;
@@ -4542,24 +4540,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
     if (!el) return;
-    const native = nativeSystemAvailable();
     try {
       if (document.fullscreenElement) {
         try { (screen.orientation as any).unlock?.(); } catch {}
-        if (native) unlockOrientation();
         await document.exitFullscreen();
       } else {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-        // Android app: real landscape rotation + bars stay hidden.
-        if (native) { lockLandscape(); applyImmersive(); }
-        else { try { await (screen.orientation as any).lock?.('landscape'); } catch {} }
+        try { await (screen.orientation as any).lock?.('landscape'); } catch {}
       }
-    } catch (e) {
-      // Even if the browser fullscreen API is unavailable, the Android app can
-      // still rotate to landscape and stay immersive.
-      if (native) { lockLandscape(); applyImmersive(); }
-    }
+    } catch { /* fullscreen unavailable */ }
   }, []);
 
   toggleFullscreenRef.current = toggleFullscreen;
@@ -4864,16 +4854,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (swipeState.type === "volume") {
       const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
       applyPlayerVolume(newBoosted, false);
-      // Android app: move the phone's REAL media volume, not just the element.
-      if (nativeSystemAvailable()) void setSystemVolume(Math.min(1, Math.max(0, newBoosted / 100)));
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
       const newBr = Math.min(1.5, Math.max(0.3, brightness - dy * 0.003));
       setBrightness(newBr);
-      // Android app: drive the REAL screen brightness (0.3–1.5 → 0.02–1.0).
-      if (nativeSystemAvailable()) {
-        void setSystemBrightness(Math.min(1, Math.max(0.02, (newBr - 0.3) / 1.2)));
-      }
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
   }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerInteractiveTarget, isFullscreen, toggleFullscreen]);
@@ -5664,6 +5648,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     All
                   </button>
                   <div
+                    ref={(row) => {
+                      // Keep the selected episode in view (player remounts on episode change).
+                      if (!row) return;
+                      const el = row.querySelector<HTMLElement>('[data-ep-active="1"]');
+                      if (!el) return;
+                      const left = el.offsetLeft - 76 - 8;
+                      if (Math.abs(row.scrollLeft - left) > 4 && (el.offsetLeft < row.scrollLeft + 76 || el.offsetLeft + el.offsetWidth > row.scrollLeft + row.clientWidth)) {
+                        row.scrollLeft = Math.max(0, left);
+                      }
+                    }}
+                    key={`ep-row-${activeEpisodeIdx}`}
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
                     style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
                   >
@@ -5671,6 +5666,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <button
                         key={ep.number}
                         onClick={ep.onClick}
+                        data-ep-active={ep.active ? "1" : undefined}
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
                         className={`relative flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
                           ep.active
@@ -6343,7 +6339,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[14px] font-bold text-white">Telegram Download</span>
-                          <span className="block text-[11px] text-white/60 mt-0.5">Free 480P, 720P & 1080P — delivered by our Telegram bot.</span>
+                          <span className="block text-[11px] text-white/60 mt-0.5">Free download — delivered by our Telegram bot.</span>
                         </span>
                         <ChevronRight className="w-4 h-4 text-white/45 shrink-0" />
                       </button>
@@ -6376,7 +6372,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       return Number.isFinite(parsed) && parsed > 0 ? parsed : downloadPanelSeasonIdx + 1;
                     })();
                     const animeTitle = String((anime as any)?.title || title || "").trim();
-                    const tgEpisodeList = hasMultiEpisodes ? panelEpisodes : [];
+                    // Only real data: qualities that actually exist and episodes that have them.
+                    const epTgQuals = (ep: any) => {
+                      const keys = Object.keys(ep?.qualityLinks || {}).filter((q) => String(ep.qualityLinks[q] || "").trim()).map((q) => normalizeTelegramQuality(q));
+                      return TELEGRAM_FREE_QUALITIES.filter((label) => keys.includes(normalizeTelegramQuality(label)));
+                    };
+                    const tgEpisodeList = hasMultiEpisodes ? panelEpisodes.filter((ep) => epTgQuals(ep).length > 0) : [];
+                    const tgAvailableQualities = hasMultiEpisodes
+                      ? TELEGRAM_FREE_QUALITIES.filter((label) => tgEpisodeList.some((ep) => epTgQuals(ep).includes(label)))
+                      : TELEGRAM_FREE_QUALITIES.filter((label) => availableDownloadQualities.some((q) => normalizeTelegramQuality(q) === normalizeTelegramQuality(label)));
+                    const effectiveTgQualities = (() => {
+                      const kept = tgSelectedQualities.filter((q) => tgAvailableQualities.includes(q));
+                      return kept.length ? kept : tgAvailableQualities.slice(-1);
+                    })();
                     const chosenEpisodes = hasMultiEpisodes
                       ? tgEpisodeList.filter((ep) => tgSelectedEpisodes.has(ep.index)).map((ep) => Number(ep.episodeNumber) || 0).filter(Boolean)
                       : [1];
@@ -6385,7 +6393,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       title: animeTitle,
                       season: seasonNumber,
                       episodes: chosenEpisodes,
-                      qualities: tgSelectedQualities,
+                      qualities: effectiveTgQualities,
                     });
                     const toggleTgEpisode = (idx: number) => {
                       setTgSelectedEpisodes((prev) => {
@@ -6399,9 +6407,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       setTgSelectedEpisodes(allTgSelected ? new Set() : new Set(tgEpisodeList.map((ep) => ep.index)));
                     };
                     const toggleTgQuality = (label: string) => {
-                      setTgSelectedQualities((prev) => (
-                        prev.includes(label) ? prev.filter((q) => q !== label) : [...prev, label]
-                      ));
+                      const base = effectiveTgQualities;
+                      setTgSelectedQualities(base.includes(label) ? base.filter((q) => q !== label) : [...base, label]);
                     };
                     return (
                       <>
@@ -6419,9 +6426,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             )}
                             <div className="mt-2.5 border-t border-white/10 pt-2.5">
                               <p className="text-[10px] text-white/50 mb-1.5">Select one or more qualities</p>
-                              <div className="grid grid-cols-3 gap-2">
-                                {TELEGRAM_FREE_QUALITIES.map((label) => {
-                                  const isOn = tgSelectedQualities.includes(label);
+                              <div className={`grid gap-2 ${tgAvailableQualities.length >= 3 ? 'grid-cols-3' : tgAvailableQualities.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                {tgAvailableQualities.length === 0 && (<p className="text-[11px] text-white/50">No Telegram quality available.</p>)}
+                                {tgAvailableQualities.map((label) => {
+                                  const isOn = effectiveTgQualities.includes(label);
                                   return (
                                     <button
                                       key={`tg-${label}`}
@@ -6927,29 +6935,44 @@ const DirectAwareVideoPlayer = (props: VideoPlayerProps) => {
 // Abyss iframe, so none of their ads can run). Expired links re-resolve.
 const abyssLabelRank = (l: string) => parseInt(String(l).replace(/\D/g, ""), 10) || 0;
 const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLink: string }) => {
-  const [state, setState] = useState<{ srcs: QualityOption[]; err: string; nonce: number }>({ srcs: [], err: "", nonce: 0 });
-  const retries = useRef(0);
+  // State is keyed by the link so a previous episode's sources can never be
+  // rendered while the next episode is still resolving.
+  const [state, setState] = useState<{ link: string; srcs: QualityOption[]; err: string; nonce: number }>({ link: "", srcs: [], err: "", nonce: 0 });
   const load = useCallback((fresh: boolean) => {
-    setState((s) => ({ ...s, err: "" }));
-    resolveAbyss(abyssLink, { fresh }).then((r) => {
-      if (!r.ok) { setState((s) => ({ ...s, srcs: [], err: r.error || "Video not available" })); return; }
-      const srcs = [...r.sources].sort((a, b) => abyssLabelRank(a.label) - abyssLabelRank(b.label)).map((x) => ({ label: x.label, src: x.url }));
-      setState((s) => ({ srcs, err: "", nonce: s.nonce + 1 }));
+    const link = abyssLink;
+    setState((s) => ({ link, srcs: [], err: "", nonce: s.nonce }));
+    resolveAbyss(link, { fresh }).then((r) => {
+      setState((s) => {
+        if (link !== abyssLink) return s;
+        if (!r.ok) return { link, srcs: [], err: r.error || "Video not available", nonce: s.nonce };
+        const srcs = [...r.sources].sort((a, b) => abyssLabelRank(a.label) - abyssLabelRank(b.label)).map((x) => ({ label: x.label, src: x.url }));
+        return { link, srcs, err: "", nonce: s.nonce + 1 };
+      });
     });
   }, [abyssLink]);
-  useEffect(() => { retries.current = 0; load(false); }, [load]);
-  const best = state.srcs.find((q) => /720/.test(q.label)) || state.srcs[state.srcs.length - 1];
+  useEffect(() => { load(false); }, [load]);
+  const srcs = state.link === abyssLink ? state.srcs : [];
+  const best = srcs.find((q) => /720/.test(q.label)) || srcs[srcs.length - 1];
   if (!best) {
+    const err = state.link === abyssLink && state.err;
     return (
-      <div className="relative w-full aspect-video bg-background flex flex-col items-center justify-center gap-3 rounded-lg">
-        {state.err ? (
+      <div className="rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center">
+      <div className="relative w-full max-w-5xl aspect-video bg-black flex flex-col items-center justify-center gap-3">
+        <button aria-label="Back" onClick={props.onClose} className="absolute left-3 top-3 h-9 w-9 rounded-full bg-background/40 text-foreground flex items-center justify-center">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        {err ? (
           <>
             <p className="text-sm text-muted-foreground">Video is temporarily unavailable</p>
-            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => load(true)}>Try again</button>
+            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm" onClick={() => { invalidateAbyss(abyssLink); load(true); }}>Try again</button>
           </>
         ) : (
-          <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <>
+            <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <p className="text-xs font-medium tracking-wide text-muted-foreground">Episode loading…</p>
+          </>
         )}
+      </div>
       </div>
     );
   }
@@ -6958,7 +6981,7 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
       key={`abyss-${abyssLink}-${state.nonce}`}
       {...props}
       src={best.src}
-      qualityOptions={state.srcs}
+      qualityOptions={srcs}
       noServerSwitch
     />
   );

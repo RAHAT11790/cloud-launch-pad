@@ -36,20 +36,24 @@ async function getBase(): Promise<string> {
 }
 
 const cache = new Map<string, { at: number; p: Promise<AbyssResolved> }>();
-const TTL = 20 * 60_000;
+const TTL = 2 * 60 * 60_000; // links stay valid for hours
+const LS = "rs_abyss_cache_v1";
+const readLs = (): Record<string, { at: number; v: AbyssResolved }> => { try { return JSON.parse(localStorage.getItem(LS) || "{}"); } catch { return {}; } };
+const writeLs = (slug: string, v: AbyssResolved | null) => { try { const all = readLs(); if (v) all[slug] = { at: Date.now(), v }; else delete all[slug]; for (const k of Object.keys(all)) if (Date.now() - all[k].at > TTL) delete all[k]; localStorage.setItem(LS, JSON.stringify(all)); } catch { /* ignore */ } };
 
 export function invalidateAbyss(link: string) {
   const slug = getAbyssSlug(link);
-  if (slug) cache.delete(slug);
+  if (slug) { cache.delete(slug); writeLs(slug, null); }
 }
 
 export function resolveAbyss(link: string, opts: { fresh?: boolean } = {}): Promise<AbyssResolved> {
   const slug = getAbyssSlug(link);
   const embed = slug ? `https://player.abyssplayer.com/${slug}` : "";
   if (!slug) return Promise.resolve({ ok: false, slug: "", sources: [], embed, error: "invalid link" });
-  if (opts.fresh) cache.delete(slug);
+  if (opts.fresh) { cache.delete(slug); writeLs(slug, null); }
   const hit = cache.get(slug);
   if (hit && Date.now() - hit.at < TTL) return hit.p;
+  if (!opts.fresh) { const st = readLs()[slug]; if (st && Date.now() - st.at < TTL && st.v?.ok) { const p0 = Promise.resolve(st.v); cache.set(slug, { at: st.at, p: p0 }); return p0; } }
   const p = (async () => {
     try {
       const base = await getBase();
@@ -57,7 +61,9 @@ export function resolveAbyss(link: string, opts: { fresh?: boolean } = {}): Prom
       const r = await fetch(`${base}/resolve?id=${encodeURIComponent(slug)}`, { cache: "no-store" });
       const j = await r.json();
       if (!j?.ok) cache.delete(slug);
-      return { ok: !!j?.ok && Array.isArray(j.sources) && j.sources.length > 0, slug, title: j?.title, sources: j?.sources || [], embed, error: j?.error } as AbyssResolved;
+      const out = { ok: !!j?.ok && Array.isArray(j.sources) && j.sources.length > 0, slug, title: j?.title, sources: j?.sources || [], embed, error: j?.error } as AbyssResolved;
+      if (out.ok) writeLs(slug, out);
+      return out;
     } catch (e) {
       cache.delete(slug);
       return { ok: false, slug, sources: [], embed, error: String((e as Error)?.message || e) };

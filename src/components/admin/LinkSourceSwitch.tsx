@@ -19,40 +19,45 @@ export const isDirectMediaUrl = (u: string) => /\.(mp4|m3u8|webm|mkv|mov)(?:$|[?
 export function LinkSectionTabs({
   value, onChange, telegramCount, directCount, total,
 }: { value: LinkSection; onChange: (v: LinkSection) => void; telegramCount: number; directCount: number; total: number }) {
-  const tab = (m: LinkSection, label: string, hint: string, count: number, Icon: typeof Send) => {
+  const isDirect = value === "direct";
+  const count = isDirect ? directCount : telegramCount;
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  const seg = (m: LinkSection, label: string, n: number, Icon: typeof Send) => {
     const active = value === m;
     return (
       <button
         type="button"
         onClick={() => onChange(m)}
         aria-pressed={active}
-        className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all ${
-          active
-            ? m === "direct"
-              ? "border-emerald-400/60 bg-emerald-500/15 shadow-lg shadow-emerald-500/10"
-              : "border-sky-400/60 bg-sky-500/15 shadow-lg shadow-sky-500/10"
-            : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"
-        }`}
+        className={`relative z-10 flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-[13px] font-semibold transition-colors ${active ? "text-white" : "text-zinc-400 hover:text-zinc-200"}`}
       >
-        <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? (m === "direct" ? "bg-emerald-400/25 text-emerald-100" : "bg-sky-400/25 text-sky-100") : "bg-white/[0.06] text-zinc-400"}`}>
-          <Icon size={15} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className={`block text-[12px] font-bold ${active ? "text-white" : "text-zinc-300"}`}>{label}</span>
-          <span className="block truncate text-[9.5px] text-zinc-500">{hint}</span>
-        </span>
-        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-white/15 text-white" : "bg-white/[0.06] text-zinc-400"}`}>
-          {count}/{total}
-        </span>
+        <Icon size={15} className="shrink-0" />
+        <span>{label}</span>
+        <span className={`min-w-[22px] rounded-full px-1.5 py-[1px] text-[10px] font-bold tabular-nums ${active ? "bg-white/20 text-white" : "bg-white/[0.07] text-zinc-400"}`}>{n}</span>
       </button>
     );
   };
   return (
-    <div className="mb-4 rounded-2xl border border-white/[0.07] bg-black/30 p-2.5">
-      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">Video links</p>
-      <div className="grid grid-cols-2 gap-2">
-        {tab("telegram", "Telegram", "Quality links + audio", telegramCount, Send)}
-        {tab("direct", "Direct Link", "MP4 / M3U8 / iframe", directCount, Link2)}
+    <div className="mb-4 rounded-2xl border border-white/[0.08] bg-zinc-950/70 p-3">
+      <div className="mb-2.5 flex items-center justify-between px-0.5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-300">Video links</p>
+        <p className="text-[10px] text-zinc-500">Separate link sets</p>
+      </div>
+      <div className="relative flex rounded-2xl border border-white/[0.06] bg-black/50 p-1">
+        <span
+          aria-hidden
+          className={`absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-xl transition-all duration-300 ease-out ${isDirect ? "left-[calc(50%+0px)] bg-gradient-to-r from-emerald-500/90 to-teal-500/90 shadow-[0_6px_20px_-6px_rgba(16,185,129,0.7)]" : "left-1 bg-gradient-to-r from-sky-500/90 to-blue-600/90 shadow-[0_6px_20px_-6px_rgba(56,189,248,0.7)]"}`}
+        />
+        {seg("telegram", "Telegram", telegramCount, Send)}
+        {seg("direct", "Direct Link", directCount, Link2)}
+      </div>
+      <div className="mt-2.5 flex items-center gap-2.5 px-0.5">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+          <div className={`h-full rounded-full transition-all duration-500 ${isDirect ? "bg-emerald-400" : "bg-sky-400"}`} style={{ width: `${pct}%` }} />
+        </div>
+        <span className="shrink-0 text-[10px] font-medium tabular-nums text-zinc-400">
+          {count}/{total} {isDirect ? "with direct link" : "with Telegram links"}
+        </span>
       </div>
     </div>
   );
@@ -64,7 +69,7 @@ export function DirectLinkField({ value, onChange }: { value: string; onChange: 
   const invalid = !!value && !/^https?:\/\//i.test(value);
   const runCheck = async () => {
     if (invalid) { setCheck({ state: "fail", text: "Link must start with http(s)://" }); return; }
-    if (!isDirectMediaUrl(value)) { setCheck({ state: "ok", text: "Embed link — plays in iframe player" }); return; }
+    if (!isDirectMediaUrl(value)) { setCheck({ state: "ok", text: /abyss(player|cdn)?\.(com|to)\//i.test(value) ? "Abyss link — plays ad-free in RS player" : "Embed link — plays in iframe player" }); return; }
     setCheck({ state: "loading" });
     const v = document.createElement("video");
     v.preload = "metadata"; v.muted = true;
@@ -86,7 +91,7 @@ export function DirectLinkField({ value, onChange }: { value: string; onChange: 
         </span>
         {value && !invalid && (
           <span className="rounded bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-200">
-            {isDirectMediaUrl(value) ? "Direct player" : "Iframe player"}
+            {isDirectMediaUrl(value) ? "Direct player" : /abyss(player|cdn)?\.(com|to)\//i.test(value) ? "RS player · ad-free" : "Iframe player"}
           </span>
         )}
       </div>

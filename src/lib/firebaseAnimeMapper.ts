@@ -117,16 +117,15 @@ const countEpisodes = (seasons: any): number | undefined => {
 
 const countBestEpisodes = (item: any): number | undefined => {
   const stored = Number(item?.episodeCount || 0) || 0;
-  if (stored > 0) return stored;
   const direct = countEpisodes(item?.seasons);
   if (direct) return direct;
   const custom = countEpisodes(item?.customSeasons);
   if (custom) return custom;
   if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
     const best = Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => countEpisodes(seasons) || 0));
-    return best > 0 ? best : undefined;
+    if (best > 0) return best;
   }
-  return undefined;
+  return stored > 0 ? stored : undefined;
 };
 
 const mapMovieParts = (parts: any): MoviePart[] | undefined => {

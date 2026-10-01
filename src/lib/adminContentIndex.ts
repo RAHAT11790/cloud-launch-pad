@@ -16,7 +16,6 @@ const values = (value: any): any[] => Array.isArray(value) ? value : (value && t
 const stripLegacyAnFromAdminList = (items: any[]) => (items || []).filter((item) => !isLegacyAnEntry(item?.id, item));
 
 const countEpisodes = (item: any) => {
-  if (Number.isFinite(Number(item?.episodeCount)) && Number(item.episodeCount) > 0) return Number(item.episodeCount);
   const countSeasonList = (seasons: any) => values(seasons).reduce((sum, season) => sum + values(season?.episodes).length, 0);
   const direct = countSeasonList(item?.seasons);
   if (direct > 0) return direct;
@@ -26,6 +25,7 @@ const countEpisodes = (item: any) => {
     const fromLangs = Math.max(0, ...Object.values(item.seasonsByLanguage).map(countSeasonList));
     if (fromLangs > 0) return fromLangs;
   }
+  if (Number.isFinite(Number(item?.episodeCount)) && Number(item.episodeCount) > 0) return Number(item.episodeCount);
   const declared = Number(item?.totalEpisodes || item?.numberOfEpisodes || 0);
   return Number.isFinite(declared) && declared > 0 ? declared : 0;
 };
