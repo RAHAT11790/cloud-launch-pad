@@ -5683,8 +5683,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
                         }`}
                       >
-                        {ep.label || String(ep.number).padStart(2, '0')}
-                        {ep.combo && !ep.locked && (<span className="absolute -top-1 -right-1 h-3.5 min-w-[14px] px-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] leading-[14px] font-extrabold text-center shadow">+</span>)}
+                        {ep.combo ? (
+                          <span className="flex flex-col items-center leading-none">
+                            <span>{ep.label}</span>
+                            <span className="mt-[3px] text-[7.5px] font-extrabold tracking-[0.12em] text-fuchsia-300">COMBO</span>
+                          </span>
+                        ) : (ep.label || String(ep.number).padStart(2, '0'))}
                         {ep.locked && (
                           <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                             <Lock className="w-2.5 h-2.5" strokeWidth={3} />
@@ -6062,7 +6066,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
                     }`}
                   >
-                    {ep.label || String(ep.number).padStart(2, '0')}
+                    {ep.combo ? (
+                      <span className="flex flex-col items-center leading-none">
+                        <span>{ep.label}</span>
+                        <span className="mt-1 text-[7px] font-extrabold tracking-[0.1em] text-fuchsia-300">COMBO</span>
+                      </span>
+                    ) : (ep.label || String(ep.number).padStart(2, '0'))}
                     {ep.locked && (
                       <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                         <Lock className="w-2.5 h-2.5" strokeWidth={3} />
