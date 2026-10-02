@@ -1,4 +1,5 @@
 import { db, get, limitToLast, orderByChild, query, ref, remove, set } from "@/lib/firebase";
+import { countRealEpisodes } from "@/lib/episodeCombo";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 import { isLegacyAnEntry } from "@/lib/legacyAn";
 
@@ -16,7 +17,7 @@ const values = (value: any): any[] => Array.isArray(value) ? value : (value && t
 const stripLegacyAnFromAdminList = (items: any[]) => (items || []).filter((item) => !isLegacyAnEntry(item?.id, item));
 
 const countEpisodes = (item: any) => {
-  const countSeasonList = (seasons: any) => values(seasons).reduce((sum, season) => sum + values(season?.episodes).length, 0);
+  const countSeasonList = (seasons: any) => values(seasons).reduce((sum, season) => sum + countRealEpisodes(values(season?.episodes)), 0);
   const direct = countSeasonList(item?.seasons);
   if (direct > 0) return direct;
   const custom = countSeasonList(item?.customSeasons);

@@ -1513,7 +1513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
       const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
       setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
-      setTgSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setTgSelectedEpisodes(new Set());
       setTgSelectedQualities(["720P"]);
       setTgEpQualityMap({});
       setTgSentSteps(new Set());
@@ -5683,8 +5683,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
                         }`}
                       >
-                        {ep.label || String(ep.number).padStart(2, '0')}
-                        {ep.combo && !ep.locked && (<span className="absolute -top-1 -right-1 h-3.5 min-w-[14px] px-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] leading-[14px] font-extrabold text-center shadow">+</span>)}
+                        {ep.combo ? (
+                          <span className="flex flex-col items-center leading-none">
+                            <span>{ep.label}</span>
+                            <span className="mt-[3px] text-[7.5px] font-extrabold tracking-[0.12em] text-fuchsia-300">COMBO</span>
+                          </span>
+                        ) : (ep.label || String(ep.number).padStart(2, '0'))}
                         {ep.locked && (
                           <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                             <Lock className="w-2.5 h-2.5" strokeWidth={3} />
@@ -6062,7 +6066,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
                     }`}
                   >
-                    {ep.label || String(ep.number).padStart(2, '0')}
+                    {ep.combo ? (
+                      <span className="flex flex-col items-center leading-none">
+                        <span>{ep.label}</span>
+                        <span className="mt-1 text-[7px] font-extrabold tracking-[0.1em] text-fuchsia-300">COMBO</span>
+                      </span>
+                    ) : (ep.label || String(ep.number).padStart(2, '0'))}
                     {ep.locked && (
                       <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                         <Lock className="w-2.5 h-2.5" strokeWidth={3} />
@@ -6401,18 +6410,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       const kept = tgSelectedQualities.filter((q) => tgAvailableQualities.includes(q));
                       return kept.length ? kept : tgAvailableQualities.slice(-1);
                     })();
+                    // Series: an episode is only sent when the user tapped one of ITS quality chips.
                     const resolveEpQuals = (ep: any): string[] => {
                       const avail = epTgQuals(ep);
-                      const custom = (tgEpQualityMap[ep.index] || []).filter((q) => avail.includes(q));
-                      if (custom.length) return custom;
-                      const fromQuick = quickPick.filter((q) => avail.includes(q));
-                      return fromQuick.length ? fromQuick : avail.slice(-1);
+                      return (tgEpQualityMap[ep.index] || []).filter((q) => avail.includes(q));
                     };
                     const groups = hasMultiEpisodes
                       ? groupTelegramSelections(
                           tgEpisodeList
-                            .filter((ep) => tgSelectedEpisodes.has(ep.index))
-                            .map((ep) => ({ episode: Number(ep.episodeNumber) || 0, qualities: resolveEpQuals(ep) })),
+                            .map((ep) => ({ episode: Number(ep.episodeNumber) || 0, qualities: resolveEpQuals(ep) }))
+                            .filter((s) => s.qualities.length > 0),
                         )
                       : (quickPick.length ? [{ episodes: [1], qualities: quickPick }] : []);
                     const steps = groups.map((g) => ({
@@ -6420,36 +6427,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       url: buildTelegramDownloadUrl({ botUrl, title: animeTitle, season: seasonNumber, episodes: g.episodes, qualities: g.qualities }),
                     })).filter((g) => g.url);
                     const chosenCount = groups.reduce((n, g) => n + g.episodes.length, 0);
-                    const toggleTgEpisode = (idx: number) => {
-                      setTgSelectedEpisodes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(idx)) next.delete(idx); else next.add(idx);
-                        return next;
-                      });
-                      setTgSentSteps(new Set());
-                    };
                     const toggleEpQuality = (ep: any, label: string) => {
                       const current = resolveEpQuals(ep);
-                      const isOnNow = tgSelectedEpisodes.has(ep.index) && current.includes(label);
-                      const nextList = isOnNow ? current.filter((q) => q !== label) : Array.from(new Set([...(tgSelectedEpisodes.has(ep.index) ? current : []), label]));
-                      setTgEpQualityMap((prev) => ({ ...prev, [ep.index]: nextList }));
-                      setTgSelectedEpisodes((prev) => {
-                        const next = new Set(prev);
-                        if (nextList.length) next.add(ep.index); else next.delete(ep.index);
+                      const nextList = current.includes(label) ? current.filter((q) => q !== label) : [...current, label];
+                      setTgEpQualityMap((prev) => {
+                        const next = { ...prev };
+                        if (nextList.length) next[ep.index] = nextList; else delete next[ep.index];
                         return next;
                       });
                       setTgSentSteps(new Set());
                     };
-                    const allTgSelected = tgEpisodeList.length > 0 && tgEpisodeList.every((ep) => tgSelectedEpisodes.has(ep.index));
-                    const toggleTgAll = () => {
-                      setTgSelectedEpisodes(allTgSelected ? new Set() : new Set(tgEpisodeList.map((ep) => ep.index)));
+                    const clearTgSelection = () => {
+                      setTgEpQualityMap({});
                       setTgSentSteps(new Set());
                     };
                     const applyQuickPick = (label: string) => {
                       const base = quickPick;
                       const next = base.includes(label) ? base.filter((q) => q !== label) : [...base, label];
                       setTgSelectedQualities(next.length ? next : [label]);
-                      setTgEpQualityMap({});
                       setTgSentSteps(new Set());
                     };
                     const fmtEps = (eps: number[]) => {
@@ -6465,7 +6460,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       setTgSentSteps((prev) => new Set(prev).add(i));
                       window.open(step.url, "_blank", "noopener,noreferrer");
                     };
-                    const mixedQualities = hasMultiEpisodes && tgEpisodeList.some((ep) => epTgQuals(ep).length !== tgAvailableQualities.length);
                     return (
                       <>
                         <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
@@ -6474,66 +6468,64 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               <h4 className="text-[11px] font-bold text-sky-200/90 uppercase tracking-wider">Telegram — free for everyone</h4>
                               {downloadSourceCount > 1 && (<button onClick={() => setDownloadMode("choose")} className="text-[11px] text-white/50 underline underline-offset-2">Back</button>)}
                             </div>
-                            {hasMultiEpisodes && (
-                              <button onClick={() => { openInlineSheet("season", "download"); }} className="mt-2.5 h-10 w-full rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
-                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
-                                <ChevronDown className="w-4 h-4 text-white/55 shrink-0" />
-                              </button>
-                            )}
-                            <div className="mt-2.5 border-t border-white/10 pt-2.5">
-                              <p className="text-[10px] text-white/50 mb-1.5">{hasMultiEpisodes ? "Preferred quality (each episode uses only what it has)" : "Select one or more qualities"}</p>
-                              <div className={`grid gap-2 ${tgAvailableQualities.length >= 3 ? 'grid-cols-3' : tgAvailableQualities.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                {tgAvailableQualities.length === 0 && (<p className="text-[11px] text-white/50">No Telegram quality available.</p>)}
-                                {tgAvailableQualities.map((label) => {
-                                  const isOn = quickPick.includes(label);
-                                  return (
-                                    <button
-                                      key={`tg-${label}`}
-                                      onClick={() => applyQuickPick(label)}
-                                      className={`h-9 rounded-[8px] text-[11px] font-semibold border transition-all ${isOn ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white border-sky-300 shadow-[0_4px_14px_-2px_rgba(56,189,248,0.5)]' : 'bg-white/[0.07] text-white border-white/10'}`}
-                                    >
-                                      {normalizeTelegramQuality(label)}
-                                    </button>
-                                  );
-                                })}
+                            {hasMultiEpisodes ? (
+                              <>
+                                <button onClick={() => { openInlineSheet("season", "download"); }} className="mt-2.5 h-10 w-full rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
+                                  <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
+                                  <ChevronDown className="w-4 h-4 text-white/55 shrink-0" />
+                                </button>
+                                <p className="mt-2 text-[10.5px] leading-snug text-white/50">Tap a quality next to each episode. Only the qualities that episode really has are shown.</p>
+                              </>
+                            ) : (
+                              <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                                <p className="text-[10px] text-white/50 mb-1.5">Select one or more qualities</p>
+                                <div className={`grid gap-2 ${tgAvailableQualities.length >= 3 ? 'grid-cols-3' : tgAvailableQualities.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                  {tgAvailableQualities.length === 0 && (<p className="text-[11px] text-white/50">No Telegram quality available.</p>)}
+                                  {tgAvailableQualities.map((label) => {
+                                    const isOn = quickPick.includes(label);
+                                    return (
+                                      <button
+                                        key={`tg-${label}`}
+                                        onClick={() => applyQuickPick(label)}
+                                        className={`h-9 rounded-[8px] text-[11px] font-semibold border transition-all ${isOn ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white border-sky-300 shadow-[0_4px_14px_-2px_rgba(56,189,248,0.5)]' : 'bg-white/[0.07] text-white border-white/10'}`}
+                                      >
+                                        {normalizeTelegramQuality(label)}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              {mixedQualities && (
-                                <p className="mt-2 text-[10px] leading-snug text-amber-200/80">Some episodes only have certain qualities — check the chips next to each episode.</p>
-                              )}
-                            </div>
+                            )}
                           </div>
 
                           {hasMultiEpisodes && (
                             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                              {tgEpisodeList.length === 0 && (
+                                <p className="py-6 text-center text-[12px] text-white/45">No Telegram episodes in this season.</p>
+                              )}
                               <div className="space-y-1.5">
                                 {tgEpisodeList.map((ep) => {
-                                  const selected = tgSelectedEpisodes.has(ep.index);
                                   const avail = epTgQuals(ep);
                                   const using = resolveEpQuals(ep);
+                                  const selected = using.length > 0;
                                   return (
-                                    <div key={`tg-ep-${downloadPanelSeasonIdx}-${ep.index}`} data-tg-episode={ep.episodeNumber} className={`rounded-[10px] border px-2.5 py-2 transition-colors ${selected ? 'border-sky-400/40 bg-sky-400/[0.07]' : 'border-white/[0.07] bg-white/[0.03]'}`}>
-                                      <button onClick={() => toggleTgEpisode(ep.index)} className="w-full flex items-center gap-2.5 text-left">
-                                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/35 text-transparent'}`}>
-                                          <Check className="w-3 h-3" />
-                                        </span>
-                                        <span className="min-w-0 flex-1">
-                                          <span className="block text-[13px] font-semibold text-white">S{String(seasonNumber).padStart(2, '0')} E{formatEpisodeChip(ep)}</span>
-                                          <span className="block text-[10.5px] text-white/45 truncate">{ep.metaText}</span>
-                                        </span>
-                                        {avail.length === 1 && (
-                                          <span className="shrink-0 rounded-full bg-white/[0.08] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/55">Only</span>
-                                        )}
-                                      </button>
-                                      <div className="mt-1.5 flex gap-1.5 pl-[30px]">
-                                        {TELEGRAM_FREE_QUALITIES.map((label) => {
-                                          const has = avail.includes(label);
-                                          if (!has) return null;
-                                          const on = selected && using.includes(label);
+                                    <div key={`tg-ep-${downloadPanelSeasonIdx}-${ep.index}`} data-tg-episode={ep.episodeNumber} className={`rounded-[10px] border pl-2.5 pr-2 py-2 flex items-center gap-2 transition-colors ${selected ? 'border-sky-400/45 bg-sky-400/[0.08]' : 'border-white/[0.07] bg-white/[0.03]'}`}>
+                                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/25 text-transparent'}`}>
+                                        <Check className="w-2.5 h-2.5" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block text-[12.5px] font-semibold text-white leading-tight">E{formatEpisodeChip(ep)}</span>
+                                        <span className="block text-[10px] text-white/40 truncate leading-tight mt-0.5">{avail.length === 1 ? `Only ${normalizeTelegramQuality(avail[0])}` : ep.metaText}</span>
+                                      </span>
+                                      <div className="flex shrink-0 gap-1">
+                                        {avail.map((label) => {
+                                          const on = using.includes(label);
                                           return (
                                             <button
                                               key={`tgq-${ep.index}-${label}`}
                                               onClick={() => toggleEpQuality(ep, label)}
-                                              className={`h-7 min-w-[52px] px-2 rounded-full text-[10.5px] font-bold border transition-all active:scale-95 ${on ? 'bg-sky-400 text-black border-sky-300' : 'bg-white/[0.06] text-white/75 border-white/12'}`}
+                                              aria-pressed={on}
+                                              className={`h-7 w-[46px] rounded-[7px] text-[10px] font-bold border transition-all active:scale-95 ${on ? 'bg-sky-400 text-black border-sky-300 shadow-[0_2px_10px_-2px_rgba(56,189,248,0.6)]' : 'bg-white/[0.06] text-white/75 border-white/12'}`}
                                             >
                                               {normalizeTelegramQuality(label)}
                                             </button>
@@ -6551,11 +6543,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <div className="p-3 border-t border-white/10 bg-black">
                           {hasMultiEpisodes && (
                             <div className="flex items-center justify-between mb-2.5">
-                              <button onClick={toggleTgAll} className={`flex items-center gap-1.5 text-[11px] ${allTgSelected ? 'text-white' : 'text-white/55'}`}>
-                                <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allTgSelected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
-                                <span>Select all episodes</span>
-                              </button>
-                              <span className="text-[10.5px] text-white/45">{chosenCount} selected</span>
+                              <span className="text-[11px] text-white/60">{chosenCount ? `${chosenCount} episode${chosenCount > 1 ? 's' : ''} selected` : 'No episode selected'}</span>
+                              {chosenCount > 0 && (
+                                <button onClick={clearTgSelection} className="text-[11px] font-semibold text-sky-300/90 underline underline-offset-2">Clear</button>
+                              )}
                             </div>
                           )}
                           {steps.length <= 1 ? (

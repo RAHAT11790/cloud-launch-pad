@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useMemo } from "react";
+import { countRealEpisodes } from "@/lib/episodeCombo";
 import { Star, Heart, Crown } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
@@ -103,7 +104,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const epInfo = useMemo(() => {
     if (anime.type === "movie") return "Movie";
     if (anime.seasons && anime.seasons.length > 0) {
-      const total = anime.seasons.reduce((sum: number, s: any) => sum + ((s.episodes || []).length), 0);
+      const total = anime.seasons.reduce((sum: number, s: any) => sum + countRealEpisodes(s.episodes || []), 0);
       if (total > 0) {
         return anime.seasons.length > 1
           ? `${anime.seasons.length}S · ${total} EP`

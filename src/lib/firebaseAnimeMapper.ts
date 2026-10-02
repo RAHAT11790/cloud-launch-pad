@@ -1,4 +1,5 @@
 import type { AnimeItem, AudioTrack, Episode, MoviePart, Season, SubtitleTrack } from "@/data/animeData";
+import { countRealEpisodes } from "@/lib/episodeCombo";
 import {
   normalizeCastFrom,
   normalizeCategoryFrom,
@@ -112,7 +113,7 @@ export const buildEpisodeLockIndex = (item: any): Record<string, number> | undef
 
 
 const countEpisodes = (seasons: any): number | undefined => {
-  const total = values(seasons).reduce((sum, season: any) => sum + values(season?.episodes).length, 0);
+  const total = values(seasons).reduce((sum, season: any) => sum + countRealEpisodes(values(season?.episodes)), 0);
   return total > 0 ? total : undefined;
 };
 
