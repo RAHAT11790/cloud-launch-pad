@@ -22,7 +22,7 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
-import { applyComboSpan, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes } from "@/lib/episodeCombo";
+import { applyComboSpan, countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes } from "@/lib/episodeCombo";
 import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
@@ -6321,7 +6321,7 @@ ${tgBulkFooter}
             onClick={() => setComboSelection(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])}
             className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${comboSelection.includes(idx) ? 'bg-amber-500 border-amber-400 text-white shadow-md shadow-amber-500/30' : 'bg-black/30 border-white/10 text-zinc-400'}`}
           >
-            {s.name || `Season ${idx + 1}`} ({s.episodes?.length || 0} EP)
+            {s.name || `Season ${idx + 1}`} ({countRealEpisodes(s.episodes || [])} EP)
           </button>
         ))}
       </div>
@@ -12786,7 +12786,7 @@ const SortableSeasonItem = memo(({
       </div>
 
       <div className="mb-2.5 flex justify-between items-center ml-9">
-        <span className="text-xs text-[#D1C4E9]">Episodes: {season.episodes.length}</span>
+        <span className="text-xs text-[#D1C4E9]">Episodes: {countRealEpisodes(season.episodes)}{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="ml-1.5 text-[10px] text-fuchsia-300/80">({season.episodes.length} links)</span>}</span>
         <div className="flex gap-1.5 items-center">
           <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
             className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
@@ -12840,7 +12840,7 @@ const SortableSeasonItem = memo(({
               <>
                 <button onClick={() => addEpisode(sIdx)}
                   className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
-                  <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
+                  <Plus size={13} /> Add Episode {(season.episodes || []).reduce((m: number, e: any) => Math.max(m, getEpisodeEnd(e)), 0) + 1} (Quick)
                 </button>
                 {episodeList.length > 0 && (
                   <p className="text-[10px] text-zinc-500 mb-2 px-1">

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
+import { countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
@@ -3885,7 +3885,7 @@ const Index = () => {
           slug: a.slug,
           shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
-          episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
+          episodeCount: a.seasons?.reduce((sum, s) => sum + countRealEpisodes(s.episodes || []), 0),
         }))}
       />
 
