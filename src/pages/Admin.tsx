@@ -22,6 +22,7 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
+import { applyComboSpan, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes } from "@/lib/episodeCombo";
 import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
@@ -355,6 +356,7 @@ interface CastMember {
 
 interface Episode {
  episodeNumber: number;
+ episodeEnd?: number;
  title: string;
  link: string;
  link480?: string;
@@ -4198,6 +4200,10 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  // Episode Lock must survive every editor load/save round-trip, otherwise the
  // premium window silently disappears and free users can watch the episode.
  lockUntil: Number(episode?.lockUntil || 0) || 0,
+ // Combo episode (one link = several real episodes). Omitted for singles.
+ ...(Number(episode?.episodeEnd || 0) > Number(episode?.episodeNumber || episode?.number || index + 1)
+   ? { episodeEnd: Number(episode.episodeEnd) }
+   : {}),
  } as Episode;
  }, [normalizeAudioTrackList]);
 
@@ -4440,7 +4446,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
 
  const addEpisode = async (sIdx: number) => {
  const season = { ...(seasonsData[sIdx] as any), episodes: Array.isArray((seasonsData[sIdx] as any)?.episodes) ? (seasonsData[sIdx] as any).episodes : [] } as Season;
- const num = season.episodes.length + 1;
+ const num = season.episodes.reduce((m: number, e: any) => Math.max(m, getEpisodeEnd(e)), 0) + 1;
  let epTitle = `Episode ${num}`;
 
  // Auto-fetch episode name from TMDB if tmdbId is available
@@ -4498,11 +4504,24 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   const copy = Array.isArray(prev) ? [...prev] : [];
   const rawSeason = copy[sIdx] || { name: `Season ${sIdx + 1}`, seasonNumber: sIdx + 1, episodes: [] };
   const s = { ...rawSeason, episodes: (Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : []).filter((_: any, i: number) => i !== eIdx) };
- // Re-number episodes
-  s.episodes = s.episodes.map((ep: any, i: number) => ({ ...ep, episodeNumber: i + 1 }));
+ // Re-number episodes (combo-aware: a combo keeps its span, the rest shift).
+  s.episodes = renumberEpisodes(s.episodes);
  copy[sIdx] = s;
  return copy;
  });
+ };
+
+ /** Combo episode: one link holds `span` real episodes; later episodes renumber. */
+ const setEpisodeComboSpan = (sIdx: number, eIdx: number, span: number) => {
+ setSeasonsData(prev => {
+  const copy = Array.isArray(prev) ? [...prev] : [];
+  const rawSeason = copy[sIdx];
+  if (!rawSeason) return prev;
+  const episodes = Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : [];
+  copy[sIdx] = { ...rawSeason, episodes: applyComboSpan(episodes, eIdx, span) } as any;
+  return copy;
+ });
+ toast.success(span > 1 ? `Combo saved — ${span} episodes in one link. Numbers updated.` : "Combo removed — numbers updated.");
  };
 
   // ============ JSON import — SMART MERGE ============
@@ -6428,6 +6447,7 @@ ${tgBulkFooter}
           updateSeriesEpisodeLanguageLink={updateSeriesEpisodeLanguageLink}
           removeEpisode={removeEpisode}
           setEpisodeLockDays={setEpisodeLockDays}
+          setEpisodeComboSpan={setEpisodeComboSpan}
           addSeriesEpisodeAudioTrack={addSeriesEpisodeAudioTrack}
           updateSeriesEpisodeAudioTrack={updateSeriesEpisodeAudioTrack}
           setSeriesEpisodeDefaultAudioTrack={setSeriesEpisodeDefaultAudioTrack}
@@ -12656,12 +12676,79 @@ const WsInlineLinkChecker = ({
  );
 };
 
+const EpisodeComboPanel = ({ ep, onApply, onClose }: { ep: any; onApply: (span: number) => void; onClose: () => void }) => {
+  const currentSpan = getComboSpan(ep);
+  const [span, setSpan] = useState<number>(currentSpan > 1 ? currentSpan : 2);
+  const start = Number(ep?.episodeNumber || 1);
+  const end = start + span - 1;
+  const nextStarts = end + 1;
+  const shift = span - currentSpan;
+  return (
+    <div className="mb-2.5 rounded-xl border border-fuchsia-500/30 bg-gradient-to-b from-fuchsia-500/[0.10] to-purple-500/[0.04] p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="h-8 w-8 shrink-0 rounded-lg bg-fuchsia-500/20 text-fuchsia-200 flex items-center justify-center"><Layers size={15} /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-bold text-white leading-tight">Combo episode</p>
+          <p className="mt-0.5 text-[10.5px] leading-relaxed text-fuchsia-100/60">How many episodes are inside this one link?</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button type="button" onClick={() => setSpan((v) => Math.max(1, v - 1))} disabled={span <= 1}
+          className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-white/[0.06] text-[18px] font-bold text-white disabled:opacity-30 active:scale-95">−</button>
+        <div className="flex-1 h-10 rounded-xl border border-fuchsia-400/30 bg-black/30 flex items-center justify-center">
+          <span className="text-[18px] font-extrabold tabular-nums text-white">{span}</span>
+          <span className="ml-1.5 text-[11px] text-zinc-400">episode{span === 1 ? "" : "s"}</span>
+        </div>
+        <button type="button" onClick={() => setSpan((v) => Math.min(50, v + 1))}
+          className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-white/[0.06] text-[18px] font-bold text-white active:scale-95">+</button>
+      </div>
+
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {[2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setSpan(n)}
+            className={`h-8 rounded-lg text-[11px] font-bold border transition-colors ${span === n ? "bg-fuchsia-500 border-fuchsia-400 text-white" : "bg-white/[0.05] border-white/10 text-zinc-300"}`}>
+            {n} in 1
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 space-y-1.5">
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-zinc-400">This link</span>
+          <span className="font-bold text-fuchsia-200">{span > 1 ? `Episode ${start}-${end}` : `Episode ${start}`}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-zinc-400">Next episode starts at</span>
+          <span className="font-bold text-white">Episode {nextStarts}</span>
+        </div>
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          {shift === 0 ? "No change to the other episodes." : `All later episodes move ${shift > 0 ? "up" : "down"} by ${Math.abs(shift)} automatically.`}
+        </p>
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button type="button" onClick={() => onApply(span)}
+          className="flex-1 h-10 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-[12px] font-bold text-white active:scale-[0.98]">
+          {span > 1 ? "Apply combo" : "Make single episode"}
+        </button>
+        {currentSpan > 1 && (
+          <button type="button" onClick={() => onApply(1)}
+            className="h-10 px-3 rounded-xl border border-red-400/30 bg-red-500/10 text-[11px] font-bold text-red-200">Remove</button>
+        )}
+        <button type="button" onClick={onClose}
+          className="h-10 px-3 rounded-xl border border-white/10 bg-white/[0.05] text-[11px] font-bold text-zinc-300">Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 const SortableSeasonItem = memo(({
   id, sIdx, rawSeason, seasonsData, updateSeasonName, removeSeason,
   wsSeasonJsonFileRef, setWsSeasonJsonTarget, setWsSeasonPasteTarget, setWsSeasonPasteText,
   setExpandedSeasons, expandedSeasons, wsSeasonPasteTarget, wsSeasonPasteText,
   wsImportJsonToSeason, addEpisode, episodeRenderLimits, setEpisodeRenderLimits,
-  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays,
+  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays, setEpisodeComboSpan,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
   removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
   comboSelection, setComboSelection, isComboMode, moveSeason, linkSection
@@ -12669,6 +12756,7 @@ const SortableSeasonItem = memo(({
 
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
   const [lockPicker, setLockPicker] = useState<number | null>(null);
+  const [comboPicker, setComboPicker] = useState<number | null>(null);
 
   return (
     <div className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
@@ -12782,8 +12870,13 @@ const SortableSeasonItem = memo(({
                      <div key={eIdx} className={`mb-3 rounded-xl border px-3 py-3 transition-colors ${lockedNow ? "border-amber-500/35 bg-amber-500/[0.06]" : "border-white/[0.07] bg-white/[0.03]"}`}>
                        <div className="mb-2.5 flex items-center justify-between gap-2">
                          <div className="flex min-w-0 items-center gap-2">
-                           <span className="inline-flex h-6 min-w-[26px] items-center justify-center rounded-md bg-purple-500/15 px-1.5 text-[11px] font-bold text-purple-300">{ep.episodeNumber}</span>
-                           <span className="truncate text-[12px] font-semibold text-zinc-200">{ep.title || `Episode ${ep.episodeNumber}`}</span>
+                           <span className={`inline-flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-md px-1.5 text-[11px] font-bold ${getComboSpan(ep) > 1 ? "bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-400/40" : "bg-purple-500/15 text-purple-300"}`}>{getComboSpan(ep) > 1 ? formatEpisodeChip(ep) : ep.episodeNumber}</span>
+                           <span className="truncate text-[12px] font-semibold text-zinc-200">{ep.title || formatEpisodeLabel(ep)}</span>
+                           {getComboSpan(ep) > 1 && (
+                             <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-fuchsia-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-fuchsia-200">
+                               <Layers size={9} /> ×{getComboSpan(ep)}
+                             </span>
+                           )}
                            {lockedNow && (
                              <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-200">
                                <Crown size={9} /> {lockLeft}
@@ -12792,7 +12885,15 @@ const SortableSeasonItem = memo(({
                          </div>
                          <div className="flex shrink-0 items-center gap-1.5">
                            <button
-                             onClick={() => setLockPicker((prev: any) => (prev === eIdx ? null : eIdx))}
+                             onClick={() => { setComboPicker((prev: any) => (prev === eIdx ? null : eIdx)); setLockPicker(null); }}
+                             aria-label={`Episode ${ep.episodeNumber} combo`}
+                             title="Combo episode — one link with several episodes"
+                             className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${getComboSpan(ep) > 1 || comboPicker === eIdx ? "bg-fuchsia-500/25 text-fuchsia-200" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}
+                           >
+                             <Layers size={12} />
+                           </button>
+                           <button
+                             onClick={() => { setLockPicker((prev: any) => (prev === eIdx ? null : eIdx)); setComboPicker(null); }}
                              aria-label={`Episode ${ep.episodeNumber} lock`}
                              title="Premium lock for a number of days"
                              className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${lockedNow ? "bg-amber-500/25 text-amber-200 hover:bg-amber-500/40" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}
@@ -12804,6 +12905,14 @@ const SortableSeasonItem = memo(({
                            </button>
                          </div>
                        </div>
+
+                       {comboPicker === eIdx && (
+                         <EpisodeComboPanel
+                           ep={ep}
+                           onApply={(span: number) => { setEpisodeComboSpan(sIdx, eIdx, span); setComboPicker(null); }}
+                           onClose={() => setComboPicker(null)}
+                         />
+                       )}
 
                        {lockPicker === eIdx && (
                          <div className="mb-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-2.5">

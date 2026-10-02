@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
@@ -2438,7 +2439,7 @@ const Index = () => {
         if (resolved) Object.assign(episode, resolved);
       }
       src = getEpisodeSrc(episode);
-      subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
+      subtitle = `${season.name} - ${formatEpisodeLabel(episode)}`;
       if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
       if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
       if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
@@ -2833,7 +2834,7 @@ const Index = () => {
           const season = resolvedSeasons[sIdx];
         episode = season.episodes[eIdx];
         src = getEpisodeSrc(episode);
-        subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
+        subtitle = `${season.name} - ${formatEpisodeLabel(episode)}`;
         if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
         if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
         if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
@@ -3013,6 +3014,8 @@ const Index = () => {
 
   const currentEpisodeList = playerState?.anime.seasons?.[playerState.seasonIdx ?? 0]?.episodes.map((ep, i) => ({
     number: ep.episodeNumber,
+    label: formatEpisodeChip(ep),
+    combo: isComboEpisode(ep),
     title: ep.title,
     active: i === (playerState?.epIdx ?? 0),
     locked: ((!userIsPremium || isGuestVisitor()) && isTimeLockedTarget(playerState?.anime, playerState?.seasonIdx ?? 0, i)) || (isGuestVisitor() && isGuestEpisodeBlocked(i)),
@@ -3049,7 +3052,7 @@ const Index = () => {
       const nextState = {
         ...playerState!,
         src: nextSrc,
-        subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
+        subtitle: `${season.name} - ${formatEpisodeLabel(clickedEp)}`,
         epIdx: i,
         resumeTime: 0,
         selectedLanguage: preferredLanguage,
@@ -3098,7 +3101,7 @@ const Index = () => {
     const nextState = {
       ...playerState,
       src: nextSrc,
-      subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
+      subtitle: `${season.name} - ${formatEpisodeLabel(ep)}`,
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       resumeTime: 0,
@@ -3579,7 +3582,7 @@ const Index = () => {
                   const nextState = {
                     ...playerState,
                     src: nextSrc,
-                    subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
+                    subtitle: `${season.name} - ${formatEpisodeLabel(nextEp)}`,
                     epIdx: nextIdx,
                      resumeTime: 0,
                      audioTracks: nextAudioTracks,
@@ -3634,7 +3637,7 @@ const Index = () => {
               ...playerState,
               anime: newAnime,
               src: nextSrc,
-              subtitle: `${newSeasons[seasonIdx].name} - Episode ${ep.episodeNumber}`,
+              subtitle: `${newSeasons[seasonIdx].name} - ${formatEpisodeLabel(ep)}`,
               seasonIdx,
               epIdx,
               // A language change is an audio-source change for the same

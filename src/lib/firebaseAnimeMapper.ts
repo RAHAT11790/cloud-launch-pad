@@ -56,6 +56,7 @@ const mapEpisode = (ep: any): Episode => ({
   link4k: ep?.link4k || undefined,
   directLink: ep?.directLink || undefined,
   lockUntil: Number(ep?.lockUntil || 0) || undefined,
+  episodeEnd: Number(ep?.episodeEnd || 0) > Number(ep?.episodeNumber || ep?.number || 0) ? Number(ep.episodeEnd) : undefined,
   subtitleTracks: mapSubtitleTracks(ep?.subtitleTracks),
   audioTracks: mapAudioTracks(ep?.audioTracks),
 });
