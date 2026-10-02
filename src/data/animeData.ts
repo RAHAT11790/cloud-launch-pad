@@ -43,6 +43,8 @@ export interface MoviePart {
 
 export interface Episode {
   episodeNumber: number;
+  /** Combo episode: last real episode inside this link (e.g. 2 → 4). */
+  episodeEnd?: number;
   title: string;
   link: string;
   link480?: string;
