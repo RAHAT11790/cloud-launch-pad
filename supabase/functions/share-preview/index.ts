@@ -63,7 +63,6 @@ ${image ? `<meta property="og:image" content="${esc(image)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(heading)}">
 <meta name="twitter:description" content="${esc(desc)}">
-<meta http-equiv="refresh" content="0;url=${esc(target)}">
 <link rel="canonical" href="${esc(target)}">
 </head><body style="background:#0b0d14"><script>location.replace(${JSON.stringify(target)})</script></body></html>`;
 
