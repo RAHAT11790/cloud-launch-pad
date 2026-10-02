@@ -12676,6 +12676,73 @@ const WsInlineLinkChecker = ({
  );
 };
 
+const EpisodeComboPanel = ({ ep, onApply, onClose }: { ep: any; onApply: (span: number) => void; onClose: () => void }) => {
+  const currentSpan = getComboSpan(ep);
+  const [span, setSpan] = useState<number>(currentSpan > 1 ? currentSpan : 2);
+  const start = Number(ep?.episodeNumber || 1);
+  const end = start + span - 1;
+  const nextStarts = end + 1;
+  const shift = span - currentSpan;
+  return (
+    <div className="mb-2.5 rounded-xl border border-fuchsia-500/30 bg-gradient-to-b from-fuchsia-500/[0.10] to-purple-500/[0.04] p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="h-8 w-8 shrink-0 rounded-lg bg-fuchsia-500/20 text-fuchsia-200 flex items-center justify-center"><Layers size={15} /></span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-bold text-white leading-tight">Combo episode</p>
+          <p className="mt-0.5 text-[10.5px] leading-relaxed text-fuchsia-100/60">How many episodes are inside this one link?</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button type="button" onClick={() => setSpan((v) => Math.max(1, v - 1))} disabled={span <= 1}
+          className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-white/[0.06] text-[18px] font-bold text-white disabled:opacity-30 active:scale-95">−</button>
+        <div className="flex-1 h-10 rounded-xl border border-fuchsia-400/30 bg-black/30 flex items-center justify-center">
+          <span className="text-[18px] font-extrabold tabular-nums text-white">{span}</span>
+          <span className="ml-1.5 text-[11px] text-zinc-400">episode{span === 1 ? "" : "s"}</span>
+        </div>
+        <button type="button" onClick={() => setSpan((v) => Math.min(50, v + 1))}
+          className="h-10 w-10 shrink-0 rounded-xl border border-white/10 bg-white/[0.06] text-[18px] font-bold text-white active:scale-95">+</button>
+      </div>
+
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {[2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" onClick={() => setSpan(n)}
+            className={`h-8 rounded-lg text-[11px] font-bold border transition-colors ${span === n ? "bg-fuchsia-500 border-fuchsia-400 text-white" : "bg-white/[0.05] border-white/10 text-zinc-300"}`}>
+            {n} in 1
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 space-y-1.5">
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-zinc-400">This link</span>
+          <span className="font-bold text-fuchsia-200">{span > 1 ? `Episode ${start}-${end}` : `Episode ${start}`}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-zinc-400">Next episode starts at</span>
+          <span className="font-bold text-white">Episode {nextStarts}</span>
+        </div>
+        <p className="text-[10px] leading-relaxed text-zinc-500">
+          {shift === 0 ? "No change to the other episodes." : `All later episodes move ${shift > 0 ? "up" : "down"} by ${Math.abs(shift)} automatically.`}
+        </p>
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button type="button" onClick={() => onApply(span)}
+          className="flex-1 h-10 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-[12px] font-bold text-white active:scale-[0.98]">
+          {span > 1 ? "Apply combo" : "Make single episode"}
+        </button>
+        {currentSpan > 1 && (
+          <button type="button" onClick={() => onApply(1)}
+            className="h-10 px-3 rounded-xl border border-red-400/30 bg-red-500/10 text-[11px] font-bold text-red-200">Remove</button>
+        )}
+        <button type="button" onClick={onClose}
+          className="h-10 px-3 rounded-xl border border-white/10 bg-white/[0.05] text-[11px] font-bold text-zinc-300">Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 const SortableSeasonItem = memo(({
   id, sIdx, rawSeason, seasonsData, updateSeasonName, removeSeason,
   wsSeasonJsonFileRef, setWsSeasonJsonTarget, setWsSeasonPasteTarget, setWsSeasonPasteText,
