@@ -22,6 +22,7 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
+import { applyComboSpan, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes } from "@/lib/episodeCombo";
 import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
@@ -4198,6 +4199,10 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  // Episode Lock must survive every editor load/save round-trip, otherwise the
  // premium window silently disappears and free users can watch the episode.
  lockUntil: Number(episode?.lockUntil || 0) || 0,
+ // Combo episode (one link = several real episodes). Omitted for singles.
+ ...(Number(episode?.episodeEnd || 0) > Number(episode?.episodeNumber || episode?.number || index + 1)
+   ? { episodeEnd: Number(episode.episodeEnd) }
+   : {}),
  } as Episode;
  }, [normalizeAudioTrackList]);
 
@@ -4440,7 +4445,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
 
  const addEpisode = async (sIdx: number) => {
  const season = { ...(seasonsData[sIdx] as any), episodes: Array.isArray((seasonsData[sIdx] as any)?.episodes) ? (seasonsData[sIdx] as any).episodes : [] } as Season;
- const num = season.episodes.length + 1;
+ const num = season.episodes.reduce((m: number, e: any) => Math.max(m, getEpisodeEnd(e)), 0) + 1;
  let epTitle = `Episode ${num}`;
 
  // Auto-fetch episode name from TMDB if tmdbId is available
@@ -4498,11 +4503,24 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   const copy = Array.isArray(prev) ? [...prev] : [];
   const rawSeason = copy[sIdx] || { name: `Season ${sIdx + 1}`, seasonNumber: sIdx + 1, episodes: [] };
   const s = { ...rawSeason, episodes: (Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : []).filter((_: any, i: number) => i !== eIdx) };
- // Re-number episodes
-  s.episodes = s.episodes.map((ep: any, i: number) => ({ ...ep, episodeNumber: i + 1 }));
+ // Re-number episodes (combo-aware: a combo keeps its span, the rest shift).
+  s.episodes = renumberEpisodes(s.episodes);
  copy[sIdx] = s;
  return copy;
  });
+ };
+
+ /** Combo episode: one link holds `span` real episodes; later episodes renumber. */
+ const setEpisodeComboSpan = (sIdx: number, eIdx: number, span: number) => {
+ setSeasonsData(prev => {
+  const copy = Array.isArray(prev) ? [...prev] : [];
+  const rawSeason = copy[sIdx];
+  if (!rawSeason) return prev;
+  const episodes = Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : [];
+  copy[sIdx] = { ...rawSeason, episodes: applyComboSpan(episodes, eIdx, span) } as any;
+  return copy;
+ });
+ toast.success(span > 1 ? `Combo saved — ${span} episodes in one link. Numbers updated.` : "Combo removed — numbers updated.");
  };
 
   // ============ JSON import — SMART MERGE ============
@@ -6428,6 +6446,7 @@ ${tgBulkFooter}
           updateSeriesEpisodeLanguageLink={updateSeriesEpisodeLanguageLink}
           removeEpisode={removeEpisode}
           setEpisodeLockDays={setEpisodeLockDays}
+          setEpisodeComboSpan={setEpisodeComboSpan}
           addSeriesEpisodeAudioTrack={addSeriesEpisodeAudioTrack}
           updateSeriesEpisodeAudioTrack={updateSeriesEpisodeAudioTrack}
           setSeriesEpisodeDefaultAudioTrack={setSeriesEpisodeDefaultAudioTrack}
