@@ -49,6 +49,7 @@ interface VideoServerOption {
 }
 
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { formatEpisodeChip, formatEpisodeLabel, getEpisodeEnd } from "@/lib/episodeCombo";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
@@ -321,7 +322,7 @@ interface VideoPlayerProps {
   onClose: () => void;
   onLanguageChange?: (language: string) => void;
   onNextEpisode?: () => void;
-  episodeList?: { number: number; title?: string; active: boolean; onClick: () => void; locked?: boolean; lockKind?: "premium" | "login" }[];
+  episodeList?: { number: number; label?: string; combo?: boolean; title?: string; active: boolean; onClick: () => void; locked?: boolean; lockKind?: "premium" | "login" }[];
   qualityOptions?: QualityOption[];
   audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   subtitleTracks?: { language?: string; label: string; url: string }[];
@@ -351,6 +352,7 @@ interface VideoPlayerProps {
 type DownloadEpisodeOption = {
   index: number;
   episodeNumber: number;
+  episodeEnd?: number;
   title: string;
   metaText: string;
   qualityLinks: Record<string, string>;
@@ -1208,8 +1210,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return {
         index,
         episodeNumber: ep.episodeNumber || index + 1,
-        title: ep.title || `Episode ${ep.episodeNumber || index + 1}`,
-        metaText: ep.title ? ep.title : `Episode ${ep.episodeNumber || index + 1}`,
+        episodeEnd: getEpisodeEnd(ep) || undefined,
+        title: ep.title || formatEpisodeLabel(ep, index + 1),
+        metaText: ep.title ? ep.title : formatEpisodeLabel(ep, index + 1),
         qualityLinks,
         directLink: ep.directLink || "",
       };
@@ -5667,7 +5670,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         onClick={ep.onClick}
                         data-ep-active={ep.active ? "1" : undefined}
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
-                        className={`relative flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
+                        className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-colors flex items-center justify-center ${
                           ep.active
                             ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60'
                             : ep.locked
@@ -5675,7 +5678,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
                         }`}
                       >
-                        {String(ep.number).padStart(2, '0')}
+                        {ep.label || String(ep.number).padStart(2, '0')}
+                        {ep.combo && !ep.locked && (<span className="absolute -top-1 -right-1 h-3.5 min-w-[14px] px-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] leading-[14px] font-extrabold text-center shadow">+</span>)}
                         {ep.locked && (
                           <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                             <Lock className="w-2.5 h-2.5" strokeWidth={3} />
@@ -6045,7 +6049,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     key={ep.number}
                     onClick={() => { ep.onClick(); closeInlineSheets(); }}
                     title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
-                    className={`relative aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
+                    className={`relative aspect-square rounded-lg ${ep.combo ? 'text-[10px] col-span-1 leading-tight' : 'text-sm'} font-bold transition-colors flex items-center justify-center ${
                       ep.active
                         ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-400/70 shadow-[0_0_14px_-2px_hsl(45_95%_55%/0.5)]'
                         : ep.locked
@@ -6053,7 +6057,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
                     }`}
                   >
-                    {String(ep.number).padStart(2, '0')}
+                    {ep.label || String(ep.number).padStart(2, '0')}
                     {ep.locked && (
                       <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 text-black flex items-center justify-center shadow">
                         <Lock className="w-2.5 h-2.5" strokeWidth={3} />
@@ -6582,7 +6586,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     {lockedByRule ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
                                   </span>
                                   <span className="min-w-0 flex-1">
-                                    <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                    <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{formatEpisodeChip(ep)}</span>
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
@@ -6996,7 +7000,7 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
               {props.episodeList.map((ep) => (
                 <button key={ep.number} onClick={ep.onClick}
                   className={`h-10 rounded-lg text-sm font-medium border transition ${ep.active ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:border-primary"}`}>
-                  {ep.number}
+                  {ep.label || ep.number}
                 </button>
               ))}
             </div>
