@@ -12785,8 +12785,8 @@ const SortableSeasonItem = memo(({
         {!isComboMode && <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg hover:bg-red-500/40 transition-all"><Trash2 size={14} /></button>}
       </div>
 
-      <div className="mb-2.5 flex justify-between items-center ml-9">
-        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b></span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links · combo</span>}</span>
+      <div className="mb-2.5 flex flex-wrap justify-between items-center gap-2 ml-9">
+        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b></span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links</span>}</span>
         <div className="flex gap-1.5 items-center">
           <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
             className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
