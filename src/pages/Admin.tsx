@@ -5393,17 +5393,17 @@ ${tgBulkFooter}
  } else {
  // Fallback to counting linked episodes in that specific season
  const seasonIdx = (release.episodeInfo?.seasonNumber || 1) - 1;
- const seasonEps = ws?.seasons?.[seasonIdx]?.episodes?.length || 0;
+ const seasonEps = countRealEpisodes(ws?.seasons?.[seasonIdx]?.episodes || []);
  setTgTotalEpisodes(String(seasonEps));
  }
  } catch {
  const seasonIdx = (release.episodeInfo?.seasonNumber || 1) - 1;
- const seasonEps = ws?.seasons?.[seasonIdx]?.episodes?.length || 0;
+ const seasonEps = countRealEpisodes(ws?.seasons?.[seasonIdx]?.episodes || []);
  setTgTotalEpisodes(String(seasonEps));
  }
  } else if (ws?.seasons) {
  const seasonIdx = (release.episodeInfo?.seasonNumber || 1) - 1;
- const seasonEps = ws?.seasons?.[seasonIdx]?.episodes?.length || 0;
+ const seasonEps = countRealEpisodes(ws?.seasons?.[seasonIdx]?.episodes || []);
  setTgTotalEpisodes(String(seasonEps));
  }
  } else {
@@ -6849,13 +6849,13 @@ ${tgBulkFooter}
  if (tmdbData?.episodes?.length) {
  setTgTotalEpisodes(String(tmdbData.episodes.length));
  } else {
- setTgTotalEpisodes(String(season?.episodes?.length || 0));
+ setTgTotalEpisodes(String(countRealEpisodes(season?.episodes || [])));
  }
  } else {
- setTgTotalEpisodes(String(season?.episodes?.length || 0));
+ setTgTotalEpisodes(String(countRealEpisodes(season?.episodes || [])));
  }
  } catch {
- setTgTotalEpisodes(String(season?.episodes?.length || 0));
+ setTgTotalEpisodes(String(countRealEpisodes(season?.episodes || [])));
  }
   startTransition(() => {
   setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
