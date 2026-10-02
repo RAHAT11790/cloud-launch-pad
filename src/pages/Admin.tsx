@@ -356,6 +356,7 @@ interface CastMember {
 
 interface Episode {
  episodeNumber: number;
+ episodeEnd?: number;
  title: string;
  link: string;
  link480?: string;
