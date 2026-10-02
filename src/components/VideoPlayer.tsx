@@ -5651,16 +5651,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </button>
                   <div
                     ref={(row) => {
-                      // Keep the selected episode in view (player remounts on episode change).
-                      if (!row) return;
+                      // Scroll to the selected episode ONCE per selection; never snap back while the user swipes.
+                      if (!row || row.dataset.epScrolled === String(activeEpisodeIdx)) return;
                       const el = row.querySelector<HTMLElement>('[data-ep-active="1"]');
                       if (!el) return;
-                      const left = el.offsetLeft - 76 - 8;
-                      if (Math.abs(row.scrollLeft - left) > 4 && (el.offsetLeft < row.scrollLeft + 76 || el.offsetLeft + el.offsetWidth > row.scrollLeft + row.clientWidth)) {
-                        row.scrollLeft = Math.max(0, left);
-                      }
+                      row.dataset.epScrolled = String(activeEpisodeIdx);
+                      row.scrollLeft = Math.max(0, el.offsetLeft - 76 - 8);
                     }}
-                    key={`ep-row-${activeEpisodeIdx}`}
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
                     style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
                   >
@@ -6960,8 +6957,12 @@ const AbyssDirectPlayer = ({ abyssLink, ...props }: VideoPlayerProps & { abyssLi
   useEffect(() => { load(false); }, [load]);
   const srcs = state.link === abyssLink ? state.srcs : [];
   const best = srcs.find((q) => /720/.test(q.label)) || srcs[srcs.length - 1];
+  const err = state.link === abyssLink && state.err;
+  if (!best && !err) {
+    // Same RS player layout while resolving — its own buffering spinner shows.
+    return <MemoVideoPlayer key={`abyss-${abyssLink}-pending`} {...props} src="" qualityOptions={[]} noServerSwitch />;
+  }
   if (!best) {
-    const err = state.link === abyssLink && state.err;
     return (
       <div className="rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center overflow-y-auto">
       <div className="relative w-full max-w-5xl aspect-video bg-black flex flex-col items-center justify-center gap-3 overflow-hidden">
