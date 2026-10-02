@@ -6534,11 +6534,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <div className="p-3 border-t border-white/10 bg-black">
                           {hasMultiEpisodes && (
                             <div className="flex items-center justify-between mb-2.5">
-                              <button onClick={toggleTgAll} className={`flex items-center gap-1.5 text-[11px] ${allTgSelected ? 'text-white' : 'text-white/55'}`}>
-                                <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allTgSelected ? 'border-sky-400 bg-sky-400 text-black' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
-                                <span>Select all episodes</span>
-                              </button>
-                              <span className="text-[10.5px] text-white/45">{chosenCount} selected</span>
+                              <span className="text-[11px] text-white/60">{chosenCount ? `${chosenCount} episode${chosenCount > 1 ? 's' : ''} selected` : 'No episode selected'}</span>
+                              {chosenCount > 0 && (
+                                <button onClick={clearTgSelection} className="text-[11px] font-semibold text-sky-300/90 underline underline-offset-2">Clear</button>
+                              )}
                             </div>
                           )}
                           {steps.length <= 1 ? (
