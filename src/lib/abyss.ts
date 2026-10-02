@@ -6,6 +6,7 @@
 // ============================================================
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { db, ref, get, set, remove } from "@/lib/firebase";
+import { firebaseRestUrl } from "@/lib/firebaseRest";
 
 export interface AbyssSource { label: string; url: string; size: number }
 export interface AbyssResolved { ok: boolean; slug: string; title?: string; sources: AbyssSource[]; embed: string; error?: string }
@@ -58,12 +59,22 @@ export function resolveAbyss(link: string, opts: { fresh?: boolean } = {}): Prom
   const p = (async () => {
     try {
       // Shared cache: one viewer's resolved links serve every viewer for 2h.
+      // Plain REST read (one fast HTTP call, no realtime socket warm-up).
       if (!opts.fresh) {
         try {
-          const snap = await get(ref(db, `abyssCache/${slug}`));
-          const s = snap.val();
+          const ctl = new AbortController();
+          const t = setTimeout(() => ctl.abort(), 2500);
+          let s: any = null;
+          try {
+            const r = await fetch(firebaseRestUrl(`abyssCache/${slug}`), { cache: "no-store", signal: ctl.signal });
+            s = r.ok ? await r.json() : null;
+          } catch {
+            const snap = await get(ref(db, `abyssCache/${slug}`));
+            s = snap.val();
+          } finally { clearTimeout(t); }
           if (s?.at && Date.now() - s.at < TTL && s.v?.ok && Array.isArray(s.v.sources) && s.v.sources.length) {
             writeLs(slug, s.v);
+            cache.set(slug, { at: s.at, p: Promise.resolve(s.v) });
             return s.v as AbyssResolved;
           }
         } catch { /* ignore */ }
