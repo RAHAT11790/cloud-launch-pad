@@ -56,7 +56,7 @@ export function LinkSectionTabs({
           <div className={`h-full rounded-full transition-all duration-500 ${isDirect ? "bg-emerald-400" : "bg-sky-400"}`} style={{ width: `${pct}%` }} />
         </div>
         <span className="shrink-0 text-[10px] font-medium tabular-nums text-zinc-400">
-          {count}/{total} {isDirect ? "with direct link" : "with Telegram links"}
+          {count}/{total} links {isDirect ? "are direct" : "on Telegram"}
         </span>
       </div>
     </div>
