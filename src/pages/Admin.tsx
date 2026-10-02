@@ -12681,7 +12681,7 @@ const SortableSeasonItem = memo(({
   wsSeasonJsonFileRef, setWsSeasonJsonTarget, setWsSeasonPasteTarget, setWsSeasonPasteText,
   setExpandedSeasons, expandedSeasons, wsSeasonPasteTarget, wsSeasonPasteText,
   wsImportJsonToSeason, addEpisode, episodeRenderLimits, setEpisodeRenderLimits,
-  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays,
+  seriesForm, normalizeLanguageValue, updateSeriesEpisodeLanguageLink, removeEpisode, setEpisodeLockDays, setEpisodeComboSpan,
   addSeriesEpisodeAudioTrack, updateSeriesEpisodeAudioTrack, setSeriesEpisodeDefaultAudioTrack,
   removeSeriesEpisodeAudioTrack, inputClass, btnSecondary,
   comboSelection, setComboSelection, isComboMode, moveSeason, linkSection
@@ -12689,6 +12689,7 @@ const SortableSeasonItem = memo(({
 
   const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
   const [lockPicker, setLockPicker] = useState<number | null>(null);
+  const [comboPicker, setComboPicker] = useState<number | null>(null);
 
   return (
     <div className={`bg-black/30 rounded-xl p-3.5 mb-3 border relative group transition-all duration-300 ${isComboMode ? (comboSelection.includes(sIdx) ? 'border-amber-500 bg-amber-500/10' : 'border-white/5 opacity-60') : 'border-white/5'}`}>
@@ -12802,8 +12803,13 @@ const SortableSeasonItem = memo(({
                      <div key={eIdx} className={`mb-3 rounded-xl border px-3 py-3 transition-colors ${lockedNow ? "border-amber-500/35 bg-amber-500/[0.06]" : "border-white/[0.07] bg-white/[0.03]"}`}>
                        <div className="mb-2.5 flex items-center justify-between gap-2">
                          <div className="flex min-w-0 items-center gap-2">
-                           <span className="inline-flex h-6 min-w-[26px] items-center justify-center rounded-md bg-purple-500/15 px-1.5 text-[11px] font-bold text-purple-300">{ep.episodeNumber}</span>
-                           <span className="truncate text-[12px] font-semibold text-zinc-200">{ep.title || `Episode ${ep.episodeNumber}`}</span>
+                           <span className={`inline-flex h-6 min-w-[26px] shrink-0 items-center justify-center rounded-md px-1.5 text-[11px] font-bold ${getComboSpan(ep) > 1 ? "bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-400/40" : "bg-purple-500/15 text-purple-300"}`}>{getComboSpan(ep) > 1 ? formatEpisodeChip(ep) : ep.episodeNumber}</span>
+                           <span className="truncate text-[12px] font-semibold text-zinc-200">{ep.title || formatEpisodeLabel(ep)}</span>
+                           {getComboSpan(ep) > 1 && (
+                             <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-fuchsia-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-fuchsia-200">
+                               <Layers size={9} /> ×{getComboSpan(ep)}
+                             </span>
+                           )}
                            {lockedNow && (
                              <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-200">
                                <Crown size={9} /> {lockLeft}
@@ -12812,7 +12818,15 @@ const SortableSeasonItem = memo(({
                          </div>
                          <div className="flex shrink-0 items-center gap-1.5">
                            <button
-                             onClick={() => setLockPicker((prev: any) => (prev === eIdx ? null : eIdx))}
+                             onClick={() => { setComboPicker((prev: any) => (prev === eIdx ? null : eIdx)); setLockPicker(null); }}
+                             aria-label={`Episode ${ep.episodeNumber} combo`}
+                             title="Combo episode — one link with several episodes"
+                             className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${getComboSpan(ep) > 1 || comboPicker === eIdx ? "bg-fuchsia-500/25 text-fuchsia-200" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}
+                           >
+                             <Layers size={12} />
+                           </button>
+                           <button
+                             onClick={() => { setLockPicker((prev: any) => (prev === eIdx ? null : eIdx)); setComboPicker(null); }}
                              aria-label={`Episode ${ep.episodeNumber} lock`}
                              title="Premium lock for a number of days"
                              className={`h-7 w-7 inline-flex items-center justify-center rounded-lg transition-all ${lockedNow ? "bg-amber-500/25 text-amber-200 hover:bg-amber-500/40" : "bg-white/[0.06] text-zinc-400 hover:bg-white/10 hover:text-white"}`}
@@ -12824,6 +12838,14 @@ const SortableSeasonItem = memo(({
                            </button>
                          </div>
                        </div>
+
+                       {comboPicker === eIdx && (
+                         <EpisodeComboPanel
+                           ep={ep}
+                           onApply={(span: number) => { setEpisodeComboSpan(sIdx, eIdx, span); setComboPicker(null); }}
+                           onClose={() => setComboPicker(null)}
+                         />
+                       )}
 
                        {lockPicker === eIdx && (
                          <div className="mb-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] p-2.5">
