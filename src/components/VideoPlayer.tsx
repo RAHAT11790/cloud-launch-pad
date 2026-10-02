@@ -1513,7 +1513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
       const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
       setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
-      setTgSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setTgSelectedEpisodes(new Set());
       setTgSelectedQualities(["720P"]);
       setTgEpQualityMap({});
       setTgSentSteps(new Set());
