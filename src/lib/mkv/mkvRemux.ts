@@ -217,8 +217,8 @@ export class AudioFragmenter {
     return this.mp4Pending.length >= this.maxBlocks ? this.flush() : null;
   }
 
-  flush(): Uint8Array | null {
-    if (this.track.route === "webm") return this.flushWebm(false);
+  flush(final = false): Uint8Array | null {
+    if (this.track.route === "webm") return this.flushWebm(final);
     if (!this.mp4Pending.length) return null;
     const list = this.mp4Pending;
     this.mp4Pending = [];

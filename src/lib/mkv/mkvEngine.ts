@@ -346,7 +346,7 @@ export class MkvEngine {
         if (gen !== this.generation || this.destroyed) return;
         if (!block) {
           const fv = vf.flush(); if (fv) await this.vw.append(fv);
-          const fa = af.flush(); if (fa) await this.aw.append(fa);
+          const fa = af.flush(true); if (fa) await this.aw.append(fa);
           this.eofReached = true;
           if (gen === this.generation) await this.endStream();
           break;
