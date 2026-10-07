@@ -105,7 +105,7 @@ export class VideoFragmenter {
   /** Push a block; returns a finished fragment when a new GOP begins. */
   push(block: MkvBlock): Uint8Array | null {
     let out: Uint8Array | null = null;
-    if (block.isKey && this.pending.length >= 1 && this.pending.length + 1 > 1) out = this.flush();
+    if (block.isKey && this.pending.length > 0) out = this.flush();
     else if (this.pending.length >= 480) out = this.flush();
     const base = this.toUnits(block.ptsTicks);
     block.frames.forEach((frame, i) => {
