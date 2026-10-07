@@ -12,7 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { MkvEngine, type TextCue } from "@/lib/mkv/mkvEngine";
 import type { PgsBitmapCue } from "@/lib/mkv/pgs";
-import { isLikelyMatroska, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
+import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
+import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -92,7 +93,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const busyRef = useRef(false);
   const setBusyBoth = (value: boolean) => { busyRef.current = value; setBusy(value); };
 
-  const candidate = enabled && !!src && isLikelyMatroska(src) ? src : "";
+  const candidate = enabled && !!src && isProbeCandidate(src) ? src : "";
   const key = useMemo(() => (candidate ? mediaKey(candidate) : ""), [candidate]);
   const keyRef = useRef(key);
   keyRef.current = key;
@@ -121,6 +122,48 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     }
   }, []);
 
+  const cueCallbacks = useRef({
+    onTextCue: (track: number, cue: TextCue) => {
+      const list = textCues.current.get(track) || [];
+      if (list.some((c) => c.start === cue.start && c.text === cue.text)) return;
+      insertSorted(list, cue);
+      textCues.current.set(track, list);
+    },
+    onBitmapCue: (track: number, cue: PgsBitmapCue) => {
+      const list = bitmapCues.current.get(track) || [];
+      if (list.some((c) => c.start === cue.start)) return;
+      insertSorted(list, cue);
+      bitmapCues.current.set(track, list);
+    },
+  }).current;
+
+  // ---- subtitle side-reader: CC while the original audio keeps playing natively ----
+  const subReaderRef = useRef<MkvSubtitleReader | null>(null);
+  const subOpRef = useRef(0);
+  const stopSubReader = useCallback(() => {
+    subOpRef.current += 1;
+    subReaderRef.current?.destroy();
+    subReaderRef.current = null;
+  }, []);
+  const startSubReader = useCallback(async () => {
+    if (engineRef.current || subReaderRef.current) return;
+    const playUrl = srcRef.current;
+    if (!playUrl || tracksRef.current?.container === "mp4") return;
+    const op = ++subOpRef.current;
+    try {
+      const { header, cues, corsUrl } = await loadHeader(playUrl);
+      if (op !== subOpRef.current || engineRef.current || activeSubRef.current < 0 || srcRef.current !== playUrl) return;
+      const reader = new MkvSubtitleReader(corsUrl, header, cues, () => videoRef.current?.currentTime || 0, cueCallbacks);
+      subReaderRef.current = reader;
+      reader.start();
+    } catch (error) {
+      if (op === subOpRef.current) {
+        console.warn("[mkv] subtitle reader failed:", (error as Error)?.message);
+        noticeRef.current?.("Couldn't load subtitles right now.");
+      }
+    }
+  }, [cueCallbacks, videoRef]);
+
   const destroyEngine = useCallback(() => {
     const e = engineRef.current;
     engineRef.current = null;
@@ -147,7 +190,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const native = tracksRef.current?.nativeAudio ?? -1;
     activeAudioRef.current = native;
     setActiveAudio(native);
-  }, [destroyEngine, unfreeze, videoRef]);
+    if (activeSubRef.current >= 0) void startSubReader();
+  }, [destroyEngine, startSubReader, unfreeze, videoRef]);
 
   // ---- reset + background probe per source ----
   useEffect(() => {
@@ -157,6 +201,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   useEffect(() => {
     opRef.current += 1;
     destroyEngine();
+    stopSubReader();
     textCues.current = new Map();
     bitmapCues.current = new Map();
     setSubtitleText("");
@@ -181,7 +226,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     // Let the first frames load before we spend bandwidth on the probe.
     const timer = setTimeout(() => { probeEmbeddedTracks(candidate).then(apply).catch(() => undefined); }, 600);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [candidate, destroyEngine]);
+  }, [candidate, destroyEngine, stopSubReader]);
 
   // If anything else (server/quality switch, retry) replaces the element's
   // source, the engine silently steps aside.
@@ -216,17 +261,9 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       if (op !== opRef.current) return false;
       freeze();
       destroyEngine();
+      stopSubReader(); // the engine reads subtitles itself
       const engine = new MkvEngine(corsUrl, header, cues, audioNumber, {
-        onTextCue: (track, cue) => {
-          const list = textCues.current.get(track) || [];
-          insertSorted(list, cue);
-          textCues.current.set(track, list);
-        },
-        onBitmapCue: (track, cue) => {
-          const list = bitmapCues.current.get(track) || [];
-          insertSorted(list, cue);
-          bitmapCues.current.set(track, list);
-        },
+        ...cueCallbacks,
         onFatal: (error) => {
           if (engineRef.current !== engine) return;
           console.warn("[mkv] engine stopped:", error.message);
@@ -256,7 +293,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     } finally {
       if (op === opRef.current) setBusyBoth(false);
     }
-  }, [backToNative, destroyEngine, freeze, unfreeze, videoRef]);
+  }, [backToNative, cueCallbacks, destroyEngine, freeze, stopSubReader, unfreeze, videoRef]);
 
   const selectAudio = useCallback((number: number) => {
     const list = tracksRef.current;
@@ -269,6 +306,17 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     writePref(PREF_AUDIO, number === list.nativeAudio ? "" : langOf(track));
     writeMediaPref(keyRef.current, { a: number === list.nativeAudio ? "native" : langOf(track) });
     if (number === activeAudioRef.current) return;
+    if (list.container === "mp4") {
+      // Real MP4: the browser decodes every track itself — just flip which one is enabled.
+      const native = (videoRef.current as any)?.audioTracks;
+      const index = list.audio.findIndex((a) => a.number === number);
+      if (native && index >= 0 && native.length > index) {
+        for (let i = 0; i < native.length; i += 1) native[i].enabled = i === index;
+        activeAudioRef.current = number;
+        setActiveAudio(number);
+      } else noticeRef.current?.("This browser can't switch audio in this file.");
+      return;
+    }
     activeAudioRef.current = number;
     setActiveAudio(number);
     const engine = engineRef.current;
@@ -282,7 +330,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     }
     if (number === list.nativeAudio) return; // native already plays it
     void handOver(number);
-  }, [handOver]);
+  }, [handOver, videoRef]);
 
   const selectSubtitle = useCallback((number: number) => {
     activeSubRef.current = number;
@@ -292,15 +340,11 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const track = tracksRef.current?.subtitles.find((s) => s.number === number);
     writePref(PREF_SUB, number >= 0 ? langOf(track) || "on" : "off");
     writeMediaPref(keyRef.current, { s: number >= 0 ? langOf(track) || "on" : "off" });
-    if (number < 0) return;
-    // Embedded subtitles are read by the engine while it streams.
-    if (!engineRef.current && !busyRef.current) {
-      const audio = activeAudioRef.current >= 0 ? activeAudioRef.current : tracksRef.current?.nativeAudio ?? -1;
-      const audioTrack = tracksRef.current?.audio.find((a) => a.number === audio);
-      if (audio >= 0 && audioTrack?.playable) void handOver(audio);
-      else noticeRef.current?.("Subtitles from this file can't be shown on this device.");
-    }
-  }, [handOver]);
+    if (number < 0) { stopSubReader(); return; }
+    // With another language playing the engine already streams every subtitle;
+    // otherwise a light side-reader fetches them while native playback continues.
+    if (!engineRef.current) void startSubReader();
+  }, [startSubReader, stopSubReader]);
 
   // ---- remembered language choices: apply once the episode is playing ----
   useEffect(() => {
@@ -310,7 +354,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const prefSub = media.s || readPref(PREF_SUB);
     const audioMatch = prefAudio ? tracks.audio.find((a) => a.playable && langOf(a) === prefAudio && a.number !== tracks.nativeAudio) : undefined;
     const subMatch = prefSub && prefSub !== "off"
-      ? tracks.subtitles.find((s) => langOf(s) === prefSub && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
+      ? tracks.subtitles.find((s) => langOf(s) === prefSub && !s.forced && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
       : undefined;
     if (!audioMatch && !subMatch) { autoAppliedRef.current = key; return; }
     const v = videoRef.current;
@@ -327,16 +371,13 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       autoAppliedRef.current = key;
       if (subMatch) { activeSubRef.current = subMatch.number; setActiveSubtitle(subMatch.number); }
       if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number); }
-      else if (subMatch) {
-        const native = tracks.audio.find((a) => a.number === tracks.nativeAudio);
-        if (native?.playable) void handOver(tracks.nativeAudio);
-      }
+      else if (subMatch) void startSubReader();
     };
     const start = () => { settleTimer = window.setTimeout(run, 350); };
     if (!v.paused && v.readyState >= 3) start();
     else v.addEventListener("playing", start, { once: true });
     return () => { clearTimeout(settleTimer); v.removeEventListener("playing", start); v.removeEventListener("seeked", run); };
-  }, [candidate, handOver, key, tracks, videoRef]);
+  }, [candidate, handOver, key, startSubReader, tracks, videoRef]);
 
   // ---- subtitle clock ----
   useEffect(() => {
@@ -361,7 +402,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     return () => cancelAnimationFrame(raf);
   }, [activeSubtitle, videoRef]);
 
-  useEffect(() => () => { destroyEngine(); freezeRef.current?.remove(); }, [destroyEngine]);
+  useEffect(() => () => { destroyEngine(); stopSubReader(); freezeRef.current?.remove(); }, [destroyEngine, stopSubReader]);
 
   const available = !!tracks && (tracks.audio.length > 1 || tracks.subtitles.length > 0);
   return { available, tracks, activeAudio, activeSubtitle, busy, engineActive, ownsRef, subtitleText, bitmapCue, selectAudio, selectSubtitle };

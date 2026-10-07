@@ -14,6 +14,7 @@ import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
+import { isMp4Magic, readMp4Tracks } from "./mp4Probe";
 
 export interface EmbeddedTrack {
   number: number;
@@ -27,6 +28,8 @@ export interface EmbeddedTrack {
   /** Can this browser play/render it through the engine? */
   playable: boolean;
   bitmap?: boolean;
+  /** Forced / signs-only subtitle (only on-screen text, not the dialogue). */
+  forced?: boolean;
   /** MSE mime of the audio track (audio only). */
   mime?: string;
 }
@@ -37,9 +40,11 @@ export interface EmbeddedTrackList {
   /** Track the browser decodes natively before the engine takes over. */
   nativeAudio: number;
   videoMime?: string;
+  /** Real container sniffed from the bytes (file names are often wrong). */
+  container?: "mkv" | "mp4" | "none";
 }
 
-const LS_KEY = "rs_mkv_tracks_v2";
+const LS_KEY = "rs_mkv_tracks_v3";
 const LS_TTL = 14 * 24 * 60 * 60 * 1000;
 const mem = new Map<string, { list: EmbeddedTrackList; header?: MkvHeader; cues?: MkvCue[]; corsUrl?: string }>();
 const inflight = new Map<string, Promise<EmbeddedTrackList | null>>();
@@ -60,6 +65,22 @@ export const isLikelyMatroska = (value: string): boolean => {
   let decoded = inner;
   try { decoded = decodeURIComponent(inner); } catch { /* keep */ }
   return /\.mkv(?:$|[?#&])/i.test(decoded);
+};
+
+/**
+ * Any direct video file can carry extra tracks. RS uploads named ".mp4" are
+ * often Matroska inside (and vice versa), so every direct file is sniffed.
+ */
+export const isProbeCandidate = (value: string): boolean => {
+  const inner = unwrapMediaUrl(value);
+  if (!/^https?:\/\//i.test(inner)) return false;
+  let decoded = inner;
+  try { decoded = decodeURIComponent(inner); } catch { /* keep */ }
+  if (/\.(m3u8|mpd|ts)(?:$|[?#&])/i.test(decoded)) return false;
+  let path = "";
+  try { path = new URL(inner).pathname; } catch { return false; }
+  const ext = (path.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "").toLowerCase();
+  return !ext || ["mkv", "mp4", "m4v", "webm", "mov", "mka"].includes(ext);
 };
 
 /** Host-independent key: the same file is served by several RS mirrors. */
@@ -105,16 +126,27 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 };
 
 /** Re-evaluate "playable" for THIS browser (shared cache stores raw facts). */
-const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle" }>(items: T[]): T[] => {
+const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle"; forced?: boolean }>(items: T[]): T[] => {
   const seen = new Map<string, number>();
-  return items.map((t, i) => {
-    const base = buildTrackLabel(t.kind, t.language, t.label, i);
+  // Full dialogue subtitles first; signs-only tracks after them.
+  const rank = (t: T) => (t.forced ? 2 : t.kind === "subtitle" && /dialog|full/i.test(t.rawName || "") ? 0 : 1);
+  const ordered = items.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i);
+  return ordered.map(({ t, i }) => {
+    const lang = buildTrackLabel(t.kind, t.language, t.rawName || t.label, i);
+    const base = t.forced ? `${lang} (Signs)` : lang;
     const n = (seen.get(base) || 0) + 1; seen.set(base, n);
     return { ...t, rawName: t.rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
   });
 };
 
+const nativeAudioTracks = () => typeof HTMLMediaElement !== "undefined" && "audioTracks" in HTMLMediaElement.prototype;
+
 const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
+  if (list.container === "mp4") {
+    const ok = nativeAudioTracks();
+    return { ...list, audio: relabel(list.audio || []).map((a) => ({ ...a, playable: ok || a.number === list.nativeAudio })), subtitles: relabel(list.subtitles || []) };
+  }
+  if (list.container === "none") return { ...list, audio: [], subtitles: [] };
   const MS = mseAvailable() ? (window as any).MediaSource : null;
   const videoOk = !!(MS && list.videoMime && MS.isTypeSupported(list.videoMime));
   return {
@@ -127,6 +159,7 @@ const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
 const summarize = (header: MkvHeader): EmbeddedTrackList => {
   const native = header.audio.find((a) => a.isDefault) || header.audio[0];
   return applySupport({
+    container: "mkv",
     nativeAudio: native?.number ?? -1,
     videoMime: header.video?.route ? videoMime(header.video) : "",
     audio: header.audio.map((a) => ({
@@ -138,6 +171,7 @@ const summarize = (header: MkvHeader): EmbeddedTrackList => {
       .map((s) => ({
         number: s.number, kind: "subtitle" as const, label: s.label, rawName: s.name, language: s.language, codec: s.codec,
         isDefault: s.isDefault, playable: true, bitmap: isPgsTrack(s),
+        forced: s.isForced || /\b(signs?|songs?|forced)\b/i.test(s.name),
       })),
   });
 };
@@ -164,7 +198,7 @@ async function readShared(key: string): Promise<EmbeddedTrackList | null> {
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 2500);
-    const res = await fetch(firebaseRestUrl(`mediaTracks/${fbKey(key)}`), { signal: ctl.signal, cache: "no-store" });
+    const res = await fetch(firebaseRestUrl(`mediaTracks/${fbKey(`${key}|v3`)}`), { signal: ctl.signal, cache: "no-store" });
     clearTimeout(timer);
     const val = res.ok ? await res.json() : null;
     if (val?.list && Date.now() - Number(val.at || 0) < LS_TTL) {
@@ -184,8 +218,23 @@ export function peekEmbeddedTracks(playUrl: string): EmbeddedTrackList | null {
   return list ? applySupport(list) : null;
 }
 
+const mp4Summary = (tracks: Awaited<ReturnType<typeof readMp4Tracks>>): EmbeddedTrackList => {
+  const audio = tracks.filter((t) => t.kind === "audio");
+  return applySupport({
+    container: "mp4",
+    nativeAudio: audio[0]?.id ?? -1,
+    audio: audio.map((a, i) => ({
+      number: a.id, kind: "audio" as const, label: a.name, rawName: a.name, language: a.language, codec: a.codec,
+      isDefault: i === 0, playable: false,
+    })),
+    // MP4 timed-text never shows up in RS uploads (their "text" tracks are chapter titles).
+    subtitles: [],
+  });
+};
+
+/** Track list for one direct file (MKV or MP4, sniffed from the bytes). */
 export async function probeEmbeddedTracks(playUrl: string): Promise<EmbeddedTrackList | null> {
-  if (!isLikelyMatroska(playUrl)) return null;
+  if (!isProbeCandidate(playUrl)) return null;
   const key = mediaKey(playUrl);
   const hit = mem.get(key);
   if (hit) return hit.list;
@@ -199,16 +248,33 @@ export async function probeEmbeddedTracks(playUrl: string): Promise<EmbeddedTrac
       writeLs(key, cached);
       return list;
     }
-    const loaded = await loadHeader(playUrl).catch(() => null);
-    if (!loaded) return null;
-    const list = summarize(loaded.header);
-    mem.set(key, { list, header: loaded.header, cues: loaded.cues, corsUrl: loaded.corsUrl });
-    writeLs(key, list);
-    set(ref(db, `mediaTracks/${fbKey(key)}`), { at: Date.now(), list }).catch(() => undefined);
-    return list;
+    const remember = (list: EmbeddedTrackList, extra: Partial<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> = {}) => {
+      mem.set(key, { list, ...extra });
+      writeLs(key, list);
+      set(ref(db, `mediaTracks/${fbKey(`${key}|v3`)}`), { at: Date.now(), list }).catch(() => undefined);
+      return list;
+    };
+    try {
+      const loaded = await loadHeader(playUrl);
+      return remember(summarize(loaded.header), loaded);
+    } catch (error) {
+      const notMkv = error instanceof NotMatroskaError ? error : null;
+      if (!notMkv) return null; // network trouble — try again next time
+      if (isMp4Magic(notMkv.head)) {
+        const source = new HttpRangeSource(notMkv.corsUrl);
+        try {
+          return remember(mp4Summary(await readMp4Tracks(source, notMkv.head)));
+        } catch { return null; } finally { source.abort(); }
+      }
+      return remember({ container: "none", audio: [], subtitles: [], nativeAudio: -1 });
+    }
   })().finally(() => inflight.delete(key));
   inflight.set(key, task);
   return task;
+}
+
+export class NotMatroskaError extends Error {
+  constructor(readonly corsUrl: string, readonly head: Uint8Array) { super("not a matroska file"); }
 }
 
 /** Full header + cues + a working CORS URL (needed before engine hand-over). */
@@ -226,7 +292,10 @@ export async function loadHeader(playUrl: string): Promise<{ header: MkvHeader; 
       return { header, cues, corsUrl };
     } catch (error) {
       lastError = error;
-      if (String((error as Error)?.message || "").includes("not a matroska")) break;
+      if (String((error as Error)?.message || "").includes("not a matroska")) {
+        const head = await source.read(0, 64 * 1024).catch(() => new Uint8Array(0));
+        if (head.length >= 8) { lastError = new NotMatroskaError(corsUrl, head); break; }
+      }
     } finally {
       source.abort();
     }
