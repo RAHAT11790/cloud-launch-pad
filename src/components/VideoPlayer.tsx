@@ -3,6 +3,8 @@ import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
+import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
+import { EmbeddedSubtitleLayer } from "@/components/player/EmbeddedSubtitleLayer";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -653,6 +655,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     () => !!currentSrc && !isHlsSrc && !!forceEmbedMode,
     [currentSrc, forceEmbedMode, isHlsSrc],
   );
+
+  // Multi-audio + embedded subtitles for RS .mkv files. Playback always starts
+  // natively; the engine only takes over when another language/subtitle is
+  // picked, so opening an episode is exactly as fast as before.
+  const embedded = useEmbeddedTracks({
+    videoRef,
+    src: currentSrc,
+    enabled: !isHlsSrc && !isEmbedPlayback && !String(currentSrc || "").startsWith("blob:"),
+    onNotice: (message) => toast(message),
+  });
+  const embeddedOwnsRef = embedded.ownsRef;
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
   // → window blurs). This mirrors AN's own controls open/close behaviour.
@@ -2278,6 +2291,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    // The embedded-track engine recovers on its own (falls back to native).
+    if (embeddedOwnsRef.current) return false;
     if (isAnimeSaltContent) {
       // Do NOT immediately show "Link expired" on AN — the synthetic HLS master
       // with separate audio/video playlists can throw transient network errors
@@ -3466,6 +3481,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // 404/5xx/unreachable server triggers the failover chain.
   const healthProbeSrcRef = useRef<string>("");
   const failoverIfServerDead = useCallback((srcAtStart: string, time: number) => {
+    if (embeddedOwnsRef.current) return;
     if (!srcAtStart || healthProbeSrcRef.current === srcAtStart) return;
     healthProbeSrcRef.current = srcAtStart;
     const stillCurrent = () => {
@@ -4071,6 +4087,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch { return false; }
     };
     const onError = () => {
+      // Engine-driven element: the engine reports and recovers by itself.
+      if (embeddedOwnsRef.current) return;
       const errSrc = currentSrc;
       const savedTimeForRetry = preserveResumePoint(lastKnownTime || v?.currentTime || 0);
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
@@ -4163,6 +4181,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hardStallTimer) clearTimeout(hardStallTimer);
       hardStallTimer = setTimeout(() => {
         if (adGateActiveRef.current || v.paused || !userPlaybackIntentRef.current) return;
+        if (embeddedOwnsRef.current) return;
         const seekTarget = activeSeekTargetRef.current;
         const seekStillStuck = seekTarget !== null && !finishSeekRecoveryIfReady(v);
         const playbackStillStuck = v.readyState < 3;
@@ -4194,6 +4213,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onLoadStart = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
+      if (embeddedOwnsRef.current) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
       armStartupWatchdog();
