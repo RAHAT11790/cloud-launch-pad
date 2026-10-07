@@ -19,6 +19,8 @@ export interface EmbeddedTrack {
   number: number;
   kind: "audio" | "subtitle";
   label: string;
+  /** Original track title — internal only, never shown in the player. */
+  rawName?: string;
   language: string;
   codec: string;
   isDefault: boolean;
@@ -103,12 +105,12 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 };
 
 /** Re-evaluate "playable" for THIS browser (shared cache stores raw facts). */
-const relabel = <T extends { label: string; language: string; kind: "audio" | "subtitle" }>(items: T[]): T[] => {
+const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle" }>(items: T[]): T[] => {
   const seen = new Map<string, number>();
   return items.map((t, i) => {
     const base = buildTrackLabel(t.kind, t.language, t.label, i);
     const n = (seen.get(base) || 0) + 1; seen.set(base, n);
-    return { ...t, rawName: (t as any).rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
+    return { ...t, rawName: t.rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
   });
 };
 

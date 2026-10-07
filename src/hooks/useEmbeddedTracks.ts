@@ -310,7 +310,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const prefSub = media.s || readPref(PREF_SUB);
     const audioMatch = prefAudio ? tracks.audio.find((a) => a.playable && langOf(a) === prefAudio && a.number !== tracks.nativeAudio) : undefined;
     const subMatch = prefSub && prefSub !== "off"
-      ? tracks.subtitles.find((s) => langOf(s) === prefSub && !/sign|song/i.test(`${(s as any).rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
+      ? tracks.subtitles.find((s) => langOf(s) === prefSub && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
       : undefined;
     if (!audioMatch && !subMatch) { autoAppliedRef.current = key; return; }
     const v = videoRef.current;
