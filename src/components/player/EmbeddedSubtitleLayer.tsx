@@ -7,10 +7,12 @@ interface Props {
   fontScale: number;
   verticalOffset: number;
   objectFit: string;
+  /** Extra lift while the player controls are on screen, so captions never sit under them. */
+  liftPx?: number;
 }
 
 /** Renders embedded MKV subtitles: text captions and Blu-ray (PGS) bitmaps. */
-export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOffset, objectFit }: Props) => {
+export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOffset, objectFit, liftPx = 0 }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOf
         style={{ objectFit: (objectFit as any) || "contain", opacity: bitmap ? 1 : 0, transition: "opacity 90ms linear" }}
       />
       {!!text && (
-        <div data-embedded-subtitle="" className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center" style={{ bottom: `clamp(8px, ${verticalOffset}%, 28%)` }}>
+        <div data-embedded-subtitle="" className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center" style={{ bottom: `max(clamp(8px, ${verticalOffset}%, 28%), ${liftPx}px)`, transition: "bottom 200ms ease" }}>
           <div
             className="max-w-[92%] whitespace-pre-line px-1 text-center font-semibold leading-snug text-white"
             style={{

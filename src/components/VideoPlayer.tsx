@@ -5063,6 +5063,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               fontScale={captionFontScale}
               verticalOffset={captionVerticalOffset}
               objectFit={cropModes[cropIndex]}
+              liftPx={showControls && !locked ? 64 : 0}
             />
           )}
 
