@@ -129,7 +129,8 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle"; forced?: boolean }>(items: T[]): T[] => {
   const seen = new Map<string, number>();
   // Full dialogue subtitles first; signs-only tracks after them.
-  const ordered = items.map((t, i) => ({ t, i })).sort((a, b) => Number(!!a.t.forced) - Number(!!b.t.forced) || a.i - b.i);
+  const rank = (t: T) => (t.forced ? 2 : t.kind === "subtitle" && /dialog|full/i.test(t.rawName || "") ? 0 : 1);
+  const ordered = items.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i);
   return ordered.map(({ t, i }) => {
     const lang = buildTrackLabel(t.kind, t.language, t.rawName || t.label, i);
     const base = t.forced ? `${lang} (Signs)` : lang;
