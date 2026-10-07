@@ -19,6 +19,20 @@ const PREF_SUB = "rs_mkv_pref_sub_v1";
 
 const readPref = (key: string): string => { try { return localStorage.getItem(key) || ""; } catch { return ""; } };
 const writePref = (key: string, value: string) => { try { if (value) localStorage.setItem(key, value); else localStorage.removeItem(key); } catch { /* ignore */ } };
+const PREF_BY_MEDIA = "rs_mkv_pref_by_media_v1";
+const readMediaPref = (k: string): { a?: string; s?: string } => {
+  try { return (JSON.parse(localStorage.getItem(PREF_BY_MEDIA) || "{}") || {})[k] || {}; } catch { return {}; }
+};
+const writeMediaPref = (k: string, patch: { a?: string; s?: string }) => {
+  if (!k) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(PREF_BY_MEDIA) || "{}") || {};
+    all[k] = { ...(all[k] || {}), ...patch, t: Date.now() };
+    const keys = Object.keys(all);
+    if (keys.length > 400) keys.sort((x, y) => (all[x].t || 0) - (all[y].t || 0)).slice(0, keys.length - 400).forEach((x) => delete all[x]);
+    localStorage.setItem(PREF_BY_MEDIA, JSON.stringify(all));
+  } catch { /* ignore */ }
+};
 const langOf = (t?: EmbeddedTrack | null) => String(t?.language || "").toLowerCase().split(/[-_]/)[0];
 
 const insertSorted = <T extends { start: number }>(list: T[], item: T) => {
@@ -80,6 +94,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
 
   const candidate = enabled && !!src && isLikelyMatroska(src) ? src : "";
   const key = useMemo(() => (candidate ? mediaKey(candidate) : ""), [candidate]);
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
   // ---- freeze frame (keeps the last picture while the element is swapped) ----
   const freezeRef = useRef<HTMLCanvasElement | null>(null);
@@ -251,6 +267,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       return;
     }
     writePref(PREF_AUDIO, number === list.nativeAudio ? "" : langOf(track));
+    writeMediaPref(keyRef.current, { a: number === list.nativeAudio ? "native" : langOf(track) });
     if (number === activeAudioRef.current) return;
     activeAudioRef.current = number;
     setActiveAudio(number);
@@ -274,6 +291,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     setBitmapCue(null);
     const track = tracksRef.current?.subtitles.find((s) => s.number === number);
     writePref(PREF_SUB, number >= 0 ? langOf(track) || "on" : "off");
+    writeMediaPref(keyRef.current, { s: number >= 0 ? langOf(track) || "on" : "off" });
     if (number < 0) return;
     // Embedded subtitles are read by the engine while it streams.
     if (!engineRef.current && !busyRef.current) {
@@ -287,8 +305,9 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   // ---- remembered language choices: apply once the episode is playing ----
   useEffect(() => {
     if (!tracks || !candidate || autoAppliedRef.current === key) return;
-    const prefAudio = readPref(PREF_AUDIO);
-    const prefSub = readPref(PREF_SUB);
+    const media = readMediaPref(key);
+    const prefAudio = media.a ? (media.a === "native" ? "" : media.a) : readPref(PREF_AUDIO);
+    const prefSub = media.s || readPref(PREF_SUB);
     const audioMatch = prefAudio ? tracks.audio.find((a) => a.playable && langOf(a) === prefAudio && a.number !== tracks.nativeAudio) : undefined;
     const subMatch = prefSub && prefSub !== "off"
       ? tracks.subtitles.find((s) => langOf(s) === prefSub && !/sign|song/i.test(s.label)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
@@ -296,8 +315,15 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     if (!audioMatch && !subMatch) { autoAppliedRef.current = key; return; }
     const v = videoRef.current;
     if (!v) return;
+    let settleTimer = 0;
     const run = () => {
       if (autoAppliedRef.current === key) return;
+      // Continue-watching seeks right after start; hand over only once the
+      // resume position is applied so the chosen audio starts from there.
+      if (v.seeking || (v.currentTime < 1 && v.readyState < 3)) {
+        v.addEventListener("seeked", run, { once: true });
+        return;
+      }
       autoAppliedRef.current = key;
       if (subMatch) { activeSubRef.current = subMatch.number; setActiveSubtitle(subMatch.number); }
       if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number); }
@@ -306,9 +332,10 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         if (native?.playable) void handOver(tracks.nativeAudio);
       }
     };
-    if (!v.paused && v.readyState >= 3) { run(); return; }
-    v.addEventListener("playing", run, { once: true });
-    return () => v.removeEventListener("playing", run);
+    const start = () => { settleTimer = window.setTimeout(run, 350); };
+    if (!v.paused && v.readyState >= 3) start();
+    else v.addEventListener("playing", start, { once: true });
+    return () => { clearTimeout(settleTimer); v.removeEventListener("playing", start); v.removeEventListener("seeked", run); };
   }, [candidate, handOver, key, tracks, videoRef]);
 
   // ---- subtitle clock ----
