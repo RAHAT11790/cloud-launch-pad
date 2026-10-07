@@ -33,7 +33,11 @@ export function videoMime(track: MkvTrack): string {
   return `video/mp4; codecs="${codec}"`;
 }
 
+export const isMp3Track = (track: MkvTrack) => /^A_MPEG\/L3$/i.test(track.codecId);
+const mp3FrameSamples = (track: MkvTrack) => ((track.sampleRate || 48000) >= 32000 ? 1152 : 576);
+
 export function audioMime(track: MkvTrack): string {
+  if (isMp3Track(track)) return 'audio/mp4; codecs="mp4a.6b"';
   if (track.route === "webm") return `audio/webm; codecs="${/OPUS/i.test(track.codecId) ? "opus" : "vorbis"}"`;
   const asc = track.codecPrivate?.length ? track.codecPrivate : undefined;
   const objectType = asc ? (asc[0] >> 3) & 0x1f : 2;
@@ -66,13 +70,15 @@ export function audioInit(header: MkvHeader, track: MkvTrack): Uint8Array {
     });
   }
   const rate = Math.round(track.sampleRate || 48000);
+  const mp3 = isMp3Track(track);
   return buildInitSegment({
     kind: "audio",
     timescale: rate,
     channels: track.channels || 2,
     sampleRate: rate,
     sampleSize: 16,
-    codecPrivate: track.codecPrivate?.length ? track.codecPrivate : buildAudioSpecificConfig(rate, track.channels || 2),
+    objectType: mp3 ? 0x6b : 0x40,
+    codecPrivate: mp3 ? new Uint8Array(0) : track.codecPrivate?.length ? track.codecPrivate : buildAudioSpecificConfig(rate, track.channels || 2),
   });
 }
 
@@ -146,8 +152,10 @@ export class AudioFragmenter {
   private webmPending: WebmBlock[] = [];
   private seq = 1;
   private readonly rate: number;
+  private readonly frameSamples: number;
   constructor(private readonly header: MkvHeader, readonly track: MkvTrack, private readonly maxBlocks = 60) {
     this.rate = Math.round(track.sampleRate || 48000);
+    this.frameSamples = isMp3Track(track) ? mp3FrameSamples(track) : 1024;
   }
   reset() { this.mp4Pending = []; this.webmPending = []; }
 
@@ -166,7 +174,7 @@ export class AudioFragmenter {
     }
     const base = Math.round((block.ptsTicks * this.header.timecodeScale * this.rate) / 1_000_000_000);
     block.frames.forEach((frame, i) => {
-      this.mp4Pending.push({ data: withPrefix(this.track.stripPrefix, frame), pts: base + i * 1024 });
+      this.mp4Pending.push({ data: withPrefix(this.track.stripPrefix, frame), pts: base + i * this.frameSamples });
     });
     return this.mp4Pending.length >= this.maxBlocks ? this.flush() : null;
   }
@@ -183,7 +191,7 @@ export class AudioFragmenter {
     this.mp4Pending = [];
     const samples: Mp4Sample[] = list.map((s, i) => ({
       data: s.data,
-      duration: i + 1 < list.length ? Math.max(1, list[i + 1].pts - s.pts) : 1024,
+      duration: i + 1 < list.length ? Math.max(1, list[i + 1].pts - s.pts) : this.frameSamples,
       cto: 0,
       isKey: true,
     }));

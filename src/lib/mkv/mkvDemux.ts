@@ -110,7 +110,7 @@ export function buildTrackLabel(kind: TrackKind, language: string, name: string,
 const routeFor = (kind: TrackKind, codecId: string, hasCompression: boolean): TrackRoute => {
   if (kind === "video") return /^V_MPEG4\/ISO\/AVC$/i.test(codecId) || /^V_MPEGH\/ISO\/HEVC$/i.test(codecId) ? "mp4" : null;
   if (kind === "audio") {
-    if (/^A_AAC/i.test(codecId)) return "mp4";
+    if (/^A_AAC/i.test(codecId) || /^A_MPEG\/L3$/i.test(codecId)) return "mp4";
     if ((/^A_OPUS$/i.test(codecId) || /^A_VORBIS$/i.test(codecId)) && !hasCompression) return "webm";
     return null;
   }

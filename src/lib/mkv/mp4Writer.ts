@@ -70,8 +70,10 @@ export interface AudioTrackConfig {
   channels: number;
   sampleRate: number;
   sampleSize: number;
-  /** AudioSpecificConfig from Matroska CodecPrivate (AAC). */
+  /** AudioSpecificConfig from Matroska CodecPrivate (AAC). Empty for MP3. */
   codecPrivate: Uint8Array;
+  /** esds objectTypeIndication: 0x40 = AAC (default), 0x6b = MP3. */
+  objectType?: number;
 }
 
 export type TrackConfig = VideoTrackConfig | AudioTrackConfig;
@@ -102,7 +104,7 @@ const descriptor = (tag: number, ...payload: Uint8Array[]): Uint8Array => {
   return concat([u8(tag), descriptorLength(body.length), body]);
 };
 
-const esds = (asc: Uint8Array): Uint8Array =>
+const esds = (asc: Uint8Array, oti = 0x40): Uint8Array =>
   fullBox(
     "esds",
     0,
@@ -113,12 +115,12 @@ const esds = (asc: Uint8Array): Uint8Array =>
       u8(0),
       descriptor(
         0x04,
-        u8(0x40), // MPEG-4 audio
+        u8(oti), // 0x40 MPEG-4 audio, 0x6b MPEG-1 audio (MP3)
         u8(0x15), // streamType audio + upStream 0 + reserved 1
         u8(0x00, 0x00, 0x00), // bufferSizeDB
         u32(0), // maxBitrate
         u32(0), // avgBitrate
-        descriptor(0x05, asc),
+        ...(asc.length ? [descriptor(0x05, asc)] : []),
       ),
       descriptor(0x06, u8(0x02)),
     ),
@@ -167,7 +169,7 @@ const stsdAudio = (cfg: AudioTrackConfig): Uint8Array =>
       u16(cfg.sampleSize || 16),
       ZERO(4),
       u32(Math.round(cfg.sampleRate) * 0x10000 > 0x7fffffff ? 0 : Math.round(cfg.sampleRate) * 0x10000),
-      esds(cfg.codecPrivate),
+      esds(cfg.codecPrivate, cfg.objectType || 0x40),
     ),
   );
 
