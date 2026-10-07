@@ -43,6 +43,8 @@ export interface MkvTrack {
   seekPreRollNs?: number;
   /** Header-stripping compression prefix (prepended to every frame). */
   stripPrefix?: Uint8Array;
+  /** Frames are zlib-compressed (only accepted for subtitle tracks). */
+  zlib?: boolean;
 }
 
 export interface MkvHeader {
@@ -114,6 +116,7 @@ const routeFor = (kind: TrackKind, codecId: string, hasCompression: boolean): Tr
     if ((/^A_OPUS$/i.test(codecId) || /^A_VORBIS$/i.test(codecId)) && !hasCompression) return "webm";
     return null;
   }
+  if (/^S_HDMV\/PGS$/i.test(codecId)) return "text"; // rendered as bitmaps by the PGS decoder
   return /^S_TEXT\/(UTF8|ASS|SSA|WEBVTT)$/i.test(codecId) || /^S_(ASS|SSA)$/i.test(codecId) ? "text" : null;
 };
 
@@ -177,9 +180,10 @@ function parseTracks(buf: Uint8Array, start: number, end: number): { video: MkvT
     if (!kind) return;
     const language = t.bcp47 || t.language || "und";
     const hasCompression = t.compAlgo !== undefined;
-    const unusableCompression = t.encrypted || (hasCompression && t.compAlgo !== 3);
+    const zlib = hasCompression && t.compAlgo === 0;
+    const unusableCompression = t.encrypted || (hasCompression && t.compAlgo !== 3 && !(zlib && kind === "subtitle"));
     if (t.compAlgo !== 3) t.stripPrefix = undefined;
-    const route = unusableCompression ? null : routeFor(kind, t.codecId, hasCompression);
+    const route = unusableCompression ? null : routeFor(kind, t.codecId, hasCompression && !zlib);
     const index = kind === "audio" ? audio.length : subtitles.length;
     const track: MkvTrack = {
       number: t.number, kind, codecId: t.codecId, codec: codecName(t.codecId), language, name: t.name || "",
@@ -187,7 +191,7 @@ function parseTracks(buf: Uint8Array, start: number, end: number): { video: MkvT
       isDefault: !!t.isDefault, isForced: !!t.isForced, route,
       channels: t.channels, sampleRate: t.sampleRate, bitDepth: t.bitDepth, width: t.width, height: t.height,
       codecPrivate: t.codecPrivate, defaultDurationNs: t.defaultDurationNs, codecDelayNs: t.codecDelayNs,
-      seekPreRollNs: t.seekPreRollNs, stripPrefix: t.stripPrefix,
+      seekPreRollNs: t.seekPreRollNs, stripPrefix: t.stripPrefix, zlib: zlib || undefined,
     };
     if (kind === "video") { if (!video || (!video.route && route)) video = track; }
     else if (kind === "audio") audio.push(track);
@@ -537,3 +541,20 @@ export const subtitleBlockText = (track: MkvTrack, frame: Uint8Array): string =>
 
 export const isMatroskaMagic = (bytes: Uint8Array) =>
   bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+
+export const isPgsTrack = (track: MkvTrack) => /^S_HDMV\/PGS$/i.test(track.codecId);
+
+/** Undo zlib (ContentCompAlgo 0) or header stripping for one frame. */
+export async function unpackFrame(track: MkvTrack, frame: Uint8Array): Promise<Uint8Array> {
+  if (track.stripPrefix?.length) {
+    const out = new Uint8Array(track.stripPrefix.length + frame.length);
+    out.set(track.stripPrefix, 0);
+    out.set(frame, track.stripPrefix.length);
+    return out;
+  }
+  if (!track.zlib) return frame;
+  const DS = (globalThis as any).DecompressionStream;
+  if (!DS) throw new Error("zlib not supported");
+  const stream = new Blob([frame as unknown as BlobPart]).stream().pipeThrough(new DS("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}

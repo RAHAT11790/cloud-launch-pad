@@ -11,7 +11,7 @@
 // Switching language again keeps the video buffer and only swaps the audio
 // SourceBuffer (changeType), so the picture never goes black.
 
-import { loadMkvCues, MkvBlockStream, parseMkvHeader, subtitleBlockText, type MkvBlock, type MkvCue, type MkvHeader, type MkvTrack, type RangeSource } from "./mkvDemux";
+import { isPgsTrack, loadMkvCues, MkvBlockStream, parseMkvHeader, subtitleBlockText, unpackFrame, type MkvBlock, type MkvCue, type MkvHeader, type MkvTrack, type RangeSource } from "./mkvDemux";
 import { AudioFragmenter, VideoFragmenter, audioInit, audioMime, videoInit, videoMime } from "./mkvRemux";
 import { PgsDecoder, type PgsBitmapCue } from "./pgs";
 
@@ -204,8 +204,8 @@ export class MkvEngine {
   ) {
     this.source = new HttpRangeSource(url);
     this.audio = header.audio.find((a) => a.number === audioNumber) || header.audio[0];
-    this.textTracks = header.subtitles.filter((s) => s.route === "text");
-    this.pgsTracks = header.subtitles.filter((s) => /PGS/i.test(s.codecId));
+    this.textTracks = header.subtitles.filter((s) => s.route === "text" && !isPgsTrack(s));
+    this.pgsTracks = header.subtitles.filter((s) => s.route === "text" && isPgsTrack(s));
     this.pgsTracks.forEach((t) => this.pgs.set(t.number, new PgsDecoder()));
   }
 
@@ -318,7 +318,9 @@ export class MkvEngine {
     this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), wanted, 2 * 1024 * 1024);
     this.vf = new VideoFragmenter(this.header, this.header.video!);
     this.af = new AudioFragmenter(this.header, this.audio);
+    // A seek jumps the PGS epoch: start fresh, cues already shown stay cached.
     this.pgs.forEach((d) => d.reset());
+    this.seenCues.clear();
     this.running = false;
     void this.pump(this.generation);
   }
@@ -381,24 +383,32 @@ export class MkvEngine {
     try { if (ms.readyState === "open") ms.endOfStream(); } catch { /* ignore */ }
   }
 
+  private subChain: Promise<void> = Promise.resolve();
+
+  /** Subtitles are decoded in arrival order on a side chain (zlib is async). */
   private emitSubtitle(block: MkvBlock) {
-    const text = this.textTracks.find((t) => t.number === block.track);
+    const track = this.textTracks.find((t) => t.number === block.track) || this.pgsTracks.find((t) => t.number === block.track);
+    if (!track) return;
+    const key = `${block.track}:${block.ptsTicks}`;
+    if (this.seenCues.has(key)) return;
+    this.seenCues.add(key);
     const start = this.tickSeconds(block.ptsTicks);
-    if (text) {
-      const key = `${block.track}:${block.ptsTicks}`;
-      if (this.seenCues.has(key)) return;
-      this.seenCues.add(key);
-      const body = subtitleBlockText(text, block.frames[0] || new Uint8Array(0));
-      if (!body) return;
-      const duration = block.durationTicks > 0 ? this.tickSeconds(block.durationTicks) : 3;
-      this.cb.onTextCue?.(block.track, { start, end: start + duration, text: body });
-      return;
-    }
-    const decoder = this.pgs.get(block.track);
-    if (!decoder) return;
-    for (const frame of block.frames) {
-      for (const cue of decoder.push(frame, start)) this.cb.onBitmapCue?.(block.track, cue);
-    }
+    const duration = block.durationTicks > 0 ? this.tickSeconds(block.durationTicks) : 0;
+    const frames = block.frames;
+    this.subChain = this.subChain.then(async () => {
+      if (this.destroyed) return;
+      for (const raw of frames) {
+        const frame = await unpackFrame(track, raw).catch(() => null);
+        if (!frame) continue;
+        if (isPgsTrack(track)) {
+          const decoder = this.pgs.get(track.number);
+          if (decoder) for (const cue of decoder.push(frame, start)) this.cb.onBitmapCue?.(track.number, cue);
+        } else {
+          const body = subtitleBlockText(track, frame);
+          if (body) this.cb.onTextCue?.(track.number, { start, end: start + (duration || 3), text: body });
+        }
+      }
+    }).catch(() => undefined);
   }
 
   /** Swap the audio language in place; video keeps playing from its buffer. */
