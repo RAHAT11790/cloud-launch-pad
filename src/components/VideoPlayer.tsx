@@ -5711,8 +5711,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       if (!row || row.dataset.epScrolled === String(activeEpisodeIdx)) return;
                       const el = row.querySelector<HTMLElement>('[data-ep-active="1"]');
                       if (!el) return;
+                      const firstTime = !row.dataset.epScrolled;
                       row.dataset.epScrolled = String(activeEpisodeIdx);
-                      row.scrollLeft = Math.max(0, el.offsetLeft - 76 - 8);
+                      // Center the chosen episode inside the visible strip (right of "All").
+                      const visible = row.clientWidth - 76;
+                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft - 76 - (visible - el.offsetWidth) / 2));
+                      if (firstTime) { row.scrollLeft = target; return; }
+                      // Gentle eased glide; any finger touch cancels it so it never fights the user.
+                      const from = row.scrollLeft;
+                      const dist = target - from;
+                      if (Math.abs(dist) < 2) return;
+                      const duration = Math.min(650, 320 + Math.abs(dist) * 0.25);
+                      const t0 = performance.now();
+                      let cancelled = false;
+                      const cancel = () => { cancelled = true; };
+                      row.addEventListener("touchstart", cancel, { once: true, passive: true });
+                      row.addEventListener("wheel", cancel, { once: true, passive: true });
+                      row.addEventListener("pointerdown", cancel, { once: true });
+                      const step = (now: number) => {
+                        if (cancelled) return;
+                        const p = Math.min(1, (now - t0) / duration);
+                        const eased = 1 - Math.pow(1 - p, 3);
+                        row.scrollLeft = from + dist * eased;
+                        if (p < 1) requestAnimationFrame(step);
+                        else { row.removeEventListener("touchstart", cancel); row.removeEventListener("wheel", cancel); row.removeEventListener("pointerdown", cancel); }
+                      };
+                      requestAnimationFrame(step);
                     }}
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
                     style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
@@ -5723,9 +5747,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         onClick={ep.onClick}
                         data-ep-active={ep.active ? "1" : undefined}
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
-                        className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-colors flex items-center justify-center ${
+                        className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-[background-color,border-color,color,transform,box-shadow] duration-300 ease-out flex items-center justify-center ${
                           ep.active
-                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60 scale-[1.04] shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
                             : ep.locked
                               ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
                               : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
