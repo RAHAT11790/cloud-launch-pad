@@ -5,6 +5,7 @@ import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
 import { EmbeddedSubtitleLayer } from "@/components/player/EmbeddedSubtitleLayer";
+import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -3881,7 +3882,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const toggleCcPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
     setShowCcPanel((p) => !p);
-    setCcTab(hlsSubtitleOptions.length > 0 ? "subtitle" : "audio");
+    setCcTab(embedded.available ? ((embedded.tracks?.audio.length || 0) > 1 ? "audio" : "subtitle") : hlsSubtitleOptions.length > 0 ? "subtitle" : "audio");
     setShowAudioPanel(false);
     setShowQualityPanel(false);
     setShowSettings(false);
@@ -5052,6 +5053,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
           <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
+          {!isEmbedPlayback && embedded.activeSubtitle >= 0 && (
+            <EmbeddedSubtitleLayer
+              text={embedded.subtitleText}
+              bitmap={embedded.bitmapCue}
+              fontScale={captionFontScale}
+              verticalOffset={captionVerticalOffset}
+              objectFit={cropModes[cropIndex]}
+            />
+          )}
+
           {subtitleOverlayText && !isEmbedPlayback && (
             <div
               className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center"
@@ -5247,12 +5258,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </button>
                   </div>
                 ) : null}
-                {(isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+                {(embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
                   <div className="relative">
                     <button
                       onPointerDown={toggleCcPanelFast}
                       onClick={stopControlPress}
-                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 || embedded.activeSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-3.5 h-3.5" />
                       <span className="text-[11px] font-semibold">CC</span>
@@ -5402,7 +5413,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showCcPanel && (isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+          {!isEmbedPlayback && showCcPanel && (embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
             <div
               data-player-panel="true"
               className={`absolute bottom-16 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(72dvh,360px)] z-[95]`}
@@ -5416,6 +5427,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onScroll={keepPanelScrollActive}
               onWheel={stopPanelWheelPropagation}
             >
+              {embedded.available && embedded.tracks ? (
+                <EmbeddedTracksPanel
+                  tab={ccTab}
+                  onTab={setCcTab}
+                  tracks={embedded.tracks}
+                  activeAudio={embedded.activeAudio}
+                  activeSubtitle={embedded.activeSubtitle}
+                  busy={embedded.busy}
+                  onAudio={(n) => { embedded.selectAudio(n); resetHideTimer(); }}
+                  onSubtitle={(n) => { embedded.selectSubtitle(n); resetHideTimer(); }}
+                  captionFontScale={captionFontScale}
+                  captionVerticalOffset={captionVerticalOffset}
+                  onCaptionFontScale={setCaptionFontScale}
+                  onCaptionVerticalOffset={setCaptionVerticalOffset}
+                />
+              ) : (<>
               <div className="flex gap-1 mb-2">
                 <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                 <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -5447,6 +5474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
               )}
+              </>)}
             </div>
           )}
 
