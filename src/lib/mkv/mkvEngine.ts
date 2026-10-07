@@ -315,7 +315,7 @@ export class MkvEngine {
     this.source.cancelPending();
     this.eofReached = false;
     const wanted = new Set<number>([this.header.video!.number, this.audio.number, ...this.textTracks.map((t) => t.number), ...this.pgsTracks.map((t) => t.number)]);
-    this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), wanted, 2 * 1024 * 1024);
+    this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), wanted, 1024 * 1024);
     this.vf = new VideoFragmenter(this.header, this.header.video!);
     this.af = new AudioFragmenter(this.header, this.audio);
     // A seek jumps the PGS epoch: start fresh, cues already shown stay cached.
