@@ -5749,7 +5749,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
                         className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-[background-color,border-color,color,transform,box-shadow] duration-300 ease-out flex items-center justify-center ${
                           ep.active
-                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60 scale-[1.04] shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 border border-amber-400/60 scale-[1.04] text-amber-600 dark:text-amber-300 shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
                             : ep.locked
                               ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
                               : 'bg-foreground/[0.06] text-foreground border border-border active:scale-95'
