@@ -1,3 +1,4 @@
+import { filterExistingHistory } from "@/lib/historyFilter";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
@@ -518,6 +519,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [watchHistory, setWatchHistory] = useState<any[]>(() => {
     try { return JSON.parse(localStorage.getItem("rs_continueCache") || "[]"); } catch { return []; }
   });
+  const visibleHistory = useMemo(() => filterExistingHistory(watchHistory, allAnime, !!allAnime && allAnime.length > 0), [watchHistory, allAnime]);
   const [viewAllMode, setViewAllMode] = useState<null | "history" | "watchlist">(null);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
@@ -1953,7 +1955,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
         <div className="profile-stat-grid">
           <div><Coins className="h-4 w-4" /><strong>{coinWallet.coins || 0}</strong><span>Coins</span></div>
-          <div><History className="h-4 w-4" /><strong>{watchHistory.length}</strong><span>Watched</span></div>
+          <div><History className="h-4 w-4" /><strong>{visibleHistory.length}</strong><span>Watched</span></div>
           <div><Bookmark className="h-4 w-4" /><strong>{watchlist.length}</strong><span>Watchlist</span></div>
         </div>
 
@@ -1977,7 +1979,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       <div className="profile-content-section">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-bold flex items-center category-bar">Watch History</h3>
-          {watchHistory.length > 0 && (
+          {visibleHistory.length > 0 && (
             <button
               onClick={() => setViewAllMode("history")}
               className="text-xs text-primary flex items-center gap-1 hover:underline"
@@ -1986,14 +1988,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             </button>
           )}
         </div>
-        {watchHistory.length === 0 ? (
+        {visibleHistory.length === 0 ? (
           <div className="text-center py-8">
             <History className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2.5" />
             <p className="text-sm text-secondary-foreground">No watch history yet</p>
           </div>
         ) : (
           <div className="profile-media-rail scrollbar-hide">
-            {watchHistory.slice(0, 10).map((item: any) => (
+            {visibleHistory.slice(0, 10).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
@@ -2076,14 +2078,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 </h2>
                 <p className="text-[11px] text-muted-foreground">
                   {viewAllMode === "history"
-                    ? `${watchHistory.length} items · last 30 days`
+                    ? `${visibleHistory.length} items · last 30 days`
                     : `${watchlist.length} items`}
                 </p>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3">
-              {(viewAllMode === "history" ? watchHistory : watchlist).length === 0 ? (
+              {(viewAllMode === "history" ? visibleHistory : watchlist).length === 0 ? (
                 <div className="text-center py-16">
                   {viewAllMode === "history"
                     ? <History className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
@@ -2094,7 +2096,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
-                  {(viewAllMode === "history" ? watchHistory : watchlist).map((item: any) => (
+                  {(viewAllMode === "history" ? visibleHistory : watchlist).map((item: any) => (
                     <div
                       key={item.id}
                       onClick={() => { setViewAllMode(null); handleAnimeClick(item); }}

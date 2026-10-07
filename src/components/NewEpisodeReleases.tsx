@@ -150,12 +150,15 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     const groups = Array.from(byContent.values()).map((arr) => {
       arr.sort((a, b) => b.timestamp - a.timestamp);
       const latest = arr[0];
-      const starts = arr.map(getEpStart).filter((n): n is number => typeof n === "number");
-      const ends = arr.map(getEpEnd).filter((n): n is number => typeof n === "number");
+      // Only the most recent Save & Notify batch counts. Older releases of the
+      // same anime (e.g. yesterday's 61-70) must not widen today's 71-80 range.
+      const batch = arr.filter((r) => latest.timestamp - r.timestamp < 2 * 60 * 1000 && (getSeason(r) ?? 1) === (getSeason(latest) ?? 1));
+      const starts = batch.map(getEpStart).filter((n): n is number => typeof n === "number");
+      const ends = batch.map(getEpEnd).filter((n): n is number => typeof n === "number");
       const all = [...starts, ...ends];
       return {
         latest,
-        all: arr,
+        all: batch,
         minEp: all.length ? Math.min(...all) : undefined,
         maxEp: all.length ? Math.max(...all) : undefined,
       };
@@ -192,9 +195,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     window.setTimeout(() => { if (openingRef.current === release.id) openingRef.current = null; }, 180);
     const content = getContent(release.contentId);
     const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
-    const eIdx = typeof startEpisode === "number"
-      ? Math.max(0, startEpisode - 1)
-      : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
+    const wanted = typeof startEpisode === "number" ? startEpisode : getEpStart(release);
+    const eps: any[] = (content as any)?.seasons?.[sIdx]?.episodes || [];
+    // Map the episode NUMBER to its real position (lists can be offset/combined).
+    const byNumber = typeof wanted === "number"
+      ? eps.findIndex((ep: any, i: number) => Number(ep?.episodeNumber ?? i + 1) === wanted)
+      : -1;
+    const byRange = byNumber < 0 && typeof wanted === "number"
+      ? eps.findIndex((ep: any, i: number) => {
+          const st = Number(ep?.episodeNumber ?? i + 1); const en = Number(ep?.episodeEnd ?? st);
+          return wanted >= st && wanted <= en;
+        })
+      : -1;
+    const eIdx = byNumber >= 0 ? byNumber : byRange >= 0 ? byRange : (typeof wanted === "number" ? Math.max(0, wanted - 1) : 0);
     if (content) {
       onCardClick({ ...(content as any), __rsForceFreshPlayback: true } as AnimeItem, sIdx, eIdx);
       return;

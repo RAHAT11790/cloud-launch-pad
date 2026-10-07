@@ -11,7 +11,7 @@ import { firebaseRestUrl } from "@/lib/firebaseRest";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { SUPABASE_URL } from "@/lib/siteConfig";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
-import { isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
+import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
 
@@ -19,6 +19,8 @@ export interface EmbeddedTrack {
   number: number;
   kind: "audio" | "subtitle";
   label: string;
+  /** Original track title — internal only, never shown in the player. */
+  rawName?: string;
   language: string;
   codec: string;
   isDefault: boolean;
@@ -103,12 +105,22 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 };
 
 /** Re-evaluate "playable" for THIS browser (shared cache stores raw facts). */
+const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle" }>(items: T[]): T[] => {
+  const seen = new Map<string, number>();
+  return items.map((t, i) => {
+    const base = buildTrackLabel(t.kind, t.language, t.label, i);
+    const n = (seen.get(base) || 0) + 1; seen.set(base, n);
+    return { ...t, rawName: t.rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
+  });
+};
+
 const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
   const MS = mseAvailable() ? (window as any).MediaSource : null;
   const videoOk = !!(MS && list.videoMime && MS.isTypeSupported(list.videoMime));
   return {
     ...list,
-    audio: list.audio.map((a) => ({ ...a, playable: videoOk && !!a.mime && MS.isTypeSupported(a.mime) })),
+    audio: relabel(list.audio).map((a) => ({ ...a, playable: videoOk && !!a.mime && MS.isTypeSupported(a.mime) })),
+    subtitles: relabel(list.subtitles),
   };
 };
 
@@ -118,13 +130,13 @@ const summarize = (header: MkvHeader): EmbeddedTrackList => {
     nativeAudio: native?.number ?? -1,
     videoMime: header.video?.route ? videoMime(header.video) : "",
     audio: header.audio.map((a) => ({
-      number: a.number, kind: "audio" as const, label: a.label, language: a.language, codec: a.codec,
+      number: a.number, kind: "audio" as const, label: a.label, rawName: a.name, language: a.language, codec: a.codec,
       isDefault: a.number === native?.number, playable: false, mime: a.route ? audioMime(a) : "",
     })),
     subtitles: header.subtitles
       .filter((s) => s.route === "text")
       .map((s) => ({
-        number: s.number, kind: "subtitle" as const, label: s.label, language: s.language, codec: s.codec,
+        number: s.number, kind: "subtitle" as const, label: s.label, rawName: s.name, language: s.language, codec: s.codec,
         isDefault: s.isDefault, playable: true, bitmap: isPgsTrack(s),
       })),
   });

@@ -91,7 +91,7 @@ const codecName = (id: string) => CODEC_NAMES.find(([re]) => re.test(id))?.[1] |
 const CHANNEL_LABEL = (n?: number) => (!n ? "" : n === 1 ? "Mono" : n === 2 ? "Stereo" : n === 6 ? "5.1" : n === 8 ? "7.1" : `${n}ch`);
 
 /** Clean up release-group noise in track names ("BluRay~Toonworld4all.me"). */
-const cleanTrackName = (name: string): string => {
+export const cleanTrackName = (name: string): string => {
   const cleaned = String(name || "")
     .replace(/[~|]?\s*(?:www\.)?[a-z0-9-]+\.(?:me|com|net|org|in|xyz|to|cc|io|site|online|co)\b/gi, "")
     .replace(/@\w+/g, "")
@@ -101,12 +101,18 @@ const cleanTrackName = (name: string): string => {
   return cleaned;
 };
 
+const NAME_HINTS: Array<[RegExp, string]> = [
+  [/hindi|हिन्दी|हिंदी|\bhin\b/i, "Hindi"], [/english|\beng\b/i, "English"], [/japanese|日本語|\bjpn?\b/i, "Japanese"],
+  [/bengali|bangla|বাংলা/i, "Bengali"], [/tamil/i, "Tamil"], [/telugu/i, "Telugu"], [/malayalam/i, "Malayalam"],
+  [/kannada/i, "Kannada"], [/marathi/i, "Marathi"], [/urdu/i, "Urdu"], [/spanish|español/i, "Spanish"],
+  [/french/i, "French"], [/german/i, "German"], [/portug/i, "Portuguese"], [/korean/i, "Korean"],
+  [/chinese|mandarin/i, "Chinese"], [/arabic/i, "Arabic"], [/russian/i, "Russian"], [/indonesian/i, "Indonesian"],
+];
+
+/** Display name = language only. Release/group metadata in the track title is never shown. */
 export function buildTrackLabel(kind: TrackKind, language: string, name: string, index: number): string {
-  const lang = languageName(language);
-  const clean = cleanTrackName(name);
-  const base = lang || (clean && clean.length <= 24 ? clean : "") || (kind === "audio" ? `Audio ${index + 1}` : `Subtitle ${index + 1}`);
-  if (clean && lang && !clean.toLowerCase().includes(lang.toLowerCase()) && clean.length <= 28) return `${lang} · ${clean}`;
-  return base;
+  const lang = languageName(language) || NAME_HINTS.find(([re]) => re.test(String(name || "")))?.[1] || "";
+  return lang || (kind === "audio" ? `Audio ${index + 1}` : `Subtitle ${index + 1}`);
 }
 
 const routeFor = (kind: TrackKind, codecId: string, hasCompression: boolean): TrackRoute => {
@@ -187,7 +193,7 @@ function parseTracks(buf: Uint8Array, start: number, end: number): { video: MkvT
     const index = kind === "audio" ? audio.length : subtitles.length;
     const track: MkvTrack = {
       number: t.number, kind, codecId: t.codecId, codec: codecName(t.codecId), language, name: t.name || "",
-      label: buildTrackLabel(kind, language, t.name || "", index),
+      label: buildTrackLabel(kind, language, t.name || "", index), // display = language only
       isDefault: !!t.isDefault, isForced: !!t.isForced, route,
       channels: t.channels, sampleRate: t.sampleRate, bitDepth: t.bitDepth, width: t.width, height: t.height,
       codecPrivate: t.codecPrivate, defaultDurationNs: t.defaultDurationNs, codecDelayNs: t.codecDelayNs,
@@ -204,8 +210,7 @@ function parseTracks(buf: Uint8Array, start: number, end: number): { video: MkvT
       const n = (seen.get(track.label) || 0) + 1;
       seen.set(track.label, n);
       if (n > 1) {
-        const extra = track.kind === "audio" ? (CHANNEL_LABEL(track.channels) || track.codec) : track.codec;
-        track.label = `${track.label} · ${extra || n}`;
+        track.label = `${track.label} ${n}`;
       }
     });
   };

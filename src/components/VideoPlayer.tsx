@@ -1,3 +1,4 @@
+import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -2985,7 +2986,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const aTracks = hls.audioTracks || [];
       const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
         language: t.lang || `aud${i + 1}`,
-        label: t.name || t.lang || `Audio ${i + 1}`,
+        label: buildTrackLabel("audio", t.lang || "", `${t.name || ""} ${t.lang || ""}`, i),
         hlsAudioIndex: i,
       }));
       setHlsAudioOptions(opts);
@@ -3212,7 +3213,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const t = audioTracks[i];
           nativeTracks.push({
             language: t.language || `Track ${i + 1}`,
-            label: t.label || t.language || `Audio ${i + 1}`,
+            label: buildTrackLabel("audio", t.language || "", `${t.label || ""} ${t.language || ""}`, i),
             nativeIndex: i,
           });
         }
@@ -5713,15 +5714,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       if (!el) return;
                       const firstTime = !row.dataset.epScrolled;
                       row.dataset.epScrolled = String(activeEpisodeIdx);
-                      // Center the chosen episode inside the visible strip (right of "All").
-                      const visible = row.clientWidth - 76;
-                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft - 76 - (visible - el.offsetWidth) / 2));
+                      // Selected episode sits exactly under the middle of the player,
+                      // earlier episodes on the left, later ones on the right.
+                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft + el.offsetWidth / 2 - row.clientWidth / 2));
                       if (firstTime) { row.scrollLeft = target; return; }
                       // Gentle eased glide; any finger touch cancels it so it never fights the user.
                       const from = row.scrollLeft;
                       const dist = target - from;
                       if (Math.abs(dist) < 2) return;
-                      const duration = Math.min(650, 320 + Math.abs(dist) * 0.25);
+                      const duration = Math.min(720, 420 + Math.abs(dist) * 0.2);
                       const t0 = performance.now();
                       let cancelled = false;
                       const cancel = () => { cancelled = true; };
@@ -5731,15 +5732,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       const step = (now: number) => {
                         if (cancelled) return;
                         const p = Math.min(1, (now - t0) / duration);
-                        const eased = 1 - Math.pow(1 - p, 3);
+                        const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
                         row.scrollLeft = from + dist * eased;
                         if (p < 1) requestAnimationFrame(step);
                         else { row.removeEventListener("touchstart", cancel); row.removeEventListener("wheel", cancel); row.removeEventListener("pointerdown", cancel); }
                       };
                       requestAnimationFrame(step);
                     }}
-                    className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
-                    style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
+                    className="relative flex gap-1.5 overflow-x-auto scrollbar-hide pb-1"
+                    style={{ paddingLeft: "max(76px, calc(50% - 30px))", paddingRight: "calc(50% - 30px)", WebkitOverflowScrolling: "touch" }}
                   >
                     {episodeList.map((ep) => (
                       <button
