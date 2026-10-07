@@ -75,6 +75,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const noticeRef = useRef(onNotice);
   noticeRef.current = onNotice;
   const autoAppliedRef = useRef("");
+  const busyRef = useRef(false);
+  const setBusyBoth = (value: boolean) => { busyRef.current = value; setBusy(value); };
 
   const candidate = enabled && !!src && isLikelyMatroska(src) ? src : "";
   const key = useMemo(() => (candidate ? mediaKey(candidate) : ""), [candidate]);
@@ -183,8 +185,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     return () => v.removeEventListener("loadstart", onLoadStart);
   }, [destroyEngine, videoRef]);
 
-  const busyRef = useRef(false);
-  const setBusyBoth = (value: boolean) => { busyRef.current = value; setBusy(value); };
 
   /** Hand the element to the engine with `audioNumber` at the current time. */
   const handOver = useCallback(async (audioNumber: number) => {
