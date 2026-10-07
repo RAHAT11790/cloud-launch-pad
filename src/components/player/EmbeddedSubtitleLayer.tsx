@@ -37,7 +37,7 @@ export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOf
         ref={canvasRef}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 z-[8] h-full w-full"
-        style={{ objectFit: (objectFit as any) || "contain", opacity: bitmap ? 1 : 0, transition: "opacity 90ms linear" }}
+        style={{ objectFit: (objectFit as any) || "contain", opacity: bitmap ? 1 : 0, transform: liftPx ? `translateY(-${Math.round(liftPx * 0.6)}px)` : undefined, transition: "opacity 90ms linear, transform 200ms ease" }}
       />
       {!!text && (
         <div data-embedded-subtitle="" className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center" style={{ bottom: `max(clamp(8px, ${verticalOffset}%, 28%), ${liftPx}px)`, transition: "bottom 200ms ease" }}>
