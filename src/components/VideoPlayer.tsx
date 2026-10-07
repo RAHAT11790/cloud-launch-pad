@@ -3888,7 +3888,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowSettings(false);
     setShowServerPanel(false);
     resetHideTimer();
-  }, [hlsSubtitleOptions.length, resetHideTimer, stopControlPress]);
+  }, [embedded.available, embedded.tracks, hlsSubtitleOptions.length, resetHideTimer, stopControlPress]);
 
   const toggleQualityPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
