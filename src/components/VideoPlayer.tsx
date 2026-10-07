@@ -668,6 +668,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     onNotice: (message) => toast(message),
   });
   const embeddedOwnsRef = embedded.ownsRef;
+  const embeddedAudioList = embedded.tracks && embedded.tracks.audio.length > 1 ? embedded.tracks.audio : [];
+  const embeddedAudioLabel = embeddedAudioList.find((a) => a.number === embedded.activeAudio)?.label || "Audio";
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
   // → window blurs). This mirrors AN's own controls open/close behaviour.
@@ -5349,16 +5351,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {/* Bottom CC button removed — single CC lives in the top server row */}
-                    {audioTrackOptions.length > 1 && (
+                    {(audioTrackOptions.length > 1 || embeddedAudioList.length > 0) && (
                       <button
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
-                        className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 max-w-[62px] shrink-0 ${
-                          activePlaybackLanguage ? "gradient-primary text-white" : "player-control-chip"
+                        className={`h-7 px-2 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-1 max-w-[86px] shrink-0 ${
+                          showAudioPanel ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                         aria-label="Audio track"
                       >
-                        <span className="truncate">🎧 {activePlaybackLanguage || "Audio"}</span>
+                        {embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <Languages className="w-3 h-3 shrink-0" />}
+                        <span className="truncate">{embeddedAudioList.length > 0 ? embeddedAudioLabel : activePlaybackLanguage || "Audio"}</span>
                       </button>
                     )}
                     {onNextEpisode && (
@@ -5417,7 +5420,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {!isEmbedPlayback && showCcPanel && (embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
             <div
               data-player-panel="true"
-              className={`absolute bottom-16 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(72dvh,360px)] z-[95]`}
+              className={`absolute top-14 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(calc(100%-8.5rem),360px)] z-[95]`}
               style={panelBaseStyle}
               onClick={stopPanelPointerPropagation}
               onPointerDown={(e) => e.stopPropagation()}
@@ -5503,22 +5506,44 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showAudioPanel && audioTrackOptions.length > 1 && (
-            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[190px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-              <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
-              {audioTrackOptions.map((track, idx) => {
-                const label = track.label || track.language || `Track ${idx + 1}`;
-                const isActive = activePlaybackLanguage === label;
-                return (
-                  <button key={`${track.language}-${idx}`} onClick={() => selectAudioTrack(track)}
-                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
-                      isActive ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                    }`}>
-                    <span className="truncate flex-1 min-w-0">{label}</span>
-                    {isActive && <Check className="w-3 h-3 shrink-0" />}
-                  </button>
-                );
-              })}
+          {!isEmbedPlayback && showAudioPanel && (audioTrackOptions.length > 1 || embeddedAudioList.length > 0) && (
+            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[200px] max-w-[82vw] max-h-[min(calc(100%-8rem),320px)] z-[95]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+              {embeddedAudioList.length > 0 && embedded.tracks && (
+                <>
+                  <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium flex items-center gap-1"><Languages className="w-3 h-3" /> Audio</p>
+                  <div className="space-y-0.5">
+                    {embeddedAudioList.map((track) => {
+                      const active = embedded.activeAudio === track.number;
+                      const disabled = !track.playable && track.number !== embedded.tracks!.nativeAudio;
+                      return (
+                        <button key={`emb-${track.number}`} disabled={disabled || embedded.busy} onClick={() => { embedded.selectAudio(track.number); resetHideTimer(); }}
+                          className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1.5 ${disabled ? "opacity-45 cursor-not-allowed" : active ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                          <span className="truncate flex-1 min-w-0">{track.label}</span>
+                          {active && embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : active ? <Check className="w-3 h-3 shrink-0" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {audioTrackOptions.length > 1 && (
+                <>
+                  <p className={`text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium ${embeddedAudioList.length > 0 ? "mt-2 pt-2 border-t border-border" : ""}`}>{embeddedAudioList.length > 0 ? "Versions" : "Audio Track"}</p>
+                  {audioTrackOptions.map((track, idx) => {
+                    const label = track.label || track.language || `Track ${idx + 1}`;
+                    const isActive = activePlaybackLanguage === label;
+                    return (
+                      <button key={`${track.language}-${idx}`} onClick={() => selectAudioTrack(track)}
+                        className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
+                          isActive ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                        }`}>
+                        <span className="truncate flex-1 min-w-0">{label}</span>
+                        {isActive && <Check className="w-3 h-3 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
 
@@ -5696,12 +5721,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <div className="relative -mx-5">
                   <div
                     aria-hidden="true"
-                    className="absolute left-0 top-0 z-10 h-11 w-[68px] bg-background pointer-events-none"
+                    className="absolute left-0 top-0 bottom-0 z-10 w-[68px] bg-background pointer-events-none"
                   />
                   {/* Hard left mask: episode cards can only enter from the right side of All; once behind it they never reappear from left/top/bottom. */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
-                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"
+                    className="absolute left-5 top-2.5 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"
                     aria-label="All episodes"
                   >
                     All
@@ -5714,9 +5739,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       if (!el) return;
                       const firstTime = !row.dataset.epScrolled;
                       row.dataset.epScrolled = String(activeEpisodeIdx);
-                      // Selected episode sits exactly under the middle of the player,
-                      // earlier episodes on the left, later ones on the right.
-                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft + el.offsetWidth / 2 - row.clientWidth / 2));
+                      // Middle episodes glide to the centre of the visible strip (right of "All").
+                      // Edge episodes (1, 2, 3… or the last few) stay where they naturally sit, so
+                      // the strip never shows an empty gap on either side.
+                      const visibleCenter = (68 + row.clientWidth) / 2;
+                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft + el.offsetWidth / 2 - visibleCenter));
                       if (firstTime) { row.scrollLeft = target; return; }
                       // Gentle eased glide; any finger touch cancels it so it never fights the user.
                       const from = row.scrollLeft;
@@ -5739,8 +5766,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       };
                       requestAnimationFrame(step);
                     }}
-                    className="relative flex gap-1.5 overflow-x-auto scrollbar-hide pb-1"
-                    style={{ paddingLeft: "max(76px, calc(50% - 30px))", paddingRight: "calc(50% - 30px)", WebkitOverflowScrolling: "touch" }}
+                    className="relative flex items-center gap-1.5 overflow-x-auto overflow-y-visible scrollbar-hide py-2.5"
+                    style={{ paddingLeft: 76, paddingRight: 20, WebkitOverflowScrolling: "touch", scrollPaddingLeft: 76 }}
                   >
                     {episodeList.map((ep) => (
                       <button
@@ -5750,7 +5777,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
                         className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-[background-color,border-color,color,transform,box-shadow] duration-300 ease-out flex items-center justify-center ${
                           ep.active
-                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 border border-amber-400/60 scale-[1.04] text-amber-600 dark:text-amber-300 shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 border border-amber-400/60 scale-[1.04] text-amber-600 dark:text-amber-300 shadow-[0_0_10px_-2px_rgba(251,191,36,0.5)]'
                             : ep.locked
                               ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
                               : 'bg-foreground/[0.06] text-foreground border border-border active:scale-95'

@@ -174,9 +174,9 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
                       className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/80 flex items-center justify-center hover:bg-destructive transition-colors z-10">
                       <X className="w-3 h-3" />
                     </button>
-                    <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10">
+                    <div className="absolute top-1.5 left-1.5 flex flex-col items-start gap-1 z-10">
                       <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                      {(() => { const badge = getSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
+                      {(() => { const badge = getSourceBadge(anime); return <span className={`inline-flex w-fit items-center justify-center rounded-[4px] px-1 py-[2px] text-[7.5px] font-black leading-none tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 p-2">
                       <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>
@@ -214,7 +214,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
                 <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                 <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                   <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                  {(() => { const badge = getSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
+                  {(() => { const badge = getSourceBadge(anime); return <span className={`inline-flex w-fit items-center justify-center rounded-[4px] px-1 py-[2px] text-[7.5px] font-black leading-none tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-2">
                   <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>

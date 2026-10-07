@@ -438,14 +438,19 @@ const MASTER_INSIDE_CLUSTER = new Set<number>([EBML_IDS.Cluster]);
 export class MkvBlockStream {
   private reader: WindowReader;
   private clusterTicks = 0;
+  /** Optional soft stop: next() returns null with `paused` set once a cluster starts past this tick. */
+  pauseAtTicks = -1;
+  paused = false;
   constructor(src: RangeSource, startPos: number, private readonly wanted: Set<number>, chunk = 1 << 20) {
     this.reader = new WindowReader(src, startPos, chunk);
   }
   get position() { return this.reader.pos; }
+  get currentClusterTicks() { return this.clusterTicks; }
 
   /** Next wanted block, or null at end of file. */
   async next(): Promise<MkvBlock | null> {
     const r = this.reader;
+    this.paused = false;
     for (;;) {
       if (!(await r.ensure(12)) && r.available < 2) return null;
       const { buf, offset } = r.view();
@@ -460,6 +465,7 @@ export class MkvBlockStream {
         const v = r.view();
         this.clusterTicks = readUintBytes(v.buf, v.offset + el.headerSize, el.size);
         r.skip(total);
+        if (this.pauseAtTicks >= 0 && this.clusterTicks > this.pauseAtTicks) { this.paused = true; return null; }
         continue;
       }
       if (el.id === EBML_IDS.SimpleBlock || el.id === EBML_IDS.BlockGroup) {
