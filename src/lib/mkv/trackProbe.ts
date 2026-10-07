@@ -128,13 +128,13 @@ const summarize = (header: MkvHeader): EmbeddedTrackList => {
     nativeAudio: native?.number ?? -1,
     videoMime: header.video?.route ? videoMime(header.video) : "",
     audio: header.audio.map((a) => ({
-      number: a.number, kind: "audio" as const, label: a.label, language: a.language, codec: a.codec,
+      number: a.number, kind: "audio" as const, label: a.label, rawName: a.name, language: a.language, codec: a.codec,
       isDefault: a.number === native?.number, playable: false, mime: a.route ? audioMime(a) : "",
     })),
     subtitles: header.subtitles
       .filter((s) => s.route === "text")
       .map((s) => ({
-        number: s.number, kind: "subtitle" as const, label: s.label, language: s.language, codec: s.codec,
+        number: s.number, kind: "subtitle" as const, label: s.label, rawName: s.name, language: s.language, codec: s.codec,
         isDefault: s.isDefault, playable: true, bitmap: isPgsTrack(s),
       })),
   });
