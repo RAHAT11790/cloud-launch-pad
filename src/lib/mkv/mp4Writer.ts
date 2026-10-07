@@ -205,7 +205,8 @@ export function buildInitSegment(cfg: TrackConfig, trackId = 1): Uint8Array {
     3,
     u32(0), u32(0),
     u32(trackId),
-    u32(0),
+    u32(0), // reserved
+    u32(0), // duration (fragmented)
     ZERO(8),
     u16(0), // layer
     u16(0), // alternate group
