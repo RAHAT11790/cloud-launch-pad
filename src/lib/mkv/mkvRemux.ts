@@ -149,7 +149,7 @@ export class VideoFragmenter {
 /** Collects audio blocks into fMP4 (AAC) or WebM (Opus/Vorbis) chunks. */
 export class AudioFragmenter {
   private mp4Pending: Array<{ data: Uint8Array; pts: number }> = [];
-  private webmPending: WebmBlock[] = [];
+  private webmPending: MkvBlock[] = [];
   private seq = 1;
   private readonly rate: number;
   private readonly frameSamples: number;
@@ -159,17 +159,55 @@ export class AudioFragmenter {
   }
   reset() { this.mp4Pending = []; this.webmPending = []; }
 
+  private msToTicks(ms: number) { return (ms * 1_000_000) / this.header.timecodeScale; }
+
+  /** Opus packet duration from its TOC byte (RFC 6716 §3.1). */
+  private opusTicks(frame: Uint8Array): number {
+    if (!frame.length) return 0;
+    const toc = frame[0];
+    const config = toc >> 3;
+    const ms = config < 12 ? [10, 20, 40, 60][config & 3] : config < 16 ? [10, 20][config & 1] : [2.5, 5, 10, 20][config & 3];
+    const code = toc & 3;
+    const count = code === 0 ? 1 : code < 3 ? 2 : (frame[1] || 0) & 0x3f;
+    return this.msToTicks(ms * Math.max(1, count));
+  }
+
+  /**
+   * Chrome's WebM parser rejects laced blocks, so every laced frame becomes
+   * its own SimpleBlock. Opus timing comes from the packet TOC; other codecs
+   * split the block span evenly (needs the next block, so one may carry over).
+   */
+  private flushWebm(final: boolean): Uint8Array | null {
+    const list = this.webmPending;
+    if (!list.length) return null;
+    const isOpus = /OPUS/i.test(this.track.codecId);
+    const out: WebmBlock[] = [];
+    let carry: MkvBlock | null = null;
+    list.forEach((block, idx) => {
+      if (block.frames.length <= 1) {
+        out.push({ ptsTicks: block.ptsTicks, flags: block.flags & ~0x06, payload: block.frames[0] || block.payload });
+        return;
+      }
+      const next = list[idx + 1];
+      let each = 0;
+      if (!isOpus) {
+        const span = block.durationTicks > 0 ? block.durationTicks : next ? next.ptsTicks - block.ptsTicks : 0;
+        if (span <= 0 && !final) { carry = block; return; }
+        each = span > 0 ? span / block.frames.length : this.msToTicks(20);
+      }
+      let t = block.ptsTicks;
+      block.frames.forEach((frame) => {
+        out.push({ ptsTicks: Math.round(t), flags: block.flags & ~0x06, payload: frame });
+        t += isOpus ? this.opusTicks(frame) : each;
+      });
+    });
+    this.webmPending = carry ? [carry] : [];
+    return out.length ? buildWebmCluster(out) : null;
+  }
+
   push(block: MkvBlock): Uint8Array | null {
     if (this.track.route === "webm") {
-      if (this.webmPending.length) {
-        const span = block.ptsTicks - this.webmPending[0].ptsTicks;
-        if (span > 30000 * (1_000_000 / this.header.timecodeScale) || span < 0) {
-          const out = this.flush();
-          this.webmPending.push({ ptsTicks: block.ptsTicks, flags: block.flags, payload: block.payload });
-          return out;
-        }
-      }
-      this.webmPending.push({ ptsTicks: block.ptsTicks, flags: block.flags, payload: block.payload });
+      this.webmPending.push(block);
       return this.webmPending.length >= this.maxBlocks ? this.flush() : null;
     }
     const base = Math.round((block.ptsTicks * this.header.timecodeScale * this.rate) / 1_000_000_000);
@@ -180,12 +218,7 @@ export class AudioFragmenter {
   }
 
   flush(): Uint8Array | null {
-    if (this.track.route === "webm") {
-      if (!this.webmPending.length) return null;
-      const out = buildWebmCluster(this.webmPending);
-      this.webmPending = [];
-      return out;
-    }
+    if (this.track.route === "webm") return this.flushWebm(false);
     if (!this.mp4Pending.length) return null;
     const list = this.mp4Pending;
     this.mp4Pending = [];
