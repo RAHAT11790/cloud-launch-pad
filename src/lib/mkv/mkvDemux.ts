@@ -193,7 +193,7 @@ function parseTracks(buf: Uint8Array, start: number, end: number): { video: MkvT
     const index = kind === "audio" ? audio.length : subtitles.length;
     const track: MkvTrack = {
       number: t.number, kind, codecId: t.codecId, codec: codecName(t.codecId), language, name: t.name || "",
-      label: buildTrackLabel(kind, language, t.name || "", index),
+      label: buildTrackLabel(kind, language, t.name || "", index), // display = language only
       isDefault: !!t.isDefault, isForced: !!t.isForced, route,
       channels: t.channels, sampleRate: t.sampleRate, bitDepth: t.bitDepth, width: t.width, height: t.height,
       codecPrivate: t.codecPrivate, defaultDurationNs: t.defaultDurationNs, codecDelayNs: t.codecDelayNs,

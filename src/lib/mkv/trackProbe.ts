@@ -108,7 +108,7 @@ const relabel = <T extends { label: string; language: string; kind: "audio" | "s
   return items.map((t, i) => {
     const base = buildTrackLabel(t.kind, t.language, t.label, i);
     const n = (seen.get(base) || 0) + 1; seen.set(base, n);
-    return { ...t, label: n > 1 ? `${base} ${n}` : base };
+    return { ...t, rawName: (t as any).rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
   });
 };
 
