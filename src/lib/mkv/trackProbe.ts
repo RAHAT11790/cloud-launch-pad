@@ -11,7 +11,7 @@ import { firebaseRestUrl } from "@/lib/firebaseRest";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { SUPABASE_URL } from "@/lib/siteConfig";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
-import { isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
+import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
 

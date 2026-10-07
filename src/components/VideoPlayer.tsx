@@ -1,3 +1,4 @@
+import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -2985,7 +2986,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const aTracks = hls.audioTracks || [];
       const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
         language: t.lang || `aud${i + 1}`,
-        label: t.name || t.lang || `Audio ${i + 1}`,
+        label: buildTrackLabel("audio", t.lang || "", `${t.name || ""} ${t.lang || ""}`, i),
         hlsAudioIndex: i,
       }));
       setHlsAudioOptions(opts);
@@ -3212,7 +3213,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const t = audioTracks[i];
           nativeTracks.push({
             language: t.language || `Track ${i + 1}`,
-            label: t.label || t.language || `Audio ${i + 1}`,
+            label: buildTrackLabel("audio", t.language || "", `${t.label || ""} ${t.language || ""}`, i),
             nativeIndex: i,
           });
         }
