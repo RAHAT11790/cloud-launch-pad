@@ -362,16 +362,18 @@ export class WindowReader {
   async ensure(bytes: number): Promise<boolean> {
     while (this.available < bytes) {
       if (this.eof) return false;
+      // Cursor jumped past the buffered window (skipped a large block):
+      // restart the window there instead of downloading the gap.
+      if (this.pos > this.bufStart + this.buf.length) { this.buf = new Uint8Array(0); this.bufStart = this.pos; }
+      const kept = this.buf.subarray(this.pos - this.bufStart);
       const next = this.bufStart + this.buf.length;
       const data = await this.src.read(next, Math.max(this.chunk, bytes - this.available));
       if (!data.length) { this.eof = true; return this.available >= bytes; }
-      const keepFrom = Math.max(0, this.pos - this.bufStart);
-      const kept = this.buf.subarray(keepFrom);
       const merged = new Uint8Array(kept.length + data.length);
       merged.set(kept, 0);
       merged.set(data, kept.length);
       this.buf = merged;
-      this.bufStart += keepFrom;
+      this.bufStart = this.pos;
     }
     return true;
   }
@@ -462,12 +464,7 @@ export class MkvBlockStream {
           if (inner && inner.id === EBML_IDS.Block) blockStart = inner.dataStart;
         }
         const trackPeek = readVint(v.buf, blockStart);
-        if (!trackPeek || !this.wanted.has(trackPeek.value)) {
-          if (r.available >= total) { r.skip(total); continue; }
-          // Skip without downloading into memory twice: move the cursor.
-          r.skip(total);
-          continue;
-        }
+        if (!trackPeek || !this.wanted.has(trackPeek.value)) { r.skip(total); continue; }
         if (!(await r.ensure(total))) return null;
         v = r.view();
         const block = this.decode(v.buf, v.offset, el.id === EBML_IDS.SimpleBlock, el.headerSize, total);
