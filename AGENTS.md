@@ -1,0 +1,1 @@
+- MKV multi-audio/subtitles live in `src/lib/mkv/*` + `useEmbeddedTracks`: playback always starts natively; the MSE engine (fMP4 video, WebM/fMP4 audio, text+PGS subs) only takes over on user track choice, via the existing EGD-routed `video-proxy` — keeps episode start instant and needs no new edge function.
