@@ -12,7 +12,8 @@ import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { SUPABASE_URL } from "@/lib/siteConfig";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
-import { HttpRangeSource, openMkv, canPlayTrackCombo } from "./mkvEngine";
+import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
+import { audioMime, videoMime } from "./mkvRemux";
 
 export interface EmbeddedTrack {
   number: number;
@@ -24,6 +25,8 @@ export interface EmbeddedTrack {
   /** Can this browser play/render it through the engine? */
   playable: boolean;
   bitmap?: boolean;
+  /** MSE mime of the audio track (audio only). */
+  mime?: string;
 }
 
 export interface EmbeddedTrackList {
@@ -31,6 +34,7 @@ export interface EmbeddedTrackList {
   subtitles: EmbeddedTrack[];
   /** Track the browser decodes natively before the engine takes over. */
   nativeAudio: number;
+  videoMime?: string;
 }
 
 const LS_KEY = "rs_mkv_tracks_v2";
@@ -99,21 +103,23 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 };
 
 /** Re-evaluate "playable" for THIS browser (shared cache stores raw facts). */
-const withBrowserSupport = (list: EmbeddedTrackList, header?: MkvHeader): EmbeddedTrackList => {
-  if (!header) return list;
+const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
+  const MS = mseAvailable() ? (window as any).MediaSource : null;
+  const videoOk = !!(MS && list.videoMime && MS.isTypeSupported(list.videoMime));
   return {
     ...list,
-    audio: list.audio.map((a) => ({ ...a, playable: canPlayTrackCombo(header.video, header.audio.find((x) => x.number === a.number) || null) })),
+    audio: list.audio.map((a) => ({ ...a, playable: videoOk && !!a.mime && MS.isTypeSupported(a.mime) })),
   };
 };
 
 const summarize = (header: MkvHeader): EmbeddedTrackList => {
   const native = header.audio.find((a) => a.isDefault) || header.audio[0];
-  return {
+  return applySupport({
     nativeAudio: native?.number ?? -1,
+    videoMime: header.video?.route ? videoMime(header.video) : "",
     audio: header.audio.map((a) => ({
       number: a.number, kind: "audio" as const, label: a.label, language: a.language, codec: a.codec,
-      isDefault: a.number === native?.number, playable: canPlayTrackCombo(header.video, a),
+      isDefault: a.number === native?.number, playable: false, mime: a.route ? audioMime(a) : "",
     })),
     subtitles: header.subtitles
       .filter((s) => s.route === "text")
@@ -121,7 +127,7 @@ const summarize = (header: MkvHeader): EmbeddedTrackList => {
         number: s.number, kind: "subtitle" as const, label: s.label, language: s.language, codec: s.codec,
         isDefault: s.isDefault, playable: true, bitmap: isPgsTrack(s),
       })),
-  };
+  });
 };
 
 const buildProxyUrl = (base: string, target: string) => {
@@ -162,7 +168,8 @@ async function readShared(key: string): Promise<EmbeddedTrackList | null> {
 /** Cached track list without network (for instant UI). */
 export function peekEmbeddedTracks(playUrl: string): EmbeddedTrackList | null {
   const key = mediaKey(playUrl);
-  return mem.get(key)?.list || readLs(key);
+  const list = mem.get(key)?.list || readLs(key);
+  return list ? applySupport(list) : null;
 }
 
 export async function probeEmbeddedTracks(playUrl: string): Promise<EmbeddedTrackList | null> {
@@ -175,9 +182,10 @@ export async function probeEmbeddedTracks(playUrl: string): Promise<EmbeddedTrac
   const task = (async () => {
     const cached = readLs(key) || (await readShared(key));
     if (cached) {
-      mem.set(key, { list: cached });
+      const list = applySupport(cached);
+      mem.set(key, { list });
       writeLs(key, cached);
-      return cached;
+      return list;
     }
     const loaded = await loadHeader(playUrl).catch(() => null);
     if (!loaded) return null;
@@ -201,7 +209,7 @@ export async function loadHeader(playUrl: string): Promise<{ header: MkvHeader; 
     const source = new HttpRangeSource(corsUrl);
     try {
       const { header, cues } = await openMkv(source);
-      const list = hit?.list ? withBrowserSupport(hit.list, header) : summarize(header);
+      const list = summarize(header);
       mem.set(key, { list, header, cues, corsUrl });
       return { header, cues, corsUrl };
     } catch (error) {
