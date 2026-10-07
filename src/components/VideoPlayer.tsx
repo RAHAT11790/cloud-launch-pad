@@ -5752,7 +5752,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60 scale-[1.04] shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
                             : ep.locked
                               ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
-                              : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
+                              : 'bg-foreground/[0.06] text-foreground border border-border active:scale-95'
                         }`}
                       >
                         {ep.combo ? (
