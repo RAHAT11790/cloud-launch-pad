@@ -21,7 +21,6 @@ interface OdsObject { width: number; height: number; chunks: Uint8Array[]; expec
 const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 
 export class PgsDecoder {
-  private palette = new Uint32Array(256); // packed RGBA little-endian per entry -> we store bytes separately
   private pal = new Uint8ClampedArray(256 * 4);
   private objects = new Map<number, OdsObject>();
   private current: PgsBitmapCue | null = null;
@@ -40,7 +39,6 @@ export class PgsDecoder {
     this.pal[o + 1] = clamp(Math.round(y - 0.344136 * (cb - 128) - 0.714136 * (cr - 128)));
     this.pal[o + 2] = clamp(Math.round(y + 1.772 * (cb - 128)));
     this.pal[o + 3] = a;
-    this.palette[id] = 1;
   }
 
   private decodeRle(obj: OdsObject): Uint8ClampedArray | null {
