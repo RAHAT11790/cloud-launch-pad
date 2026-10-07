@@ -1541,14 +1541,14 @@ const Index = () => {
     return URL.createObjectURL(blob);
   }, []);
 
-  const visibleContinueWatching = useMemo(
-    () => filterExistingHistory(continueWatching, allAnime, !loading),
-    [continueWatching, allAnime, loading],
-  );
   // Continue watching data (per-account, NOT per-device). Seeded from localStorage cache for instant render.
   const [continueWatching, setContinueWatching] = useState<any[]>(() => {
     try { return JSON.parse(localStorage.getItem("rs_continueCache") || "[]"); } catch { return []; }
   });
+  const visibleContinueWatching = useMemo(
+    () => filterExistingHistory(continueWatching, allAnime, !loading),
+    [continueWatching, allAnime, loading],
+  );
 
   // Load continue watching from Firebase - per ACCOUNT
   useEffect(() => {
