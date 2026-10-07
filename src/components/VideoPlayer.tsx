@@ -3,6 +3,9 @@ import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
+import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
+import { EmbeddedSubtitleLayer } from "@/components/player/EmbeddedSubtitleLayer";
+import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -653,6 +656,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     () => !!currentSrc && !isHlsSrc && !!forceEmbedMode,
     [currentSrc, forceEmbedMode, isHlsSrc],
   );
+
+  // Multi-audio + embedded subtitles for RS .mkv files. Playback always starts
+  // natively; the engine only takes over when another language/subtitle is
+  // picked, so opening an episode is exactly as fast as before.
+  const embedded = useEmbeddedTracks({
+    videoRef,
+    src: currentSrc,
+    enabled: !isHlsSrc && !isEmbedPlayback && !String(currentSrc || "").startsWith("blob:"),
+    onNotice: (message) => toast(message),
+  });
+  const embeddedOwnsRef = embedded.ownsRef;
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
   // → window blurs). This mirrors AN's own controls open/close behaviour.
@@ -2278,6 +2292,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    // The embedded-track engine recovers on its own (falls back to native).
+    if (embeddedOwnsRef.current) return false;
     if (isAnimeSaltContent) {
       // Do NOT immediately show "Link expired" on AN — the synthetic HLS master
       // with separate audio/video playlists can throw transient network errors
@@ -3466,6 +3482,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // 404/5xx/unreachable server triggers the failover chain.
   const healthProbeSrcRef = useRef<string>("");
   const failoverIfServerDead = useCallback((srcAtStart: string, time: number) => {
+    if (embeddedOwnsRef.current) return;
     if (!srcAtStart || healthProbeSrcRef.current === srcAtStart) return;
     healthProbeSrcRef.current = srcAtStart;
     const stillCurrent = () => {
@@ -3865,13 +3882,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const toggleCcPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
     setShowCcPanel((p) => !p);
-    setCcTab(hlsSubtitleOptions.length > 0 ? "subtitle" : "audio");
+    setCcTab(embedded.available ? ((embedded.tracks?.audio.length || 0) > 1 ? "audio" : "subtitle") : hlsSubtitleOptions.length > 0 ? "subtitle" : "audio");
     setShowAudioPanel(false);
     setShowQualityPanel(false);
     setShowSettings(false);
     setShowServerPanel(false);
     resetHideTimer();
-  }, [hlsSubtitleOptions.length, resetHideTimer, stopControlPress]);
+  }, [embedded.available, embedded.tracks, hlsSubtitleOptions.length, resetHideTimer, stopControlPress]);
 
   const toggleQualityPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
@@ -4071,6 +4088,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch { return false; }
     };
     const onError = () => {
+      // Engine-driven element: the engine reports and recovers by itself.
+      if (embeddedOwnsRef.current) return;
       const errSrc = currentSrc;
       const savedTimeForRetry = preserveResumePoint(lastKnownTime || v?.currentTime || 0);
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
@@ -4163,6 +4182,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hardStallTimer) clearTimeout(hardStallTimer);
       hardStallTimer = setTimeout(() => {
         if (adGateActiveRef.current || v.paused || !userPlaybackIntentRef.current) return;
+        if (embeddedOwnsRef.current) return;
         const seekTarget = activeSeekTargetRef.current;
         const seekStillStuck = seekTarget !== null && !finishSeekRecoveryIfReady(v);
         const playbackStillStuck = v.readyState < 3;
@@ -4194,6 +4214,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onLoadStart = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
+      if (embeddedOwnsRef.current) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
       armStartupWatchdog();
@@ -5032,6 +5053,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
           <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
+          {!isEmbedPlayback && embedded.activeSubtitle >= 0 && (
+            <EmbeddedSubtitleLayer
+              text={embedded.subtitleText}
+              bitmap={embedded.bitmapCue}
+              fontScale={captionFontScale}
+              verticalOffset={captionVerticalOffset}
+              objectFit={cropModes[cropIndex]}
+            />
+          )}
+
           {subtitleOverlayText && !isEmbedPlayback && (
             <div
               className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center"
@@ -5227,12 +5258,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </button>
                   </div>
                 ) : null}
-                {(isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+                {(embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
                   <div className="relative">
                     <button
                       onPointerDown={toggleCcPanelFast}
                       onClick={stopControlPress}
-                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 || embedded.activeSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-3.5 h-3.5" />
                       <span className="text-[11px] font-semibold">CC</span>
@@ -5382,7 +5413,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showCcPanel && (isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+          {!isEmbedPlayback && showCcPanel && (embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
             <div
               data-player-panel="true"
               className={`absolute bottom-16 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(72dvh,360px)] z-[95]`}
@@ -5396,6 +5427,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onScroll={keepPanelScrollActive}
               onWheel={stopPanelWheelPropagation}
             >
+              {embedded.available && embedded.tracks ? (
+                <EmbeddedTracksPanel
+                  tab={ccTab}
+                  onTab={setCcTab}
+                  tracks={embedded.tracks}
+                  activeAudio={embedded.activeAudio}
+                  activeSubtitle={embedded.activeSubtitle}
+                  busy={embedded.busy}
+                  onAudio={(n) => { embedded.selectAudio(n); resetHideTimer(); }}
+                  onSubtitle={(n) => { embedded.selectSubtitle(n); resetHideTimer(); }}
+                  captionFontScale={captionFontScale}
+                  captionVerticalOffset={captionVerticalOffset}
+                  onCaptionFontScale={setCaptionFontScale}
+                  onCaptionVerticalOffset={setCaptionVerticalOffset}
+                />
+              ) : (<>
               <div className="flex gap-1 mb-2">
                 <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                 <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -5427,6 +5474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
               )}
+              </>)}
             </div>
           )}
 
@@ -5663,8 +5711,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       if (!row || row.dataset.epScrolled === String(activeEpisodeIdx)) return;
                       const el = row.querySelector<HTMLElement>('[data-ep-active="1"]');
                       if (!el) return;
+                      const firstTime = !row.dataset.epScrolled;
                       row.dataset.epScrolled = String(activeEpisodeIdx);
-                      row.scrollLeft = Math.max(0, el.offsetLeft - 76 - 8);
+                      // Center the chosen episode inside the visible strip (right of "All").
+                      const visible = row.clientWidth - 76;
+                      const target = Math.max(0, Math.min(row.scrollWidth - row.clientWidth, el.offsetLeft - 76 - (visible - el.offsetWidth) / 2));
+                      if (firstTime) { row.scrollLeft = target; return; }
+                      // Gentle eased glide; any finger touch cancels it so it never fights the user.
+                      const from = row.scrollLeft;
+                      const dist = target - from;
+                      if (Math.abs(dist) < 2) return;
+                      const duration = Math.min(650, 320 + Math.abs(dist) * 0.25);
+                      const t0 = performance.now();
+                      let cancelled = false;
+                      const cancel = () => { cancelled = true; };
+                      row.addEventListener("touchstart", cancel, { once: true, passive: true });
+                      row.addEventListener("wheel", cancel, { once: true, passive: true });
+                      row.addEventListener("pointerdown", cancel, { once: true });
+                      const step = (now: number) => {
+                        if (cancelled) return;
+                        const p = Math.min(1, (now - t0) / duration);
+                        const eased = 1 - Math.pow(1 - p, 3);
+                        row.scrollLeft = from + dist * eased;
+                        if (p < 1) requestAnimationFrame(step);
+                        else { row.removeEventListener("touchstart", cancel); row.removeEventListener("wheel", cancel); row.removeEventListener("pointerdown", cancel); }
+                      };
+                      requestAnimationFrame(step);
                     }}
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
                     style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
@@ -5675,12 +5747,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         onClick={ep.onClick}
                         data-ep-active={ep.active ? "1" : undefined}
                         title={ep.locked ? (ep.lockKind === "premium" ? "Premium only" : "Log in to watch") : undefined}
-                        className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-colors flex items-center justify-center ${
+                        className={`relative flex-shrink-0 ${ep.combo ? 'min-w-[60px] px-2 text-[11px]' : 'w-12 text-[12px]'} h-11 rounded-lg font-bold transition-[background-color,border-color,color,transform,box-shadow] duration-300 ease-out flex items-center justify-center ${
                           ep.active
-                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 border border-amber-400/60 scale-[1.04] text-amber-600 dark:text-amber-300 shadow-[0_0_14px_-3px_rgba(251,191,36,0.55)]'
                             : ep.locked
                               ? 'bg-amber-500/10 text-amber-200/80 border border-amber-400/35 active:scale-95'
-                              : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
+                              : 'bg-foreground/[0.06] text-foreground border border-border active:scale-95'
                         }`}
                       >
                         {ep.combo ? (
