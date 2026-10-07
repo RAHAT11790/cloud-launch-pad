@@ -59,3 +59,11 @@
 - [x] Editor Telegram/Direct Link switch redesigned.
 - [x] Home cards update episode count live.
 - [x] Profile app download buttons removed; junk files removed.
+
+## Player tracks + slider polish (2026-10-07)
+- [x] Episode slider: edge episodes stay in place, middle ones glide to centre, selected chip no longer clipped.
+- [x] Search cards: RS badge sized to its text.
+- [x] CC panel opens under the CC button; separate Audio button before Next.
+- [x] Track detection sniffs real file type (".mp4" MKVs, ".mkv" MP4s); MP4 track list.
+- [x] Subtitles with original audio load without restarting playback (works with E-AC3 files too); dialogue tracks listed before signs.
+- [x] Live-tested Naruto Shippuden, Tokyo Ghoul, Days with My Stepsister, Akame ga Kill, First Dragon; screenshots in test-shots/v4.
