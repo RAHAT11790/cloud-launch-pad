@@ -23,7 +23,6 @@ import VideoReactionsBar from "@/components/VideoReactionsBar";
 import { fireAdOnly } from "@/lib/adEngagement";
 
 import { guestStore, isGuest } from "@/lib/guestStore";
-import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
