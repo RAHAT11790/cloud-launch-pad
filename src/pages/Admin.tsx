@@ -8567,7 +8567,10 @@ ${tgBulkFooter}
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Audio languages</label>
- <input value={tgLanguages} onChange={e => setTgLanguages(e.target.value)} className={inputClass} placeholder="Bengali,English,Hindi,Japanese" />
+ <div className="flex gap-2">
+ <input value={tgLanguages} onChange={e => setTgLanguages(e.target.value)} className={`${inputClass} flex-1 min-w-0`} placeholder="Bengali,English,Hindi,Japanese" />
+ <button type="button" onClick={() => setTgLanguages("Multi Audio")} className={`shrink-0 px-3 rounded-lg text-[11px] font-semibold border transition-all ${tgLanguages === "Multi Audio" ? "bg-pink-600 border-pink-500 text-white" : "bg-[#141422] border-white/8 text-zinc-300"}`}>Multi Audio</button>
+ </div>
  </div>
  <div className="grid grid-cols-2 gap-3">
  <div>
