@@ -1958,6 +1958,105 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
  );
 };
 
+// Module-level so parent re-renders never remount it (which wiped typed domains).
+const InlineUrlChanger = ({ seasonsData, setSeasonsData, normalizeAudioTrackList, glassCard, inputClass, btnPrimary }: { seasonsData: any[]; setSeasonsData: (v: any) => void; normalizeAudioTrackList: (t: any) => any[]; glassCard: string; inputClass: string; btnPrimary: string }) => {
+ const [inlineOldDomain, setInlineOldDomain] = useState("");
+ const [inlineNewDomain, setInlineNewDomain] = useState("");
+ const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
+ const [inlineQP, setInlineQP] = useState("");
+ const [showInlineQP, setShowInlineQP] = useState(false);
+
+ const handleInlineQP = () => {
+ const t = inlineQP.trim();
+ if (!t) { toast.error("link Paste!"); return; }
+ try {
+ const u = new URL(t.split('\n')[0].trim());
+ setInlineOldDomain(`${u.protocol}//${u.host}`);
+ toast.success(`✅ domain set: ${u.protocol}//${u.host}`);
+ setShowInlineQP(false); setInlineQP("");
+ } catch { toast.error("valid URL Paste!"); }
+ };
+
+ const replaceInSeasonsData = () => {
+ if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো domainthis দিতে will be!"); return; }
+ const old = inlineOldDomain.trim();
+ const nw = inlineNewDomain.trim();
+ let totalLinks = 0, replacedLinks = 0;
+
+  const updatedSeasons = (Array.isArray(seasonsData) ? seasonsData : []).map(season => ({
+ ...season,
+  episodes: (Array.isArray((season as any).episodes) ? (season as any).episodes : []).map(ep => {
+ const updatedEp = { ...ep } as any;
+ ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
+ if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
+ });
+  if (updatedEp.audioTracks) {
+  updatedEp.audioTracks = normalizeAudioTrackList(updatedEp.audioTracks).map((at: any) => {
+ const u = { ...at };
+ ["link", "link480", "link720", "link1080", "link4k"].forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
+ return u;
+ });
+ }
+ return updatedEp;
+ }),
+ }));
+
+ setSeasonsData(updatedSeasons);
+ setInlineResult({ total: totalLinks, replaced: replacedLinks });
+ toast.success(`✅ ${replacedLinks}/${totalLinks} link replaced! (save to do don't forget)`);
+ };
+
+ return (
+ <div className={`${glassCard} p-4 mb-4`}>
+ <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
+ <p className="text-[9px] text-zinc-400 mb-3">Replace domains in every link for this series. Saving writes the changes to the database.</p>
+ 
+ {/* Quick Paste */}
+ <button onClick={() => setShowInlineQP(!showInlineQP)}
+ className="mb-2 text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+ <Download size={10} /> Quick Paste (extract domain from links)
+ </button>
+ {showInlineQP && (
+ <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-2.5">
+ <textarea value={inlineQP} onChange={e => setInlineQP(e.target.value)}
+ placeholder="any video link Paste — domain auto set will be"
+ className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
+ <button onClick={handleInlineQP} disabled={!inlineQP.trim()}
+ className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
+ <Check size={11} /> domain set 
+ </button>
+ </div>
+ )}
+
+ <div className="grid grid-cols-1 gap-2 mb-3">
+ <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="old: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
+ <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="new: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
+ </div>
+ <button onClick={replaceInSeasonsData} className={`${btnPrimary} w-full py-2 text-[11px] flex items-center justify-center gap-1.5`}>
+ <RefreshCw size={12} /> replace 
+ </button>
+ {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} replaced</p>}
+ 
+ {/* Quick Presets */}
+ <div className="mt-3 pt-3 border-t border-zinc-700/30">
+ <p className="text-[9px] text-zinc-500 mb-2">⚡ Quick Presets</p>
+ <div className="grid grid-cols-2 gap-1.5">
+ <button onClick={() => { setInlineOldDomain("http://fi3.bot-hosting.net:22854"); setInlineNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
+ className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+ <p className="text-[9px] font-semibold text-white">Bot → HF</p>
+ <p className="text-[8px] text-zinc-500">fi3.bot → hf.space</p>
+ </button>
+ <button onClick={() => { setInlineOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setInlineNewDomain("http://fi3.bot-hosting.net:22854"); }}
+ className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+ <p className="text-[9px] font-semibold text-white">HF → Bot</p>
+ <p className="text-[8px] text-zinc-500">hf.space → fi3.bot</p>
+ </button>
+ </div>
+ </div>
+ </div>
+ );
+ };
+
 const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const adminBranding = useBranding();
  useEffect(() => {
@@ -6478,104 +6577,7 @@ ${tgBulkFooter}
  {/* Inline URL Changer for current series */}
  {seasonsData.length > 0 && (() => {
 
- const InlineUrlChanger = () => {
- const [inlineOldDomain, setInlineOldDomain] = useState("");
- const [inlineNewDomain, setInlineNewDomain] = useState("");
- const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
- const [inlineQP, setInlineQP] = useState("");
- const [showInlineQP, setShowInlineQP] = useState(false);
-
- const handleInlineQP = () => {
- const t = inlineQP.trim();
- if (!t) { toast.error("link Paste!"); return; }
- try {
- const u = new URL(t.split('\n')[0].trim());
- setInlineOldDomain(`${u.protocol}//${u.host}`);
- toast.success(`✅ domain set: ${u.protocol}//${u.host}`);
- setShowInlineQP(false); setInlineQP("");
- } catch { toast.error("valid URL Paste!"); }
- };
-
- const replaceInSeasonsData = () => {
- if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো domainthis দিতে will be!"); return; }
- const old = inlineOldDomain.trim();
- const nw = inlineNewDomain.trim();
- let totalLinks = 0, replacedLinks = 0;
-
-  const updatedSeasons = (Array.isArray(seasonsData) ? seasonsData : []).map(season => ({
- ...season,
-  episodes: (Array.isArray((season as any).episodes) ? (season as any).episodes : []).map(ep => {
- const updatedEp = { ...ep } as any;
- ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
- if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
- });
-  if (updatedEp.audioTracks) {
-  updatedEp.audioTracks = normalizeAudioTrackList(updatedEp.audioTracks).map((at: any) => {
- const u = { ...at };
- ["link", "link480", "link720", "link1080", "link4k"].forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
- return u;
- });
- }
- return updatedEp;
- }),
- }));
-
- setSeasonsData(updatedSeasons);
- setInlineResult({ total: totalLinks, replaced: replacedLinks });
- toast.success(`✅ ${replacedLinks}/${totalLinks} link replaced! (save to do don't forget)`);
- };
-
- return (
- <div className={`${glassCard} p-4 mb-4`}>
- <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
- <p className="text-[9px] text-zinc-400 mb-3">Replace domains in every link for this series. Saving writes the changes to the database.</p>
- 
- {/* Quick Paste */}
- <button onClick={() => setShowInlineQP(!showInlineQP)}
- className="mb-2 text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
- <Download size={10} /> Quick Paste (extract domain from links)
- </button>
- {showInlineQP && (
- <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-2.5">
- <textarea value={inlineQP} onChange={e => setInlineQP(e.target.value)}
- placeholder="any video link Paste — domain auto set will be"
- className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
- <button onClick={handleInlineQP} disabled={!inlineQP.trim()}
- className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
- <Check size={11} /> domain set 
- </button>
- </div>
- )}
-
- <div className="grid grid-cols-1 gap-2 mb-3">
- <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="old: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
- <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="new: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
- </div>
- <button onClick={replaceInSeasonsData} className={`${btnPrimary} w-full py-2 text-[11px] flex items-center justify-center gap-1.5`}>
- <RefreshCw size={12} /> replace 
- </button>
- {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} replaced</p>}
- 
- {/* Quick Presets */}
- <div className="mt-3 pt-3 border-t border-zinc-700/30">
- <p className="text-[9px] text-zinc-500 mb-2">⚡ Quick Presets</p>
- <div className="grid grid-cols-2 gap-1.5">
- <button onClick={() => { setInlineOldDomain("http://fi3.bot-hosting.net:22854"); setInlineNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
- className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
- <p className="text-[9px] font-semibold text-white">Bot → HF</p>
- <p className="text-[8px] text-zinc-500">fi3.bot → hf.space</p>
- </button>
- <button onClick={() => { setInlineOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setInlineNewDomain("http://fi3.bot-hosting.net:22854"); }}
- className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
- <p className="text-[9px] font-semibold text-white">HF → Bot</p>
- <p className="text-[8px] text-zinc-500">hf.space → fi3.bot</p>
- </button>
- </div>
- </div>
- </div>
- );
- };
- return <InlineUrlChanger />;
+ return <InlineUrlChanger seasonsData={seasonsData} setSeasonsData={setSeasonsData} normalizeAudioTrackList={normalizeAudioTrackList} glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />;
  })()}
 
  {/* Export JSON for current series */}
