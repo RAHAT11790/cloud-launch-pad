@@ -221,11 +221,17 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       tracksRef.current = list;
       setTracks(list);
       if (activeAudioRef.current < 0) { activeAudioRef.current = list.nativeAudio; setActiveAudio(list.nativeAudio); }
+      // Pre-read the full header + cues in the background so a later language
+      // switch skips that round-trip and starts in about a second.
+      if (list.container !== "mp4" && (list.audio.length > 1 || list.subtitles.length > 0) && !warmTimer) {
+        warmTimer = setTimeout(() => { if (!cancelled) loadHeader(candidate).catch(() => undefined); }, 2500);
+      }
     };
+    let warmTimer: ReturnType<typeof setTimeout> | null = null;
     apply(peekEmbeddedTracks(candidate));
     // Let the first frames load before we spend bandwidth on the probe.
     const timer = setTimeout(() => { probeEmbeddedTracks(candidate).then(apply).catch(() => undefined); }, 600);
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => { cancelled = true; clearTimeout(timer); if (warmTimer) clearTimeout(warmTimer); };
   }, [candidate, destroyEngine, stopSubReader]);
 
   // If anything else (server/quality switch, retry) replaces the element's

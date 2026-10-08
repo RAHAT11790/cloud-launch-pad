@@ -67,3 +67,10 @@
 - [x] Track detection sniffs real file type (".mp4" MKVs, ".mkv" MP4s); MP4 track list.
 - [x] Subtitles with original audio load without restarting playback (works with E-AC3 files too); dialogue tracks listed before signs.
 - [x] Live-tested Naruto Shippuden, Tokyo Ghoul, Days with My Stepsister, Akame ga Kill, First Dragon; screenshots in test-shots/v4.
+
+## Audio/lang + admin fixes (2026-10-08)
+- [x] Faster language switch (header pre-read, shorter buffer wait).
+- [x] Player language sheet lists both editor languages and in-file languages.
+- [x] Series/Movie domain replacer no longer clears itself.
+- [x] Telegram post: "Multi Audio" shortcut button.
+- [ ] Tomb Raider King Ep 11: file server refuses to send the file (re-upload needed); routed video-proxy project unreachable — user to check.

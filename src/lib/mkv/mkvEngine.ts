@@ -270,9 +270,9 @@ export class MkvEngine {
         if (this.failed) return reject(new Error("engine failed"));
         const ve = rangeEndAt(this.vw?.ranges() || [], t);
         const ae = rangeEndAt(this.aw?.ranges() || [], t);
-        if ((ve > t + 1 && ae > t + 1) || this.eofReached) return resolve();
+        if ((ve > t + 0.4 && ae > t + 0.4) || this.eofReached) return resolve();
         if (Date.now() - started > timeoutMs) return reject(new Error("timed out waiting for media"));
-        setTimeout(check, 120);
+        setTimeout(check, 60);
       };
       check();
     });
