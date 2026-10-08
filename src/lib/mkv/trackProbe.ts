@@ -278,10 +278,19 @@ export class NotMatroskaError extends Error {
 }
 
 /** Full header + cues + a working CORS URL (needed before engine hand-over). */
-export async function loadHeader(playUrl: string): Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> {
+const headerInflight = new Map<string, Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }>>();
+export function loadHeader(playUrl: string): Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> {
   const key = mediaKey(playUrl);
   const hit = mem.get(key);
-  if (hit?.header && hit.cues && hit.corsUrl) return { header: hit.header, cues: hit.cues, corsUrl: hit.corsUrl };
+  if (hit?.header && hit.cues && hit.corsUrl) return Promise.resolve({ header: hit.header, cues: hit.cues, corsUrl: hit.corsUrl });
+  const running = headerInflight.get(key);
+  if (running) return running;
+  const task = loadHeaderFresh(playUrl, key).finally(() => headerInflight.delete(key));
+  headerInflight.set(key, task);
+  return task;
+}
+
+async function loadHeaderFresh(playUrl: string, key: string): Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> {
   let lastError: unknown = null;
   for (const corsUrl of await corsCandidates(playUrl)) {
     const source = new HttpRangeSource(corsUrl);
