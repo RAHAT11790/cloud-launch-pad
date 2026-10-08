@@ -5709,7 +5709,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
-                    {currentLangLabel}
+                    {embedded.engineActive && embeddedAudioList.length > 0 ? embeddedAudioLabel : currentLangLabel}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                   {seasons && seasons.length > 0 && (
@@ -6086,6 +6086,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </button>
                 );
               })}
+              {sheetOrigin === "resource" && embeddedLangChoices.length > 0 && (
+                <>
+                  <p className="pt-2 px-1 text-[10px] uppercase tracking-wider text-white/45 font-semibold">In this episode</p>
+                  {embeddedLangChoices.map((track) => {
+                    const active = embedded.activeAudio === track.number;
+                    const disabled = !track.playable && track.number !== embedded.tracks?.nativeAudio;
+                    return (
+                      <button
+                        key={`emb-${track.number}`}
+                        disabled={disabled || embedded.busy}
+                        onClick={() => { embedded.selectAudio(track.number); closeInlineSheets(); }}
+                        className={`w-full rounded-[10px] px-3 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] disabled:opacity-40 ${
+                          active
+                            ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
+                            : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
+                        }`}
+                      >
+                        {track.label}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </div>
         )}
