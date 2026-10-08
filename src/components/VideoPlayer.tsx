@@ -1814,12 +1814,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => unsub();
   }, []);
 
-  // Ad-blocker / ad-DNS guard — arms only for non-premium users.
-  useEffect(() => {
-    if (isPremium === null) return;
-    startAdGuard({ isPremium: !!isPremium });
-    return () => { stopAdGuard(); };
-  }, [isPremium]);
+  // The ad-blocker guard used to arm here and force-pause every <video> on a
+  // 600 ms loop when its heuristics fired (common on Samsung Internet, which
+  // ships its own ad/tracker blocking). In fullscreen its overlay is invisible,
+  // so viewers only saw the video pausing every few seconds. Player ads stay
+  // best-effort and must never pause playback.
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
@@ -3793,26 +3792,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isFullscreen, stopAndClosePlayer]);
 
 
-  // Pause when user leaves the page/app. Never clear src here: ad popups / app
-  // switching can fire pagehide, and wiping the media source restarts playback.
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        const v = videoRef.current;
-        if (v) { preserveResumePoint(v.currentTime || 0); try { v.pause(); } catch {} }
-      }
-    };
-    const onPageHide = () => {
-      const v = videoRef.current;
-      if (v) { preserveResumePoint(v.currentTime || 0); try { v.pause(); } catch {} }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pagehide", onPageHide);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pagehide", onPageHide);
-    };
-  }, [preserveResumePoint]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -4370,32 +4349,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, []);
 
-  // Pause video when app goes background / tab hidden
-  useEffect(() => {
-    const pausePlayback = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (!v.paused) {
-        preserveResumePoint(v.currentTime || 0);
-        v.pause();
-        setPlaying(false);
-      }
-    };
-
-    const onVisibilityChange = () => {
-      if (document.hidden) pausePlayback();
-    };
-
-    window.addEventListener('pagehide', pausePlayback);
-    window.addEventListener('beforeunload', pausePlayback);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      window.removeEventListener('pagehide', pausePlayback);
-      window.removeEventListener('beforeunload', pausePlayback);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [preserveResumePoint]);
 
   // Resilient resume. A single v.play() can silently reject (AbortError after a
   // pause/seek race) or resolve while the buffer stays stalled — that is what made
@@ -4438,6 +4391,51 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => () => {
     if (resumeRetryTimerRef.current) window.clearTimeout(resumeRetryTimerRef.current);
   }, []);
+
+  // Background pause with automatic resume.
+  // Samsung Internet / One UI and several other Android browsers briefly
+  // flip the page to "hidden" whenever a tap-ad tab opens and the browser
+  // jumps back (often for well under a second). Pausing there without ever
+  // resuming made those phones look like "play, pause, play, pause". We still
+  // pause while the app is really in the background, but if the viewer comes
+  // back within a short window and had not paused on purpose, playback simply
+  // continues from the same spot.
+  const resumeOnReturnRef = useRef<{ at: number } | null>(null);
+  useEffect(() => {
+    const RESUME_WINDOW_MS = 3 * 60 * 1000;
+    const pauseForBackground = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      if (!v.paused && !v.ended) {
+        resumeOnReturnRef.current = { at: Date.now() };
+        preserveResumePoint(v.currentTime || 0);
+        try { v.pause(); } catch {}
+        setPlaying(false);
+      }
+    };
+    const resumeIfReturning = () => {
+      const pending = resumeOnReturnRef.current;
+      resumeOnReturnRef.current = null;
+      if (!pending || Date.now() - pending.at > RESUME_WINDOW_MS) return;
+      if (adGateActiveRef.current) return;
+      const v = videoRef.current;
+      if (!v || !v.paused || v.ended) return;
+      resumePlayback(v);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") pauseForBackground();
+      else resumeIfReturning();
+    };
+    const onPageShow = () => { if (document.visibilityState === "visible") resumeIfReturning(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", pauseForBackground);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", pauseForBackground);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [preserveResumePoint, resumePlayback]);
 
   const togglePlay = useCallback(() => {
     if (isEmbedPlayback) {
