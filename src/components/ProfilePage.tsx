@@ -31,6 +31,8 @@ import {
 import { EMPTY_SHOP, equipOrBuyShopItem, subscribeProfileShop, type ProfileShop, type ShopItem, type ShopKind } from "@/lib/profileShop";
 import { GUEST_PROFILE_MESSAGE } from "@/lib/contentGating";
 import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
+import { FrameBackLayers, FrameFrontLayers, frameStyleVars } from "@/components/profile/AnimatedFrame";
+import BackdropMedia from "@/components/profile/BackdropMedia";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -648,13 +650,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   const renderProfileAvatar = (size: "large" | "small" = "large") => (
     <div
-      className={`profile-avatar-frame ${size === "small" ? "profile-avatar-small" : ""} ${selectedShopFrame?.imageUrl ? "has-profile-artwork" : ""}`}
-      style={selectedShopFrame?.imageUrl ? {
-        "--frame-scale": `${selectedShopFrame.scale}%`,
-        "--frame-x": `${selectedShopFrame.offsetX}px`,
-        "--frame-y": `${selectedShopFrame.offsetY}px`,
-      } as CSSProperties : undefined}
+      className={`profile-avatar-frame ${size === "small" ? "profile-avatar-small" : ""} ${selectedShopFrame ? "has-profile-artwork" : ""}`}
+      style={frameStyleVars(selectedShopFrame)}
     >
+      <FrameBackLayers frame={selectedShopFrame} />
       <div className="profile-avatar-core">
         {profilePhoto ? (
           <img src={profilePhoto} alt="Profile" className="h-full w-full rounded-full object-cover" />
@@ -662,14 +661,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <span>{initial}</span>
         )}
       </div>
-      {selectedShopFrame?.imageUrl && (
-        <img
-          src={selectedShopFrame.imageUrl}
-          alt=""
-          className="profile-frame-artwork"
-          aria-hidden="true"
-        />
-      )}
+      <FrameFrontLayers frame={selectedShopFrame} />
       {isPremium && <span className="profile-crown"><Crown className="h-3.5 w-3.5" /></span>}
     </div>
   );
@@ -1758,9 +1750,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <button key={frame.id} type="button" onClick={() => selectOrBuyShopItem("frames", frame)}
                       disabled={buyingFrame === frame.id}
                       className={`profile-frame-card ${equipped ? "is-equipped" : ""}`}>
-                      <span className="profile-frame-demo has-artwork">
-                        <span>{profilePhoto ? <img src={profilePhoto} alt="" className="h-full w-full rounded-full object-cover" /> : <em>{initial}</em>}</span>
-                        <img src={frame.imageUrl} alt="" loading="lazy" style={{ "--frame-scale": `${frame.scale}%`, "--frame-x": `${frame.offsetX}px`, "--frame-y": `${frame.offsetY}px` } as CSSProperties} />
+                      <span className="profile-frame-demo has-artwork" style={frameStyleVars(frame)}>
+                        <FrameBackLayers frame={frame} />
+                        <span className="profile-frame-demo-photo">{profilePhoto ? <img src={profilePhoto} alt="" className="h-full w-full rounded-full object-cover" /> : <em>{initial}</em>}</span>
+                        <FrameFrontLayers frame={frame} />
                       </span>
                       <strong>{frame.name}</strong>
                       <small>{frame.tier}</small>
@@ -1788,7 +1781,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   return (
                     <button key={background.id} type="button" onClick={() => selectOrBuyShopItem("backgrounds", background)} disabled={buyingFrame === background.id}
                       className={`profile-background-card ${equipped ? "is-equipped" : ""}`}>
-                      <img src={background.imageUrl} alt={background.name} loading="lazy" />
+                      <span className="pf-backdrop-wrap"><BackdropMedia item={background} preview /></span>
                       <span><strong>{background.name}</strong><small>{equipped ? "Equipped" : owned ? "Use backdrop" : `${background.price} coins`}</small></span>
                     </button>
                   );
@@ -1905,7 +1898,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="profile-cover-pattern" aria-hidden="true">
-            <img src={selectedShopBackground?.imageUrl || profileAnimeBanner} alt="" width={1536} height={512} />
+            <BackdropMedia item={selectedShopBackground} fallbackSrc={profileAnimeBanner} width={1536} height={512} />
           </div>
           <div className="profile-identity-content">
             {renderProfileAvatar()}
