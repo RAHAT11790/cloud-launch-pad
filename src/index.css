@@ -2764,7 +2764,6 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border: 1px solid rgb(255 255 255 / .16);
   background: rgb(10 12 16 / .62) !important;
   color: #fff !important;
-  backdrop-filter: blur(6px);
 }
 .profile-identity-actions > button.profile-studio-action {
   border: 1px solid rgb(var(--pf-accent-2) / .5) !important;
@@ -2935,9 +2934,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0 12%, var(--fx-c) 22%, transparent 34% 52%, var(--fx-c) 66%, transparent 78% 100%);
   -webkit-mask: radial-gradient(circle, transparent 58%, #000 61%, #000 69%, transparent 72%);
-  mask: radial-gradient(circle, transparent 58%, #000 61%, #000 69%, transparent 72%);
-  filter: blur(2px);
+  mask: radial-gradient(circle, transparent 56%, #000 61.5%, #000 68.5%, transparent 73%);
   opacity: .95;
+  backface-visibility: hidden;
   animation: pfSpin calc(var(--fx-t) * 4.5) linear infinite;
   will-change: transform;
 }
@@ -2949,6 +2948,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   box-shadow: 0 0 18px 2px var(--fx-c);
   opacity: .45;
   animation: pfBreath calc(var(--fx-t) * 2.6) ease-in-out infinite;
+  will-change: opacity;
 }
 .pf-fx-ripple {
   position: absolute;
@@ -2957,6 +2957,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border: 2px solid var(--fx-c);
   opacity: 0;
   animation: pfRipple calc(var(--fx-t) * 2.8) cubic-bezier(.2,.6,.3,1) infinite;
+  will-change: transform, opacity;
 }
 .pf-fx-ripple-2 { animation-delay: calc(var(--fx-t) * 1.4); }
 
@@ -2970,7 +2971,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   transform: translate(calc(-50% + var(--frame-x, 0px)), calc(-50% + var(--frame-y, 0px)));
   pointer-events: none;
 }
-.pf-art-motion { position: absolute; inset: 0; display: block; }
+.pf-art-motion { position: absolute; inset: 0; display: block; will-change: transform; backface-visibility: hidden; }
 .pf-art-motion.is-float { animation: pfFloat calc(var(--fx-t) * 3.2) ease-in-out infinite; }
 .pf-art-motion.is-pulse { animation: pfPulse calc(var(--fx-t) * 1.6) ease-in-out infinite; }
 .pf-art-motion.is-spin { animation: pfSpin calc(var(--fx-t) * 14) linear infinite; }
@@ -2987,10 +2988,11 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   user-select: none;
 }
 .pf-art-glow {
-  filter: blur(5px) drop-shadow(0 0 6px var(--fx-c)) saturate(1.6) brightness(1.35);
+  filter: blur(4px) brightness(1.4) saturate(1.5);
+  transform: scale(1.03);
   opacity: .25;
   animation: pfGlow calc(var(--fx-t) * 2.4) ease-in-out infinite;
-  will-change: opacity, transform;
+  will-change: opacity;
 }
 .pf-art-shine {
   position: absolute;
@@ -3002,7 +3004,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
-  mix-blend-mode: screen;
+  opacity: .7;
 }
 .pf-art-shine > span,
 .pf-art-ring-shine {
@@ -3043,9 +3045,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   content: "";
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: radial-gradient(circle, #fff 0 30%, var(--fx-c) 70%);
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
-  filter: drop-shadow(0 0 3px var(--fx-c));
 }
 .pf-fx-sparkle { animation: pfTwinkle calc(var(--fx-t) * 2.2) ease-in-out infinite; animation-delay: calc(var(--d) / var(--fx-speed, 1)); }
 
@@ -3065,7 +3066,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   margin-left: -3.5%;
   border-radius: 50%;
   background: radial-gradient(circle, #fff 0 25%, var(--fx-c) 55%, transparent 72%);
-  box-shadow: 0 0 8px 2px var(--fx-c);
+  box-shadow: 0 0 6px 1px var(--fx-c);
 }
 .pf-fx-orbit > span:nth-child(2) { top: auto; bottom: 0; width: 5%; height: 5%; margin-left: -2.5%; opacity: .8; }
 .pf-fx-orbit > span:nth-child(3) { top: 50%; left: 0; margin: -2% 0 0 0; width: 4%; height: 4%; opacity: .6; }
@@ -3093,15 +3094,15 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 @keyframes pfFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5%); } }
 @keyframes pfPulse { 0%, 100% { transform: scale(1); } 18% { transform: scale(1.05); } 32% { transform: scale(.99); } 46% { transform: scale(1.035); } }
 @keyframes pfFloatPulse { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-5%) scale(1.04); } }
-@keyframes pfGlow { 0%, 100% { opacity: .2; transform: scale(1); } 50% { opacity: .85; transform: scale(1.04); } }
+@keyframes pfGlow { 0%, 100% { opacity: .2; } 50% { opacity: .85; } }
 @keyframes pfSweep {
   0%, 20% { transform: translateX(-140%) skewX(-12deg); }
   70%, 100% { transform: translateX(360%) skewX(-12deg); }
 }
 @keyframes pfTwinkle {
-  0%, 100% { opacity: 0; scale: .3; }
-  45% { opacity: 1; scale: 1; }
-  60% { opacity: .9; scale: .85; }
+  0%, 100% { opacity: 0; transform: rotate(var(--a)) translateY(-560%) scale(.3); }
+  45% { opacity: 1; transform: rotate(var(--a)) translateY(-560%) scale(1); }
+  60% { opacity: .9; transform: rotate(var(--a)) translateY(-560%) scale(.85); }
 }
 @keyframes pfEmber {
   0% { transform: translateY(0) scale(.6); opacity: 0; }
@@ -3127,7 +3128,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   object-position: center;
   display: block;
 }
-.pf-backdrop-video { opacity: 0; transition: opacity .45s ease; pointer-events: none; }
+.pf-backdrop-video { opacity: 0; transition: opacity .45s ease; pointer-events: none; transform: translateZ(0); backface-visibility: hidden; }
 .pf-backdrop-video.is-playing { opacity: 1; }
 .pf-backdrop-video::-webkit-media-controls { display: none !important; }
 .pf-backdrop-live {
@@ -3173,6 +3174,13 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   border-radius: 50%;
   background: radial-gradient(circle at 50% 38%, hsl(var(--muted-foreground) / .55) 0 22%, hsl(var(--muted)) 23% 100%);
 }
+
+/* Off-screen frames freeze (no work at all); low-RAM phones get the light set. */
+.pf-off, .pf-off *, .pf-off *::before, .pf-off *::after { animation-play-state: paused !important; }
+.pf-lite .pf-art-glow { filter: none; opacity: .3; animation: none; }
+.pf-lite .pf-fx-aura::after { animation: none; }
+.pf-lite .pf-fx-ember:nth-child(n+5), .pf-lite .pf-fx-sparkle:nth-child(n+4) { display: none; }
+.pf-lite .pf-fx-ripple-2 { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .pf-fx-aura, .pf-fx-aura::after, .pf-fx-ripple, .pf-art-motion, .pf-art-glow,
