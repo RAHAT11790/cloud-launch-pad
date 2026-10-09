@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useState, type CSSProperties, type ForwardedRef } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState, type CSSProperties, type ForwardedRef } from "react";
 
 /* ---------- Performance: pause effects that are off screen, lite mode on low-RAM phones ---------- */
 if (typeof window !== "undefined") {
@@ -18,13 +18,18 @@ const getObserver = () => {
 };
 
 /** Callback ref: forwards the node and pauses its CSS animations while it is off screen. */
-const usePauseOffscreen = (forwarded: ForwardedRef<HTMLSpanElement>) => useCallback((node: HTMLSpanElement | null) => {
-  if (typeof forwarded === "function") forwarded(node);
-  else if (forwarded) forwarded.current = node;
-  const io = getObserver();
-  if (!io || !node) return;
-  io.observe(node);
-}, [forwarded]);
+const usePauseOffscreen = (forwarded: ForwardedRef<HTMLSpanElement>) => {
+  const last = useRef<HTMLSpanElement | null>(null);
+  return useCallback((node: HTMLSpanElement | null) => {
+    if (typeof forwarded === "function") forwarded(node);
+    else if (forwarded) forwarded.current = node;
+    const io = getObserver();
+    if (!io) return;
+    if (last.current && last.current !== node) io.unobserve(last.current);
+    last.current = node;
+    if (node) io.observe(node);
+  }, [forwarded]);
+};
 import type { FrameEffect, ShopItem } from "@/lib/profileShop";
 
 /**
