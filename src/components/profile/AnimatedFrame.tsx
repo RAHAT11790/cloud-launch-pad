@@ -1,4 +1,30 @@
-import { forwardRef, useEffect, useState, type CSSProperties } from "react";
+import { forwardRef, useCallback, useEffect, useState, type CSSProperties, type ForwardedRef } from "react";
+
+/* ---------- Performance: pause effects that are off screen, lite mode on low-RAM phones ---------- */
+if (typeof window !== "undefined") {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const lowRam = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 2;
+  const fewCores = typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4 && lowRam;
+  if (lowRam || fewCores) document.documentElement.classList.add("pf-lite");
+}
+
+let sharedObserver: IntersectionObserver | null = null;
+const getObserver = () => {
+  if (sharedObserver || typeof IntersectionObserver === "undefined") return sharedObserver;
+  sharedObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) (e.target as HTMLElement).classList.toggle("pf-off", !e.isIntersecting);
+  }, { rootMargin: "80px" });
+  return sharedObserver;
+};
+
+/** Callback ref: forwards the node and pauses its CSS animations while it is off screen. */
+const usePauseOffscreen = (forwarded: ForwardedRef<HTMLSpanElement>) => useCallback((node: HTMLSpanElement | null) => {
+  if (typeof forwarded === "function") forwarded(node);
+  else if (forwarded) forwarded.current = node;
+  const io = getObserver();
+  if (!io || !node) return;
+  io.observe(node);
+}, [forwarded]);
 import type { FrameEffect, ShopItem } from "@/lib/profileShop";
 
 /**
@@ -126,11 +152,12 @@ const has = (effects: FrameEffect[], id: FrameEffect) => effects.includes(id);
 /** Layers drawn BEHIND the avatar photo. */
 export const FrameBackLayers = forwardRef<HTMLSpanElement, { frame?: FrameLike | null }>(({ frame }, ref) => {
   const colorStyle = useFrameColor(frame);
+  const setRef = usePauseOffscreen(ref);
   if (!frame) return null;
   const fx = frame.effects || [];
   if (!has(fx, "aura") && !has(fx, "ripple")) return null;
   return (
-    <span ref={ref} className="pf-fx-back" style={colorStyle} aria-hidden="true">
+    <span ref={setRef} className="pf-fx-back" style={colorStyle} aria-hidden="true">
       {has(fx, "aura") && <span className="pf-fx-aura" />}
       {has(fx, "ripple") && (
         <>
@@ -146,6 +173,8 @@ FrameBackLayers.displayName = "FrameBackLayers";
 /** Artwork + layers drawn IN FRONT of the avatar photo. */
 export const FrameFrontLayers = forwardRef<HTMLSpanElement, { frame?: FrameLike | null }>(({ frame }, ref) => {
   const colorStyle = useFrameColor(frame);
+  const setRef = usePauseOffscreen(ref);
+  const setFrontRef = usePauseOffscreen(null);
   if (!frame) return null;
   const fx = frame.effects || [];
   const art = frame.imageUrl;
@@ -157,7 +186,7 @@ export const FrameFrontLayers = forwardRef<HTMLSpanElement, { frame?: FrameLike 
 
   return (
     <>
-      <span ref={ref} className="pf-art" style={colorStyle} aria-hidden="true">
+      <span ref={setRef} className="pf-art" style={colorStyle} aria-hidden="true">
         <span className={`pf-art-motion ${motion}`}>
           {art ? (
             <>
@@ -177,7 +206,7 @@ export const FrameFrontLayers = forwardRef<HTMLSpanElement, { frame?: FrameLike 
         </span>
       </span>
       {(has(fx, "sparkle") || has(fx, "orbit") || has(fx, "embers")) && (
-        <span className="pf-fx-front" style={colorStyle} aria-hidden="true">
+        <span ref={setFrontRef} className="pf-fx-front" style={colorStyle} aria-hidden="true">
           {has(fx, "sparkle") && SPARKLES.map((s, i) => (
             <span key={`s${i}`} className="pf-fx-sparkle" style={{ "--a": `${s.a}deg`, "--d": `${s.d}s` } as CSSProperties} />
           ))}
