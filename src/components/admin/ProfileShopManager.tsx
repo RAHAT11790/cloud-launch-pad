@@ -1,9 +1,12 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, Image as ImageIcon, Loader2, Plus, ScanFace, Trash2, Save, Coins, Gift, Upload } from "lucide-react";
+import { Eye, EyeOff, Image as ImageIcon, Loader2, Plus, ScanFace, Trash2, Save, Coins, Gift, Upload, Film, Sparkles, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  DEFAULT_FRAME_EFFECTS,
   EMPTY_SHOP,
+  FRAME_EFFECTS,
+  FrameEffect,
   ProfileShop,
   ShopItem,
   ShopKind,
@@ -12,13 +15,20 @@ import {
   saveProfileShopItem,
   subscribeProfileShop,
 } from "@/lib/profileShop";
+import { FrameBackLayers, FrameFrontLayers, frameStyleVars } from "@/components/profile/AnimatedFrame";
+import BackdropMedia from "@/components/profile/BackdropMedia";
 
-type DraftItem = ShopItem & { isNew?: boolean };
+type DraftItem = ShopItem & { isNew?: boolean; draftKind?: ShopKind };
 
 const blankItem = (kind: ShopKind, order: number): DraftItem => ({
   id: makeShopItemId(kind === "frames" ? "frame" : "background"),
   name: "",
   imageUrl: "",
+  mediaType: "image",
+  videoUrl: "",
+  effects: [...DEFAULT_FRAME_EFFECTS],
+  fxColor: "",
+  fxSpeed: 1,
   price: 10,
   free: false,
   enabled: true,
@@ -28,6 +38,7 @@ const blankItem = (kind: ShopKind, order: number): DraftItem => ({
   offsetX: 0,
   offsetY: 0,
   isNew: true,
+  draftKind: kind,
 });
 
 const card = "rounded-lg border border-border/60 bg-card p-4 shadow-sm";
@@ -48,7 +59,7 @@ const ProfileShopManager = () => {
 
   const rows = useMemo<DraftItem[]>(() => {
     const stored = items.map((item) => drafts[item.id] || item);
-    const news = Object.values(drafts).filter((d) => d.isNew && !items.some((i) => i.id === d.id));
+    const news = Object.values(drafts).filter((d) => d.isNew && d.draftKind === kind && !items.some((i) => i.id === d.id));
     return [...news, ...stored];
   }, [items, drafts]);
 
@@ -85,11 +96,20 @@ const ProfileShopManager = () => {
 
   const save = async (item: DraftItem) => {
     if (!item.name.trim()) return toast.error("Give this item a name");
-    if (!item.imageUrl.trim()) return toast.error("Add the image URL");
+    const isVideo = kind === "backgrounds" && item.mediaType === "video";
+    if (isVideo && !/^https?:\/\//i.test(item.videoUrl.trim())) return toast.error("Add a video URL (https://…)");
+    if (!isVideo && kind === "backgrounds" && !item.imageUrl.trim()) return toast.error("Add the image URL");
+    if (kind === "frames" && !item.imageUrl.trim() && item.effects.length === 0) return toast.error("Add frame artwork or pick at least one animation");
     setSavingId(item.id);
     try {
-      const { isNew, ...clean } = item;
-      await saveProfileShopItem(kind, { ...clean, name: clean.name.trim(), imageUrl: clean.imageUrl.trim() });
+      const { isNew, draftKind, ...clean } = item;
+      await saveProfileShopItem(kind, {
+        ...clean,
+        name: clean.name.trim(),
+        imageUrl: clean.imageUrl.trim(),
+        videoUrl: kind === "backgrounds" && clean.mediaType === "video" ? clean.videoUrl.trim() : "",
+        mediaType: kind === "backgrounds" ? clean.mediaType : "image",
+      });
       setDrafts((current) => {
         const next = { ...current };
         delete next[item.id];
@@ -130,7 +150,7 @@ const ProfileShopManager = () => {
               <ScanFace size={17} className="text-primary" /> Profile Shop
             </h3>
             <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
-              Add transparent PNG/WebP frames or wide backdrop images. Upload, preview, set the price, then publish.
+              Frames: transparent PNG / WebP / GIF artwork plus live animations. Backdrops: a wide image or a looping video URL. Preview, set the price, then publish.
             </p>
           </div>
           <Button
@@ -158,7 +178,7 @@ const ProfileShopManager = () => {
 
       {rows.length === 0 ? (
         <div className={`${card} py-10 text-center text-[13px] text-muted-foreground`}>
-          No {kind} yet. Add one, then choose an image from your gallery.
+          No {kind} yet. Add one, then choose artwork from your gallery{kind === "backgrounds" ? " or paste a video URL" : ""}.
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -177,9 +197,19 @@ const ProfileShopManager = () => {
                   <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">#{Math.max(0, item.order)}</span>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className={`profile-shop-admin-preview grid shrink-0 place-items-center overflow-hidden rounded-md border border-border ${kind === "frames" ? "is-frame h-28 w-28" : "h-20 w-28"}`}>
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.name || `${kind} preview`} className={`h-full w-full ${kind === "frames" ? "object-contain" : "object-cover"}`} />
+                  <div className={`profile-shop-admin-preview relative grid shrink-0 place-items-center rounded-md border border-border bg-muted/30 ${kind === "frames" ? "is-frame h-28 w-28 overflow-visible" : "h-20 w-28 overflow-hidden"}`}>
+                    {kind === "frames" ? (
+                      item.imageUrl || item.effects.length ? (
+                        <span className="pf-admin-frame-stage" style={frameStyleVars(item)}>
+                          <FrameBackLayers frame={item} />
+                          <span className="pf-admin-photo" />
+                          <FrameFrontLayers frame={item} />
+                        </span>
+                      ) : (
+                        <ImageIcon size={20} className="text-muted-foreground" />
+                      )
+                    ) : (item.mediaType === "video" ? item.videoUrl : item.imageUrl) ? (
+                      <BackdropMedia item={item} preview />
                     ) : (
                       <ImageIcon size={20} className="text-muted-foreground" />
                     )}
@@ -195,20 +225,99 @@ const ProfileShopManager = () => {
                       />
                     </div>
                     <label className="block">
-                      <span className={label}>Gallery image</span>
+                      <span className={label}>{kind === "backgrounds" && item.mediaType === "video" ? "Poster image (optional)" : kind === "frames" ? "Artwork (PNG / WebP / GIF)" : "Gallery image"}</span>
                        <span className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-primary/60 bg-primary/5 px-3 text-center text-[12px] font-semibold text-primary hover:bg-primary/10">
                         {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                         {isUploading ? "Uploading…" : "Choose from gallery"}
                       </span>
-                      <input type="file" accept={kind === "frames" ? "image/png,image/webp" : "image/*"} className="hidden" disabled={isUploading} onChange={(event) => uploadImage(item, event)} />
+                      <input type="file" accept={kind === "frames" ? "image/png,image/webp,image/gif,image/apng" : "image/*"} className="hidden" disabled={isUploading} onChange={(event) => uploadImage(item, event)} />
                     </label>
                   </div>
                 </div>
 
+                {kind === "backgrounds" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {([["image", ImageIcon, "Image"], ["video", Film, "Looping video"]] as const).map(([type, Icon, text]) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant={item.mediaType === type ? "default" : "outline"}
+                        onClick={() => patch(item.id, { mediaType: type })}
+                        className="h-9 min-w-0 px-2 text-[12px]"
+                      >
+                        <Icon size={13} /> {text}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {kind === "backgrounds" && item.mediaType === "video" && (
+                  <div>
+                    <span className={label}>Video URL (MP4 / WebM)</span>
+                    <input
+                      className={field}
+                      value={item.videoUrl}
+                      placeholder="https://…/backdrop.mp4"
+                      onChange={(e) => patch(item.id, { videoUrl: e.target.value })}
+                    />
+                    <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Plays muted and loops forever behind the profile. Any length works; short 5–20s clips load fastest. Use an https link.</p>
+                  </div>
+                )}
+
                 <div>
-                  <span className={label}>Image URL</span>
-                  <input className={field} value={item.imageUrl} placeholder="Uploaded URL appears here" onChange={(e) => patch(item.id, { imageUrl: e.target.value })} />
+                  <span className={label}>{kind === "backgrounds" && item.mediaType === "video" ? "Poster image URL (optional)" : "Image URL"}</span>
+                  <input className={field} value={item.imageUrl} placeholder={kind === "frames" ? "Leave empty for an animated ring frame" : "Uploaded URL appears here"} onChange={(e) => patch(item.id, { imageUrl: e.target.value })} />
                 </div>
+
+                {kind === "frames" && (
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground"><Sparkles size={13} className="text-primary" /> Animation</span>
+                        <span className="text-[10px] text-muted-foreground">Mix any effects — the preview updates live</span>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-[11px]" onClick={() => patch(item.id, { effects: [...DEFAULT_FRAME_EFFECTS], fxColor: "", fxSpeed: 1 })}>Reset</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FRAME_EFFECTS.map((fx) => {
+                        const on = item.effects.includes(fx.id);
+                        return (
+                          <button
+                            key={fx.id}
+                            type="button"
+                            title={fx.hint}
+                            aria-pressed={on}
+                            onClick={() => patch(item.id, { effects: on ? item.effects.filter((e) => e !== fx.id) : [...item.effects, fx.id as FrameEffect] })}
+                            className={`h-8 rounded-md border px-2.5 text-[11px] font-semibold transition-colors ${on ? "border-primary bg-primary/15 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"}`}
+                          >
+                            {fx.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <span className="mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Palette size={12} /> Effect colour</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            aria-label="Effect colour"
+                            className="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1"
+                            value={item.fxColor || "#ed4245"}
+                            onChange={(e) => patch(item.id, { fxColor: e.target.value })}
+                          />
+                          <Button type="button" variant={item.fxColor ? "outline" : "default"} className="h-9 min-w-0 flex-1 px-2 text-[11px]" onClick={() => patch(item.id, { fxColor: "" })}>
+                            Auto colour
+                          </Button>
+                        </div>
+                      </div>
+                      <label className="block text-[11px] text-muted-foreground">
+                        <span className="mb-1 flex justify-between"><span>Speed</span><strong className="text-foreground">{item.fxSpeed.toFixed(1)}×</strong></span>
+                        <input className="w-full accent-primary" type="range" min={0.5} max={2} step={0.1} value={item.fxSpeed} onChange={(e) => patch(item.id, { fxSpeed: Number(e.target.value) })} />
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
                   <div>
@@ -241,7 +350,7 @@ const ProfileShopManager = () => {
                   <div className="rounded-md border border-border/60 bg-muted/20 p-3">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div><span className="block text-[12px] font-semibold text-foreground">Frame placement</span><span className="text-[10px] text-muted-foreground">Fit the clear opening around the profile photo</span></div>
-                      <Button type="button" variant="ghost" size="sm" className="h-8 text-[11px]" onClick={() => patch(item.id, { scale: 126, offsetX: 0, offsetY: 0 })}>Reset</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-[11px]" onClick={() => patch(item.id, { scale: 126, offsetX: 0, offsetY: 0 })}>Reset</Button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       {([

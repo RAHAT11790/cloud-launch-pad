@@ -2,10 +2,41 @@ import { db, onValue, ref, remove, runTransaction, update } from "@/lib/firebase
 
 export type ShopKind = "frames" | "backgrounds";
 
+/** Live animation layers a frame can wear (combined freely). */
+export const FRAME_EFFECTS = [
+  { id: "aura", name: "Aura ring", hint: "Rotating light ring behind the frame" },
+  { id: "shine", name: "Shine sweep", hint: "A light beam glides across the artwork" },
+  { id: "glow", name: "Breathing glow", hint: "Soft glow that breathes in and out" },
+  { id: "pulse", name: "Heartbeat", hint: "Frame gently scales like a heartbeat" },
+  { id: "float", name: "Float", hint: "Frame hovers up and down" },
+  { id: "spin", name: "Slow spin", hint: "Artwork rotates (best for round frames)" },
+  { id: "sparkle", name: "Sparkles", hint: "Stars twinkle around the avatar" },
+  { id: "orbit", name: "Orbit", hint: "Energy orbs circle the avatar" },
+  { id: "embers", name: "Embers", hint: "Glowing particles rise from below" },
+  { id: "ripple", name: "Ripple", hint: "Energy waves expand outward" },
+] as const;
+
+export type FrameEffect = (typeof FRAME_EFFECTS)[number]["id"];
+const EFFECT_IDS = new Set<string>(FRAME_EFFECTS.map((e) => e.id));
+/** Older frames saved before animations existed still come alive. */
+export const DEFAULT_FRAME_EFFECTS: FrameEffect[] = ["aura", "shine", "glow"];
+
+export type BackdropMediaType = "image" | "video";
+
+export const looksLikeVideoUrl = (url: string) => /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(String(url || "").trim());
+
 export type ShopItem = {
   id: string;
   name: string;
+  /** Frame artwork, or the backdrop image / video poster. */
   imageUrl: string;
+  /** Backdrops only: "video" plays `videoUrl` on a seamless loop. */
+  mediaType: BackdropMediaType;
+  videoUrl: string;
+  /** Frames only: animation layers, accent colour ("" = theme colour), speed multiplier. */
+  effects: FrameEffect[];
+  fxColor: string;
+  fxSpeed: number;
   price: number;
   free: boolean;
   enabled: boolean;
@@ -25,10 +56,31 @@ export const EMPTY_SHOP: ProfileShop = { frames: [], backgrounds: [] };
 
 const SHOP_PATH = "settings/profileShop";
 
-const normalizeItem = (id: string, raw: any): ShopItem => ({
+const normalizeEffects = (raw: any): FrameEffect[] => {
+  if (raw === undefined || raw === null) return [...DEFAULT_FRAME_EFFECTS];
+  // Stored as "aura,shine" ("none" = deliberately no effects; Firebase drops empty arrays).
+  const list = typeof raw === "string" ? raw.split(",") : Array.isArray(raw) ? raw : typeof raw === "object" ? Object.values(raw) : [];
+  return list.map((v: any) => String(v).trim()).filter((id) => EFFECT_IDS.has(id)) as FrameEffect[];
+};
+
+const normalizeColor = (raw: any) => {
+  const value = String(raw || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(value) ? value : "";
+};
+
+export const normalizeItem = (id: string, raw: any): ShopItem => {
+  const videoUrl = String(raw?.videoUrl || "").trim();
+  const imageUrl = String(raw?.imageUrl || "").trim();
+  const mediaType: BackdropMediaType = raw?.mediaType === "video" || (!raw?.mediaType && (videoUrl || looksLikeVideoUrl(imageUrl))) ? "video" : "image";
+  return {
   id,
   name: String(raw?.name || id),
-  imageUrl: String(raw?.imageUrl || "").trim(),
+  imageUrl: mediaType === "video" && !videoUrl && looksLikeVideoUrl(imageUrl) ? "" : imageUrl,
+  mediaType,
+  videoUrl: videoUrl || (mediaType === "video" && looksLikeVideoUrl(imageUrl) ? imageUrl : ""),
+  effects: normalizeEffects(raw?.effects),
+  fxColor: normalizeColor(raw?.fxColor),
+  fxSpeed: Math.min(2, Math.max(0.5, Number(raw?.fxSpeed || 1))),
   price: Math.max(0, Number(raw?.price || 0)),
   free: raw?.free === true || Number(raw?.price || 0) <= 0,
   enabled: raw?.enabled !== false,
@@ -37,7 +89,8 @@ const normalizeItem = (id: string, raw: any): ShopItem => ({
   scale: Math.min(180, Math.max(80, Number(raw?.scale || 126))),
   offsetX: Math.min(30, Math.max(-30, Number(raw?.offsetX || 0))),
   offsetY: Math.min(30, Math.max(-30, Number(raw?.offsetY || 0))),
-});
+  };
+};
 
 const parseList = (raw: any): ShopItem[] =>
   Object.entries(raw || {})
@@ -56,6 +109,7 @@ export const saveProfileShopItem = async (kind: ShopKind, item: ShopItem) => {
   const { id, ...rest } = item;
   await update(ref(db, `${SHOP_PATH}/${kind}/${id}`), {
     ...rest,
+    effects: rest.effects.length ? rest.effects.join(",") : "none",
     price: rest.free ? 0 : Math.max(0, Number(rest.price || 0)),
     updatedAt: Date.now(),
   });
