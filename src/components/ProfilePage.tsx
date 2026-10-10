@@ -24,6 +24,7 @@ import {
   PROFILE_FONTS,
   PROFILE_FRAMES,
   PROFILE_THEMES,
+  readCachedCustomization,
   saveProfileStyle,
   subscribeProfileCustomization,
   type ProfileCustomization,
@@ -540,7 +541,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [paymentTab, setPaymentTab] = useState<"bkash" | "redeem">("bkash");
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
-  const [customization, setCustomization] = useState<ProfileCustomization>(DEFAULT_PROFILE_CUSTOMIZATION);
+  const [customization, setCustomization] = useState<ProfileCustomization>(() => {
+    try { return readCachedCustomization(JSON.parse(localStorage.getItem("rsanime_user") || "{}").id); }
+    catch { return DEFAULT_PROFILE_CUSTOMIZATION; }
+  });
   const [customizeTab, setCustomizeTab] = useState<"frames" | "backgrounds" | "themes" | "fonts">("frames");
   const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
   const [profileShop, setProfileShop] = useState<ProfileShop>(readCachedShop);
