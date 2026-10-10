@@ -23,7 +23,7 @@ export const DEFAULT_FRAME_EFFECTS: FrameEffect[] = ["aura", "shine", "glow"];
 
 export type BackdropMediaType = "image" | "video";
 
-export const looksLikeVideoUrl = (url: string) => /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(String(url || "").trim());
+export const looksLikeVideoUrl = (url: string) => String(url || "").startsWith("rtdb:") || /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(String(url || "").trim());
 
 export type ShopItem = {
   id: string;
@@ -97,10 +97,24 @@ const parseList = (raw: any): ShopItem[] =>
     .map(([id, value]) => normalizeItem(id, value))
     .sort((a, b) => a.order - b.order || a.price - b.price || a.name.localeCompare(b.name));
 
+const SHOP_CACHE_KEY = "rs_profile_shop_cache_v1";
+
+/** Last known shop, so the profile paints the equipped frame/backdrop instantly. */
+export const readCachedShop = (): ProfileShop => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHOP_CACHE_KEY) || "null");
+    if (raw) return { frames: parseList(raw.frames), backgrounds: parseList(raw.backgrounds) };
+  } catch { /* ignore */ }
+  return EMPTY_SHOP;
+};
+
 export const subscribeProfileShop = (cb: (shop: ProfileShop) => void) => {
   const unsubscribe = onValue(ref(db, SHOP_PATH), (snap) => {
     const raw = snap.val() || {};
-    cb({ frames: parseList(raw.frames), backgrounds: parseList(raw.backgrounds) });
+    try { localStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({ frames: raw.frames || {}, backgrounds: raw.backgrounds || {} })); } catch { /* quota */ }
+    const shop = { frames: parseList(raw.frames), backgrounds: parseList(raw.backgrounds) };
+    cb(shop);
+    import("@/lib/profileMediaStore").then((m) => m.pruneMediaCache(shop.backgrounds.map((b) => b.videoUrl))).catch(() => undefined);
   });
   return () => unsubscribe();
 };

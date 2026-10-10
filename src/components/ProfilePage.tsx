@@ -28,7 +28,7 @@ import {
   subscribeProfileCustomization,
   type ProfileCustomization,
 } from "@/lib/profileCustomization";
-import { EMPTY_SHOP, equipOrBuyShopItem, subscribeProfileShop, type ProfileShop, type ShopItem, type ShopKind } from "@/lib/profileShop";
+import { EMPTY_SHOP, readCachedShop, equipOrBuyShopItem, subscribeProfileShop, type ProfileShop, type ShopItem, type ShopKind } from "@/lib/profileShop";
 import { GUEST_PROFILE_MESSAGE } from "@/lib/contentGating";
 import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
 import { FrameBackLayers, FrameFrontLayers, frameStyleVars } from "@/components/profile/AnimatedFrame";
@@ -543,7 +543,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [customization, setCustomization] = useState<ProfileCustomization>(DEFAULT_PROFILE_CUSTOMIZATION);
   const [customizeTab, setCustomizeTab] = useState<"frames" | "backgrounds" | "themes" | "fonts">("frames");
   const [buyingFrame, setBuyingFrame] = useState<string | null>(null);
-  const [profileShop, setProfileShop] = useState<ProfileShop>(EMPTY_SHOP);
+  const [profileShop, setProfileShop] = useState<ProfileShop>(readCachedShop);
 
   // User APK download — admin sets settings/apk/userEnabled + settings/apk/userUrl.
   const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);

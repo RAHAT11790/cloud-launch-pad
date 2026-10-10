@@ -98,7 +98,12 @@ const cleanCustomization = (raw: Partial<ProfileCustomization> | null): ProfileC
 });
 
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
-  const unsubscribe = onValue(ref(db, `users/${uid}/profileCustomization`), (snap) => cb(cleanCustomization(snap.val())));
+  const key = `rs_profile_custom_cache_v1_${uid}`;
+  try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
+  const unsubscribe = onValue(ref(db, `users/${uid}/profileCustomization`), (snap) => {
+    try { localStorage.setItem(key, JSON.stringify(snap.val() || {})); } catch { /* quota */ }
+    cb(cleanCustomization(snap.val()));
+  });
   return () => unsubscribe();
 };
 
