@@ -97,6 +97,16 @@ const cleanCustomization = (raw: Partial<ProfileCustomization> | null): ProfileC
   ownedBackgrounds: { ...(raw?.ownedBackgrounds || {}) },
 });
 
+/** Last saved customization for this user, read synchronously so the first paint is already correct. */
+export const readCachedCustomization = (uid?: string | null): ProfileCustomization => {
+  if (!uid) return DEFAULT_PROFILE_CUSTOMIZATION;
+  try {
+    const c = localStorage.getItem(`rs_profile_custom_cache_v1_${uid}`);
+    if (c) return cleanCustomization(JSON.parse(c));
+  } catch { /* ignore */ }
+  return DEFAULT_PROFILE_CUSTOMIZATION;
+};
+
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
   const key = `rs_profile_custom_cache_v1_${uid}`;
   try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
