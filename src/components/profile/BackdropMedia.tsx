@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ShopItem } from "@/lib/profileShop";
+import { isStoredMedia, resolveMediaUrl } from "@/lib/profileMediaStore";
 
 /**
  * Profile backdrop: a still image, or a muted video that loops forever.
@@ -20,34 +21,6 @@ type Props = {
 };
 
 const MAX_RETRIES = 4;
-const MAX_MEMORY_BYTES = 24 * 1024 * 1024;
-
-/**
- * Seamless loop: the clip is downloaded once and played from memory, so the
- * restart at the end is instant (no re-request, no buffering pause). Large or
- * non-CORS files simply stream from the URL as before.
- */
-const blobCache = new Map<string, Promise<string>>();
-const loadIntoMemory = (url: string): Promise<string> => {
-  const hit = blobCache.get(url);
-  if (hit) return hit;
-  const job = (async () => {
-    try {
-      const res = await fetch(url, { mode: "cors", credentials: "omit" });
-      if (!res.ok) return url;
-      const len = Number(res.headers.get("content-length") || 0);
-      if (len > MAX_MEMORY_BYTES) { res.body?.cancel().catch(() => undefined); return url; }
-      const blob = await res.blob();
-      if (blob.size > MAX_MEMORY_BYTES || !blob.size) return url;
-      return URL.createObjectURL(blob);
-    } catch {
-      return url;
-    }
-  })();
-  blobCache.set(url, job);
-  return job;
-};
-
 const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, className = "", preview = false, width, height }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -67,8 +40,8 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
     if (!videoUrl) return;
     let alive = true;
     // Previews stream directly (many cards); the real profile header loads into memory.
-    if (preview) { setSrc(videoUrl); return; }
-    loadIntoMemory(videoUrl).then((u) => alive && setSrc(u));
+    if (preview && !isStoredMedia(videoUrl)) { setSrc(videoUrl); return; }
+    resolveMediaUrl(videoUrl).then((u) => { if (!alive) return; if (u) setSrc(u); else setFailed(true); });
     return () => { alive = false; };
   }, [videoUrl, preview]);
 
@@ -129,7 +102,7 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
 
   const handleError = () => {
     setPlaying(false);
-    if (src.startsWith("blob:")) { setSrc(videoUrl); return; }
+    if (src.startsWith("blob:") && !isStoredMedia(videoUrl)) { setSrc(videoUrl); return; }
     if (attempt + 1 >= MAX_RETRIES) {
       setFailed(true);
       return;

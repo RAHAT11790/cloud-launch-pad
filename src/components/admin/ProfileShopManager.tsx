@@ -94,10 +94,36 @@ const ProfileShopManager = () => {
     }
   };
 
+  const uploadVideo = async (item: DraftItem, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return toast.error("File is larger than 10MB — not accepted");
+    const isGif = file.type === "image/gif";
+    if (!isGif && !file.type.startsWith("video/")) return toast.error("Choose a video or GIF file");
+    setUploadingId(item.id);
+    try {
+      if (isGif) {
+        const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+        const imageUrl = await uploadToImgbb(file);
+        patch(item.id, { mediaType: "image", imageUrl, name: item.name || file.name.replace(/\.[^.]+$/, "") });
+      } else {
+        const { uploadMediaFile } = await import("@/lib/profileMediaStore");
+        const videoUrl = await uploadMediaFile(file);
+        patch(item.id, { mediaType: "video", videoUrl, name: item.name || file.name.replace(/\.[^.]+$/, "") });
+      }
+      toast.success("Uploaded. Save the item to publish it.");
+    } catch {
+      toast.error("Upload failed. Try again.");
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
   const save = async (item: DraftItem) => {
     if (!item.name.trim()) return toast.error("Give this item a name");
     const isVideo = kind === "backgrounds" && item.mediaType === "video";
-    if (isVideo && !/^https?:\/\//i.test(item.videoUrl.trim())) return toast.error("Add a video URL (https://…)");
+    if (isVideo && !/^(https?:\/\/|rtdb:)/i.test(item.videoUrl.trim())) return toast.error("Upload a video or add a video URL (https://…)");
     if (!isVideo && kind === "backgrounds" && !item.imageUrl.trim()) return toast.error("Add the image URL");
     if (kind === "frames" && !item.imageUrl.trim() && item.effects.length === 0) return toast.error("Add frame artwork or pick at least one animation");
     setSavingId(item.id);
@@ -253,11 +279,19 @@ const ProfileShopManager = () => {
 
                 {kind === "backgrounds" && item.mediaType === "video" && (
                   <div>
-                    <span className={label}>Video URL (MP4 / WebM)</span>
+                    <label className="mb-2 block">
+                      <span className={label}>Video / GIF from gallery (max 10MB)</span>
+                      <span className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-primary bg-primary/10 px-3 text-center text-[13px] font-bold text-primary">
+                        {isUploading ? <Loader2 size={15} className="animate-spin" /> : <Film size={15} />}
+                        {isUploading ? "Uploading…" : item.videoUrl.startsWith("rtdb:") ? "Uploaded ✓ — tap to replace" : "Upload video or GIF"}
+                      </span>
+                      <input type="file" accept="video/mp4,video/webm,video/quicktime,video/*,image/gif" className="hidden" disabled={isUploading} onChange={(event) => uploadVideo(item, event)} />
+                    </label>
+                    <span className={label}>…or Video URL (MP4 / WebM)</span>
                     <input
                       className={field}
-                      value={item.videoUrl}
-                      placeholder="https://…/backdrop.mp4"
+                      value={item.videoUrl.startsWith("rtdb:") ? "" : item.videoUrl}
+                      placeholder={item.videoUrl.startsWith("rtdb:") ? "Using uploaded file" : "https://…/backdrop.mp4"}
                       onChange={(e) => patch(item.id, { videoUrl: e.target.value })}
                     />
                     <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">Plays muted and loops forever behind the profile. Any length works; short 5–20s clips load fastest. Use an https link.</p>
