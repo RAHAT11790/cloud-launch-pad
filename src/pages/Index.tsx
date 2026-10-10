@@ -3184,7 +3184,10 @@ const Index = () => {
   const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
 
   useEffect(() => {
-    const warmProfile = () => import("@/components/ProfilePage");
+    const warmProfile = () => {
+      import("@/lib/profileMediaStore").then((m) => m.warmProfileAssets()).catch(() => undefined);
+      return import("@/components/ProfilePage");
+    };
     if (showProfile) {
       void warmProfile();
       return;

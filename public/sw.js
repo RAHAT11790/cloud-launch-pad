@@ -24,9 +24,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // Drop any other unrelated caches from older SW versions
+    // Drop only this worker's OLD image caches. App-owned caches (profile
+    // videos, image cache) must survive updates, or every deploy wiped them.
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== IMAGE_CACHE).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => k.startsWith('rs-image-cache-') && k !== IMAGE_CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
   })());
 });
