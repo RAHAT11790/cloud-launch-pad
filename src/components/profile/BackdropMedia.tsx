@@ -91,7 +91,15 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
     }
     tryPlay();
 
+    // Self-heal: if anything else on the page pauses or empties the backdrop, bring it back.
+    const watchdog = window.setInterval(() => {
+      if (!visible || document.hidden) return;
+      if (!el.getAttribute("src") || el.error) { setAttempt((n) => n + 1); return; }
+      if (el.paused) tryPlay();
+    }, 1500);
+
     return () => {
+      window.clearInterval(watchdog);
       document.removeEventListener("visibilitychange", onVisibility);
       el.removeEventListener("ended", onEnded);
       observer?.disconnect();
