@@ -3130,6 +3130,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 }
 .pf-backdrop-video { opacity: 0; transition: opacity .45s ease; pointer-events: none; transform: translateZ(0); backface-visibility: hidden; }
 .pf-backdrop-video.is-playing { opacity: 1; }
+.pf-backdrop-video.has-poster { transition-duration: .12s; }
 .pf-backdrop-video::-webkit-media-controls { display: none !important; }
 .pf-backdrop-live {
   position: absolute;

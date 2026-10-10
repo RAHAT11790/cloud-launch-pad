@@ -108,9 +108,20 @@ const ProfileShopManager = () => {
         const imageUrl = await uploadToImgbb(file);
         patch(item.id, { mediaType: "image", imageUrl, name: item.name || file.name.replace(/\.[^.]+$/, "") });
       } else {
-        const { uploadMediaFile } = await import("@/lib/profileMediaStore");
+        const { uploadMediaFile, posterFromFile } = await import("@/lib/profileMediaStore");
         const videoUrl = await uploadMediaFile(file);
         patch(item.id, { mediaType: "video", videoUrl, name: item.name || file.name.replace(/\.[^.]+$/, "") });
+        // Auto poster (first frame) so every phone paints the right picture before the video starts.
+        if (!item.imageUrl.trim()) {
+          try {
+            const poster = await posterFromFile(file);
+            if (poster) {
+              const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+              const imageUrl = await uploadToImgbb(new File([poster], "backdrop-poster.jpg", { type: "image/jpeg" }));
+              if (imageUrl) patch(item.id, { imageUrl });
+            }
+          } catch { /* poster is optional */ }
+        }
       }
       toast.success("Uploaded. Save the item to publish it.");
     } catch {
