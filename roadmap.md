@@ -74,3 +74,10 @@
 - [x] Series/Movie domain replacer no longer clears itself.
 - [x] Telegram post: "Multi Audio" shortcut button.
 - [ ] Tomb Raider King Ep 11: file server refuses to send the file (re-upload needed); routed video-proxy project unreachable — user to check.
+
+## Profile video + frame instant load (2026-10-10)
+- [x] Root cause: site-wide "stop playback" sweeps emptied the profile video; fixed + self-healing watchdog.
+- [x] Stored videos download over HTTPS (not the realtime socket), decoded natively; frames no longer wait 5s.
+- [x] First paint shows saved frame + video's own first frame (no default image); admin uploads auto-make a poster.
+- [x] Service worker no longer wipes the video cache on updates.
+- [x] Live-tested with the real account: reopen, in-app return, browser restart, 30s loop, slowed CPU.
