@@ -142,6 +142,7 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
           controls={false}
           preload={preview ? "metadata" : "auto"}
           aria-hidden="true"
+          data-bg-media=""
           tabIndex={-1}
           onPlaying={handlePlaying}
           onError={handleError}

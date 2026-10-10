@@ -1324,7 +1324,8 @@ const Index = () => {
     // alive so React can swap props in-place (no flash / no reopen).
     if (keepPlayerAliveRef.current) return;
     try {
-      document.querySelectorAll("video, audio").forEach((node) => {
+      // Decorative backdrop loops (profile video) are not "playback" — never kill them.
+      document.querySelectorAll("video:not([data-bg-media]), audio").forEach((node) => {
         const media = node as HTMLMediaElement;
         try { media.pause(); } catch {}
         try { media.currentTime = 0; } catch {}
