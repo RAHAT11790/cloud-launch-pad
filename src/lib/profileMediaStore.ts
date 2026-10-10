@@ -216,7 +216,15 @@ export const warmProfileAssets = async () => {
     const user = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
     const uid = String(user?.id || "");
     if (!uid) return;
-    const custom = JSON.parse(localStorage.getItem(`rs_profile_custom_cache_v1_${uid}`) || "null");
+    const customKey = `rs_profile_custom_cache_v1_${uid}`;
+    let custom = JSON.parse(localStorage.getItem(customKey) || "null");
+    if (!custom) {
+      // First visit after login: read it over HTTPS so the realtime socket's startup queue can't delay it.
+      const base = String((db as any)?.app?.options?.databaseURL || "").replace(/\/$/, "");
+      const res = base ? await fetch(`${base}/users/${encodeURIComponent(uid)}/profileCustomization.json`, { credentials: "omit" }).catch(() => null) : null;
+      custom = res && res.ok ? await res.json().catch(() => null) : null;
+      if (custom) try { localStorage.setItem(customKey, JSON.stringify(custom)); window.dispatchEvent(new Event("rs_profile_custom_cached")); } catch { /* quota */ }
+    }
     const { readCachedShop } = await import("@/lib/profileShop");
     const shop = readCachedShop();
     const frame = shop.frames.find((f) => f.id === custom?.frameId);

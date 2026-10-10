@@ -109,12 +109,21 @@ export const readCachedCustomization = (uid?: string | null): ProfileCustomizati
 
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
   const key = `rs_profile_custom_cache_v1_${uid}`;
-  try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
+  let live = false;
+  const fromCache = () => {
+    if (live) return;
+    try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
+  };
+  fromCache();
+  window.addEventListener("rs_profile_custom_cached", fromCache);
   const unsubscribe = onValue(ref(db, `users/${uid}/profileCustomization`), (snap) => {
+    live = true;
     try { localStorage.setItem(key, JSON.stringify(snap.val() || {})); } catch { /* quota */ }
     cb(cleanCustomization(snap.val()));
   });
-  return () => unsubscribe();
+  // No cache yet (first open after login): warm it over HTTPS in parallel with the socket.
+  if (!localStorage.getItem(key)) import("@/lib/profileMediaStore").then((m) => m.warmProfileAssets()).catch(() => undefined);
+  return () => { window.removeEventListener("rs_profile_custom_cached", fromCache); unsubscribe(); };
 };
 
 export const saveProfileStyle = async (
