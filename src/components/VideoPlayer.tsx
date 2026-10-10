@@ -3746,7 +3746,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
 
       try {
-        document.querySelectorAll("video, audio").forEach((node) => {
+        document.querySelectorAll("video:not([data-bg-media]), audio").forEach((node) => {
           const media = node as HTMLMediaElement;
           try { media.pause(); } catch {}
           try { media.removeAttribute("src"); } catch {}

@@ -97,14 +97,33 @@ const cleanCustomization = (raw: Partial<ProfileCustomization> | null): ProfileC
   ownedBackgrounds: { ...(raw?.ownedBackgrounds || {}) },
 });
 
+/** Last saved customization for this user, read synchronously so the first paint is already correct. */
+export const readCachedCustomization = (uid?: string | null): ProfileCustomization => {
+  if (!uid) return DEFAULT_PROFILE_CUSTOMIZATION;
+  try {
+    const c = localStorage.getItem(`rs_profile_custom_cache_v1_${uid}`);
+    if (c) return cleanCustomization(JSON.parse(c));
+  } catch { /* ignore */ }
+  return DEFAULT_PROFILE_CUSTOMIZATION;
+};
+
 export const subscribeProfileCustomization = (uid: string, cb: (value: ProfileCustomization) => void) => {
   const key = `rs_profile_custom_cache_v1_${uid}`;
-  try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
+  let live = false;
+  const fromCache = () => {
+    if (live) return;
+    try { const c = localStorage.getItem(key); if (c) cb(cleanCustomization(JSON.parse(c))); } catch { /* ignore */ }
+  };
+  fromCache();
+  window.addEventListener("rs_profile_custom_cached", fromCache);
   const unsubscribe = onValue(ref(db, `users/${uid}/profileCustomization`), (snap) => {
+    live = true;
     try { localStorage.setItem(key, JSON.stringify(snap.val() || {})); } catch { /* quota */ }
     cb(cleanCustomization(snap.val()));
   });
-  return () => unsubscribe();
+  // No cache yet (first open after login): warm it over HTTPS in parallel with the socket.
+  if (!localStorage.getItem(key)) import("@/lib/profileMediaStore").then((m) => m.warmProfileAssets()).catch(() => undefined);
+  return () => { window.removeEventListener("rs_profile_custom_cached", fromCache); unsubscribe(); };
 };
 
 export const saveProfileStyle = async (

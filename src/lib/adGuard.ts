@@ -245,7 +245,7 @@ function buildOverlay(): HTMLDivElement {
 
 function forcePauseAllVideos() {
   try {
-    document.querySelectorAll("video").forEach((v) => {
+    document.querySelectorAll("video:not([data-bg-media])").forEach((v) => {
       try {
         const el = v as HTMLVideoElement;
         if (!el.paused) el.pause();

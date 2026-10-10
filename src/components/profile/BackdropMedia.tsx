@@ -1,13 +1,14 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ShopItem } from "@/lib/profileShop";
-import { isStoredMedia, resolveMediaUrl } from "@/lib/profileMediaStore";
+import { captureVideoFrame, getResolvedMediaUrl, isStoredMedia, readPoster, resolveMediaUrl, savePoster } from "@/lib/profileMediaStore";
 
 /**
  * Profile backdrop: a still image, or a muted video that loops forever.
- * - Poster / fallback image stays underneath so there is never a black flash.
+ * - First paint already shows the right picture: the admin poster, or the
+ *   video's own first frame remembered on this phone. Never a different image.
+ * - The video plays from memory / phone cache with the native gapless loop.
  * - Video only plays while on screen and while the tab is visible (battery).
- * - A failed or stalled video retries a few times, then quietly falls back
- *   to the poster image.
+ * - A failed video retries a few times, then quietly stays on the poster.
  */
 
 type Props = {
@@ -23,23 +24,29 @@ type Props = {
 const MAX_RETRIES = 4;
 const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, className = "", preview = false, width, height }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoUrl = item?.mediaType === "video" ? String(item.videoUrl || "").trim() : "";
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
+  // Already resolved this session → render the video in the very first paint.
+  const [src, setSrc] = useState(() => getResolvedMediaUrl(videoUrl));
   const [playing, setPlaying] = useState(false);
+  const [capturedPoster, setCapturedPoster] = useState(() => readPoster(videoUrl));
 
-  const videoUrl = item?.mediaType === "video" ? String(item.videoUrl || "").trim() : "";
-  const poster = String(item?.imageUrl || "").trim() || fallbackSrc || "";
-  const [src, setSrc] = useState("");
+  const ownPoster = String(item?.imageUrl || "").trim();
+  // A video backdrop never borrows the default banner: that was the "wrong image" on return.
+  const poster = ownPoster || capturedPoster || (videoUrl ? "" : fallbackSrc || "");
   const showVideo = !!videoUrl && !failed && !!src;
 
   useEffect(() => {
     setAttempt(0);
     setFailed(false);
+    setCapturedPoster(readPoster(videoUrl));
+    const ready = getResolvedMediaUrl(videoUrl);
+    setSrc(ready);
+    if (!videoUrl || ready) return;
     setPlaying(false);
-    setSrc("");
-    if (!videoUrl) return;
     let alive = true;
-    // Previews stream directly (many cards); the real profile header loads into memory.
+    // Previews of URL videos stream directly (many cards); everything else plays from memory.
     if (preview && !isStoredMedia(videoUrl)) { setSrc(videoUrl); return; }
     resolveMediaUrl(videoUrl).then((u) => { if (!alive) return; if (u) setSrc(u); else setFailed(true); });
     return () => { alive = false; };
@@ -62,20 +69,12 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
       if (p && typeof p.catch === "function") p.catch(() => undefined);
     };
     const onVisibility = () => (document.hidden ? el.pause() : tryPlay());
-    // Safety net for browsers that ignore `loop` on some streams.
+    // Safety net for browsers that ignore `loop`.
     const onEnded = () => {
       try { el.currentTime = 0; } catch { /* ignore */ }
       tryPlay();
     };
-    // Jump back a hair before the real end: avoids the decoder's end-of-stream stall.
-    const onTime = () => {
-      const d = el.duration;
-      if (d && Number.isFinite(d) && d > 1 && el.currentTime >= d - 0.12) {
-        try { el.currentTime = 0.01; } catch { /* ignore */ }
-      }
-    };
-    el.addEventListener("timeupdate", onTime);
-
+    if (el.readyState >= 2 && !el.paused) setPlaying(true);
     document.addEventListener("visibilitychange", onVisibility);
     el.addEventListener("ended", onEnded);
 
@@ -92,13 +91,34 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
     }
     tryPlay();
 
+    // Self-heal: if anything else on the page pauses or empties the backdrop, bring it back.
+    const watchdog = window.setInterval(() => {
+      if (!visible || document.hidden) return;
+      if (!el.getAttribute("src") || el.error) { setAttempt((n) => n + 1); return; }
+      if (el.paused) tryPlay();
+    }, 1500);
+
     return () => {
+      window.clearInterval(watchdog);
       document.removeEventListener("visibilitychange", onVisibility);
       el.removeEventListener("ended", onEnded);
-      el.removeEventListener("timeupdate", onTime);
       observer?.disconnect();
     };
   }, [showVideo, attempt, preview, src]);
+
+  const handlePlaying = () => {
+    setPlaying(true);
+    const el = videoRef.current;
+    if (!el || ownPoster || capturedPoster || !src.startsWith("blob:")) return;
+    // Remember the first frame so the next visit paints the right picture instantly.
+    const grab = () => {
+      const data = captureVideoFrame(el);
+      if (data) { savePoster(videoUrl, data); setCapturedPoster(data); }
+    };
+    const anyEl = el as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+    if (typeof anyEl.requestVideoFrameCallback === "function") anyEl.requestVideoFrameCallback(grab);
+    else window.setTimeout(grab, 120);
+  };
 
   const handleError = () => {
     setPlaying(false);
@@ -113,15 +133,14 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
   return (
     <span ref={ref} className={`pf-backdrop ${className}`}>
       {poster && (
-        <img src={poster} alt="" className="pf-backdrop-poster" loading={preview ? "lazy" : "eager"} width={width} height={height} draggable={false} />
+        <img src={poster} alt="" className="pf-backdrop-poster" loading={preview ? "lazy" : "eager"} decoding="async" width={width} height={height} draggable={false} />
       )}
       {showVideo && (
         <video
           key={`${src}#${attempt}`}
           ref={videoRef}
-          className={`pf-backdrop-video ${playing ? "is-playing" : ""}`}
+          className={`pf-backdrop-video ${playing ? "is-playing" : ""} ${poster ? "has-poster" : ""}`}
           src={src}
-          poster={poster || undefined}
           muted
           loop
           autoPlay
@@ -131,8 +150,9 @@ const BackdropMedia = forwardRef<HTMLSpanElement, Props>(({ item, fallbackSrc, c
           controls={false}
           preload={preview ? "metadata" : "auto"}
           aria-hidden="true"
+          data-bg-media=""
           tabIndex={-1}
-          onPlaying={() => setPlaying(true)}
+          onPlaying={handlePlaying}
           onError={handleError}
         />
       )}
