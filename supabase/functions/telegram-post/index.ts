@@ -148,13 +148,23 @@ function markUpdateProcessed(id: number): boolean {
   return false;
 }
 
+function realEpisodeCount(episodes: any): number {
+  const list = Array.isArray(episodes) ? episodes : Object.values(episodes || {});
+  return list.reduce((sum: number, ep: any) => {
+    const start = Math.trunc(Number(ep?.episodeNumber || 0)) || 0;
+    const end = Math.trunc(Number(ep?.episodeEnd || 0)) || 0;
+    return sum + (ep ? (start && end > start ? end - start + 1 : 1) : 0);
+  }, 0);
+}
+
 function summarizeSeasons(raw: any): { summary: string; totalEp: number; totalSeasons: number } {
   const seasons = Array.isArray(raw?.seasons) ? raw.seasons : [];
   if (!seasons.length) return { summary: "", totalEp: 0, totalSeasons: 0 };
   const lines: string[] = [];
   let totalEp = 0;
   seasons.forEach((s: any, i: number) => {
-    const eps = Array.isArray(s?.episodes) ? s.episodes.length : 0;
+    // Combo entries (e.g. "Episode 1-3") hold several real episodes.
+    const eps = realEpisodeCount(s?.episodes);
     if (!eps) return;
     totalEp += eps;
     const name = String(s?.name || `Season ${i + 1}`).trim();

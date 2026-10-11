@@ -14,7 +14,7 @@ import { MkvEngine, type TextCue } from "@/lib/mkv/mkvEngine";
 import type { PgsBitmapCue } from "@/lib/mkv/pgs";
 import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
 import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
-import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
+import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, refineSubtitleLabels, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -127,7 +127,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const relabelRef = useRef((track: number, lang: string) => {
     const list = tracksRef.current;
     const t = list?.subtitles.find((x) => x.number === track);
-    if (!list || !t || t.label.startsWith(lang)) return;
+    if (!list || !t || list.scanned || t.label.startsWith(lang)) return;
     const signs = t.forced ? " (Signs)" : "";
     const subs = list.subtitles.map((x) => (x.number === track ? { ...x, label: `${lang}${signs}`, language: lang.slice(0, 2).toLowerCase(), detected: true } : x));
     const seen = new Map<string, number>();
@@ -244,16 +244,14 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       if (list.container !== "mp4" && (list.audio.length > 1 || list.subtitles.length > 0) && !warmTimer) {
         warmTimer = setTimeout(() => {
           if (cancelled) return;
-          loadHeader(candidate).then(({ header, cues, corsUrl }) => {
-            const langs = list.subtitles.filter((s) => !s.bitmap).map((s) => langOf(s));
-            if (cancelled || engineRef.current || subReaderRef.current || langs.length < 2 || new Set(langs).size === langs.length) return;
-            // Tags look copied ("English" ×5): read a few lines quietly to learn the real languages.
-            const reader = new MkvSubtitleReader(corsUrl, header, cues, () => videoRef.current?.currentTime || 0, cueCallbacks, 40);
-            subReaderRef.current = reader;
-            reader.start();
-            setTimeout(() => { if (subReaderRef.current === reader && activeSubRef.current < 0) stopSubReader(); }, 45000);
+          // One-time scan (shared via the track cache): real subtitle
+          // languages + which tracks are signs-only. Labels update in place.
+          loadHeader(candidate).then(() => refineSubtitleLabels(candidate, tracksRef.current || list)).then((next) => {
+            if (cancelled || !next) return;
+            tracksRef.current = next;
+            setTracks(next);
           }).catch(() => undefined);
-        }, 2500);
+        }, 4000);
       }
     };
     let warmTimer: ReturnType<typeof setTimeout> | null = null;

@@ -1,6 +1,6 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
+import { countRealEpisodes, episodeNumberAt, findEpisodeIndexByNumber, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
@@ -14,10 +14,13 @@ import type { AnNativeResolvedData } from "@/components/AnNativeView";
 // Telegram/WhatsApp show the anime logo card; otherwise the plain watch link.
 let sharePreviewBase = "";
 getEdgeFunctionUrl("share-preview").then((u) => { sharePreviewBase = (u || "").replace(/\/+$/, ""); }).catch(() => {});
-const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
+// `ep` = the REAL episode number (combo entries hold several episodes, so it
+// differs from the list position). `e` = legacy list position + 1.
+const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number, epNumber?: number) => {
   const params = new URLSearchParams();
   if (seasonIdx !== undefined) params.set("s", String(seasonIdx + 1));
-  if (epIdx !== undefined) params.set("e", String(epIdx + 1));
+  if (epNumber && epNumber > 0) params.set("ep", String(Math.trunc(epNumber)));
+  else if (epIdx !== undefined) params.set("e", String(epIdx + 1));
   const qs = params.toString();
   if (sharePreviewBase) {
     params.set("o", window.location.origin);
@@ -29,7 +32,9 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
 const parseWatchRouteIndices = (search: string) => {
   const params = new URLSearchParams(search);
   const sRaw = params.get("s");
-  const eRaw = params.get("e") ?? params.get("ep");
+  const eRaw = params.get("e");
+  const epRaw = params.get("ep");
+  const epNumber = epRaw !== null && /^\d+$/.test(epRaw) && Number(epRaw) > 0 ? Number(epRaw) : undefined;
   const legacyZeroBased = sRaw !== null && Number(sRaw) <= 0;
   const parseIdx = (raw: string | null, legacy = false) => {
     if (raw === null) return undefined;
@@ -40,7 +45,8 @@ const parseWatchRouteIndices = (search: string) => {
   };
   return {
     seasonIdx: parseIdx(sRaw, legacyZeroBased),
-    epIdx: parseIdx(eRaw, legacyZeroBased),
+    epIdx: eRaw !== null ? parseIdx(eRaw, legacyZeroBased) : epNumber !== undefined ? epNumber - 1 : undefined,
+    epNumber: eRaw === null ? epNumber : undefined,
   };
 };
 
@@ -1316,8 +1322,14 @@ const Index = () => {
     return { seasonIdx: undefined, epIdx: undefined };
   }, []);
 
-  const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
-    return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
+  const buildShareLink = useCallback((anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
+    let epNumber: number | undefined;
+    if (!isAnimeSaltRouteItem(anime) && seasonIdx !== undefined && epIdx !== undefined) {
+      const seasons = resolveAnimeSeasonsForLanguage(anime, resolvePlayableLanguage(anime, anime.baseLanguage || anime.language));
+      const ep: any = seasons?.[seasonIdx]?.episodes?.[epIdx];
+      if (ep && Number(ep.episodeNumber) > 0) epNumber = episodeNumberAt(seasons![seasonIdx].episodes, epIdx);
+    }
+    return buildEpisodeDeepLink(anime.id, seasonIdx, epIdx, epNumber);
   }, []);
   const stopAllPlayback = useCallback(() => {
     // Skip teardown when the suggestion-switch flow wants to keep the player
@@ -2381,6 +2393,10 @@ const Index = () => {
     // those fresh URLs with stale animesalt:// sentinels, which caused the
     // "no saved Firebase HLS URL" toast and blocked every AN video.
     const forceFreshPlayback = !!(anime as any).__rsForceFreshPlayback;
+    // One-shot: read the requested real episode number, then drop it so Next /
+    // episode-list taps on this item are never pulled back to it.
+    const wantedEpisodeNumber = Number((anime as any).__rsEpisodeNumber || 0);
+    if (wantedEpisodeNumber) { anime = { ...anime }; delete (anime as any).__rsEpisodeNumber; }
     const alreadyRetriedFresh = !!(anime as any).__rsRetriedFreshPlayback;
     if (!isAnimeSaltContentEarlyReload) {
       const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
@@ -2391,6 +2407,19 @@ const Index = () => {
         const fullDefaultTarget = getDefaultWatchTarget(anime);
         resolvedSeasonIdx = resolvedSeasonIdx ?? fullDefaultTarget.seasonIdx;
         resolvedEpIdx = resolvedEpIdx ?? fullDefaultTarget.epIdx;
+      }
+      // New Release cards ask for a REAL episode number. Combo entries hold
+      // several episodes, so find the entry that contains it in the full list.
+      const wantedNumber = wantedEpisodeNumber;
+      if (anime.type === "webseries" && resolvedSeasonIdx !== undefined) {
+        const seasonsNow = resolveAnimeSeasonsForLanguage(anime, resolvePlayableLanguage(anime, anime.baseLanguage || anime.language));
+        const eps = seasonsNow?.[resolvedSeasonIdx]?.episodes || [];
+        if (wantedNumber > 0) {
+          const byNumber = findEpisodeIndexByNumber(eps, wantedNumber);
+          if (byNumber >= 0) resolvedEpIdx = byNumber;
+        }
+        // Never point past the end of the list (that made taps do nothing).
+        if (eps.length && resolvedEpIdx !== undefined && resolvedEpIdx >= eps.length) resolvedEpIdx = eps.length - 1;
       }
     }
 
@@ -2556,8 +2585,25 @@ const Index = () => {
     }
     if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
 
-    const { seasonIdx: nextSeasonIdx, epIdx: nextEpIdx } = parseWatchRouteIndices(location.search);
+    const { seasonIdx: nextSeasonIdx, epIdx: nextEpIdx, epNumber: routeEpNumber } = parseWatchRouteIndices(location.search);
     const targetAnime = allAnime.find((item) => matchesAnimeRouteId(item, watchRouteAnimeId));
+
+    // Share links carry the REAL episode number (?ep=42). Map it to the list
+    // position once the full episode list is known (combo entries hold several
+    // episodes), then continue with the normal position-based route.
+    if (routeEpNumber !== undefined && !watchRouteAnimeId.startsWith("as_") && !watchRouteAnimeId.startsWith("an_")) {
+      const routeId = watchRouteAnimeId;
+      const sIdx = nextSeasonIdx ?? 0;
+      void loadFirebaseAnimeItemByRouteId(routeId).then((full) => {
+        const item = full || targetAnime;
+        const seasons = item ? resolveAnimeSeasonsForLanguage(item, resolvePlayableLanguage(item, item.baseLanguage || item.language)) : undefined;
+        const idx = findEpisodeIndexByNumber(seasons?.[sIdx]?.episodes || [], routeEpNumber);
+        const count = seasons?.[sIdx]?.episodes?.length || 0;
+        const safeIdx = idx >= 0 ? idx : Math.max(0, Math.min(routeEpNumber - 1, Math.max(0, count - 1)));
+        navigate(buildWatchRoute(item?.id || routeId, sIdx, safeIdx), { replace: true });
+      });
+      return;
+    }
 
     // 🔗 BACKWARD COMPAT: old Telegram bot share links carry only the series
     // ID (no ?s= / ?e=). If the ID isn't in allAnime yet (or it's an AN slug
@@ -3679,8 +3725,8 @@ const Index = () => {
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           noServerSwitch={playerState.anime.source === "animesalt"}
-          shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
-          buildShareLinkForEpisode={(seasonIdx, epIdx) => buildShareLink(playerState.anime.id, seasonIdx, epIdx)}
+          shareLink={buildShareLink(playerState.anime, playerState.seasonIdx, playerState.epIdx)}
+          buildShareLinkForEpisode={(seasonIdx, epIdx) => buildShareLink(playerState.anime, seasonIdx, epIdx)}
           onLibraryClick={(animeId) => {
             if (!animeId) return;
             const targetAnime = allAnime.find((item) => item.id === animeId);

@@ -25,6 +25,19 @@ async function readAnime(id) {
   return null;
 }
 
+function realEpisodeLabel(a, s, e) {
+  if (!e) return null;
+  const seasons = Array.isArray(a?.seasons) ? a.seasons : Object.values(a?.seasons || {});
+  const season = seasons[Math.max(0, Number(s || 1) - 1)];
+  const eps = (Array.isArray(season?.episodes) ? season.episodes : Object.values(season?.episodes || {}))
+    .slice().sort((x, y) => Number(x?.episodeNumber || 0) - Number(y?.episodeNumber || 0));
+  const item = eps[Number(e) - 1];
+  const start = Number(item?.episodeNumber || 0);
+  if (!start) return e;
+  const end = Number(item?.episodeEnd || 0);
+  return end > start ? `${start}-${end}` : String(start);
+}
+
 // Logo on a dark 16:9 canvas (1200x675) so every app shows a clean card.
 const cardImage = (img, isLogo) =>
   `https://wsrv.nl/?url=${encodeURIComponent(img)}&w=1200&h=675&fit=${isLogo ? "contain" : "cover"}&cbg=0b0d14&output=jpg&q=88`;
@@ -36,12 +49,14 @@ async function handler(req) {
   const o = String(url.searchParams.get("o") || "").replace(/\/+$/, "");
   const origin = ALLOWED_ORIGIN.test(o) ? o : FALLBACK_ORIGIN;
   const qs = new URLSearchParams();
-  for (const k of ["s", "e"]) { const v = url.searchParams.get(k); if (v && /^\d+$/.test(v)) qs.set(k, v); }
+  for (const k of ["s", "e", "ep"]) { const v = url.searchParams.get(k); if (v && /^\d+$/.test(v)) qs.set(k, v); }
   const target = id ? `${origin}/watch/${encodeURIComponent(id)}${qs.toString() ? `?${qs}` : ""}` : origin;
 
   const a = id ? await readAnime(id) : null;
   const title = String(a?.title || "RS Anime");
-  const ep = qs.get("e");
+  // `ep` is the real episode number; legacy `e` is the list position, so look
+  // its real number up (combo entries hold several episodes, e.g. 1-3).
+  const ep = qs.get("ep") || realEpisodeLabel(a, qs.get("s"), qs.get("e"));
   const season = qs.get("s");
   const heading = ep ? `${title} — ${season && season !== "1" ? `S${season} ` : ""}Episode ${ep}` : title;
   const desc = String(a?.storyline || a?.description || a?.overview || `Watch ${title} on RS Anime`).slice(0, 200);
