@@ -5,3 +5,4 @@
 - Subtitle names come from a one-time scan of the real lines (`src/lib/mkv/subtitleScan.ts` via `refineSubtitleLabels`), saved in the shared track cache with `scanned: true` — file tags are often wrong and sparse tracks are signs-only, and only the first viewer of a file pays the read.
 - Category emoji + motion for pills, rail titles and New Release live only in `src/lib/categoryFx.ts` + `CategoryLabel.tsx` (transform/opacity CSS `cat-*`) — one look everywhere, cheap on low-end phones.
 - Share links carry the real episode number as `?ep=N` (combo-aware); `?e=` stays the legacy list position and the app maps `ep` to a position after loading the full episode list — combo entries make numbers and positions differ.
+- Live TV visibility is one Firebase flag (`settings/liveTvEnabled`, missing = on) read via `src/lib/liveTvToggle.ts`; the swipe pages and bottom menu both derive from `mainPagesFor()` so they never disagree.
