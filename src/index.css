@@ -3265,3 +3265,5 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
 /* Home rails off screen skip layout/paint entirely (big win on long pages). */
 .rail-section { content-visibility: auto; contain-intrinsic-size: auto 270px; }
+.hero-idle *, .hero-idle *::before, .hero-idle *::after { animation-play-state: paused !important; }
+.rs-lite .hero-info-title { animation: none; }
