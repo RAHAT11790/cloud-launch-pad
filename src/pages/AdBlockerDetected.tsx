@@ -181,18 +181,18 @@ const AdBlockerDetected = () => {
               <p className="mt-5 text-center text-sm font-medium text-destructive">{t.stillBlocked}</p>
             )}
 
-            <div className="mt-6 flex flex-col sm:flex-row gap-3">
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-[1fr_10rem] gap-3">
               <button
                 onClick={onRecheck}
                 disabled={checking}
-                className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-60 transition-opacity"
+                className="w-full min-w-0 h-12 px-4 whitespace-nowrap rounded-xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-60 transition-opacity"
               >
-                {checking ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                {checking ? t.checking : t.recheck}
+                {checking ? <Loader2 className="w-5 h-5 shrink-0 animate-spin" /> : <RefreshCw className="w-5 h-5 shrink-0" />}
+                <span className="truncate">{checking ? t.checking : t.recheck}</span>
               </button>
               <button
                 onClick={onClose}
-                className="sm:w-40 h-12 rounded-xl border border-border bg-muted/50 text-foreground font-semibold flex items-center justify-center gap-2 hover:bg-muted transition-colors"
+                className="w-full h-12 px-4 whitespace-nowrap rounded-xl border border-border bg-muted/50 text-foreground font-semibold flex items-center justify-center gap-2 hover:bg-muted transition-colors"
               >
                 <X className="w-5 h-5" />
                 {t.close}

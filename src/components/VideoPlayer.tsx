@@ -1,3 +1,4 @@
+import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
@@ -1746,6 +1747,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     set(dailyRef, { lastSeen: Date.now(), userName }).catch(() => {});
 
     return () => {
+      window.clearInterval(viewTick);
       // Remove active viewer on unmount
       remove(activeRef).catch(() => {});
     };
