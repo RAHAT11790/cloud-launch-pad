@@ -813,6 +813,7 @@ const writeCachedAnDetails = (id: string, data: AnimeItem) => {
   try { localStorage.setItem(anDetailsCacheKey(id), JSON.stringify({ ts: Date.now(), data })); } catch {}
 };
 import { db, ref, set, onValue, get } from "@/lib/firebase";
+import { useLiveTvEnabled, mainPagesFor } from "@/lib/liveTvToggle";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
@@ -3254,7 +3255,9 @@ const Index = () => {
 
   // ===== SWIPE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
-  const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
+  const liveTvOn = useLiveTvEnabled();
+  const pageOrder = useMemo(() => mainPagesFor(liveTvOn), [liveTvOn]);
+  const activePageIdx = Math.max(0, pageOrder.indexOf(activePage));
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeRafRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
@@ -3299,7 +3302,7 @@ const Index = () => {
       if (window.location.pathname !== "/profile") navigate("/profile");
       return;
     }
-    const nextPage = isMainPage(page) ? page : "home";
+    const nextPage = isMainPage(page) && pageOrder.includes(page) ? page : "home";
 
     // Push real URL so each tab has its own router route (back-button friendly).
     const targetPath = MAIN_PAGE_PATH[nextPage];
@@ -3315,7 +3318,7 @@ const Index = () => {
 
     setDubFilter("all");
 
-    const nextIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
+    const nextIdx = pageOrder.indexOf(nextPage);
     // Update BottomNav immediately
     setVisualPage(nextPage);
     // Animate strip to target
@@ -3336,7 +3339,7 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate, pageOrder]);
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
@@ -3348,6 +3351,16 @@ const Index = () => {
       setVisualPage(fromPath);
     }
   }, [pathname, isRoutedOverlay, activePage]);
+
+  // Live TV switched off by admin → the page disappears; send viewers home.
+  useEffect(() => {
+    if (liveTvOn) return;
+    if (activePage === "livetv" || visualPage === "livetv") {
+      setActivePage("home");
+      setVisualPage("home");
+    }
+    if (pathname === "/live-tv" || pathname.startsWith("/live-tv/")) navigate("/", { replace: true });
+  }, [liveTvOn, activePage, visualPage, pathname, navigate]);
 
   // /profile is a real route — keep the profile overlay in sync with the URL.
   useEffect(() => {
@@ -3768,16 +3781,16 @@ const Index = () => {
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          width: `${pageOrder.length * 100}vw`,
           height: "100%",
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          {MAIN_PAGE_ORDER.map((page, idx) => {
+          {pageOrder.map((page, idx) => {
             // Keep-alive: mount visited pages + any page currently crossed by the slide.
-            const visualIdx = MAIN_PAGE_ORDER.indexOf(visualPage);
+            const visualIdx = pageOrder.indexOf(visualPage);
             const inSlide = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
             const shouldRender = inSlide || mountedPages.has(page);
             const isActive = page === activePage;
