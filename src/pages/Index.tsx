@@ -1,5 +1,5 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
-import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect, memo } from "react";
 import { countRealEpisodes, episodeNumberAt, findEpisodeIndexByNumber, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
@@ -530,6 +530,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
+import CategoryLabel from "@/components/CategoryLabel";
 import { useLiveTvEnabled } from "@/lib/liveTvToggle";
 import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
@@ -754,27 +755,75 @@ const getCardSourceBadge = (anime: AnimeItem | any) => {
 // Expose so AnimeCard (separate file) can warm too without prop drilling.
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
-const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
-  <button key={anime.id} type="button" data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
-    <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
-    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
-    <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-      {anime.year && <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
-      {(() => { const badge = getCardSourceBadge(anime); return <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>; })()}
+const PosterGridCard = memo(({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => {
+  const badge = getCardSourceBadge(anime);
+  return (
+    <button type="button" data-anime-card="true" className="grid-card relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0 bg-card active:scale-[0.96] transition-transform duration-150" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
+      <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" draggable={false} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
+      <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
+        {anime.year && <span className="gradient-primary px-1.5 py-0.5 rounded text-[8px] font-bold leading-none text-primary-foreground">{anime.year}</span>}
+        <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider leading-none ${badge === "AN" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{badge}</span>
+      </div>
+      {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold leading-none text-white">FAN</span>}
+      <div className="absolute bottom-0 left-0 right-0 p-2">
+        <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>{anime.title}</p>
+        {(anime.rating || anime.year) && (
+          <p className="mt-1 text-[8px] text-white/85 flex items-center gap-1" style={{ textShadow: "0 1px 5px rgba(0,0,0,0.9)" }}>
+            {anime.rating ? <span>★ {anime.rating}</span> : null}
+            {anime.rating && anime.year ? <span className="opacity-50">·</span> : null}
+            {anime.year ? <span>{anime.year}</span> : null}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}, (a, b) => a.anime === b.anime && a.onClick === b.onClick);
+PosterGridCard.displayName = "PosterGridCard";
+
+type DubFilter = "all" | "official" | "fandub";
+const DUB_FILTERS: { id: DubFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "official", label: "Official Dub" },
+  { id: "fandub", label: "Fan Dub" },
+];
+
+/** Series / Movies tab: animated title, live count, segmented dub filter, light grid. */
+const TabGridPage = memo(({ title, items, visibleCount, dubFilter, onDubFilter, onCardClick }: {
+  title: string;
+  items: AnimeItem[];
+  visibleCount: number;
+  dubFilter: DubFilter;
+  onDubFilter: (f: DubFilter) => void;
+  onCardClick: (anime: AnimeItem) => void;
+}) => (
+  <div className="pt-[65px] pb-24 px-4">
+    <div className="flex items-end justify-between gap-3 mb-3">
+      <h2 className="text-xl font-bold flex items-center category-bar"><CategoryLabel title={title} /></h2>
+      <span className="text-[11px] font-semibold text-muted-foreground tabular-nums pb-0.5">{items.length} titles</span>
     </div>
-    {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-    <div className="absolute bottom-0 left-0 right-0 p-2">
-      <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>{anime.title}</p>
-      {(anime.rating || anime.year) && (
-        <p className="mt-1 text-[8px] text-white/85 flex items-center gap-1" style={{ textShadow: "0 1px 5px rgba(0,0,0,0.9)" }}>
-          {anime.rating ? <span>★ {anime.rating}</span> : null}
-          {anime.rating && anime.year ? <span className="opacity-50">·</span> : null}
-          {anime.year ? <span>{anime.year}</span> : null}
-        </p>
-      )}
+    <div role="tablist" aria-label="Dub type" className="grid grid-cols-3 gap-1 p-1 mb-4 rounded-2xl bg-card" style={{ boxShadow: "var(--neu-shadow-inset)" }}>
+      {DUB_FILTERS.map(({ id, label }) => {
+        const on = dubFilter === id;
+        return (
+          <button key={id} role="tab" aria-selected={on} onClick={() => onDubFilter(id)}
+            className={`py-2 rounded-xl text-xs font-semibold transition-[background-color,color,box-shadow] duration-200 ${on
+              ? id === "fandub" ? "bg-orange-600 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]" : "gradient-primary text-primary-foreground shadow-[0_2px_12px_hsl(var(--primary)/0.3)]"
+              : "text-muted-foreground active:bg-secondary"}`}>
+            {label}
+          </button>
+        );
+      })}
     </div>
-  </button>
-);
+    <div className="grid grid-cols-3 gap-2.5">
+      {items.slice(0, visibleCount).map((anime) => (
+        <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
+      ))}
+    </div>
+    {items.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
+  </div>
+));
+TabGridPage.displayName = "TabGridPage";
 
 const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
 
@@ -3450,49 +3499,11 @@ const Index = () => {
   }
 
   const getPageContent_series = () => (
-    <div className="pt-[65px] pb-24 px-4">
-      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
-      <div className="flex gap-2 mb-4">
-        {(["all", "official", "fandub"] as const).map(dt => (
-          <button key={dt} onClick={() => setDubFilter(dt)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-              : "bg-card border-border text-muted-foreground"}`}>
-            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-2.5">
-        {filteredSeries.slice(0, tabGridVisibleCount.series).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
-        ))}
-      </div>
-      {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
-    </div>
+    <TabGridPage title="Anime Series" items={filteredSeries} visibleCount={tabGridVisibleCount.series} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={handleCardClick} />
   );
 
   const getPageContent_movies = () => (
-    <div className="pt-[65px] pb-24 px-4">
-      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
-      <div className="flex gap-2 mb-4">
-        {(["all", "official", "fandub"] as const).map(dt => (
-          <button key={dt} onClick={() => setDubFilter(dt)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-              : "bg-card border-border text-muted-foreground"}`}>
-            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-2.5">
-        {filteredMovies.slice(0, tabGridVisibleCount.movies).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
-        ))}
-      </div>
-      {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
-    </div>
+    <TabGridPage title="Anime Movies" items={filteredMovies} visibleCount={tabGridVisibleCount.movies} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={handleCardClick} />
   );
 
   const getPageContent_home = () => (
