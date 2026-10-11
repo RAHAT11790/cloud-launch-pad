@@ -3268,3 +3268,4 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .hero-idle *, .hero-idle *::before, .hero-idle *::after { animation-play-state: paused !important; }
 .rs-lite .hero-info-title { animation: none; }
 .grid-card { content-visibility: auto; contain-intrinsic-size: auto 170px; }
+.suggest-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
