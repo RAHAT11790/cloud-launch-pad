@@ -99,7 +99,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [transitioning, setTransitioning] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [dragDx, setDragDx] = useState(0);
+  const [inView, setInView] = useState(true);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
   const deckRef = useRef(deck);
   const currentRef = useRef(current);
@@ -200,7 +201,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   useEffect(() => {
     clearTimer();
-    if (paused || transitioning || lockRef.current || deck.length <= 1) return;
+    if (paused || !inView || transitioning || lockRef.current || deck.length <= 1) return;
     if (typeof document !== "undefined" && document.hidden) return;
 
     timerRef.current = setTimeout(() => {
@@ -208,7 +209,22 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     }, SLIDE_DURATION);
 
     return clearTimer;
-  }, [clearTimer, current, deck.length, goTo, paused, transitioning]);
+  }, [clearTimer, current, deck.length, goTo, paused, inView, transitioning]);
+
+  // Banner scrolled out of view (or tab hidden in the swipe strip): stop the
+  // auto-advance and pause its looping effects so scrolling stays smooth.
+  const hasDeck = deck.length > 0;
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasDeck]);
+
+  const setDragX = (dx: number) => {
+    sectionRef.current?.style.setProperty("--hero-drag-x", `${dx * 0.22}px`);
+  };
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -249,7 +265,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     const dx = touch.clientX - start.x;
     const dy = touch.clientY - start.y;
     if (Math.abs(dx) > Math.abs(dy) + 8) {
-      setDragDx(Math.max(-90, Math.min(90, dx)));
+      setDragX(Math.max(-90, Math.min(90, dx)));
     }
   };
 
@@ -258,7 +274,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     const touch = event.changedTouches[0];
     touchStartRef.current = null;
     setPaused(false);
-    setDragDx(0);
+    setDragX(0);
     if (!start || !touch || lockRef.current) return;
 
     const dx = touch.clientX - start.x;
@@ -297,8 +313,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     <section
       data-no-swipe="true"
       aria-label="Featured anime"
-      className="relative w-full h-[44vh] min-h-[340px] max-h-[460px] overflow-hidden bg-background select-none"
-      style={{ touchAction: "pan-y pinch-zoom", "--hero-drag-x": `${dragDx * 0.22}px` } as CSSProperties}
+      ref={sectionRef}
+      className={`relative w-full h-[44vh] min-h-[340px] max-h-[460px] overflow-hidden bg-background select-none${inView ? "" : " hero-idle"}`}
+      style={{ touchAction: "pan-y pinch-zoom", "--hero-drag-x": "0px" } as CSSProperties}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
