@@ -1692,18 +1692,47 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const uid = getUserId();
     if (!uid) return;
 
-    // 1. Log a view count (per-day, per-user)
+    // 1. A view counts only once per user per series per 24h, and only after
+    //    real watching (5 min or 40% of duration). Watched time accumulates
+    //    from actual playback progress, so seeking ahead does not count.
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    const viewRef = ref(db, `analytics/views/${animeId}/${today}/${uid}`);
-    set(viewRef, { timestamp: Date.now(), title: title || "" }).catch(() => {});
-
-    // 1b. All-time total counter (never reset by daily cleanup)
-    import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
-      runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
-        const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
-        return { count: (base.count || 0) + 1, title: title || base.title || "", lastSeen: Date.now() };
-      }).catch(() => {});
-    });
+    const lockKey = `rs_view_lock_${animeId}`;
+    let watched = 0;
+    let lastT = -1;
+    let counted = false;
+    const countView = async () => {
+      counted = true;
+      const now = Date.now();
+      let last = Number(localStorage.getItem(lockKey) || 0);
+      try {
+        const { get } = await import("@/lib/firebase");
+        const snap = await get(ref(db, `analytics/viewLocks/${animeId}/${uid}`));
+        last = Math.max(last, Number(snap.val() || 0));
+      } catch {}
+      if (!canCountView(last, now)) return;
+      try { localStorage.setItem(lockKey, String(now)); } catch {}
+      set(ref(db, `analytics/viewLocks/${animeId}/${uid}`), now).catch(() => {});
+      set(ref(db, `analytics/views/${animeId}/${today}/${uid}`), { timestamp: now, title: title || "" }).catch(() => {});
+      import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
+        runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
+          const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
+          return { count: (base.count || 0) + 1, title: title || base.title || "", lastSeen: now };
+        }).catch(() => {});
+      });
+    };
+    const viewTick = window.setInterval(() => {
+      if (counted) return;
+      if (!canCountView(Number(localStorage.getItem(lockKey) || 0), Date.now())) { counted = true; return; }
+      const v = videoRef.current;
+      if (!v) return;
+      const t = v.currentTime;
+      if (!v.paused && lastT >= 0) {
+        const d = t - lastT;
+        if (d > 0 && d < 3) watched += d;
+      }
+      lastT = t;
+      if (hasWatchedEnough(watched, v.duration)) void countView();
+    }, 1000);
 
     // 2. Track as active viewer (presence)
     const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
