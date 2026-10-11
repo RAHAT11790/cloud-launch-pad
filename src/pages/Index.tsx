@@ -1304,6 +1304,9 @@ const Index = () => {
     }
   });
   const pageScrollPositions = useRef<Record<MainPage, number>>({ home: 0, series: 0, livetv: 0, movies: 0 });
+  // Stable poster-tap handler so memoized grids/rails don't re-render every parent update.
+  const cardClickRef = useRef<(anime: AnimeItem, sIdx?: number, eIdx?: number) => unknown>(() => {});
+  const stableCardClick = useCallback((anime: AnimeItem, sIdx?: number, eIdx?: number) => { void cardClickRef.current(anime, sIdx, eIdx); }, []);
   const [tabGridVisibleCount, setTabGridVisibleCount] = useState<Record<"series" | "movies", number>>({
     series: TAB_GRID_INITIAL_COUNT,
     movies: TAB_GRID_INITIAL_COUNT,
@@ -2377,6 +2380,7 @@ const Index = () => {
     // avoid stacking duplicate entries; push from anywhere else.
     await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
+  cardClickRef.current = handleCardClick;
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
     if (unlockBlocked) {
@@ -3499,11 +3503,11 @@ const Index = () => {
   }
 
   const getPageContent_series = () => (
-    <TabGridPage title="Anime Series" items={filteredSeries} visibleCount={tabGridVisibleCount.series} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={handleCardClick} />
+    <TabGridPage title="Anime Series" items={filteredSeries} visibleCount={tabGridVisibleCount.series} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={stableCardClick} />
   );
 
   const getPageContent_movies = () => (
-    <TabGridPage title="Anime Movies" items={filteredMovies} visibleCount={tabGridVisibleCount.movies} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={handleCardClick} />
+    <TabGridPage title="Anime Movies" items={filteredMovies} visibleCount={tabGridVisibleCount.movies} dubFilter={dubFilter} onDubFilter={setDubFilter} onCardClick={stableCardClick} />
   );
 
   const getPageContent_home = () => (
@@ -3516,7 +3520,7 @@ const Index = () => {
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.slice(0, HOME_CATEGORY_GRID_LIMIT).map((anime) => (
-                <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+                <PosterGridCard key={anime.id} anime={anime} onClick={stableCardClick} />
               ))}
             </div>
           ) : (
@@ -3584,14 +3588,14 @@ const Index = () => {
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
-            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
+            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={stableCardClick} onViewAll={() => navigate("/series")} />
           )}
           {filteredMovies.length > 0 && (
-            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
+            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={stableCardClick} onViewAll={() => navigate("/movies")} />
           )}
           {categoryGroups
             .map(({ key, title, items }) => (
-              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={handleCardClick} showWhenEmpty />
+              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={stableCardClick} showWhenEmpty />
             ))}
         </>
       )}
