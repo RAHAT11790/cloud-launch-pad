@@ -1366,10 +1366,10 @@ video, iframe[title="player"] {
 
 /* Keep images paintable while fast-scrolling; content-visibility on <img>
    can show black placeholders on Android until scrolling stops. */
+/* No backface-visibility here: inside the 3D-translated swipe strip it turned
+   every image into its own GPU layer (hundreds per page = scroll jank). */
 img {
   background: hsl(var(--card));
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 @media (max-width: 768px), (pointer: coarse) {

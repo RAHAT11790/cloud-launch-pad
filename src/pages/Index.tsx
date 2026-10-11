@@ -3802,7 +3802,6 @@ const Index = () => {
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
-          backfaceVisibility: "hidden",
         }}>
           {pageOrder.map((page, idx) => {
             // Keep-alive: mount visited pages + any page currently crossed by the slide.
@@ -3820,7 +3819,6 @@ const Index = () => {
                 flexShrink: 0,
                 overflowY: "auto",
                 overflowX: "hidden",
-                backfaceVisibility: "hidden",
                 WebkitOverflowScrolling: "touch",
                 contain: isActive ? "none" : "layout paint style",
                 // Skip paint work for off-screen mounted tabs — huge scroll/nav win on mobile.
