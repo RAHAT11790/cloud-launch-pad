@@ -3259,6 +3259,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 .cat-label:not([data-live]) :is(.cat-emo, .cat-emo-in, .cat-txt, .cat-ch),
 .cat-label:not([data-live]) .cat-emo::after { animation-play-state: paused !important; }
 /* Low-end phones: the word moves as one piece in sync with its emoji. */
-.rs-lite .cat-txt { animation: cat-word 3.6s cubic-bezier(.3,.7,.3,1) infinite .4s; }
+.rs-lite .cat-txt, .cat-solid .cat-txt { animation: cat-word 3.6s cubic-bezier(.3,.7,.3,1) infinite .4s; }
 @keyframes cat-word { 0%, 22%, 100% { transform: translateY(0); } 7% { transform: translateY(-.18em); } 14% { transform: translateY(.04em); } }
 .rs-lite .cat-m-heart::after { display: none; }
+
+/* Home rails off screen skip layout/paint entirely (big win on long pages). */
+.rail-section { content-visibility: auto; contain-intrinsic-size: auto 270px; }

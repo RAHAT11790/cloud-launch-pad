@@ -9,13 +9,13 @@ const LITE = typeof document !== "undefined" && document.documentElement.classLi
  * Letters ripple only while the title is on screen (motion gate) and only on
  * capable phones — low-end phones animate the word as one piece.
  */
-const CategoryLabel = memo(({ title, className = "" }: { title: string; className?: string }) => {
+const CategoryLabel = memo(({ title, className = "", ripple = true }: { title: string; className?: string; ripple?: boolean }) => {
   const { emoji, label, fx } = categoryFx(title);
   const rootRef = useRef<HTMLSpanElement>(null);
   useEffect(() => gateMotion(rootRef.current), []);
-  const letters = LITE ? null : Array.from(label);
+  const letters = LITE || !ripple ? null : Array.from(label);
   return (
-    <span ref={rootRef} className={`cat-label cat-t-${fx.text} cat-k-${fx.motion} ${className}`} aria-label={label}>
+    <span ref={rootRef} className={`cat-label cat-t-${fx.text}${letters ? "" : " cat-solid"} ${className}`} aria-label={label}>
       <span aria-hidden className={`cat-emo cat-m-${fx.motion}`}><span className="cat-emo-in">{emoji}</span></span>
       <span aria-hidden className="cat-txt">
         {letters

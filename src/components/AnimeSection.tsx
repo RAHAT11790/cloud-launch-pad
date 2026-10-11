@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ChevronRight } from "lucide-react";
 import AnimeCard from "./AnimeCard";
 import AnimatedTitle from "./AnimatedTitle";
@@ -15,11 +16,11 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll, showWhenEmpty = fa
   if (items.length === 0 && !showWhenEmpty) return null;
 
   return (
-    <section className="py-5 -mt-10 relative z-20 first:mt-0">
+    <section className="rail-section py-5 -mt-10 relative z-20 first:mt-0">
       <div className="flex justify-between items-center px-4 mb-3">
         <h3 className="text-base font-bold flex items-center category-bar"><AnimatedTitle title={title} /></h3>
         {onViewAll && (
-          <button onClick={onViewAll} className="text-primary text-xs font-semibold flex items-center gap-1 transition-all hover:gap-2">
+          <button onClick={onViewAll} className="text-primary text-xs font-semibold flex items-center gap-1 px-2 py-1 -mr-2 rounded-full transition-[gap,background-color] duration-150 hover:gap-2 active:bg-primary/10">
             View All <ChevronRight className="w-3 h-3" />
           </button>
         )}
@@ -35,4 +36,4 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll, showWhenEmpty = fa
   );
 };
 
-export default AnimeSection;
+export default memo(AnimeSection);
