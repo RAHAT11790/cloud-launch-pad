@@ -1996,7 +1996,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <div className="absolute bottom-1 left-1 right-1">
                     <p className="text-[9px] font-semibold leading-tight line-clamp-2">{item.title}</p>
@@ -2037,7 +2037,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
+                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <button onClick={(e) => { e.stopPropagation(); removeFromWatchlist(item.id); }}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center">
@@ -2100,7 +2100,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                       className="cursor-pointer relative"
                     >
                       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
+                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 55%)" }} />
                         {viewAllMode === "watchlist" && (
                           <button

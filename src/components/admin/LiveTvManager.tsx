@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { db, ref, onValue, set, push, update, remove } from "@/lib/firebase";
 import { toast } from "sonner";
-import { Save, Loader2, Upload, Edit, Trash2, Power } from "lucide-react";
+import { Save, Loader2, Upload, Edit, Trash2 } from "lucide-react";
 import CachedImg from "@/components/CachedImg";
-import { setLiveTvEnabled, useLiveTvEnabled } from "@/lib/liveTvToggle";
 
 interface Props {
   glassCard: string;
@@ -47,8 +46,6 @@ const LiveTvManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }: Prop
   const [categories, setCategories] = useState<string[]>(categoriesCache.length ? categoriesCache : ["General"]);
   const [newCatName, setNewCatName] = useState("");
   const [showAddCat, setShowAddCat] = useState(false);
-  const liveTvOn = useLiveTvEnabled();
-  const [togglingLiveTv, setTogglingLiveTv] = useState(false);
 
   const handleImgUpload = async (file: File, setter: (v: string) => void, setLoading: (v: boolean) => void) => {
     if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB!"); return; }
@@ -133,43 +130,8 @@ const LiveTvManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }: Prop
     setEditId(ch.id); setName(ch.name); setLogo(ch.logo); setBanner(ch.banner || ""); setStreamUrl(ch.streamUrl); setCategory(ch.category);
   };
 
-  const toggleLiveTv = async () => {
-    const next = !liveTvOn;
-    setTogglingLiveTv(true);
-    try {
-      await setLiveTvEnabled(next);
-      toast.success(next ? "✅ Live TV is ON for users" : "⛔ Live TV is OFF — hidden from users");
-    } catch {
-      toast.error("❌ Could not change Live TV");
-    }
-    setTogglingLiveTv(false);
-  };
-
   return (
     <div>
-      <div className={`${glassCard} p-4 mb-4 flex items-center justify-between gap-3`}>
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Power size={14} className={liveTvOn ? "text-emerald-400" : "text-red-400"} /> Live TV {liveTvOn ? "ON" : "OFF"}
-          </h3>
-          <p className="text-[10px] text-zinc-400 mt-1 leading-snug">
-            {liveTvOn ? "Users see the Live TV tab and page." : "Live TV tab and page are hidden from every user."}
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={liveTvOn}
-          aria-label="Live TV on/off"
-          disabled={togglingLiveTv}
-          onClick={toggleLiveTv}
-          className={`relative shrink-0 w-14 h-8 rounded-full transition-colors duration-200 disabled:opacity-60 ${liveTvOn ? "bg-emerald-500" : "bg-zinc-700"}`}
-        >
-          <span className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200 flex items-center justify-center ${liveTvOn ? "translate-x-6" : "translate-x-0"}`}>
-            {togglingLiveTv && <Loader2 size={12} className="animate-spin text-zinc-700" />}
-          </span>
-        </button>
-      </div>
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           📺 {editId ? "Edit Channel" : "Add New Channel"}

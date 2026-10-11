@@ -1,28 +1,21 @@
-import { memo, useEffect, useRef } from "react";
+import { memo } from "react";
 import { categoryFx } from "@/lib/categoryFx";
-import { gateMotion } from "@/lib/motionGate";
-
-const LITE = typeof document !== "undefined" && document.documentElement.classList.contains("rs-lite");
 
 /**
- * Category title: the emoji and the text move together on one shared beat.
- * Letters ripple only while the title is on screen (motion gate) and only on
- * capable phones — low-end phones animate the word as one piece.
+ * Category title with a moving emoji and letters that animate one after
+ * another. Everything is transform/opacity only, so it stays smooth on
+ * low-end phones.
  */
-const CategoryLabel = memo(({ title, className = "", ripple = true }: { title: string; className?: string; ripple?: boolean }) => {
+const CategoryLabel = memo(({ title, className = "" }: { title: string; className?: string }) => {
   const { emoji, label, fx } = categoryFx(title);
-  const rootRef = useRef<HTMLSpanElement>(null);
-  useEffect(() => gateMotion(rootRef.current), []);
-  const letters = LITE || !ripple ? null : Array.from(label);
+  const letters = Array.from(label);
   return (
-    <span ref={rootRef} className={`cat-label cat-t-${fx.text}${letters ? "" : " cat-solid"} ${className}`} aria-label={label}>
+    <span className={`cat-label cat-t-${fx.text} ${className}`} aria-label={label}>
       <span aria-hidden className={`cat-emo cat-m-${fx.motion}`}><span className="cat-emo-in">{emoji}</span></span>
       <span aria-hidden className="cat-txt">
-        {letters
-          ? letters.map((ch, i) => (
-              <span key={i} className="cat-ch" style={{ ["--i" as string]: i }}>{ch === " " ? "\u00A0" : ch}</span>
-            ))
-          : label}
+        {letters.map((ch, i) => (
+          <span key={i} className="cat-ch" style={{ ["--i" as string]: i }}>{ch === " " ? "\u00A0" : ch}</span>
+        ))}
       </span>
     </span>
   );

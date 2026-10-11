@@ -159,9 +159,8 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         src={optimizedImageUrl(anime.poster, "poster")}
         alt={anime.title}
         className="poster-img w-full h-full object-cover"
-        loading="lazy"
+        loading="eager"
         decoding="async"
-        draggable={false}
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       {timeLocked && <PremiumCardFrame size="sm" label={seriesLocked ? "Premium Only" : "Premium Episodes"} />}
@@ -169,7 +168,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
           isInWatchlist
             ? "bg-primary text-primary-foreground"
-            : "bg-background/85 text-foreground hover:bg-primary hover:text-primary-foreground border border-border/40"
+            : "bg-background/85 text-foreground hover:bg-primary hover:text-primary-foreground border border-border/40 backdrop-blur-sm"
         }`}
         onClick={toggleWatchlist}
         style={{ boxShadow: "var(--neu-shadow-sm)" }}

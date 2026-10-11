@@ -1,6 +1,5 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
-import SuggestedGrid from "@/components/player/SuggestedGrid";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -850,17 +849,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (highlight on the card + a loading overlay on the player) until the new
   // anime's src actually mounts. Cleared when the player's `anime.id` changes.
   const [pendingSuggestion, setPendingSuggestion] = useState<AnimeItem | null>(null);
-  const onSuggestedClickRef = useRef(onSuggestedClick);
-  onSuggestedClickRef.current = onSuggestedClick;
-  const pendingSuggestionRef = useRef<AnimeItem | null>(null);
-  pendingSuggestionRef.current = pendingSuggestion;
-  // Stable so the memoized "For you" grid skips the player's 1 Hz re-renders.
-  const pickSuggestion = useCallback((item: AnimeItem) => {
-    if (pendingSuggestionRef.current) return; // ignore rapid double-taps
-    setPendingSuggestion(item);
-    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-    onSuggestedClickRef.current?.(item);
-  }, []);
   useEffect(() => {
     // New anime loaded → clear the pending overlay. Small delay lets the
     // buffering loader take over seamlessly.
@@ -5864,7 +5852,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
 
                 {bottomTab === "foryou" && suggestedAnime && suggestedAnime.length > 0 && (
-                  <SuggestedGrid items={suggestedAnime} pendingId={pendingSuggestion?.id ?? null} onPick={pickSuggestion} />
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {suggestedAnime.slice(0, 15).map((anime, idx) => {
+                      const isPending = pendingSuggestion?.id === anime.id;
+                      return (
+                        <button
+                          key={anime.id}
+                          onClick={() => {
+                            if (pendingSuggestion) return; // ignore rapid double-taps
+                            setPendingSuggestion(anime);
+                            // Scroll player into view so the user sees the loader
+                            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+                            onSuggestedClick?.(anime);
+                          }}
+                          disabled={!!pendingSuggestion && !isPending}
+                          className={`group text-left transition-transform duration-150 ${isPending ? "scale-95" : "active:scale-95"} ${pendingSuggestion && !isPending ? "opacity-50" : ""}`}
+                        >
+                          <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "magic-card-pulse" : ""}`}>
+                            {anime.poster ? (
+                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 9 ? "eager" : "lazy"} decoding="async" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
+                            )}
+                            {anime.language && <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold text-white">{anime.language}</span>}
+                            {/* Gemini-style border pulse handled by magic-card-pulse class on the wrapper above — no extra spinner here */}
+
+                          </div>
+                          <p className={`text-xs font-medium line-clamp-2 leading-tight mt-1.5 ${isPending ? "text-primary" : "text-foreground"}`}>{anime.title}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
 
                 {bottomTab === "comments" && animeId && (
@@ -6046,7 +6064,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className="text-left"
                     >
                       <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-white/[0.06] border border-white/10">
-                        {item?.poster ? <img src={optimizedImageUrl(item.poster, "poster")} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="lazy" decoding="async" /> : null}
+                        {item?.poster ? <img src={optimizedImageUrl(item.poster, "poster")} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="eager" decoding="async" /> : null}
                       </div>
                       <p className="mt-1.5 text-[11px] font-medium leading-4 text-white line-clamp-2">{item?.title || "Untitled"}</p>
                     </button>

@@ -1,4 +1,3 @@
-import { memo } from "react";
 import CategoryLabel from "./CategoryLabel";
 
 interface CategoryPillsProps {
@@ -19,7 +18,7 @@ const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => 
           <button
             key={`${cat}-${index}`}
             onClick={() => onSelect(cat)}
-            className={`cat-pill flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-[transform,box-shadow,background-color,color] duration-200 whitespace-nowrap ${
+            className={`cat-pill flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
               isActive ? "gradient-primary text-primary-foreground -translate-y-0.5 cat-pill-on" : "bg-card text-muted-foreground"
             }`}
             style={{
@@ -27,7 +26,7 @@ const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => 
               boxShadow: isActive ? "0 4px 15px hsl(var(--primary) / 0.35)" : "var(--neu-shadow-sm)",
             }}
           >
-            <CategoryLabel title={cat} ripple={isActive} />
+            <CategoryLabel title={cat} />
           </button>
         );
       })}
@@ -35,4 +34,4 @@ const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => 
   );
 };
 
-export default memo(CategoryPills);
+export default CategoryPills;

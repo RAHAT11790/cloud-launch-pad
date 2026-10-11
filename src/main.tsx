@@ -7,9 +7,6 @@ import "@fontsource/manrope/400.css";
 import "@fontsource/manrope/500.css";
 import "@fontsource/manrope/600.css";
 import { setupTvNavigation } from "@/hooks/useTvNavigation";
-import { applyDeviceTierClass } from "@/lib/deviceTier";
-
-applyDeviceTierClass();
 
 // Theme
 const savedTheme = localStorage.getItem("rs_theme");
