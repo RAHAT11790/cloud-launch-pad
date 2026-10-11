@@ -3190,7 +3190,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 /* Category titles (pills, rails, New Release): the emoji MOVES in a way that
    fits the category and the letters ripple one after another. Transform and
    opacity only, so it is compositor-cheap on low-end phones. */
-.cat-pill { animation: cat-in 460ms cubic-bezier(.2,.8,.2,1) both; }
+.cat-pill { animation: cat-in 460ms cubic-bezier(.2,.8,.2,1) backwards; }
 .cat-pill:active { transform: scale(.94); }
 @keyframes cat-in { from { opacity: 0; transform: translateY(8px) scale(.94); } }
 
