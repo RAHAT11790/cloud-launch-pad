@@ -530,6 +530,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
+import { useLiveTvEnabled } from "@/lib/liveTvToggle";
 import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
@@ -3254,7 +3255,12 @@ const Index = () => {
 
   // ===== SWIPE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
-  const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
+  const liveTvEnabled = useLiveTvEnabled();
+  const pageOrder = useMemo<MainPage[]>(
+    () => (liveTvEnabled ? MAIN_PAGE_ORDER : MAIN_PAGE_ORDER.filter((p) => p !== "livetv")),
+    [liveTvEnabled],
+  );
+  const activePageIdx = Math.max(0, pageOrder.indexOf(activePage));
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeRafRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
@@ -3299,7 +3305,7 @@ const Index = () => {
       if (window.location.pathname !== "/profile") navigate("/profile");
       return;
     }
-    const nextPage = isMainPage(page) ? page : "home";
+    const nextPage = isMainPage(page) && (liveTvEnabled || page !== "livetv") ? page : "home";
 
     // Push real URL so each tab has its own router route (back-button friendly).
     const targetPath = MAIN_PAGE_PATH[nextPage];
@@ -3315,7 +3321,7 @@ const Index = () => {
 
     setDubFilter("all");
 
-    const nextIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
+    const nextIdx = Math.max(0, pageOrder.indexOf(nextPage));
     // Update BottomNav immediately
     setVisualPage(nextPage);
     // Animate strip to target
@@ -3336,7 +3342,15 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate, pageOrder]);
+
+  // Admin turned Live TV off → nobody can stay on (or open) the Live TV page.
+  useEffect(() => {
+    if (liveTvEnabled || activePage !== "livetv") return;
+    setActivePage("home");
+    setVisualPage("home");
+    if (pathToMainPage(window.location.pathname) === "livetv") navigate("/", { replace: true });
+  }, [liveTvEnabled, activePage, navigate]);
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
@@ -3768,16 +3782,16 @@ const Index = () => {
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          width: `${pageOrder.length * 100}vw`,
           height: "100%",
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          {MAIN_PAGE_ORDER.map((page, idx) => {
+          {pageOrder.map((page, idx) => {
             // Keep-alive: mount visited pages + any page currently crossed by the slide.
-            const visualIdx = MAIN_PAGE_ORDER.indexOf(visualPage);
+            const visualIdx = Math.max(0, pageOrder.indexOf(visualPage));
             const inSlide = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
             const shouldRender = inSlide || mountedPages.has(page);
             const isActive = page === activePage;
@@ -3809,7 +3823,7 @@ const Index = () => {
         </div>
       </main>
 
-      <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
+      <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} liveTvEnabled={liveTvEnabled} />
 
       <AnimatePresence>
         {isSearchRoute && (
