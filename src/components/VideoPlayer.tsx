@@ -1,5 +1,6 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
+import SuggestedGrid from "@/components/player/SuggestedGrid";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -849,6 +850,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (highlight on the card + a loading overlay on the player) until the new
   // anime's src actually mounts. Cleared when the player's `anime.id` changes.
   const [pendingSuggestion, setPendingSuggestion] = useState<AnimeItem | null>(null);
+  const onSuggestedClickRef = useRef(onSuggestedClick);
+  onSuggestedClickRef.current = onSuggestedClick;
+  const pendingSuggestionRef = useRef<AnimeItem | null>(null);
+  pendingSuggestionRef.current = pendingSuggestion;
+  // Stable so the memoized "For you" grid skips the player's 1 Hz re-renders.
+  const pickSuggestion = useCallback((item: AnimeItem) => {
+    if (pendingSuggestionRef.current) return; // ignore rapid double-taps
+    setPendingSuggestion(item);
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+    onSuggestedClickRef.current?.(item);
+  }, []);
   useEffect(() => {
     // New anime loaded → clear the pending overlay. Small delay lets the
     // buffering loader take over seamlessly.
@@ -5852,43 +5864,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
 
                 {bottomTab === "foryou" && suggestedAnime && suggestedAnime.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {suggestedAnime.slice(0, 15).map((anime, idx) => {
-                      const isPending = pendingSuggestion?.id === anime.id;
-                      return (
-                        <button
-                          key={anime.id}
-                          onClick={() => {
-                            if (pendingSuggestion) return; // ignore rapid double-taps
-                            setPendingSuggestion(anime);
-                            // Scroll player into view so the user sees the loader
-                            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-                            onSuggestedClick?.(anime);
-                          }}
-                          disabled={!!pendingSuggestion && !isPending}
-                          className={`group suggest-card text-left transition-transform duration-150 ${isPending ? "scale-95" : "active:scale-95"} ${pendingSuggestion && !isPending ? "opacity-50" : ""}`}
-                        >
-                          <div className={`relative aspect-[2/3] rounded-xl overflow-hidden bg-foreground/5 ring-1 ring-border/40 ${isPending ? "magic-card-pulse" : ""}`}>
-                            {anime.poster ? (
-                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 6 ? "eager" : "lazy"} decoding="async" draggable={false} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)" }} />
-                            {anime.language && <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/70 text-[9px] font-bold leading-none text-white">{anime.language}</span>}
-                            {(anime.rating || anime.year) && (
-                              <span className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center gap-1 text-[9px] font-semibold text-white/90 leading-none">
-                                {anime.rating ? <span>★ {anime.rating}</span> : null}
-                                {anime.rating && anime.year ? <span className="opacity-50">·</span> : null}
-                                {anime.year ? <span>{anime.year}</span> : null}
-                              </span>
-                            )}
-                          </div>
-                          <p className={`text-[12px] font-semibold line-clamp-2 leading-tight mt-1.5 ${isPending ? "text-primary" : "text-foreground"}`}>{anime.title}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <SuggestedGrid items={suggestedAnime} pendingId={pendingSuggestion?.id ?? null} onPick={pickSuggestion} />
                 )}
 
                 {bottomTab === "comments" && animeId && (
