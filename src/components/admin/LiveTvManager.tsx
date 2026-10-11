@@ -3,6 +3,7 @@ import { db, ref, onValue, set, push, update, remove } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Save, Loader2, Upload, Edit, Trash2 } from "lucide-react";
 import CachedImg from "@/components/CachedImg";
+import { useLiveTvEnabled, setLiveTvEnabled } from "@/lib/liveTvToggle";
 
 interface Props {
   glassCard: string;
@@ -132,6 +133,7 @@ const LiveTvManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }: Prop
 
   return (
     <div>
+      <LiveTvSwitch glassCard={glassCard} />
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           📺 {editId ? "Edit Channel" : "Add New Channel"}
@@ -267,5 +269,32 @@ const LiveTvManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }: Prop
     </div>
   );
 };
+
+function LiveTvSwitch({ glassCard }: { glassCard: string }) {
+  const on = useLiveTvEnabled();
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    setBusy(true);
+    try { await setLiveTvEnabled(!on); toast.success(!on ? "Live TV is now ON for users" : "Live TV is now OFF — page hidden"); }
+    catch { toast.error("Could not change Live TV"); }
+    setBusy(false);
+  };
+  return (
+    <div className={`${glassCard} p-4 mb-4 flex items-center gap-3`}>
+      <div className={`w-10 h-10 rounded-xl grid place-items-center text-lg shrink-0 ${on ? "bg-emerald-500/15" : "bg-zinc-700/40"}`}>📺</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold">Live TV</p>
+        <p className="text-[11px] text-zinc-400 truncate">{on ? "Visible in the app menu" : "Hidden — users see Home, Series, Movies, Profile"}</p>
+      </div>
+      <span className={`text-[10px] font-bold tracking-wide ${on ? "text-emerald-400" : "text-zinc-500"}`}>{on ? "ON" : "OFF"}</span>
+      <button
+        role="switch" aria-checked={on} aria-label="Live TV on/off" disabled={busy} onClick={toggle}
+        className={`relative w-12 h-7 rounded-full shrink-0 transition-colors duration-300 ${on ? "bg-emerald-500" : "bg-zinc-600"} ${busy ? "opacity-60" : ""}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-300 ${on ? "translate-x-5" : ""}`} />
+      </button>
+    </div>
+  );
+}
 
 export default LiveTvManager;
