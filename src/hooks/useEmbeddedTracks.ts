@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { MkvEngine, type TextCue } from "@/lib/mkv/mkvEngine";
 import type { PgsBitmapCue } from "@/lib/mkv/pgs";
 import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
+import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
 import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
@@ -122,12 +123,28 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     }
   }, []);
 
+  const detectedRef = useRef(new Set<number>());
+  const relabelRef = useRef((track: number, lang: string) => {
+    const list = tracksRef.current;
+    const t = list?.subtitles.find((x) => x.number === track);
+    if (!list || !t || t.label.startsWith(lang)) return;
+    const signs = t.forced ? " (Signs)" : "";
+    const subs = list.subtitles.map((x) => (x.number === track ? { ...x, label: `${lang}${signs}`, language: lang.slice(0, 2).toLowerCase(), detected: true } : x));
+    const seen = new Map<string, number>();
+    const next = { ...list, subtitles: subs.map((x) => { const base = x.label.replace(/ \d+$/, ""); const n = (seen.get(base) || 0) + 1; seen.set(base, n); return { ...x, label: n > 1 ? `${base} ${n}` : base }; }) };
+    tracksRef.current = next;
+    setTracks(next);
+  });
   const cueCallbacks = useRef({
     onTextCue: (track: number, cue: TextCue) => {
       const list = textCues.current.get(track) || [];
       if (list.some((c) => c.start === cue.start && c.text === cue.text)) return;
       insertSorted(list, cue);
       textCues.current.set(track, list);
+      if (list.length >= 6 && !detectedRef.current.has(track)) {
+        const lang = detectSubtitleLanguage(list.slice(0, 40).map((c) => c.text));
+        if (lang || list.length >= 40) { detectedRef.current.add(track); if (lang) relabelRef.current(track, lang); }
+      }
     },
     onBitmapCue: (track: number, cue: PgsBitmapCue) => {
       const list = bitmapCues.current.get(track) || [];
@@ -204,6 +221,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     stopSubReader();
     textCues.current = new Map();
     bitmapCues.current = new Map();
+    detectedRef.current = new Set();
     setSubtitleText("");
     setBitmapCue(null);
     setBusy(false);
@@ -224,7 +242,18 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       // Pre-read the full header + cues in the background so a later language
       // switch skips that round-trip and starts in about a second.
       if (list.container !== "mp4" && (list.audio.length > 1 || list.subtitles.length > 0) && !warmTimer) {
-        warmTimer = setTimeout(() => { if (!cancelled) loadHeader(candidate).catch(() => undefined); }, 2500);
+        warmTimer = setTimeout(() => {
+          if (cancelled) return;
+          loadHeader(candidate).then(({ header, cues, corsUrl }) => {
+            const langs = list.subtitles.filter((s) => !s.bitmap).map((s) => langOf(s));
+            if (cancelled || engineRef.current || subReaderRef.current || langs.length < 2 || new Set(langs).size === langs.length) return;
+            // Tags look copied ("English" ×5): read a few lines quietly to learn the real languages.
+            const reader = new MkvSubtitleReader(corsUrl, header, cues, () => videoRef.current?.currentTime || 0, cueCallbacks, 40);
+            subReaderRef.current = reader;
+            reader.start();
+            setTimeout(() => { if (subReaderRef.current === reader && activeSubRef.current < 0) stopSubReader(); }, 45000);
+          }).catch(() => undefined);
+        }, 2500);
       }
     };
     let warmTimer: ReturnType<typeof setTimeout> | null = null;
