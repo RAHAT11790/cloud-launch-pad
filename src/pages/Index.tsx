@@ -3352,6 +3352,16 @@ const Index = () => {
     }
   }, [pathname, isRoutedOverlay, activePage]);
 
+  // Live TV switched off by admin → the page disappears; send viewers home.
+  useEffect(() => {
+    if (liveTvOn) return;
+    if (activePage === "livetv" || visualPage === "livetv") {
+      setActivePage("home");
+      setVisualPage("home");
+    }
+    if (pathname === "/live-tv" || pathname.startsWith("/live-tv/")) navigate("/", { replace: true });
+  }, [liveTvOn, activePage, visualPage, pathname, navigate]);
+
   // /profile is a real route — keep the profile overlay in sync with the URL.
   useEffect(() => {
     if (pathname === "/profile") {
