@@ -3189,3 +3189,26 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     animation-duration: calc(var(--fx-t) * 12) !important;
   }
 }
+
+/* Category pills: emoji motion matching each category (transform-only, cheap) */
+.cat-pill { animation: cat-in 420ms cubic-bezier(.2,.8,.2,1) both; }
+.cat-pill:active { transform: scale(.94); }
+.cat-fx { will-change: transform; transform-origin: 50% 70%; }
+.cat-fx-flame { animation: cat-flame 1.4s ease-in-out infinite; }
+.cat-fx-slash { animation: cat-slash 2.2s ease-in-out infinite; }
+.cat-fx-pop { animation: cat-pop 2s ease-in-out infinite; }
+.cat-fx-beat { animation: cat-beat 1.2s ease-in-out infinite; }
+.cat-fx-wiggle { animation: cat-wiggle 1.6s ease-in-out infinite; }
+.cat-fx-float { animation: cat-float 2.4s ease-in-out infinite; }
+.cat-fx-spin { animation: cat-spin 3s linear infinite; }
+.cat-fx-bounce { animation: cat-bounce 1.5s ease-in-out infinite; }
+@keyframes cat-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+@keyframes cat-flame { 0%,100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.18) rotate(4deg); } }
+@keyframes cat-slash { 0%,70%,100% { transform: rotate(0); } 80% { transform: rotate(-25deg); } 90% { transform: rotate(15deg); } }
+@keyframes cat-pop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+@keyframes cat-beat { 0%,100% { transform: scale(1); } 20% { transform: scale(1.25); } 40% { transform: scale(1); } 60% { transform: scale(1.15); } }
+@keyframes cat-wiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+@keyframes cat-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes cat-spin { to { transform: rotate(360deg); } }
+@keyframes cat-bounce { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-4px); } 60% { transform: translateY(0) scale(1.08,.92); } }
+@media (prefers-reduced-motion: reduce) { .cat-fx, .cat-pill { animation: none !important; } }
