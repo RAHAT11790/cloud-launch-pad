@@ -444,7 +444,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
-                  <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+                  <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
                   {premiumOnly && <PremiumCardFrame size="sm" label={seriesLocked ? "Full Series • Premium" : `${lockedEpText} • Premium`} />}
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">

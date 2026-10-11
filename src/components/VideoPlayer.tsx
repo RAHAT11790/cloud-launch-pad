@@ -6064,7 +6064,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className="text-left"
                     >
                       <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-white/[0.06] border border-white/10">
-                        {item?.poster ? <img src={optimizedImageUrl(item.poster, "poster")} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="eager" decoding="async" /> : null}
+                        {item?.poster ? <img src={optimizedImageUrl(item.poster, "poster")} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="lazy" decoding="async" /> : null}
                       </div>
                       <p className="mt-1.5 text-[11px] font-medium leading-4 text-white line-clamp-2">{item?.title || "Untitled"}</p>
                     </button>
