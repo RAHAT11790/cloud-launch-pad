@@ -5,7 +5,7 @@ import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
-import { EmbeddedSubtitleLayer } from "@/components/player/EmbeddedSubtitleLayer";
+import { EmbeddedSubtitleLayer, SUBTITLE_FONTS } from "@/components/player/EmbeddedSubtitleLayer";
 import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
@@ -1920,7 +1920,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
       : shareLink || (typeof window !== "undefined" ? window.location.href : "");
     const shareTitle = hasEpisodeContext
-      ? `${title} • S${String((seasonIdx ?? 0) + 1).padStart(2, "0")} E${String((epIdx ?? 0) + 1).padStart(2, "0")}`
+      ? `${title} • S${String((seasonIdx ?? 0) + 1).padStart(2, "0")} E${formatEpisodeChip((seasons as any)?.[seasonIdx ?? 0]?.episodes?.[epIdx ?? 0] || {}, (epIdx ?? 0) + 1)}`
       : title;
     const shareData = { title: shareTitle, text: shareTitle, url };
     try {
@@ -1934,7 +1934,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     // No native share API — open a custom share menu (Telegram / WhatsApp / FB / X / Copy)
     setShareFallback({ url, title: shareTitle });
-  }, [buildShareLinkForEpisode, shareLink, title]);
+  }, [buildShareLinkForEpisode, seasons, shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
@@ -5079,7 +5079,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             >
               <div
                 className="max-w-[92%] px-1 text-center font-medium leading-snug text-white whitespace-pre-line"
-                style={{ fontSize: `${Math.round(12 * captionFontScale)}px`, lineHeight: Math.max(1.2, 1.34 - ((captionFontScale - 1) * 0.08)) }}
+                style={{ fontFamily: SUBTITLE_FONTS, fontSize: `${Math.round(12 * captionFontScale)}px`, lineHeight: Math.max(1.2, 1.34 - ((captionFontScale - 1) * 0.08)) }}
               >
                 {subtitleOverlayText}
               </div>
@@ -5426,7 +5426,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {!isEmbedPlayback && showCcPanel && (embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
             <div
               data-player-panel="true"
-              className={`absolute top-14 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(calc(100%-8.5rem),360px)] z-[95]`}
+              className={`absolute top-14 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(max(140px,calc(100%-4.25rem)),360px)] z-[95]`}
               style={panelBaseStyle}
               onClick={stopPanelPointerPropagation}
               onPointerDown={(e) => e.stopPropagation()}

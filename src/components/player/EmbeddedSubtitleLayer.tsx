@@ -11,6 +11,8 @@ interface Props {
   liftPx?: number;
 }
 
+export const SUBTITLE_FONTS = '"Noto Sans", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Tamil", "Noto Sans Telugu", "Nirmala UI", "Mangal", "Vrinda", "Kohinoor Devanagari", "Kohinoor Bangla", system-ui, -apple-system, Roboto, sans-serif';
+
 /** Renders embedded MKV subtitles: text captions and Blu-ray (PGS) bitmaps. */
 export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOffset, objectFit, liftPx = 0 }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,6 +47,8 @@ export const EmbeddedSubtitleLayer = memo(({ text, bitmap, fontScale, verticalOf
             className="max-w-[92%] whitespace-pre-line px-1 text-center font-semibold leading-snug text-white"
             style={{
               fontSize: `${Math.round(13 * fontScale)}px`,
+              // Hindi / Bangla / Tamil / Telugu glyphs: prefer the phone's own Noto/Indic fonts.
+              fontFamily: SUBTITLE_FONTS,
               lineHeight: Math.max(1.2, 1.34 - (fontScale - 1) * 0.08),
               textShadow: "0 0 3px rgba(0,0,0,.95), 0 1px 2px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.6)",
             }}

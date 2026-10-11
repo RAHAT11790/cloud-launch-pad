@@ -19,8 +19,8 @@ const SCRIPTS: [RegExp, string][] = [
 
 export function detectSubtitleLanguage(lines: string[]): string {
   const text = lines.join(" ");
-  const letters = (text.match(/\p{L}/gu) || []).length;
-  if (letters < 20) return "";
+  const letters = (text.match(/[\p{L}\p{M}]/gu) || []).length;
+  if (letters < 4) return "";
   let best = ""; let bestCount = 0;
   for (const [re, name] of SCRIPTS) {
     const n = (text.match(re) || []).length;
@@ -28,7 +28,9 @@ export function detectSubtitleLanguage(lines: string[]): string {
   }
   if (best === "Japanese" || (best === "Chinese" && /[\u3040-\u30FF]/.test(text))) best = "Japanese";
   if (best === "Arabic" && /[ٹڈڑںےۓ]/.test(text)) best = "Urdu";
+  // A non-Latin script is unambiguous even in one short sign line.
   if (bestCount / letters > 0.3) return best;
+  if (letters < 20) return "";
   // Latin script: tell Hinglish (romanised Hindi) apart from English.
   const words = text.toLowerCase().match(/[a-z]+/g) || [];
   if (words.length < 8) return "";

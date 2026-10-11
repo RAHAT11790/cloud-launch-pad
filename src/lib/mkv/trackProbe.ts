@@ -15,6 +15,7 @@ import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvD
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
 import { isMp4Magic, readMp4Tracks } from "./mp4Probe";
+import { isSparseTrack, languageCodeFor, scanSubtitleTracks, type SubtitleScan } from "./subtitleScan";
 
 export interface EmbeddedTrack {
   number: number;
@@ -32,6 +33,8 @@ export interface EmbeddedTrack {
   forced?: boolean;
   /** MSE mime of the audio track (audio only). */
   mime?: string;
+  /** Label learned by reading the subtitle lines ("Hindi (Signs)"). */
+  scanLabel?: string;
 }
 
 export interface EmbeddedTrackList {
@@ -42,6 +45,8 @@ export interface EmbeddedTrackList {
   videoMime?: string;
   /** Real container sniffed from the bytes (file names are often wrong). */
   container?: "mkv" | "mp4" | "none";
+  /** Subtitle languages/signs were learned from the real lines (one-time scan). */
+  scanned?: boolean;
 }
 
 const LS_KEY = "rs_mkv_tracks_v3";
@@ -126,14 +131,14 @@ const writeLs = (key: string, list: EmbeddedTrackList) => {
 };
 
 /** Re-evaluate "playable" for THIS browser (shared cache stores raw facts). */
-const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle"; forced?: boolean }>(items: T[]): T[] => {
+const relabel = <T extends { label: string; rawName?: string; language: string; kind: "audio" | "subtitle"; forced?: boolean; scanLabel?: string }>(items: T[]): T[] => {
   const seen = new Map<string, number>();
   // Full dialogue subtitles first; signs-only tracks after them.
   const rank = (t: T) => (t.forced ? 2 : t.kind === "subtitle" && /dialog|full/i.test(t.rawName || "") ? 0 : 1);
   const ordered = items.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i);
   return ordered.map(({ t, i }) => {
     const lang = buildTrackLabel(t.kind, t.language, t.rawName || t.label, i);
-    const base = t.forced ? `${lang} (Signs)` : lang;
+    const base = t.scanLabel || (t.forced ? `${lang} (Signs)` : lang);
     const n = (seen.get(base) || 0) + 1; seen.set(base, n);
     return { ...t, rawName: t.rawName || t.label, label: n > 1 ? `${base} ${n}` : base };
   });
@@ -270,6 +275,45 @@ export async function probeEmbeddedTracks(playUrl: string): Promise<EmbeddedTrac
     }
   })().finally(() => inflight.delete(key));
   inflight.set(key, task);
+  return task;
+}
+
+/** Apply a subtitle scan to a track list (pure; exported for tests). */
+export function applySubtitleScan(list: EmbeddedTrackList, scan: SubtitleScan): EmbeddedTrackList {
+  const busiest = Math.max(0, ...Object.values(scan).map((x) => x.cues));
+  const subtitles = list.subtitles.map((t) => {
+    const hit = scan[t.number];
+    if (!hit || t.bitmap) return t;
+    const tagged = String(buildTrackLabel("subtitle", t.language, t.rawName || "", 0)).replace(/ \(.*$/, "");
+    const lang = hit.lang || tagged || "Subtitle";
+    const signs = !!t.forced || isSparseTrack(hit.cues, busiest);
+    return { ...t, language: hit.lang ? languageCodeFor(hit.lang) : t.language, forced: signs, scanLabel: signs ? `${lang} (Signs)` : lang };
+  });
+  return applySupport({ ...list, subtitles, scanned: true });
+}
+
+const scanInflight = new Map<string, Promise<EmbeddedTrackList | null>>();
+/**
+ * Learn the real subtitle languages once per file (shared for every viewer).
+ * Returns the updated list, or null when nothing needed or it failed.
+ */
+export function refineSubtitleLabels(playUrl: string, list: EmbeddedTrackList): Promise<EmbeddedTrackList | null> {
+  if (list.scanned || list.container !== "mkv" || list.subtitles.filter((s) => !s.bitmap).length < 1) return Promise.resolve(null);
+  const key = mediaKey(playUrl);
+  const running = scanInflight.get(key);
+  if (running) return running;
+  const task = (async () => {
+    const { header, cues, corsUrl } = await loadHeader(playUrl);
+    const scan = await scanSubtitleTracks(corsUrl, header, cues);
+    if (!Object.keys(scan).length) return null;
+    const next = applySubtitleScan(list, scan);
+    const hit = mem.get(key);
+    mem.set(key, { ...(hit || {}), list: next });
+    writeLs(key, next);
+    set(ref(db, `mediaTracks/${fbKey(`${key}|v3`)}`), { at: Date.now(), list: next }).catch(() => undefined);
+    return next;
+  })().catch(() => null).finally(() => scanInflight.delete(key));
+  scanInflight.set(key, task);
   return task;
 }
 

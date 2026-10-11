@@ -1,3 +1,4 @@
+import CategoryLabel from "./CategoryLabel";
 import { useState, useEffect, forwardRef, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Zap, ChevronRight, X, Crown } from "lucide-react";
@@ -209,7 +210,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       : -1;
     const eIdx = byNumber >= 0 ? byNumber : byRange >= 0 ? byRange : (typeof wanted === "number" ? Math.max(0, wanted - 1) : 0);
     if (content) {
-      onCardClick({ ...(content as any), __rsForceFreshPlayback: true } as AnimeItem, sIdx, eIdx);
+      onCardClick({ ...(content as any), __rsForceFreshPlayback: true, __rsEpisodeNumber: wanted } as AnimeItem, sIdx, eIdx);
       return;
     }
     // Fallback: content wasn't in the local index (rare — Firebase snapshot
@@ -228,6 +229,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       storyline: "",
       language: "",
       __rsForceFreshPlayback: true,
+      __rsEpisodeNumber: wanted,
     };
     onCardClick(synth, sIdx, eIdx);
   };
@@ -336,9 +338,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     <>
       <div className="px-4 mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold flex items-center gap-2 category-bar">
-            <Zap className="w-4 h-4 text-accent" />
-            New Episode Release
+          <h3 className="text-base font-bold flex items-center category-bar">
+            <CategoryLabel title="New Episode Release" />
           </h3>
           <button
             onClick={() => setShowModal(true)}

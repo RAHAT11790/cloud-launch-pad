@@ -81,3 +81,8 @@
 - [x] First paint shows saved frame + video's own first frame (no default image); admin uploads auto-make a poster.
 - [x] Service worker no longer wipes the video cache on updates.
 - [x] Live-tested with the real account: reopen, in-app return, browser restart, 30s loop, slowed CPU.
+
+## Subtitles, category animation, combo episodes (2026-10-11)
+- [x] Real subtitle names (language + Signs) from a one-time shared scan; Indic-friendly caption fonts; CC panel fits on phones.
+- [x] Moving emoji + letter animation on top pills, every lower rail title and New Episode Release.
+- [x] Combo episodes: New Release taps, share links/cards (`?ep=42`), share title and both Telegram bots count every episode.

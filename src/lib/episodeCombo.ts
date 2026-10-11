@@ -81,3 +81,25 @@ export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], ind
 /** Total real episodes inside a season (combos counted fully). */
 export const countRealEpisodes = (episodes: any[]): number =>
   (Array.isArray(episodes) ? episodes : []).reduce((sum, ep) => sum + getComboSpan(ep), 0);
+
+/**
+ * Position of the stored entry that contains real episode `n`
+ * (combos count every episode they hold). -1 when no entry holds it.
+ */
+export const findEpisodeIndexByNumber = (episodes: any[], n: number): number => {
+  const list = Array.isArray(episodes) ? episodes : [];
+  const want = Math.trunc(Number(n) || 0);
+  if (want <= 0) return -1;
+  for (let i = 0; i < list.length; i += 1) {
+    const start = Math.trunc(Number(list[i]?.episodeNumber || 0)) || 0;
+    if (!start) continue;
+    if (want >= start && want <= getEpisodeEnd(list[i])) return i;
+  }
+  return -1;
+};
+
+/** Real episode number of the entry at `idx` (first episode of a combo). */
+export const episodeNumberAt = (episodes: any[], idx: number): number => {
+  const ep = Array.isArray(episodes) ? episodes[idx] : undefined;
+  return Math.trunc(Number(ep?.episodeNumber || 0)) || idx + 1;
+};

@@ -68,7 +68,16 @@ async function loadCatalog(): Promise<CatalogItem[]> {
       if (v.visibility === "private") continue;
       let epCount = 0;
       if (Array.isArray(v.seasons)) {
-        for (const s of v.seasons) epCount += s?.episodes?.length || 0;
+        // Combo entries (e.g. "Episode 1-3") count every episode they hold.
+        for (const s of v.seasons) {
+          const list: any[] = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
+          for (const ep of list) {
+            if (!ep) continue;
+            const st = Math.trunc(Number(ep.episodeNumber || 0)) || 0;
+            const en = Math.trunc(Number(ep.episodeEnd || 0)) || 0;
+            epCount += st && en > st ? en - st + 1 : 1;
+          }
+        }
       }
       items.push({
         id,

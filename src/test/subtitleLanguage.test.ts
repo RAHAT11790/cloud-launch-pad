@@ -10,3 +10,15 @@ describe("detectSubtitleLanguage", () => {
   it("Urdu", () => expect(detectSubtitleLanguage(rep("تم یہاں کیا کر رہے ہو؟ ٹھیک ہے"))).toBe("Urdu"));
   it("English", () => expect(detectSubtitleLanguage(rep("What are you doing here, it is not safe"))).toBe("English"));
 });
+
+describe("short sign lines", () => {
+  it("detects Tamil from a single short line", () => {
+    expect(detectSubtitleLanguage(["ஹ? நானா? நீ யரு?"])).toBe("Tamil");
+  });
+  it("detects Bengali from a single short line", () => {
+    expect(detectSubtitleLanguage(["তুমি কে?"])).toBe("Bengali");
+  });
+  it("does not guess from one short English line", () => {
+    expect(detectSubtitleLanguage(["HUH? ME?"])).toBe("");
+  });
+});
