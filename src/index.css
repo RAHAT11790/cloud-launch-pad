@@ -3257,3 +3257,42 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 @media (prefers-reduced-motion: reduce) {
   .cat-pill, .cat-emo, .cat-emo-in, .cat-ch, .cat-txt, .cat-emo::after { animation: none !important; }
 }
+
+/* Smoothness pass: one animated layer per title (no per-letter layers),
+   text follows the emoji on the same clock, isolated so it never repaints the rail. */
+.cat-label { contain: layout style; }
+.cat-txt { will-change: transform; animation: cat-follow 3.2s ease-in-out infinite; }
+.cat-emo { animation-duration: 3.2s !important; }
+@keyframes cat-follow { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+
+/* Bottom navigation — modern animated icons */
+.nv-item { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; border-radius: 16px; -webkit-tap-highlight-color: transparent; color: hsl(var(--muted-foreground)); transition: color .25s ease; }
+.nv-item:active .nv-ico { transform: scale(.88); }
+.nv-ico { position: relative; width: 26px; height: 26px; display: grid; place-items: center; transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+.nv-ico::before { content: ""; position: absolute; inset: -5px -12px; border-radius: 999px; background: hsl(var(--primary) / .14); transform: scale(.4); opacity: 0; transition: transform .35s cubic-bezier(.3,1.4,.5,1), opacity .25s ease; }
+.nv-svg { position: relative; width: 22px; height: 22px; overflow: visible; }
+.nv-line { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nv-fill { fill: currentColor; opacity: 0; transition: opacity .3s ease; }
+.nv-dot { fill: currentColor; }
+.nv-lbl { font-size: 9.5px; font-weight: 600; letter-spacing: .01em; line-height: 1; transition: transform .3s ease; }
+.nv-on { color: hsl(var(--primary)); }
+.nv-on .nv-ico { transform: translateY(-2px); }
+.nv-on .nv-ico::before { transform: scale(1); opacity: 1; }
+.nv-on .nv-fill { opacity: .22; }
+.nv-on .nv-lbl { transform: translateY(-1px); }
+.nv-svg g, .nv-svg path, .nv-svg rect, .nv-svg circle { transform-box: fill-box; transform-origin: center; }
+.nv-on.nv-home .nv-door { animation: nv-door .6s cubic-bezier(.3,1.5,.5,1) both; transform-origin: 50% 100%; }
+@keyframes nv-door { from { transform: scaleY(0); } }
+.nv-on.nv-series .nv-play { animation: nv-pop .5s cubic-bezier(.3,1.6,.5,1) both; }
+.nv-on.nv-series .nv-stack { animation: nv-slide .5s ease-out both; }
+@keyframes nv-pop { from { transform: scale(0); } }
+@keyframes nv-slide { from { transform: translateY(3px); opacity: 0; } }
+.nv-livetv .nv-dot { animation: nv-pulse 1.6s ease-in-out infinite; }
+.nv-on.nv-livetv .nv-wave { animation: nv-wave 1.6s ease-in-out infinite; }
+@keyframes nv-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.75); opacity: .6; } }
+@keyframes nv-wave { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.nv-on.nv-movies .nv-reel { animation: nv-spin .9s cubic-bezier(.3,.8,.3,1) both; }
+@keyframes nv-spin { from { transform: rotate(-180deg); } }
+.nv-on.nv-profile .nv-head { animation: nv-nod .6s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes nv-nod { from { transform: translateY(3px) scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .nv-svg *, .cat-txt { animation: none !important; } }
