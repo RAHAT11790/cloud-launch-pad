@@ -1035,13 +1035,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
   }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, anime?.seasonsByLanguage, currentLangLabel, isAnimeSaltContent, propAudioTracks]);
 
-  // Languages tracked inside the file itself, shown next to the editor-saved ones
-  // (an editor link for the same language wins, so it isn't listed twice).
-  const embeddedLangChoices = useMemo(() => {
-    const native = embedded.tracks?.nativeAudio;
-    const saved = new Set(languageOptions.map((l) => l.toLowerCase()));
-    return embeddedAudioList.filter((t) => t.number !== native && !saved.has(String(t.label).toLowerCase()));
-  }, [embedded.tracks?.nativeAudio, embeddedAudioList, languageOptions]);
+  // Every language inside the file itself (Hindi included, even when the editor
+  // also saved a "Hindi" link) — listed under "In this episode" so both stay pickable.
+  const embeddedLangChoices = embeddedAudioList;
 
   const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
 
