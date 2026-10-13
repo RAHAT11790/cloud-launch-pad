@@ -181,7 +181,8 @@ const AN_AUDIO_LANGUAGE_PREF_KEY = "rs_an_audio_language_pref";
 const saveAnAudioLanguagePref = (value?: string) => {
   const label = String(value || "").trim();
   if (!label) return;
-  try { localStorage.setItem(AN_AUDIO_LANGUAGE_PREF_KEY, label); } catch {}
+  // Session-only: a pick sticks while switching episodes, the next visit starts on Hindi.
+  try { sessionStorage.setItem(AN_AUDIO_LANGUAGE_PREF_KEY, label); localStorage.removeItem(AN_AUDIO_LANGUAGE_PREF_KEY); } catch {}
 };
 
 const isInsecureHttpSource = (url: string): boolean => {

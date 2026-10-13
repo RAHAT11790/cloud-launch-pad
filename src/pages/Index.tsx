@@ -429,7 +429,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
     || qualityOptions.find((option) => Number(option.height) === 1080)
     || qualityOptions[0];
   const normalizedAudio = normalizeAnAudioTracks(audio, streams) || (ep as any).audioTracks;
-  const defaultAudio = (normalizedAudio || []).find((track: any) => track?.isDefault) || normalizedAudio?.[0];
+  const defaultAudio = (normalizedAudio || []).find(isHindiAnTrack) || (normalizedAudio || []).find((track: any) => track?.isDefault) || normalizedAudio?.[0];
   return {
     src: preferred?.src || buildAnHlsPlaybackUrl(streams[0].url),
     qualityOptions,
