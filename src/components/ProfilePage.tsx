@@ -327,7 +327,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
 
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-      initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+      initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
       transition={{ type: "tween", duration: 0.22, ease: [0.32, 0.72, 0, 1] }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-5 h-5" />
@@ -1117,7 +1117,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   if (activePanel === "settings") {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -1270,7 +1270,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   if (activePanel === "language") {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -1293,7 +1293,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   if (activePanel === "quality") {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -1457,7 +1457,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     return (
       <motion.div className="fixed inset-0 z-[200] overflow-y-auto pt-0 px-4 pb-24"
         style={{ background: isPremium ? "linear-gradient(180deg, hsl(30,20%,6%) 0%, hsl(215,35%,7%) 100%)" : "hsl(215,35%,7%)" }}
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => { setActivePanel("main"); setSelectedPlan(null); setEditingPendingRequest(false); }} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -1704,7 +1704,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     return (
       <motion.div
         className={`profile-studio fixed inset-0 z-[200] overflow-y-auto pb-24 pt-0 ${selectedTheme.className} ${selectedFont.className}`}
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.26 }}
       >
         <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
@@ -1856,7 +1856,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -1894,8 +1894,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Main Profile
   return (
     <motion.div className={`profile-page fixed inset-0 z-[200] overflow-x-hidden overflow-y-auto pb-24 ${selectedTheme.className} ${selectedFont.className}`}
-      initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
+      initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
+      transition={{ type: "tween", duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}>
       <div className="profile-page-inner">
         <section className="profile-identity-panel">
           <Button type="button" variant="secondary" size="icon" onClick={onClose} className="profile-back-button" aria-label="Back">
@@ -2396,7 +2396,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   if (checkingPassword) {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background flex items-center justify-center"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
         transition={{ type: "tween", duration: 0.3 }}>
         <div className="animate-spin w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full" />
       </motion.div>
@@ -2405,7 +2405,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
 
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-      initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+      initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
       transition={{ type: "tween", duration: 0.3 }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-5 h-5" />
