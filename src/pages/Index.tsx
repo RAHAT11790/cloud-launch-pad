@@ -60,9 +60,9 @@ const isAnimeSaltRouteItem = (anime?: AnimeItem | null) => !!anime && (
 );
 
 const AN_AUDIO_LANGUAGE_PREF_KEY = "rs_an_audio_language_pref";
-
+// The pick lasts for this visit only, so every fresh open starts on Hindi again.
 const getSavedAnAudioLanguagePref = () => {
-  try { return localStorage.getItem(AN_AUDIO_LANGUAGE_PREF_KEY) || ""; } catch { return ""; }
+  try { return sessionStorage.getItem(AN_AUDIO_LANGUAGE_PREF_KEY) || ""; } catch { return ""; }
 };
 
 const isInvalidPlaybackUrl = (url?: string | null) => {
@@ -525,6 +525,16 @@ const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) =>
 
   return normalizedPreferred || normalizeLanguageName(anime.baseLanguage || anime.language) || normalizeLanguageName(anime.language) || "";
 
+};
+
+/** Fresh opens play Hindi whenever the title has playable Hindi episodes; otherwise the editor's base language. */
+const resolveDefaultLanguage = (anime: AnimeItem) => {
+  const hasMap = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object" && Object.keys(anime.seasonsByLanguage).length > 0;
+  if (hasMap) {
+    const hi = resolvePlayableLanguage(anime, "Hindi");
+    if (hi.toLowerCase() === "hindi") return hi;
+  }
+  return resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
 };
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -1296,7 +1306,7 @@ const Index = () => {
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
   const getDefaultWatchTarget = useCallback((anime: AnimeItem) => {
-    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
+    const resolvedLanguage = resolveDefaultLanguage(anime);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     if (anime.type === "webseries" && resolvedSeasons?.length) {
       // Some admin-entered titles have empty links on the very first episode
@@ -2461,7 +2471,7 @@ const Index = () => {
       }
     }
 
-    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
+    const resolvedLanguage = resolveDefaultLanguage(anime);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     let src = "";
     let subtitle = "";
