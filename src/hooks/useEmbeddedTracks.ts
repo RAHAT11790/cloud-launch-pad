@@ -15,6 +15,7 @@ import type { PgsBitmapCue } from "@/lib/mkv/pgs";
 import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
 import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
 import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, refineSubtitleLabels, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
+import { pickDefaultAudio } from "@/lib/mkv/audioDefault";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -383,9 +384,10 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   useEffect(() => {
     if (!tracks || !candidate || autoAppliedRef.current === key) return;
     const media = readMediaPref(key);
-    const prefAudio = media.a ? (media.a === "native" ? "" : media.a) : readPref(PREF_AUDIO);
     const prefSub = media.s || readPref(PREF_SUB);
-    const audioMatch = prefAudio ? tracks.audio.find((a) => a.playable && langOf(a) === prefAudio && a.number !== tracks.nativeAudio) : undefined;
+    // Hindi opens by default; only a choice made on this very file overrides it.
+    const audioNumber = pickDefaultAudio(tracks, media.a, readPref(PREF_AUDIO));
+    const audioMatch = audioNumber != null ? tracks.audio.find((a) => a.number === audioNumber) : undefined;
     const subMatch = prefSub && prefSub !== "off"
       ? tracks.subtitles.find((s) => langOf(s) === prefSub && !s.forced && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
       : undefined;
