@@ -3779,10 +3779,9 @@ const Index = () => {
                 visibility: shown ? "visible" : "hidden",
                 zIndex: isActive ? 2 : isLeaving ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
+                // Hidden tabs keep their layout (visibility only skips paint), so
+                // showing one again needs no fresh layout pass — no tap delay.
                 contain: "layout paint style",
-                // Skip paint work for hidden mounted tabs — big nav win on mobile.
-                contentVisibility: shown ? "visible" : "auto",
-                containIntrinsicSize: shown ? undefined : "100vh",
               } as React.CSSProperties}
             >
               {shouldRender && page === "home" && getPageContent_home()}
