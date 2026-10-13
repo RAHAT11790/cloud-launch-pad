@@ -3263,39 +3263,36 @@ const Index = () => {
     return () => window.clearTimeout(timer);
   }, [showProfile]);
 
-  // ===== SWIPE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
+  // ===== PAGE NAVIGATION — VISITED PAGES STAY MOUNTED (ZERO RE-MOUNT LAG) =====
+  // A page change paints only two pages: the new one glides in from its side
+  // while the old one fades out (transform/opacity only — no jump, no flash,
+  // and the pages in between are never touched).
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
   const liveTvOn = useLiveTvEnabled();
   const pageOrder = useMemo(() => mainPagesFor(liveTvOn), [liveTvOn]);
-  const activePageIdx = Math.max(0, pageOrder.indexOf(activePage));
-  const swipeTrackRef = useRef<HTMLDivElement | null>(null);
-  const swipeRafRef = useRef<number | null>(null);
-  const isSwipeAnimatingRef = useRef(false);
 
   // Keep-alive set: once a tab is visited it stays mounted so revisits are instant.
   const [mountedPages, setMountedPages] = useState<Set<MainPage>>(() => new Set([activePage]));
+  const [pageFx, setPageFx] = useState<{ from: MainPage | null; dir: 1 | -1; key: number }>({ from: null, dir: 1, key: 0 });
+  const prevPageRef = useRef<MainPage>(activePage);
 
-  // Sync visualPage when activePage changes + record mount
-  useEffect(() => {
+  // Runs before paint, so the first frame of the new page already carries its motion.
+  useLayoutEffect(() => {
+    const prev = prevPageRef.current;
+    prevPageRef.current = activePage;
     setVisualPage(activePage);
-    setMountedPages((prev) => (prev.has(activePage) ? prev : new Set(prev).add(activePage)));
-  }, [activePage]);
+    setMountedPages((m) => (m.has(activePage) ? m : new Set(m).add(activePage)));
+    if (prev === activePage) return;
+    const dir: 1 | -1 = pageOrder.indexOf(activePage) >= pageOrder.indexOf(prev) ? 1 : -1;
+    setPageFx((fx) => ({ from: prev, dir, key: fx.key + 1 }));
+  }, [activePage, pageOrder]);
 
-
-  const applyStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
-    const track = swipeTrackRef.current;
-    if (!track) return;
-    track.style.transition = animate ? "transform 280ms cubic-bezier(0.25, 0.1, 0.25, 1)" : "none";
-    track.style.transform = `translate3d(calc(-${pageIdx * 100}vw + ${dx}px), 0, 0)`;
-  }, []);
-
-  const queueStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
-    if (swipeRafRef.current !== null) cancelAnimationFrame(swipeRafRef.current);
-    swipeRafRef.current = requestAnimationFrame(() => {
-      applyStripTransform(pageIdx, dx, animate);
-      swipeRafRef.current = null;
-    });
-  }, [applyStripTransform]);
+  useEffect(() => {
+    if (!pageFx.from) return;
+    const doneKey = pageFx.key;
+    const t = window.setTimeout(() => setPageFx((fx) => (fx.key === doneKey ? { ...fx, from: null } : fx)), 380);
+    return () => window.clearTimeout(t);
+  }, [pageFx.key, pageFx.from]);
 
   const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
 
@@ -3328,28 +3325,10 @@ const Index = () => {
 
     setDubFilter("all");
 
-    const nextIdx = pageOrder.indexOf(nextPage);
-    // Update BottomNav immediately
+    // Update BottomNav immediately; the page motion starts in the same frame.
     setVisualPage(nextPage);
-    // Animate strip to target
-    isSwipeAnimatingRef.current = true;
     setActivePage(nextPage);
-    queueStripTransform(nextIdx, 0, true);
-
-    const onDone = () => {
-      isSwipeAnimatingRef.current = false;
-      restorePageScroll(nextPage);
-    };
-    const track = swipeTrackRef.current;
-    if (track) {
-      const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
-      track.addEventListener("transitionend", handler);
-      // Safety fallback
-      setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
-    } else {
-      onDone();
-    }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate, pageOrder]);
+  }, [activePage, showProfile, restorePageScroll, isLoggedIn, navigate, pageOrder]);
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
@@ -3380,16 +3359,6 @@ const Index = () => {
     }
     if (showProfile && !isRoutedOverlay) setShowProfile(false);
   }, [pathname, showProfile, isRoutedOverlay]);
-
-  // Set initial position without animation
-  useLayoutEffect(() => {
-    if (showProfile) return;
-    applyStripTransform(activePageIdx, 0, false);
-  }, [activePage, applyStripTransform, activePageIdx, showProfile]);
-
-  useEffect(() => {
-    return () => { if (swipeRafRef.current !== null) cancelAnimationFrame(swipeRafRef.current); };
-  }, []);
 
   // Memoized page contents for the horizontal strip
 
@@ -3786,40 +3755,34 @@ const Index = () => {
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} showSearch={true} />
       <main
-        className="relative overflow-hidden"
+        className={`relative overflow-hidden pg-host ${showProfile ? "pg-host-under" : ""}`}
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}
       >
-        <div ref={swipeTrackRef} style={{
-          display: "flex",
-          width: `${pageOrder.length * 100}vw`,
-          height: "100%",
-          transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
-          transition: "none",
-          willChange: "transform",
-          backfaceVisibility: "hidden",
-        }}>
-          {pageOrder.map((page, idx) => {
-            // Keep-alive: mount visited pages + any page currently crossed by the slide.
-            const visualIdx = pageOrder.indexOf(visualPage);
-            const inSlide = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
-            const shouldRender = inSlide || mountedPages.has(page);
-            const isActive = page === activePage;
-            return (
+        {pageOrder.map((page) => {
+          const isActive = page === activePage;
+          const isLeaving = !isActive && page === pageFx.from;
+          const shouldRender = isActive || isLeaving || mountedPages.has(page);
+          const fxClass = isActive && pageFx.from
+            ? (pageFx.dir > 0 ? "pg-in-next" : "pg-in-prev")
+            : isLeaving ? (pageFx.dir > 0 ? "pg-out-next" : "pg-out-prev") : "";
+          const shown = isActive || isLeaving;
+          return (
             <div
               key={page}
               ref={(el) => { pageContainerRefs.current[page] = el; }}
+              className={`absolute inset-0 ${fxClass}`}
+              aria-hidden={!isActive}
               style={{
-                width: "100vw",
-                height: "100%",
-                flexShrink: 0,
                 overflowY: "auto",
                 overflowX: "hidden",
-                backfaceVisibility: "hidden",
                 WebkitOverflowScrolling: "touch",
-                contain: isActive ? "none" : "layout paint style",
-                // Skip paint work for off-screen mounted tabs — huge scroll/nav win on mobile.
-                contentVisibility: isActive || inSlide ? "visible" : "auto",
-                containIntrinsicSize: isActive || inSlide ? undefined : "100vh",
+                visibility: shown ? "visible" : "hidden",
+                zIndex: isActive ? 2 : isLeaving ? 1 : 0,
+                pointerEvents: isActive ? "auto" : "none",
+                contain: "layout paint style",
+                // Skip paint work for hidden mounted tabs — big nav win on mobile.
+                contentVisibility: shown ? "visible" : "auto",
+                containIntrinsicSize: shown ? undefined : "100vh",
               } as React.CSSProperties}
             >
               {shouldRender && page === "home" && getPageContent_home()}
@@ -3827,9 +3790,8 @@ const Index = () => {
               {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => navigate("/")} />}
               {shouldRender && page === "movies" && getPageContent_movies()}
             </div>
-            );
-          })}
-        </div>
+          );
+        })}
       </main>
 
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
