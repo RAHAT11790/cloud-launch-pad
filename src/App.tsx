@@ -61,6 +61,9 @@ const Admin = lazyWithReload(() => import("@/pages/Admin"));
 const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
 const queryClient = new QueryClient();
 
+/** Standalone pages fade in softly (opacity only, so fixed layouts never shift). */
+const Fade = ({ children }: { children: React.ReactNode }) => <div className="route-enter">{children}</div>;
+
 const RouteFallback = () => (
   <div className="fixed inset-0 z-[200] bg-background/95 flex items-center justify-center">
     <div className="w-7 h-7 rounded-full border-2 border-primary/25 border-t-primary animate-spin" />
@@ -80,16 +83,16 @@ const App = () => (
         <Toaster />
         <Sonner />
         <Routes>
-          <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
-          <Route path="/admin/:section" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
-          <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><AnExplorer /></Suspense>} />
-          <Route path="/unlock" element={<Unlock />} />
-          <Route path="/unlock-required" element={<UnlockRequired />} />
-          <Route path="/premium-required" element={<PremiumRequired />} />
-          <Route path="/premium-buy" element={<PremiumBuyPage />} />
-          <Route path="/daily-tasks" element={<DailyTasksPage />} />
-          <Route path="/adblocker-detected" element={<AdBlockerDetected />} />
-          <Route path="/adblocker-removed" element={<AdBlockerRemoved />} />
+          <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
+          <Route path="/admin/:section" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
+          <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><Fade><AnExplorer /></Fade></Suspense>} />
+          <Route path="/unlock" element={<Fade><Unlock /></Fade>} />
+          <Route path="/unlock-required" element={<Fade><UnlockRequired /></Fade>} />
+          <Route path="/premium-required" element={<Fade><PremiumRequired /></Fade>} />
+          <Route path="/premium-buy" element={<Fade><PremiumBuyPage /></Fade>} />
+          <Route path="/daily-tasks" element={<Fade><DailyTasksPage /></Fade>} />
+          <Route path="/adblocker-detected" element={<Fade><AdBlockerDetected /></Fade>} />
+          <Route path="/adblocker-removed" element={<Fade><AdBlockerRemoved /></Fade>} />
           
 
           {/* Main tab routes — all render Index, which syncs activePage from pathname */}
