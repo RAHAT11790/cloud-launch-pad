@@ -88,9 +88,9 @@
 - [x] Combo episodes: New Release taps, share links/cards (`?ep=42`), share title and both Telegram bots count every episode.
 
 ## Smooth pages + view + Hindi default (2026-10-13)
-- [ ] Bottom-menu page change slides smoothly (no jump/flash), far pages don't load the middle ones.
-- [ ] Profile opens with the same motion as the other four pages; other routes fade in smoothly.
-- [ ] View count: one view per device per series per 24h after ~20s of watching.
-- [ ] Hindi is the default language whenever a title has Hindi (editor or in-file).
-- [ ] Episode-list language button also lists the in-file Hindi track.
-- [ ] Phone-size live checks + screenshots, tests.
+- [x] Bottom-menu page change slides smoothly (no jump/flash), far pages don't load the middle ones.
+- [x] Profile opens with the same motion as the other four pages; other routes fade in smoothly.
+- [x] View count: one view per device per series per 24h after ~20s of watching.
+- [x] Hindi is the default language whenever a title has Hindi (editor or in-file).
+- [x] Episode-list language button also lists the in-file Hindi track.
+- [x] Phone-size live checks + screenshots, tests.
