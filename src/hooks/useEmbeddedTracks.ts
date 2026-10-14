@@ -333,6 +333,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         // Sidecar: video keeps playing natively, only the sound changes.
         if (engineRef.current) { const t = v.currentTime; freeze(); destroyEngine(); v.src = playUrl; v.load(); await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); try { v.currentTime = t; } catch { /* ignore */ } if (wasPlaying) v.play().catch(() => undefined); unfreeze(); }
         const old = sidecarRef.current; sidecarRef.current = null;
+        old?.destroy(); // gives the sound back before the next language takes it
         const sc = new AudioSidecar(corsUrl, header, cues, audioNumber, (error) => {
           if (sidecarRef.current !== sc) return;
           console.warn("[mkv] audio sidecar stopped:", error.message);
@@ -340,9 +341,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
           noticeRef.current?.("This audio track couldn't play here — switched back to the original audio.");
         });
         await sc.attach(v).catch((e) => { sc.destroy(); throw e; });
-        old?.destroy(); // only after the new language is ready: no silent gap
         if (op !== opRef.current) { sc.destroy(); return false; }
-        if (old) v.muted = true;
         sidecarRef.current = sc;
         setEngineActive(true);
         return true;
