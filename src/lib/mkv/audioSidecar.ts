@@ -45,7 +45,6 @@ export class AudioSidecar {
   /** What the player itself asked for (the video is force-muted while we run). */
   private wantMuted = false;
   private selfMuting = false;
-  private videoWasMuted = false;
 
   constructor(url: string, private readonly header: MkvHeader, private readonly cues: MkvCue[], audioNumber: number, private readonly onFatal?: (e: Error) => void) {
     this.source = new HttpRangeSource(url);
@@ -123,7 +122,6 @@ export class AudioSidecar {
     await this.waitFor(t);
     if (this.destroyed) throw new Error("aborted");
     // Take over the sound only now, so a failure never leaves the episode silent.
-    this.videoWasMuted = video.muted;
     this.wantMuted = video.muted;
     this.muteVideo();
     this.syncVolume();
@@ -157,9 +155,8 @@ export class AudioSidecar {
   private muteVideo() {
     const v = this.video;
     if (!v || v.muted) return;
-    this.selfMuting = true;
+    this.selfMuting = true; // swallow the volumechange our own mute fires
     v.muted = true;
-    setTimeout(() => { this.selfMuting = false; }, 0);
   }
 
   private syncVolume() {
@@ -171,7 +168,9 @@ export class AudioSidecar {
 
   private onVolume = () => {
     const v = this.video;
-    if (!v || this.selfMuting) return;
+    if (!v) return;
+    if (this.selfMuting && v.muted) { this.selfMuting = false; return; }
+    this.selfMuting = false;
     // The player unmuted → it wants sound: keep the video silent, sound from us.
     if (!v.muted) { this.wantMuted = false; this.muteVideo(); }
     else this.wantMuted = true;
@@ -201,7 +200,7 @@ export class AudioSidecar {
   private tick = () => {
     const v = this.video; const a = this.audioEl;
     if (!v || !a || this.destroyed) return;
-    if (!v.muted && !this.selfMuting) this.onVolume();
+    if (!v.muted) { this.wantMuted = false; this.muteVideo(); this.syncVolume(); }
     const t = v.currentTime;
     // Trim old audio so long episodes stay inside the buffer quota.
     if (t > 120 && this.sb && !this.sb.updating) {
@@ -273,9 +272,8 @@ export class AudioSidecar {
       v.removeEventListener("ratechange", this.onRate);
       v.removeEventListener("volumechange", this.onVolume);
       v.removeEventListener("ended", this.onPause);
-      if (this.sb) { this.selfMuting = true; v.muted = this.wantMuted; this.selfMuting = false; }
+      if (this.sb) v.muted = this.wantMuted;
     }
-    void this.videoWasMuted;
     const a = this.audioEl;
     if (a) { try { a.pause(); a.removeAttribute("src"); a.load(); } catch { /* ignore */ } }
     if (this.objectUrl) { try { URL.revokeObjectURL(this.objectUrl); } catch { /* ignore */ } }
