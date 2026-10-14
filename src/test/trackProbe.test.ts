@@ -55,4 +55,20 @@ describe("track probe", () => {
     const list = peekEmbeddedTracks("http://h/x.mkv?hash=h");
     expect(list?.subtitles.map((s) => [s.number, s.label])).toEqual([[6, "English"], [5, "English (Signs)"]]);
   });
+
+  it("treats the first audio track as the one playing on open, even when another is flagged default", () => {
+    // Perfect Crown: Hindi is track 2 (first), Korean track 3 carries the default flag.
+    localStorage.setItem("rs_mkv_tracks_v3", JSON.stringify({
+      "/pc.mkv|h": { at: Date.now(), list: {
+        container: "mkv", nativeAudio: 3, videoMime: "video/mp4; codecs=\"hvc1.1.6.L93.B0\"", subtitles: [],
+        audio: [
+          { number: 2, kind: "audio", label: "Hindi", language: "hin", codec: "AAC", isDefault: false, playable: false, mime: "audio/mp4; codecs=\"mp4a.40.2\"" },
+          { number: 3, kind: "audio", label: "Korean", language: "kor", codec: "AAC", isDefault: true, playable: false, mime: "audio/mp4; codecs=\"mp4a.40.2\"" },
+        ],
+      } },
+    }));
+    const list = peekEmbeddedTracks("http://h/pc.mkv?hash=h");
+    expect(list?.nativeAudio).toBe(2);
+    expect(list?.audio.find((a) => a.number === 2)?.playable).toBe(true);
+  });
 });

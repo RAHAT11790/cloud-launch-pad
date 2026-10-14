@@ -153,16 +153,26 @@ const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
   }
   if (list.container === "none") return { ...list, audio: [], subtitles: [] };
   const MS = mseAvailable() ? (window as any).MediaSource : null;
-  const videoOk = !!(MS && list.videoMime && MS.isTypeSupported(list.videoMime));
+  const audio = relabel(list.audio || []);
+  // Browsers decode the FIRST audio track of an .mkv natively — the file's
+  // "default" flag is ignored — so that one is what the viewer hears on open.
+  const nativeAudio = audio[0]?.number ?? -1;
   return {
     ...list,
-    audio: relabel(list.audio).map((a) => ({ ...a, playable: videoOk && !!a.mime && MS.isTypeSupported(a.mime) })),
-    subtitles: relabel(list.subtitles),
+    nativeAudio,
+    // Any other language only needs its own audio decodable: when the video
+    // can't go through Media Source it keeps playing natively (audio sidecar).
+    audio: audio.map((a) => {
+      let ok = false;
+      try { ok = !!(MS && a.mime && MS.isTypeSupported(a.mime)); } catch { ok = false; }
+      return { ...a, isDefault: a.number === nativeAudio, playable: ok || a.number === nativeAudio };
+    }),
+    subtitles: relabel(list.subtitles || []),
   };
 };
 
 const summarize = (header: MkvHeader): EmbeddedTrackList => {
-  const native = header.audio.find((a) => a.isDefault) || header.audio[0];
+  const native = header.audio[0];
   return applySupport({
     container: "mkv",
     nativeAudio: native?.number ?? -1,

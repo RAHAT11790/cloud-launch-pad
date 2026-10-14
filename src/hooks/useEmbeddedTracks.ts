@@ -10,7 +10,10 @@
 //      picture never flashes black. Any failure returns to native playback.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { MkvEngine, type TextCue } from "@/lib/mkv/mkvEngine";
+import { MkvEngine, canPlayTrackCombo, type TextCue } from "@/lib/mkv/mkvEngine";
+import { AudioSidecar } from "@/lib/mkv/audioSidecar";
+import type { MkvHeader } from "@/lib/mkv/mkvDemux";
+import { videoMime } from "@/lib/mkv/mkvRemux";
 import type { PgsBitmapCue } from "@/lib/mkv/pgs";
 import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
 import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
@@ -35,6 +38,19 @@ const writeMediaPref = (k: string, patch: { a?: string; s?: string }) => {
     if (keys.length > 400) keys.sort((x, y) => (all[x].t || 0) - (all[y].t || 0)).slice(0, keys.length - 400).forEach((x) => delete all[x]);
     localStorage.setItem(PREF_BY_MEDIA, JSON.stringify(all));
   } catch { /* ignore */ }
+};
+// Video formats whose Media Source path has shown a black picture on this
+// device: those files switch audio through the sidecar (video stays native).
+const BROKEN_MSE = "rs_mse_video_broken_v1";
+const brokenMse = (): string[] => { try { return JSON.parse(localStorage.getItem(BROKEN_MSE) || "[]"); } catch { return []; } };
+const markBrokenMse = (mime: string) => { try { const l = brokenMse(); if (!l.includes(mime)) localStorage.setItem(BROKEN_MSE, JSON.stringify([...l, mime].slice(-20))); } catch { /* ignore */ } };
+/** Full re-mux only for video the browser reliably decodes via Media Source; HEVC never (black screen on many phones). */
+export const wantsFullEngine = (header: MkvHeader, audioNumber: number): boolean => {
+  const v = header.video; const a = header.audio.find((x) => x.number === audioNumber) || null;
+  if (!v || !canPlayTrackCombo(v, a)) return false;
+  const mime = videoMime(v);
+  if (/hvc1|hev1/i.test(mime)) return false;
+  return !brokenMse().includes(mime);
 };
 const langOf = (t?: EmbeddedTrack | null) => String(t?.language || "").toLowerCase().split(/[-_]/)[0];
 
@@ -81,6 +97,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const [subtitleText, setSubtitleText] = useState("");
   const [bitmapCue, setBitmapCue] = useState<PgsBitmapCue | null>(null);
   const engineRef = useRef<MkvEngine | null>(null);
+  const sidecarRef = useRef<AudioSidecar | null>(null);
   const ownsRef = useRef(false);
   const srcRef = useRef(src);
   const textCues = useRef(new Map<number, TextCue[]>());
@@ -183,6 +200,9 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   }, [cueCallbacks, videoRef]);
 
   const destroyEngine = useCallback(() => {
+    const sc = sidecarRef.current;
+    sidecarRef.current = null;
+    if (sc) { try { sc.destroy(); } catch { /* ignore */ } }
     const e = engineRef.current;
     engineRef.current = null;
     ownsRef.current = false;
@@ -191,6 +211,15 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   }, []);
 
   const backToNative = useCallback((time: number, play: boolean) => {
+    if (!engineRef.current && sidecarRef.current) {
+      // Picture never left native playback: just give the sound back.
+      destroyEngine();
+      unfreeze();
+      const native = tracksRef.current?.nativeAudio ?? -1;
+      activeAudioRef.current = native;
+      setActiveAudio(native);
+      return;
+    }
     destroyEngine();
     const v = videoRef.current;
     const nativeSrc = srcRef.current;
@@ -269,6 +298,13 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     if (!v) return;
     const onLoadStart = () => {
       const e = engineRef.current;
+      if (!e && sidecarRef.current && !busyRef.current) {
+        destroyEngine();
+        const native = tracksRef.current?.nativeAudio ?? -1;
+        activeAudioRef.current = native;
+        setActiveAudio(native);
+        return;
+      }
       if (e && !e.ownsElement(v) && !busyRef.current) {
         destroyEngine();
         const native = tracksRef.current?.nativeAudio ?? -1;
@@ -293,6 +329,23 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     try {
       const { header, cues, corsUrl } = await loadHeader(playUrl);
       if (op !== opRef.current) return false;
+      if (!wantsFullEngine(header, audioNumber)) {
+        // Sidecar: video keeps playing natively, only the sound changes.
+        if (engineRef.current) { const t = v.currentTime; freeze(); destroyEngine(); v.src = playUrl; v.load(); await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); try { v.currentTime = t; } catch { /* ignore */ } if (wasPlaying) v.play().catch(() => undefined); unfreeze(); }
+        const old = sidecarRef.current; sidecarRef.current = null;
+        old?.destroy(); // gives the sound back before the next language takes it
+        const sc = new AudioSidecar(corsUrl, header, cues, audioNumber, (error) => {
+          if (sidecarRef.current !== sc) return;
+          console.warn("[mkv] audio sidecar stopped:", error.message);
+          backToNative(v.currentTime, !v.paused);
+          noticeRef.current?.("This audio track couldn't play here — switched back to the original audio.");
+        });
+        await sc.attach(v).catch((e) => { sc.destroy(); throw e; });
+        if (op !== opRef.current) { sc.destroy(); return false; }
+        sidecarRef.current = sc;
+        setEngineActive(true);
+        return true;
+      }
       freeze();
       destroyEngine();
       stopSubReader(); // the engine reads subtitles itself
@@ -316,6 +369,20 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       if (op !== opRef.current || engineRef.current !== engine) return false;
       if (wasPlaying) await v.play().catch(() => undefined);
       unfreeze();
+      // Watchdog: sound but no picture (seen with some phones' decoders) →
+      // remember it and continue through the sidecar with the native video.
+      const q0 = (v as any).getVideoPlaybackQuality?.()?.totalVideoFrames ?? 0;
+      const t0 = v.currentTime;
+      window.setTimeout(() => {
+        if (engineRef.current !== engine || op !== opRef.current) return;
+        const frames = ((v as any).getVideoPlaybackQuality?.()?.totalVideoFrames ?? q0 + 99) - q0;
+        const moved = v.currentTime - t0;
+        if (moved > 1.5 && (!v.videoWidth || frames < 3)) {
+          console.warn("[mkv] no picture through media source — using native video");
+          if (header.video) markBrokenMse(videoMime(header.video));
+          void handOver(audioNumber);
+        }
+      }, 3500);
       return true;
     } catch (error) {
       if (op === opRef.current) {
@@ -353,6 +420,11 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     }
     activeAudioRef.current = number;
     setActiveAudio(number);
+    if (sidecarRef.current) {
+      if (number === list.nativeAudio) { backToNative(videoRef.current?.currentTime || 0, !videoRef.current?.paused); return; }
+      void handOver(number);
+      return;
+    }
     const engine = engineRef.current;
     if (engine && !engine.isDestroyed) {
       setBusyBoth(true);
@@ -364,7 +436,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     }
     if (number === list.nativeAudio) return; // native already plays it
     void handOver(number);
-  }, [handOver, videoRef]);
+  }, [backToNative, handOver, videoRef]);
 
   const selectSubtitle = useCallback((number: number) => {
     activeSubRef.current = number;
