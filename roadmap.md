@@ -94,3 +94,8 @@
 - [x] Hindi is the default language whenever a title has Hindi (editor or in-file).
 - [x] Episode-list language button also lists the in-file Hindi track.
 - [x] Phone-size live checks + screenshots, tests.
+
+## Uploaded standalone HTML player (2026-10-18)
+- [x] Match centered play/pause, ten-second side skips, fit/fill, lock, audio/CC/speed panels and official app logos; preserve template variables.
+- [x] Verify panel opening/closing, speed, text size, lock, responsive containment and logo rendering in a browser.
+- [ ] Verify actual playback, audio switching, skips and external-app launch — source video host refuses sandbox connections; Android app launch requires a real Android device.
