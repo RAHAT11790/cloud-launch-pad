@@ -6418,7 +6418,7 @@ ${tgBulkFooter}
 
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] text-zinc-400 shrink-0">Split equally into</span>
-        <input type="number" min={1} max={100} value={rangeSplitCount} onChange={e => setRangeSplitCount(e.target.value)} className={`${inputClass} !py-1.5 !text-[12px] w-16 text-center`} />
+        <input type="number" min={1} max={100} value={rangeSplitCount} onChange={e => setRangeSplitCount(e.target.value)} className={`${inputClass} !py-1.5 !text-[12px] !w-16 text-center`} />
         <span className="text-[10px] text-zinc-400 shrink-0">seasons</span>
         <button onClick={() => setRangeDraft(evenRanges(total, Number(rangeSplitCount) || 1))} className="ml-auto px-3 py-1.5 rounded-lg bg-emerald-600/80 text-white text-[10px] font-bold">Auto</button>
       </div>
@@ -6441,9 +6441,9 @@ ${tgBulkFooter}
             </div>
             <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-zinc-400">
               <span>Ep</span>
-              <input type="number" value={r.start} disabled className={`${inputClass} !py-1 !text-[12px] w-16 text-center opacity-70`} />
+              <input type="number" value={r.start} disabled className={`${inputClass} !py-1 !text-[12px] !w-16 text-center opacity-70`} />
               <span>to</span>
-              <input type="number" min={r.start} max={total} value={Number.isFinite(r.end) ? r.end : ""} onChange={e => setRow(i, { end: Math.trunc(Number(e.target.value)) })} className={`${inputClass} !py-1 !text-[12px] w-16 text-center`} />
+              <input type="number" min={r.start} max={total} value={Number.isFinite(r.end) ? r.end : ""} onChange={e => setRow(i, { end: Math.trunc(Number(e.target.value)) })} className={`${inputClass} !py-1 !text-[12px] !w-16 text-center`} />
               <span className="ml-auto text-right leading-tight"><b className="text-emerald-300">{Math.max(0, count)} EP</b><br />shows {shown}</span>
             </div>
           </div>
