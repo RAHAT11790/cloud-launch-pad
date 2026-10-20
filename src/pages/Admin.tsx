@@ -22,7 +22,8 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
-import { applyComboSpan, countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes } from "@/lib/episodeCombo";
+import { applyComboSpan, countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes, seasonStartNumber } from "@/lib/episodeCombo";
+import { applySeasonRanges, currentRanges, evenRanges, totalRealEpisodes, validateRanges, type NumberingMode, type SeasonRange } from "@/lib/seasonRanges";
 import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
@@ -2464,6 +2465,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Season combination selection
   const [comboSelection, setComboSelection] = useState<number[]>([]);
   const [isComboMode, setIsComboMode] = useState(false);
+  const [isRangeMode, setIsRangeMode] = useState(false);
+  const [rangeDraft, setRangeDraft] = useState<SeasonRange[]>([]);
+  const [rangeNumbering, setRangeNumbering] = useState<NumberingMode>("season");
+  const [rangeSplitCount, setRangeSplitCount] = useState("4");
 
 
 
@@ -4604,7 +4609,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   const rawSeason = copy[sIdx] || { name: `Season ${sIdx + 1}`, seasonNumber: sIdx + 1, episodes: [] };
   const s = { ...rawSeason, episodes: (Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : []).filter((_: any, i: number) => i !== eIdx) };
  // Re-number episodes (combo-aware: a combo keeps its span, the rest shift).
-  s.episodes = renumberEpisodes(s.episodes);
+  s.episodes = renumberEpisodes(s.episodes, seasonStartNumber(rawSeason));
  copy[sIdx] = s;
  return copy;
  });
@@ -4617,7 +4622,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   const rawSeason = copy[sIdx];
   if (!rawSeason) return prev;
   const episodes = Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : [];
-  copy[sIdx] = { ...rawSeason, episodes: applyComboSpan(episodes, eIdx, span) } as any;
+  copy[sIdx] = { ...rawSeason, episodes: applyComboSpan(episodes, eIdx, span, true, seasonStartNumber(rawSeason)) } as any;
   return copy;
  });
  toast.success(span > 1 ? `Combo saved — ${span} episodes in one link. Numbers updated.` : "Combo removed — numbers updated.");
@@ -6366,9 +6371,103 @@ ${tgBulkFooter}
   className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isComboMode ? 'bg-amber-500/30 border-amber-500/50 text-amber-300' : 'bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/40'}`}>
   <Layers size={12} /> Merge
   </button>
+  <button onClick={() => {
+    if (!isRangeMode) {
+      setRangeDraft(currentRanges(seasonsData));
+      setRangeNumbering(seasonsData.some((x: any) => Number(x?.episodeStart) > 1) ? "continuous" : "season");
+    }
+    setIsRangeMode(prev => !prev);
+  }}
+  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isRangeMode ? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40'}`}>
+  <Layers size={12} /> Range
+  </button>
   <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
   </div>
   </div>
+
+  {/* Season Range splitter */}
+  {isRangeMode && (() => {
+    const total = totalRealEpisodes(seasonsData);
+    const error = validateRanges(rangeDraft, total);
+    const setRow = (i: number, patch: Partial<SeasonRange>) => setRangeDraft(prev => {
+      const next = prev.map(r => ({ ...r }));
+      next[i] = { ...next[i], ...patch };
+      // Keep the chain continuous: the next season starts right after this one.
+      for (let k = 1; k < next.length; k += 1) next[k].start = next[k - 1].end + 1;
+      return next;
+    });
+    return (
+    <div data-testid="season-range-panel" className="bg-gradient-to-br from-emerald-900/30 to-teal-900/20 rounded-2xl border border-emerald-500/20 p-3.5 mb-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[12px] font-bold text-emerald-200 uppercase tracking-wide">Season Range</p>
+          <p className="text-[10px] text-emerald-300/70">All seasons counted together: <b className="text-emerald-200">{total} episodes</b>. Set where each season starts and ends.</p>
+        </div>
+        <button onClick={() => setIsRangeMode(false)} className="text-[11px] text-zinc-400 px-2 py-1 rounded-lg bg-black/30">✕</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-black/30 p-1">
+        {([["season", "Per season", "S2 → 1, 2, 3…"], ["continuous", "Continuous", "S2 → 51, 52…"]] as const).map(([key, label, hint]) => (
+          <button key={key} onClick={() => setRangeNumbering(key)}
+            className={`rounded-lg px-2 py-2 text-left transition-all ${rangeNumbering === key ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'text-zinc-300'}`}>
+            <span className="block text-[11px] font-bold">{label}</span>
+            <span className={`block text-[9px] ${rangeNumbering === key ? 'text-white/80' : 'text-zinc-500'}`}>{hint}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] text-zinc-400 shrink-0">Split equally into</span>
+        <input type="number" min={1} max={100} value={rangeSplitCount} onChange={e => setRangeSplitCount(e.target.value)} className={`${inputClass} !py-1.5 !text-[12px] w-16 text-center`} />
+        <span className="text-[10px] text-zinc-400 shrink-0">seasons</span>
+        <button onClick={() => setRangeDraft(evenRanges(total, Number(rangeSplitCount) || 1))} className="ml-auto px-3 py-1.5 rounded-lg bg-emerald-600/80 text-white text-[10px] font-bold">Auto</button>
+      </div>
+
+      <div className="space-y-1.5">
+        {rangeDraft.map((r, i) => {
+          const count = r.end - r.start + 1;
+          const shown = rangeNumbering === "continuous" ? `${r.start}–${r.end}` : `1–${Math.max(0, count)}`;
+          return (
+          <div key={i} className="rounded-xl bg-black/30 border border-white/5 p-2">
+            <div className="flex items-center gap-1.5">
+              <input value={r.name} onChange={e => setRow(i, { name: e.target.value })} className={`${inputClass} !py-1.5 !text-[12px] flex-1 min-w-0`} />
+              {rangeDraft.length > 1 && (
+                <button onClick={() => setRangeDraft(prev => {
+                  const next = prev.filter((_, k) => k !== i).map(x => ({ ...x }));
+                  if (next.length) { next[0].start = 1; for (let k = 1; k < next.length; k += 1) next[k].start = next[k - 1].end + 1; next[next.length - 1].end = total; }
+                  return next;
+                })} className="text-red-400 text-[11px] px-2 py-1 rounded-lg bg-red-500/10">✕</button>
+              )}
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-zinc-400">
+              <span>Ep</span>
+              <input type="number" value={r.start} disabled className={`${inputClass} !py-1 !text-[12px] w-16 text-center opacity-70`} />
+              <span>to</span>
+              <input type="number" min={r.start} max={total} value={Number.isFinite(r.end) ? r.end : ""} onChange={e => setRow(i, { end: Math.trunc(Number(e.target.value)) })} className={`${inputClass} !py-1 !text-[12px] w-16 text-center`} />
+              <span className="ml-auto text-right leading-tight"><b className="text-emerald-300">{Math.max(0, count)} EP</b><br />shows {shown}</span>
+            </div>
+          </div>
+          );
+        })}
+      </div>
+
+      <button onClick={() => setRangeDraft(prev => {
+        const last = prev[prev.length - 1];
+        const start = last ? last.end + 1 : 1;
+        return [...prev, { name: `Season ${prev.length + 1}`, start, end: Math.max(start, total) }];
+      })} className="w-full py-2 rounded-xl border border-dashed border-emerald-500/40 text-emerald-300 text-[11px] font-bold">+ Add season box</button>
+
+      {error ? <p className="text-[11px] text-amber-300">⚠ {error}</p> : <p className="text-[11px] text-emerald-300">✓ All {total} episodes placed</p>}
+
+      <button disabled={!!error} onClick={() => {
+        if (error) return;
+        setSeasonsData(applySeasonRanges(seasonsData, rangeDraft, rangeNumbering) as Season[]);
+        setIsRangeMode(false);
+        toast.success(`Split into ${rangeDraft.length} seasons — press Save to keep it`);
+      }} className="w-full py-2.5 rounded-xl bg-emerald-600 disabled:opacity-40 text-white text-[12px] font-black uppercase">Apply Ranges</button>
+    </div>
+    );
+  })()}
 
   {/* Combination Modal/Panel */}
   {isComboMode && (
