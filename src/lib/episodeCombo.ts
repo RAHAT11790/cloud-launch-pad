@@ -43,13 +43,13 @@ export const isAutoEpisodeTitle = (title: unknown): boolean =>
  * Every combo keeps its span, everything after it shifts automatically.
  * Auto titles ("Episode N") are refreshed; custom titles are kept.
  */
-export const renumberEpisodes = <T extends Record<string, any>>(episodes: T[]): T[] => {
+export const renumberEpisodes = <T extends Record<string, any>>(episodes: T[], start = 1): T[] => {
   const list = Array.isArray(episodes) ? episodes : [];
   const order = list
     .map((ep, idx) => ({ ep, idx }))
     .sort((a, b) => (Number(a.ep?.episodeNumber || 0) - Number(b.ep?.episodeNumber || 0)) || (a.idx - b.idx));
   const result = list.slice();
-  let next = 1;
+  let next = Math.max(1, Math.trunc(Number(start) || 1));
   order.forEach(({ ep, idx }) => {
     const span = getComboSpan(ep);
     const start = next;
@@ -66,7 +66,7 @@ export const renumberEpisodes = <T extends Record<string, any>>(episodes: T[]): 
 };
 
 /** Set how many real episodes one entry contains, then renumber the season. */
-export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], index: number, span: number, renumber = true): T[] => {
+export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], index: number, span: number, renumber = true, firstNumber = 1): T[] => {
   const list = Array.isArray(episodes) ? episodes.slice() : [];
   const ep: any = list[index];
   if (!ep) return list;
@@ -75,7 +75,7 @@ export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], ind
   const updated: any = { ...ep };
   if (safeSpan > 1) updated.episodeEnd = start + safeSpan - 1; else delete updated.episodeEnd;
   list[index] = updated;
-  return renumber ? renumberEpisodes(list) : list;
+  return renumber ? renumberEpisodes(list, firstNumber) : list;
 };
 
 /** Total real episodes inside a season (combos counted fully). */
@@ -103,3 +103,7 @@ export const episodeNumberAt = (episodes: any[], idx: number): number => {
   const ep = Array.isArray(episodes) ? episodes[idx] : undefined;
   return Math.trunc(Number(ep?.episodeNumber || 0)) || idx + 1;
 };
+
+/** First number a season counts from (continuous mode stores `episodeStart`). */
+export const seasonStartNumber = (season: any): number =>
+  Math.max(1, Math.trunc(Number(season?.episodeStart || 0)) || 1);
