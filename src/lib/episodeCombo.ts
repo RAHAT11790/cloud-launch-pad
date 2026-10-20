@@ -66,7 +66,7 @@ export const renumberEpisodes = <T extends Record<string, any>>(episodes: T[], s
 };
 
 /** Set how many real episodes one entry contains, then renumber the season. */
-export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], index: number, span: number, renumber = true, start = 1): T[] => {
+export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], index: number, span: number, renumber = true, firstNumber = 1): T[] => {
   const list = Array.isArray(episodes) ? episodes.slice() : [];
   const ep: any = list[index];
   if (!ep) return list;
@@ -75,7 +75,7 @@ export const applyComboSpan = <T extends Record<string, any>>(episodes: T[], ind
   const updated: any = { ...ep };
   if (safeSpan > 1) updated.episodeEnd = start + safeSpan - 1; else delete updated.episodeEnd;
   list[index] = updated;
-  return renumber ? renumberEpisodes(list, start) : list;
+  return renumber ? renumberEpisodes(list, firstNumber) : list;
 };
 
 /** Total real episodes inside a season (combos counted fully). */
