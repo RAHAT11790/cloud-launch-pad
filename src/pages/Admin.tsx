@@ -12890,7 +12890,7 @@ const SortableSeasonItem = memo(({
       </div>
 
       <div className="mb-2.5 flex flex-wrap justify-between items-center gap-2 ml-9">
-        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b></span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links</span>}</span>
+        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b>{season.episodes.length > 0 && (() => { const nums = season.episodes.map((e: any) => Number(e?.episodeNumber || 0)).filter(Boolean); const lo = Math.min(...nums); const hi = Math.max(...season.episodes.map((e: any) => getEpisodeEnd(e))); return <b data-testid="season-range-badge" className="ml-1.5 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">EP {lo}–{hi}</b>; })()}</span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links</span>}</span>
         <div className="flex gap-1.5 items-center">
           <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
             className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
