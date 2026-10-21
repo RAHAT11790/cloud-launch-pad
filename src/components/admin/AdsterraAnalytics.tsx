@@ -162,7 +162,8 @@ const AdsterraAnalytics = () => {
     }
 
     // 2. Impressions with zero clicks (click not registering)
-    const zeroClickPl = placements.filter((p) => p.impression >= 200 && p.clicks === 0);
+    // Popunder and Smartlink never report clicks (an open = impression), so they are not a gap.
+    const zeroClickPl = placements.filter((p) => p.impression >= 200 && p.clicks === 0 && !/popunder|smart\s*link|direct/i.test(p.name));
     if (zeroClickPl.length) {
       out.push({
         level: "critical",

@@ -73,8 +73,13 @@ export const applySeasonRanges = (seasons: any[], ranges: SeasonRange[], mode: N
   flat.forEach((ep) => {
     let k = ranges.findIndex((r) => pos >= r.start && pos <= r.end);
     if (k < 0) k = ranges.length - 1;
-    buckets[k].push(ep);
-    pos += getComboSpan(ep);
+    const span = getComboSpan(ep);
+    // Overall position as a temporary number keeps order across seasons that
+    // each counted from 1 (renumbering sorts by number).
+    const tmp: any = { ...ep, episodeNumber: pos };
+    if (span > 1) tmp.episodeEnd = pos + span - 1; else delete tmp.episodeEnd;
+    buckets[k].push(tmp);
+    pos += span;
   });
   return ranges.map((r, i) => {
     const base = { ...(old[i] || {}) };
@@ -84,4 +89,36 @@ export const applySeasonRanges = (seasons: any[], ranges: SeasonRange[], mode: N
     if (mode === "continuous" && start > 1) season.episodeStart = start;
     return season;
   });
+};
+
+/**
+ * Combine the selected seasons into the first selected one, in season order.
+ * Episodes are renumbered as ONE continuous list from that season's start, so
+ * the merged season shows a single counter (1..N) — no leftover numbers from
+ * the seasons that were folded in. Combos keep their span.
+ */
+export const mergeSeasons = (seasons: any[], selected: number[]): any[] => {
+  const list = Array.isArray(seasons) ? seasons : [];
+  const picks = Array.from(new Set(selected)).filter((i) => i >= 0 && i < list.length).sort((a, b) => a - b);
+  if (picks.length < 2) return list.slice();
+  const base = list[picks[0]] || {};
+  // Temporary strictly increasing numbers keep the flattened order when renumbering.
+  const episodes = flattenSeasonEpisodes(picks.map((i) => list[i])).map((ep, idx) => ({ ...ep, episodeNumber: idx + 1, episodeEnd: undefined }));
+  const start = Math.max(1, Math.trunc(Number(base?.episodeStart || 0)) || 1);
+  const spans = flattenSeasonEpisodes(picks.map((i) => list[i])).map((ep) => getComboSpan(ep));
+  let next = start;
+  const ordered = episodes.map((ep: any, idx: number) => {
+    const span = spans[idx];
+    const out: any = { ...ep, episodeNumber: next };
+    if (span > 1) out.episodeEnd = next + span - 1; else delete out.episodeEnd;
+    if (!ep?.title || /^\s*episode\s*\d+(\s*[-–]\s*\d+)?\s*$/i.test(String(ep.title))) out.title = span > 1 ? `Episode ${next}-${next + span - 1}` : `Episode ${next}`;
+    next += span;
+    return out;
+  });
+  const merged: any = { ...base, episodes: ordered };
+  const drop = new Set(picks.slice(1));
+  return list
+    .map((s, i) => (i === picks[0] ? merged : s))
+    .filter((_, i) => !drop.has(i))
+    .map((s, i) => ({ ...s, seasonNumber: i + 1 }));
 };
