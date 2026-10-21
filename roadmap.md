@@ -99,3 +99,9 @@
 - [x] Match centered play/pause, ten-second side skips, fit/fill, lock, audio/CC/speed panels and official app logos; preserve template variables.
 - [x] Verify panel opening/closing, speed, text size, lock, responsive containment and logo rendering in a browser.
 - [ ] Verify actual playback, audio switching, skips and external-app launch — source video host refuses sandbox connections; Android app launch requires a real Android device.
+
+## Season editor + ads (2026-10-21)
+- [x] Seasons header: one 4-button tool row; compact collapsible full-series premium lock.
+- [x] Merge renumbers as one list (no double counters); range split keeps order across per-season numbering.
+- [x] Ads: popunder favoured 2:1 over smartlink; analytics no longer flags popunder/smartlink "0 clicks".
+- [ ] Social Bar / Native Banner earn nothing — waiting on owner to paste their Adsterra codes.
