@@ -615,8 +615,8 @@ export async function firePopunderAd(): Promise<boolean> {
  * 1. The Adsterra anti-adblock popunder tag is mounted exactly once per page
  *    session (re-injecting stacks click handlers → ad storms).
  * 2. Every eligible click after the admin cool-down releases ONE ad:
- *      • odd cycles → let the mounted popunder tag handle the click
- *      • even cycles, or whenever the tag is blocked / did not fire →
+ *      • two of every three cycles → let the mounted popunder tag handle the click (higher CPM)
+ *      • every third cycle, or whenever the tag is blocked / did not fire →
  *        open the Direct Link (smartlink) synchronously inside the gesture.
  *    That way the user keeps seeing ads for hours even when the script is
  *    blocked by an adblocker or throttled by the network's own frequency cap.
@@ -641,7 +641,7 @@ export async function releaseAd(): Promise<boolean> {
   const cycle = (window.__adsterraCycleCount ?? 0) + 1;
 
   // Direct-link path — must run synchronously inside the user gesture.
-  const useDirect = !!direct && (scriptBlocked || !script || (mounted && cycle % 2 === 0));
+  const useDirect = !!direct && (scriptBlocked || !script || (mounted && cycle % 3 === 0));
   if (useDirect) {
     if (!reserveAdFire()) return false;
     window.__adsterraCycleCount = cycle;

@@ -23,7 +23,7 @@ import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
 import { collectTelegramEpisodeQualities } from "@/lib/telegramQuality";
 import { applyComboSpan, countRealEpisodes, formatEpisodeChip, formatEpisodeLabel, getComboSpan, getEpisodeEnd, renumberEpisodes, seasonStartNumber } from "@/lib/episodeCombo";
-import { applySeasonRanges, currentRanges, evenRanges, totalRealEpisodes, validateRanges, type NumberingMode, type SeasonRange } from "@/lib/seasonRanges";
+import { applySeasonRanges, mergeSeasons, currentRanges, evenRanges, totalRealEpisodes, validateRanges, type NumberingMode, type SeasonRange } from "@/lib/seasonRanges";
 import { buildEpisodeLockIndex } from "@/lib/firebaseAnimeMapper";
 
 import {
@@ -2466,6 +2466,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [comboSelection, setComboSelection] = useState<number[]>([]);
   const [isComboMode, setIsComboMode] = useState(false);
   const [isRangeMode, setIsRangeMode] = useState(false);
+  const [seriesLockOpen, setSeriesLockOpen] = useState(false);
   const [rangeDraft, setRangeDraft] = useState<SeasonRange[]>([]);
   const [rangeNumbering, setRangeNumbering] = useState<NumberingMode>("season");
   const [rangeSplitCount, setRangeSplitCount] = useState("4");
@@ -6360,30 +6361,41 @@ ${tgBulkFooter}
  </div>
 
  <div id="seasons-episodes-section" className={`${glassCard} p-4 mb-4 scroll-mt-4`}>
-  <div className="flex justify-between items-center mb-3.5">
-  <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
-  <div className="flex gap-1.5 items-center">
-  <button onClick={() => setWsJsonImportMode(prev => !prev)}
-  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${wsJsonImportMode ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-blue-500/20 border-blue-500/30 text-blue-400 hover:bg-blue-500/40'}`}>
-  <FolderOpen size={12} /> JSON
-  </button>
-  <button onClick={() => setIsComboMode(prev => !prev)}
-  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isComboMode ? 'bg-amber-500/30 border-amber-500/50 text-amber-300' : 'bg-amber-500/20 border-amber-500/30 text-amber-400 hover:bg-amber-500/40'}`}>
-  <Layers size={12} /> Merge
-  </button>
-  <button onClick={() => {
-    if (!isRangeMode) {
-      setRangeDraft(currentRanges(seasonsData));
-      setRangeNumbering(seasonsData.some((x: any) => Number(x?.episodeStart) > 1) ? "continuous" : "season");
-    }
-    setIsRangeMode(prev => !prev);
-  }}
-  className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${isRangeMode ? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300' : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/40'}`}>
-  <Layers size={12} /> Range
-  </button>
-  <button onClick={() => addSeason()} className={`${btnSecondary} px-3 py-2 text-[11px]`}><Plus size={12} className="mr-1" /> Season</button>
-  </div>
-  </div>
+  {(() => {
+    const totalEps = totalRealEpisodes(seasonsData);
+    const tool = (active: boolean, tone: string) => `h-11 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all active:scale-95 ${active ? tone : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]'}`;
+    return (
+    <div className="mb-4" data-testid="seasons-header">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-bold text-white leading-tight">Seasons & Episodes</p>
+          <p className="text-[10.5px] text-zinc-400 mt-0.5">{seasonsData.length} season{seasonsData.length === 1 ? '' : 's'} · {totalEps} episode{totalEps === 1 ? '' : 's'}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        <button onClick={() => setWsJsonImportMode(prev => !prev)} className={tool(wsJsonImportMode, 'border-blue-400/50 bg-blue-500/20 text-blue-200')}>
+          <FolderOpen size={14} /> JSON
+        </button>
+        <button onClick={() => { setIsComboMode(prev => !prev); setIsRangeMode(false); }} className={tool(isComboMode, 'border-amber-400/50 bg-amber-500/20 text-amber-200')}>
+          <Layers size={14} /> Merge
+        </button>
+        <button onClick={() => {
+          if (!isRangeMode) {
+            setRangeDraft(currentRanges(seasonsData));
+            setRangeNumbering(seasonsData.some((x: any) => Number(x?.episodeStart) > 1) ? "continuous" : "season");
+            setIsComboMode(false);
+          }
+          setIsRangeMode(prev => !prev);
+        }} className={tool(isRangeMode, 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200')}>
+          <Layers size={14} /> Range
+        </button>
+        <button onClick={() => addSeason()} className={tool(false, '')}>
+          <Plus size={14} /> Season
+        </button>
+      </div>
+    </div>
+    );
+  })()}
 
   {/* Season Range splitter */}
   {isRangeMode && (() => {
@@ -6471,58 +6483,40 @@ ${tgBulkFooter}
 
   {/* Combination Modal/Panel */}
   {isComboMode && (
-    <div className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 rounded-2xl border border-amber-500/20 p-4 mb-4 space-y-3 shadow-lg shadow-amber-500/5">
-      <div className="flex items-center justify-between">
+    <div data-testid="merge-panel" className="bg-gradient-to-br from-amber-900/30 to-orange-900/20 rounded-2xl border border-amber-500/25 p-3.5 mb-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[12px] font-bold text-amber-200 uppercase tracking-wide">Season Combination</p>
-          <p className="text-[9px] text-amber-400/70">Select seasons to merge into a single sequence</p>
+          <p className="text-[12px] font-bold text-amber-200 uppercase tracking-wide">Merge seasons</p>
+          <p className="text-[10px] text-amber-300/70">Tap seasons to join. Episodes are renumbered as one list (1, 2, 3…).</p>
         </div>
-        <button onClick={() => {
+        <button onClick={() => { setIsComboMode(false); setComboSelection([]); }} className="text-[11px] text-zinc-400 px-2 py-1 rounded-lg bg-black/30">✕</button>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {seasonsData.map((s, idx) => {
+          const on = comboSelection.includes(idx);
+          return (
+            <button key={idx} onClick={() => setComboSelection(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])}
+              className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all ${on ? 'bg-amber-500/90 border-amber-300 text-amber-950' : 'bg-black/30 border-white/10 text-zinc-300'}`}>
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${on ? 'border-amber-950/40 bg-amber-950/20' : 'border-zinc-600'}`}>{on && <Check size={11} />}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] font-bold">{s.name || `Season ${idx + 1}`}</span>
+                <span className={`block text-[9.5px] ${on ? 'text-amber-950/70' : 'text-zinc-500'}`}>{countRealEpisodes(s.episodes || [])} episodes</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button disabled={comboSelection.length < 2} onClick={() => {
           if (comboSelection.length < 2) { toast.error("Select at least 2 seasons to merge"); return; }
-          
-          // Logic to merge seasons
-          const sortedIndices = [...comboSelection].sort((a, b) => a - b);
-          const baseIdx = sortedIndices[0];
-          const newSeasons = [...seasonsData];
-          const baseSeason = { ...newSeasons[baseIdx], episodes: [...(newSeasons[baseIdx].episodes || [])] };
-          
-          // Re-indexing starting point
-          let currentEpCount = baseSeason.episodes.length;
-          
-          for (let i = 1; i < sortedIndices.length; i++) {
-            const idx = sortedIndices[i];
-            const seasonToMerge = newSeasons[idx];
-            const episodesToMerge = (seasonToMerge.episodes || []).map(ep => ({
-              ...ep,
-              episodeNumber: currentEpCount + Number(ep.episodeNumber || 1)
-            }));
-            baseSeason.episodes = [...baseSeason.episodes, ...episodesToMerge];
-            currentEpCount += episodesToMerge.length;
-          }
-          
-          // Remove merged seasons (starting from highest index to avoid shift)
-          const finalSeasons = newSeasons.filter((_, idx) => !sortedIndices.slice(1).includes(idx));
-          finalSeasons[baseIdx] = baseSeason;
-          
+          const finalSeasons = mergeSeasons(seasonsData, comboSelection) as Season[];
+          const total = countRealEpisodes(finalSeasons[Math.min(...comboSelection)]?.episodes || []);
           setSeasonsData(finalSeasons);
           setComboSelection([]);
           setIsComboMode(false);
-          toast.success("Seasons merged professionally!");
-        }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-600/20 transition-all flex items-center gap-1.5 uppercase">
-          <Layers size={12} /> Combine Now
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {seasonsData.map((s, idx) => (
-          <button 
-            key={idx} 
-            onClick={() => setComboSelection(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])}
-            className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${comboSelection.includes(idx) ? 'bg-amber-500 border-amber-400 text-white shadow-md shadow-amber-500/30' : 'bg-black/30 border-white/10 text-zinc-400'}`}
-          >
-            {s.name || `Season ${idx + 1}`} ({countRealEpisodes(s.episodes || [])} EP)
-          </button>
-        ))}
-      </div>
+          toast.success(`Merged into one season · ${total} episodes — press Save to keep it`);
+        }} className="w-full py-2.5 rounded-xl bg-amber-500 disabled:opacity-40 text-amber-950 text-[12px] font-black uppercase flex items-center justify-center gap-1.5">
+        <Layers size={13} /> {comboSelection.length >= 2 ? `Merge ${comboSelection.length} seasons · ${comboSelection.reduce((n, i) => n + countRealEpisodes(seasonsData[i]?.episodes || []), 0)} episodes` : 'Pick 2 or more seasons'}
+      </button>
     </div>
   )}
 
@@ -6544,60 +6538,42 @@ ${tgBulkFooter}
     const remaining = seriesLockRemainingMs(seriesForm || {});
     const active = remaining > 0;
     const permanent = active && isPermanentLockValue(until);
+    const chip = "h-8 rounded-lg border text-[11px] font-bold transition-all active:scale-95";
     return (
-      <div className="mb-4 overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/[0.12] to-amber-900/[0.08] p-3.5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-amber-200">
-              <Crown className="h-3.5 w-3.5" /> Premium lock — full series
-            </p>
-            <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">
-              Locks every season and episode. Only premium members can watch. Free users and guests get the premium screen everywhere.
-            </p>
-          </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${active ? "bg-amber-400 text-amber-950" : "bg-white/10 text-zinc-300"}`}>
-            {active ? (permanent ? "PERMANENT" : formatLockRemaining(remaining)) : "FREE"}
+      <div data-testid="series-lock" className={`mb-4 rounded-2xl border ${active ? 'border-amber-400/40 bg-amber-500/[0.10]' : 'border-white/10 bg-white/[0.03]'}`}>
+        <button type="button" onClick={() => setSeriesLockOpen(o => !o)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? 'bg-amber-400 text-amber-950' : 'bg-amber-500/15 text-amber-300'}`}>
+            {active ? <Lock size={14} /> : <Crown size={14} />}
           </span>
-        </div>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {[1, 2, 3, 5, 7, 14, 30].map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setSeriesLockDays(d)}
-              className="h-7 rounded-lg border border-amber-400/30 bg-amber-500/15 px-2.5 text-[11px] font-bold text-amber-100 hover:bg-amber-500/30"
-            >
-              {d}d
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              const value = prompt("Lock full series for how many days?", "7");
-              const days = Number(value);
-              if (!Number.isFinite(days) || days <= 0) return;
-              setSeriesLockDays(days);
-            }}
-            className="h-7 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 text-[11px] font-bold text-zinc-200 hover:bg-white/10"
-          >
-            Custom
-          </button>
-          <button
-            type="button"
-            onClick={() => setSeriesLockDays(-1)}
-            className="h-7 rounded-lg border border-amber-300/40 bg-amber-400/25 px-2.5 text-[11px] font-black text-amber-50 hover:bg-amber-400/40"
-          >
-            Permanent
-          </button>
-          <button
-            type="button"
-            onClick={() => setSeriesLockDays(0)}
-            disabled={!active}
-            className="h-7 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-40"
-          >
-            Unlock now
-          </button>
-        </div>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-bold text-white">Premium lock · full series</span>
+            <span className="block truncate text-[10px] text-zinc-400">{active ? (permanent ? 'Locked for free users, no end date' : `Free again in ${formatLockRemaining(remaining)}`) : 'Everyone can watch'}</span>
+          </span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-black ${active ? 'bg-amber-400 text-amber-950' : 'bg-white/10 text-zinc-300'}`}>
+            {active ? (permanent ? 'PERMANENT' : 'LOCKED') : 'FREE'}
+          </span>
+          <ChevronDown size={14} className={`shrink-0 text-zinc-400 transition-transform ${seriesLockOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {seriesLockOpen && (
+          <div className="border-t border-white/5 px-3 pb-3 pt-2.5">
+            <p className="mb-2 text-[10px] leading-relaxed text-zinc-400">Locks every season and episode. Free users and guests see the premium screen.</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[1, 2, 3, 5, 7, 14, 30].map((d) => (
+                <button key={d} type="button" onClick={() => setSeriesLockDays(d)} className={`${chip} border-amber-400/25 bg-amber-500/10 text-amber-100 hover:bg-amber-500/25`}>{d}d</button>
+              ))}
+              <button type="button" onClick={() => {
+                const value = prompt("Lock full series for how many days?", "7");
+                const days = Number(value);
+                if (!Number.isFinite(days) || days <= 0) return;
+                setSeriesLockDays(days);
+              }} className={`${chip} border-white/10 bg-white/[0.05] text-zinc-200`}>Custom</button>
+            </div>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => setSeriesLockDays(-1)} className={`${chip} border-amber-300/40 bg-amber-400/20 text-amber-50`}>Permanent</button>
+              <button type="button" onClick={() => setSeriesLockDays(0)} disabled={!active} className={`${chip} border-emerald-400/30 bg-emerald-500/15 text-emerald-200 disabled:opacity-35`}>Unlock now</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   })()}
@@ -12890,7 +12866,7 @@ const SortableSeasonItem = memo(({
       </div>
 
       <div className="mb-2.5 flex flex-wrap justify-between items-center gap-2 ml-9">
-        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b>{season.episodes.length > 0 && (() => { const nums = season.episodes.map((e: any) => Number(e?.episodeNumber || 0)).filter(Boolean); const lo = Math.min(...nums); const hi = Math.max(...season.episodes.map((e: any) => getEpisodeEnd(e))); return <b data-testid="season-range-badge" className="ml-1.5 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">EP {lo}–{hi}</b>; })()}</span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links</span>}</span>
+        <span className="flex flex-col leading-tight text-xs text-[#D1C4E9] whitespace-nowrap"><span>Episodes: <b className="text-white">{countRealEpisodes(season.episodes)}</b>{season.episodes.length > 0 && (() => { const nums = season.episodes.map((e: any) => Number(e?.episodeNumber || 0)).filter(Boolean); const lo = Math.min(...nums); const hi = Math.max(...season.episodes.map((e: any) => getEpisodeEnd(e))); if (lo === 1 && hi === countRealEpisodes(season.episodes)) return null; return <b data-testid="season-range-badge" className="ml-1.5 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">EP {lo}–{hi}</b>; })()}</span>{season.episodes.some((e: any) => getComboSpan(e) > 1) && <span className="text-[10px] text-fuchsia-300/80">{season.episodes.length} links</span>}</span>
         <div className="flex gap-1.5 items-center">
           <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
             className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
