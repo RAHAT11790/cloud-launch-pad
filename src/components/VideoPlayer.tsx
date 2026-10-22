@@ -1,5 +1,5 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
-import { openDownloadFlow } from "@/lib/downloadFlow";
+import { openDownloadFlow, sourceDownloadFilename } from "@/lib/downloadFlow";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
@@ -6523,11 +6523,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                 title: ep.title,
                                 choices: Object.entries(ep.qualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({
                                   quality, url: unwrapManagedVideoUrl(url) || url,
-                                  fileName: buildDownloadFileName(buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber), quality),
+                                  fileName: sourceDownloadFilename(buildDownloadFileName(buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber), quality), unwrapManagedVideoUrl(url) || url),
                                   locked: !isDownloadAllowedForFree(quality, ep.index),
                                 })),
                               }))
-                            : [{ number: 1, title, choices: Object.entries(movieQualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({ quality, url: unwrapManagedVideoUrl(url) || url, fileName: buildDownloadFileName(title, quality), locked: !isDownloadAllowedForFree(quality) })) }];
+                            : [{ number: 1, title, choices: Object.entries(movieQualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({ quality, url: unwrapManagedVideoUrl(url) || url, fileName: sourceDownloadFilename(buildDownloadFileName(title, quality), unwrapManagedVideoUrl(url) || url), locked: !isDownloadAllowedForFree(quality) })) }];
                           try { videoRef.current?.pause(); } catch {}
                           openDownloadFlow({ title, poster, episodes, returnPath: window.location.pathname + window.location.search });
                         }}

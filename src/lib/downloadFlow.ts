@@ -10,7 +10,7 @@ export function normalizeDownloadFlowSettings(raw: Record<string, unknown> = {})
   const limit = Number(raw.maxEpisodes);
   const stages = Array.isArray(raw.adSteps) ? raw.adSteps : [5, 5];
   return {
-    maxEpisodes: Number.isFinite(limit) ? Math.max(1, Math.min(3, Math.trunc(limit))) : 2,
+    maxEpisodes: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 2,
     adSteps: stages.slice(0, 10).map((n) => Math.max(1, Math.min(120, Math.trunc(Number(n) || 5)))),
     socialBar: typeof raw.socialBar === "string" ? raw.socialBar : "",
     banner: typeof raw.banner === "string" ? raw.banner : "",
@@ -22,6 +22,12 @@ export function selectDownloadEpisode(selected: number[], episode: number, maxim
 }
 export function downloadWaitRemaining(seconds: number, visibleElapsedMs: number) {
   return Math.max(0, Math.ceil(seconds - visibleElapsedMs / 1000));
+}
+export function sourceDownloadFilename(filename: string, source: string) {
+  try {
+    const match = decodeURIComponent(new URL(source).pathname).match(/\.(mkv|mp4|webm|avi|mov|m4v)$/i);
+    return match ? filename.replace(/\.[a-z0-9]{2,5}$/i, `.${match[1].toLowerCase()}`) : filename;
+  } catch { return filename; }
 }
 export function openDownloadFlow(request: DownloadFlowRequest) {
   sessionStorage.setItem(DOWNLOAD_FLOW_KEY, JSON.stringify(request));

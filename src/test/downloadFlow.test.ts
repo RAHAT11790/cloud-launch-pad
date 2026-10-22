@@ -6,8 +6,8 @@ describe("Download controller rules", () => {
     expect(maxEpisodes).toBe(2);
     expect(selectDownloadEpisode([1, 2], 3, maxEpisodes)).toEqual([1, 2]);
   });
-  it("never allows more than three episodes", () => {
-    expect(normalizeDownloadFlowSettings({ maxEpisodes: 99 }).maxEpisodes).toBe(3);
+  it("enforces the administrator's configured limit", () => {
+    expect(normalizeDownloadFlowSettings({ maxEpisodes: 3 }).maxEpisodes).toBe(3);
     expect(selectDownloadEpisode([1, 2, 3], 4, 3)).toEqual([1, 2, 3]);
   });
   it("uses each admin-supplied step wait", () => {
