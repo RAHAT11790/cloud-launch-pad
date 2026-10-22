@@ -1,4 +1,5 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
+import { openDownloadFlow, sourceDownloadFilename } from "@/lib/downloadFlow";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
@@ -1534,8 +1535,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadQuality(preferredDownloadQuality);
       const cfg = getDownloadManagerConfig();
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
-      const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
-      setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
+      setDownloadMode(onlyTelegram ? "telegram" : "choose");
       setTgSelectedEpisodes(new Set());
       setTgSelectedQualities(["720P"]);
       setTgEpQualityMap({});
@@ -6515,7 +6515,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       )}
                       {websiteDownloadEnabled && (
                       <button
-                        onClick={() => setDownloadMode("website")}
+                        onClick={() => {
+                          const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
+                          const episodes = hasMultiEpisodes
+                            ? panelEpisodes.map((ep) => ({
+                                number: ep.episodeNumber,
+                                title: ep.title,
+                                choices: Object.entries(ep.qualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({
+                                  quality, url: unwrapManagedVideoUrl(url) || url,
+                                  fileName: sourceDownloadFilename(buildDownloadFileName(buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber), quality), unwrapManagedVideoUrl(url) || url),
+                                  locked: !isDownloadAllowedForFree(quality, ep.index),
+                                })),
+                              }))
+                            : [{ number: 1, title, choices: Object.entries(movieQualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({ quality, url: unwrapManagedVideoUrl(url) || url, fileName: sourceDownloadFilename(buildDownloadFileName(title, quality), unwrapManagedVideoUrl(url) || url), locked: !isDownloadAllowedForFree(quality) })) }];
+                          try { videoRef.current?.pause(); } catch {}
+                          openDownloadFlow({ title, poster, episodes, returnPath: window.location.pathname + window.location.search });
+                        }}
                         className="w-full rounded-[14px] border border-emerald-400/25 bg-gradient-to-r from-emerald-500/15 to-cyan-500/10 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
                       >
                         <span className="h-11 w-11 rounded-full bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shrink-0">

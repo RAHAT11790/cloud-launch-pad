@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import DownloadFlowControls from "@/components/admin/DownloadFlowControls";
 import {
   Download,
   Send,
@@ -14,6 +15,7 @@ import {
 import { db, ref, onValue, update } from "@/lib/firebase";
 import {
   DEFAULT_DOWNLOAD_MANAGER_CONFIG,
+  parseDownloadManagerConfig,
   DownloadDayStat,
   DownloadManagerConfig,
   DownloadServerMode,
@@ -46,6 +48,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
         serverModes[k] = String(modesRaw[k]).toLowerCase() === "https" ? "https" : "http";
       });
       setConfig({
+        ...parseDownloadManagerConfig(raw),
         telegramEnabled: raw?.telegramEnabled !== false,
         websiteEnabled: raw?.websiteEnabled !== false,
         serverModes,
@@ -161,6 +164,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
 
   return (
     <div className="space-y-4 max-w-4xl">
+      <DownloadFlowControls />
       {/* Sources */}
       <div className={card}>
         <div className="mb-4 flex items-center gap-3">
@@ -216,10 +220,10 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
 
         <div className="mb-3 grid gap-2 sm:grid-cols-2 text-[10.5px] leading-relaxed text-zinc-400">
           <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-            <span className="font-bold text-white">HTTP</span> — proxy path + file renaming (current system).
+            <span className="font-bold text-white">HTTP</span> — streaming relay + custom filename.
           </p>
           <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-            <span className="font-bold text-white">HTTPS</span> — direct link, no proxy, no renaming.
+            <span className="font-bold text-white">HTTPS</span> — streaming relay + custom filename.
           </p>
         </div>
 
@@ -231,7 +235,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
                 (config.serverModes[config.activeServerKey] === "https") ? "bg-emerald-500/15 text-emerald-300" : "bg-sky-500/15 text-sky-300"
               }`}>
-                {config.serverModes[config.activeServerKey] === "https" ? "https · direct" : "http · proxy"}
+                {config.serverModes[config.activeServerKey] === "https" ? "https · rename" : "http · rename"}
               </span>
             </div>
           ) : (
