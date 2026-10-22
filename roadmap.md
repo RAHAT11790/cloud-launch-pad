@@ -1,10 +1,12 @@
 # Roadmap
 
 ## Download-only advertising flow (2026-10-22)
-- [ ] Add configurable episode limit, timed ad stages and download-only placement settings.
-- [ ] Build mobile download stages and an ad-free final quality/size list with independent blocker checks.
-- [ ] Register filename relay in both libraries and router; verify hosted default and save placement settings through admin.
-- [ ] Run rule tests and real mobile flow, download and screenshot checks.
+- [x] Add configurable episode limit, timed ad stages and download-only placement settings.
+- [x] Build mobile download stages and an ad-free final quality/size list with independent blocker checks.
+- [x] Register filename relay in both libraries and router; verify hosted default and save placement settings through admin.
+- [x] Run rule tests and real mobile flow, download-start and screenshot checks (Naruto E1/E2: 212.3/212.9 MB, named MKV download started; intentionally cancelled rather than transfer entire file).
+- [ ] Switch file-rename Router row to production Cloudflare — waits for owner's separate Worker deployment URL.
+- [ ] Verify all paid ad creatives and full-file/resume download on production — advertiser delivery intermittent here; production Worker not deployed by owner yet. Range pass-through tested locally; final page has zero ad frames.
 
 - [ ] Align profile photo, name, email, and Premium badge into one polished mobile identity row.
 - [ ] Place Edit Profile and Profile Studio side by side with equal sizing.
@@ -110,4 +112,4 @@
 - [x] Seasons header: one 4-button tool row; compact collapsible full-series premium lock.
 - [x] Merge renumbers as one list (no double counters); range split keeps order across per-season numbering.
 - [x] Ads: popunder favoured 2:1 over smartlink; analytics no longer flags popunder/smartlink "0 clicks".
-- [ ] Social Bar / Native Banner earn nothing — waiting on owner to paste their Adsterra codes.
+- [x] Supplied Social Bar + 160×300 banner stored only in Download controller; non-download ad settings unchanged. Native Banner not supplied.
