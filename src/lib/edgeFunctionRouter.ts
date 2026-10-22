@@ -87,6 +87,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   
   "video-proxy",
   "video-download",
+  "file-rename",
   "live-tv-proxy",
   "telegram-post",
   "comment-bridge",

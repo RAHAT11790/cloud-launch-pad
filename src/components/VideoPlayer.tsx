@@ -1535,8 +1535,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadQuality(preferredDownloadQuality);
       const cfg = getDownloadManagerConfig();
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
-      const onlyWebsite = cfg.websiteEnabled && !cfg.telegramEnabled;
-      setDownloadMode(onlyTelegram ? "telegram" : onlyWebsite ? "website" : "choose");
+      setDownloadMode(onlyTelegram ? "telegram" : "choose");
       setTgSelectedEpisodes(new Set());
       setTgSelectedQualities(["720P"]);
       setTgEpQualityMap({});

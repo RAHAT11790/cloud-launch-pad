@@ -23,7 +23,7 @@ const CLEAR_GRACE = 3 * 60_000;
 const SWEEP_MS = 45_000;
 
 /** Routes the gate must never fight with. */
-const EXEMPT = [GATE_PATH, CLEARED_PATH, "/admin", "/an-explorer"];
+const EXEMPT = [GATE_PATH, CLEARED_PATH, "/admin", "/an-explorer", "/download"];
 
 export type GateState = { blocked: boolean; signals: AdBlockSignals | null; checking: boolean };
 

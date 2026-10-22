@@ -11,6 +11,7 @@ import videoProxySrc    from "../../cloudflare-workers/video-proxy.js?raw";
 
 import liveTvProxySrc   from "../../cloudflare-workers/live-tv-proxy.js?raw";
 import videoDownloadSrc from "../../cloudflare-workers/video-download.js?raw";
+import fileRenameSrc from "../../cloudflare-workers/file-rename.js?raw";
 import apkDownloadSrc   from "../../cloudflare-workers/apk-download.js?raw";
 import shortenArolinksSrc from "../../cloudflare-workers/shorten-arolinks.js?raw";
 import telegramPostSrc  from "../../cloudflare-workers/telegram-post.js?raw";
@@ -61,6 +62,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("file-rename", "File Rename", "Single-stream HTTP/HTTPS download relay with custom anime/season/episode/quality filename and source Range support. Set EGD Router → file-rename after deployment.", fileRenameSrc, [], { isNew: true, badgeText: "DOWNLOAD", badgeTone: "cyan" }),
   entry("abyss",           "Abyss Server",    "🎬 Abyss link resolver + MP4 stream relay (Cloudflare build). Turns an Abyss iframe link into direct 480p/720p/1080p files that play inside the RS player — no iframe, no Abyss ads. Paste the Worker URL into EGD Router → abyss.", abyssSrc, [], { isNew: true, badgeText: "ABYSS · NEW", badgeTone: "cyan" }),
   entry("share-preview",   "Share Preview",   "🖼️ Share link preview — Telegram/WhatsApp/Facebook show the anime LOGO on a 16:9 card, visitors are redirected to the episode. Paste the Worker URL into EGD Router → share-preview.", sharePreviewSrc, [], { isNew: true, badgeText: "SHARE · NEW", badgeTone: "cyan" }),
   entry("video-proxy",     "Video Proxy",     "⚡ v9 CLOUDFLARE-NATIVE FAST PATH — https ranges pass through untouched (no extra edge hop on seek), only http mirrors are windowed (8MB), CF edge cache for segments, same-origin-Referer-first + 7s header timeout so dead mirrors fail over instantly. Tuned ONLY for Cloudflare — do not mirror the Supabase build here.", videoProxySrc, [], { isNew: true, badgeText: "v9 · CF", badgeTone: "amber" }),

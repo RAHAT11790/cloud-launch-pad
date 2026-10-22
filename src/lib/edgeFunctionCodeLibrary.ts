@@ -14,6 +14,7 @@ import videoProxySource from "../../supabase/functions/video-proxy/index.ts?raw"
 
 import liveTvProxySource from "../../supabase/functions/live-tv-proxy/index.ts?raw";
 import videoDownloadSource from "../../supabase/functions/video-download/index.ts?raw";
+import fileRenameSource from "../../supabase/functions/file-rename/index.ts?raw";
 import telegramPostSource from "../../supabase/functions/telegram-post/index.ts?raw";
 import apkDownloadSource from "../../supabase/functions/apk-download/index.ts?raw";
 import linkShareBotSource from "../../supabase/functions/link-share-bot/index.ts?raw";
@@ -90,6 +91,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
+  entry("file-rename", "File Rename", "HTTP/HTTPS filename attachment relay. Use Default for verification; switch this row to your Cloudflare deployment for production downloads.", fileRenameSource, [], { isNew: true, badgeText: "DOWNLOAD", badgeTone: "cyan" }),
   entry("abyss",          "Abyss Server",   "🎬 Abyss link resolver + MP4 stream relay. Turns an Abyss iframe link into direct 480p/720p/1080p files that play inside the RS player — no iframe, no Abyss ads. Paste the URL into EGD Router → abyss (or hit Default).", abyssSource, [], { isNew: true, badgeText: "ABYSS · NEW", badgeTone: "cyan" }),
   entry("share-preview",  "Share Preview",  "🖼️ Share link preview — Telegram/WhatsApp/Facebook show the anime LOGO on a 16:9 card, visitors are redirected to the episode. Paste the URL into EGD Router → share-preview (or hit Default).", sharePreviewSource, [], { isNew: true, badgeText: "SHARE · NEW", badgeTone: "cyan" }),
   entry("video-proxy",    "Video Proxy",    "⚡ v9 ADAPTIVE-WINDOW BUILD (Supabase/Deno) — 1MB first window for instant start, 6MB steady (12MB on https), 7s header timeout, same-origin-Referer-first so HTTP mirrors answer on the first try. Fixes 'proxy down / video never loads'. Redeploy and paste the URL into EGD Router → video-proxy.", videoProxySource, [], { isNew: true, badgeText: "v9 · NEW", badgeTone: "amber" }),
