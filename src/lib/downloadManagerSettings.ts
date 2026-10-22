@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { db, ref, onValue, runTransaction } from "@/lib/firebase";
+import { normalizeDownloadFlowSettings } from "@/lib/downloadFlow";
 
 /**
  * Download Manager settings (admin controlled, Firebase backed).
@@ -27,6 +28,10 @@ export type DownloadManagerConfig = {
   activeServerKey: string;
   /** Domain/base URL of that server, e.g. https://dl3.example.com */
   activeServerDomain: string;
+  maxEpisodes: number;
+  adSteps: number[];
+  socialBar: string;
+  banner: string;
 };
 
 export const DEFAULT_DOWNLOAD_MANAGER_CONFIG: DownloadManagerConfig = {
@@ -35,11 +40,12 @@ export const DEFAULT_DOWNLOAD_MANAGER_CONFIG: DownloadManagerConfig = {
   serverModes: {},
   activeServerKey: "",
   activeServerDomain: "",
+  ...normalizeDownloadFlowSettings(),
 };
 
 const CACHE_KEY = "rs_download_manager_config_v1";
 
-const parseConfig = (raw: any): DownloadManagerConfig => {
+export const parseDownloadManagerConfig = (raw: any): DownloadManagerConfig => {
   const modesRaw = raw?.serverModes && typeof raw.serverModes === "object" ? raw.serverModes : {};
   const serverModes: Record<string, DownloadServerMode> = {};
   Object.keys(modesRaw).forEach((key) => {
@@ -51,6 +57,7 @@ const parseConfig = (raw: any): DownloadManagerConfig => {
     serverModes,
     activeServerKey: String(raw?.activeServerKey || ""),
     activeServerDomain: String(raw?.activeServerDomain || ""),
+    ...normalizeDownloadFlowSettings(raw || {}),
   };
 };
 
@@ -60,14 +67,14 @@ const listeners = new Set<(cfg: DownloadManagerConfig) => void>();
 try {
   if (typeof window !== "undefined") {
     const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) config = parseConfig(JSON.parse(cached));
+    if (cached) config = parseDownloadManagerConfig(JSON.parse(cached));
   }
 } catch {}
 
 try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/downloadManager"), (snap) => {
-      config = parseConfig(snap.val() || {});
+      config = parseDownloadManagerConfig(snap.val() || {});
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(config)); } catch {}
       listeners.forEach((fn) => { try { fn(config); } catch {} });
     });

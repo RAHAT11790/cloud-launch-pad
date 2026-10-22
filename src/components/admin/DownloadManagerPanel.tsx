@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import DownloadFlowControls from "@/components/admin/DownloadFlowControls";
 import {
   Download,
   Send,
@@ -14,6 +15,7 @@ import {
 import { db, ref, onValue, update } from "@/lib/firebase";
 import {
   DEFAULT_DOWNLOAD_MANAGER_CONFIG,
+  parseDownloadManagerConfig,
   DownloadDayStat,
   DownloadManagerConfig,
   DownloadServerMode,
@@ -46,6 +48,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
         serverModes[k] = String(modesRaw[k]).toLowerCase() === "https" ? "https" : "http";
       });
       setConfig({
+        ...parseDownloadManagerConfig(raw),
         telegramEnabled: raw?.telegramEnabled !== false,
         websiteEnabled: raw?.websiteEnabled !== false,
         serverModes,
@@ -161,6 +164,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
 
   return (
     <div className="space-y-4 max-w-4xl">
+      <DownloadFlowControls />
       {/* Sources */}
       <div className={card}>
         <div className="mb-4 flex items-center gap-3">
