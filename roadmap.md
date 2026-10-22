@@ -1,5 +1,11 @@
 # Roadmap
 
+## Download-only advertising flow (2026-10-22)
+- [ ] Add configurable episode limit, timed ad stages and download-only placement settings.
+- [ ] Build mobile download stages and an ad-free final quality/size list with independent blocker checks.
+- [ ] Register filename relay in both libraries and router; verify hosted default and save placement settings through admin.
+- [ ] Run rule tests and real mobile flow, download and screenshot checks.
+
 - [ ] Align profile photo, name, email, and Premium badge into one polished mobile identity row.
 - [ ] Place Edit Profile and Profile Studio side by side with equal sizing.
 - [ ] Render uploaded profile backdrops in a stable 16:9 area without gaps or vertical drift.
