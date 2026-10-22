@@ -87,7 +87,7 @@ export default function DownloadPage() {
     return () => { controller.abort(); clearTimeout(timer); };
   }, [stage, base, request, selected]);
   const wait = downloadWaitRemaining(config.adSteps[step] || 5, elapsed);
-  const picked = request?.episodes.filter((ep) => selected.includes(ep.number)) || [];
+  const picked = request?.episodes.filter((ep) => selected.includes(ep.number)).slice(0, config.maxEpisodes) || [];
   const back = () => window.location.assign(request?.returnPath || "/");
   const next = () => {
     if (guard !== "clear" || wait > 0) return;
