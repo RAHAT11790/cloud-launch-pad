@@ -59,6 +59,7 @@ const lazyWithReload = <T extends React.ComponentType<any>>(factory: () => Promi
 
 const Admin = lazyWithReload(() => import("@/pages/Admin"));
 const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
+const DownloadPage = lazyWithReload(() => import("./pages/DownloadPage"));
 const queryClient = new QueryClient();
 
 /** Standalone pages fade in softly (opacity only, so fixed layouts never shift). */
@@ -83,6 +84,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <Routes>
+          <Route path="/download" element={<Suspense fallback={<RouteFallback />}><DownloadPage /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
           <Route path="/admin/:section" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
           <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><Fade><AnExplorer /></Fade></Suspense>} />
