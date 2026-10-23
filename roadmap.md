@@ -1,5 +1,11 @@
 # Roadmap
 
+## Download corrections (2026-10-23)
+- [ ] Restore original player selection; free users proceed with selected episodes only, premium keeps direct downloads with renaming.
+- [ ] Remove free quality locks; list real 480p/720p/1080p files and final Telegram action without invented resolutions.
+- [ ] Repair isolated ad loading, compact no-scroll steps, sponsor-return timer and final ad cleanup.
+- [ ] Run focused rules and real mobile/premium download checks; report provider/deployment blockers.
+
 ## Download-only advertising flow (2026-10-22)
 - [x] Add configurable episode limit, timed ad stages and download-only placement settings.
 - [x] Build mobile download stages and an ad-free final quality/size list with independent blocker checks.
