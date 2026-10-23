@@ -42,6 +42,7 @@ export default function DownloadPage() {
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [smartlink, setSmartlink] = useState("");
   const [sponsorPending, setSponsorPending] = useState(false);
+  const [ready, setReady] = useState(false);
   const busy = useRef(false);
   const sponsor = useRef<{ awayAt: number; left: boolean; openedAt: number } | null>(null);
   const sponsorTab = useRef<Window | null>(null);
@@ -58,7 +59,8 @@ export default function DownloadPage() {
     advancing.current = true;
     sponsor.current = null; setSponsorPending(false);
     const next = nextDownloadStep(step, steps.length);
-    if (next === "final") finish();
+    // Last step done: show the "links ready" screen; the user taps Get Link to continue.
+    if (next === "final") setReady(true);
     else { setStep(next); setElapsed(0); }
   };
   useEffect(() => { advancing.current = false; }, [step]);
