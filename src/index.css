@@ -11,6 +11,15 @@
 .download-step-footer { flex-shrink: 0; margin-top: auto; padding: 12px 0 max(10px, env(safe-area-inset-bottom)); }
 .download-telegram { --download-telegram: 201 88% 44%; --download-telegram-foreground: 0 0% 100%; background: hsl(var(--download-telegram)); color: hsl(var(--download-telegram-foreground)); }
 .download-telegram:hover { background: hsl(var(--download-telegram) / .85); }
+.download-telegram svg { border-radius: 9999px; box-shadow: 0 0 0 2px hsl(var(--download-telegram-foreground)); }
+.download-final-screen { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.download-final-footer { flex-shrink: 0; border-top: 1px dashed hsl(var(--border)); background: hsl(var(--background)); padding: 10px 0 max(10px, env(safe-area-inset-bottom)); }
+.download-card { background: hsl(var(--secondary)); }
+.download-go { --download-go: 142 64% 38%; background: hsl(var(--download-go)); color: hsl(0 0% 100%); transition: transform .12s ease, background .15s ease; }
+.download-go:active { transform: scale(.98); }
+.download-go:hover:not(:disabled) { background: hsl(var(--download-go) / .88); }
+.download-ring-track { fill: none; stroke: hsl(var(--border)); stroke-width: 4; }
+.download-ring-fill { fill: none; stroke: hsl(var(--primary)); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
 :root {
   --telegram-canvas: 209 69% 15%;
   --telegram-surface: 204 62% 27%;
