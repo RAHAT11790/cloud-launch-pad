@@ -132,3 +132,9 @@
 - [x] Ad steps: timer ring + clear 5-second instructions; Continue visible without scrolling.
 - [x] Final page: green quality buttons (quality, size, type), no big episode title; first tap on each button opens a sponsor, next tap downloads.
 - [x] Telegram button with official logo fixed in a bottom bar.
+
+## Download flow glitch fix + Get Link screen (2026-10-23)
+- [x] Removed the 1.5s no-focus auto-advance that flipped pages 4-5 times by itself; steps now advance only on a real sponsor return.
+- [x] Last step no longer reloads straight to links: a "Your links are ready!" screen with a Get Link button appears first; Get Link redirects to the final download page.
+- [x] Last-step button reads "Get Link"; early sponsor return still restarts the step timer without penalty.
+- [x] Live mobile test on real Naruto: Step 1 Continue → sponsor → Step 2 Get Link → sponsor → ready screen → Get Link → final links (1080P FHD, real sizes, Telegram bar). 11 download tests + build pass.
