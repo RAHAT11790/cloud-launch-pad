@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue as remoteOnValue, push, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, orderByKey, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt, type DataSnapshot } from "firebase/database";
+import { getDatabase, ref, onValue as remoteOnValue, push as remotePush, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, orderByKey, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt, type DataSnapshot } from "firebase/database";
 import { currentGuestId, localGuestPath, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
 import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
 
@@ -51,6 +51,12 @@ export const set: typeof remoteSet = (target, value) => {
   try { writeGuestPath(path, value); return Promise.resolve(); } catch (error) { return Promise.reject(error); }
 };
 export const remove: typeof remoteRemove = target => useLocal(referencePath(target)) ? set(target, null) : remoteRemove(target);
+export const push: typeof remotePush = (target, value) => {
+  if (!useLocal(referencePath(target))) return remotePush(target, value);
+  const child = remotePush(target);
+  if (value !== undefined && value !== null) writeGuestPath(referencePath(child), value);
+  return child;
+};
 export const update: typeof remoteUpdate = (target, values) => {
   const path = referencePath(target);
   const remote: Record<string, unknown> = {};
@@ -88,4 +94,4 @@ export async function registerGuestId(id: string) {
   try { await remoteSet(ref(db, `guestRegistry/${id}`), true); }
   catch (error) { registeredGuests.delete(id); throw error; }
 }
-export { ref, push, query, orderByChild, orderByKey, equalTo, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+export { ref, query, orderByChild, orderByKey, equalTo, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };

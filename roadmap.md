@@ -1,11 +1,11 @@
 # Roadmap
 
 ## Stability and guest privacy (approved 2026-10-23)
-- [ ] Fix download warning loading flash, unavailable-service guidance, exact ad step count and no-ad fallback.
-- [ ] Fix repeat card clicks, stale resume episode links and stale application data.
-- [ ] Keep guest personal data local; retain only minimal guest registry/count in Firebase.
-- [ ] Batch existing guest cleanup safely without deleting real accounts.
-- [ ] Run regression tests and real-content browser checks; report external blockers.
+- [x] Fix download warning loading flash, unavailable-service guidance, exact ad step count and no-ad fallback.
+- [x] Fix repeat card clicks, stale resume episode links and stale application data.
+- [x] Keep guest personal data local; retain only minimal guest registry/count in Firebase.
+- [x] Add safe legacy guest cleanup in batches of 50 with fresh explicit-marker checks; production deletion intentionally not executed.
+- [x] Run 106 regression tests and real Naruto mobile download checks: 2 configured steps, real sizes and named MKV download. Paid advertiser fill and premium-account checks remain externally unverified.
 
 ## Download corrections (2026-10-23)
 - [x] Restore original selection with free episodes initially unselected; keep premium direct dispatch with filename relay.
