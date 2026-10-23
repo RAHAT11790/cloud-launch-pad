@@ -40,7 +40,7 @@ function localSnapshot(target: Parameters<typeof remoteGet>[0]): DataSnapshot {
     hasChild: (child: string) => readGuestPath(`${path}/${child}`) !== null,
     hasChildren: () => !!value && typeof value === "object" && Object.keys(value).length > 0,
     forEach: (action: (snapshot: DataSnapshot) => boolean | void) => {
-      for (const key of Object.keys(value || {})) if (action(localSnapshot(ref(db, `${path}/${key}`))) return true;
+      for (const key of Object.keys(value || {})) if (action(localSnapshot(ref(db, `${path}/${key}`)))) return true;
       return false;
     }, priority: null } as unknown as DataSnapshot;
 }
@@ -71,15 +71,20 @@ export const runTransaction: typeof remoteTransaction = (target, action, options
 };
 export const onValue: typeof remoteOnValue = ((target: Parameters<typeof remoteGet>[0], callback: (snapshot: DataSnapshot) => unknown, ...args: unknown[]) => {
   if (!useLocal(referencePath(target))) return (remoteOnValue as Function)(target, callback, ...args);
-  const emit = () => callback(localSnapshot(target));
-  emit();
-  if (args.some(value => value && typeof value === "object" && "onlyOnce" in value && value.onlyOnce)) return () => {};
+  let active = true;
+  const emit = () => { if (active) callback(localSnapshot(target)); };
+  queueMicrotask(emit);
+  if (args.some(value => value && typeof value === "object" && "onlyOnce" in value && value.onlyOnce)) return () => { active = false; };
   window.addEventListener("rs_guest_data_changed", emit);
   window.addEventListener("storage", emit);
-  return () => { window.removeEventListener("rs_guest_data_changed", emit); window.removeEventListener("storage", emit); };
+  return () => { active = false; window.removeEventListener("rs_guest_data_changed", emit); window.removeEventListener("storage", emit); };
 }) as typeof remoteOnValue;
 /** Only an ID bit is persisted for guest counting; no profile or activity. */
-export function registerGuestId(id: string) {
-  return remoteSet(ref(db, `guestRegistry/${id}`), true);
+const registeredGuests = new Set<string>();
+export async function registerGuestId(id: string) {
+  if (registeredGuests.has(id)) return;
+  registeredGuests.add(id);
+  try { await remoteSet(ref(db, `guestRegistry/${id}`), true); }
+  catch (error) { registeredGuests.delete(id); throw error; }
 }
 export { ref, push, query, orderByChild, orderByKey, equalTo, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };

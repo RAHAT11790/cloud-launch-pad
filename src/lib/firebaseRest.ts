@@ -52,7 +52,11 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
   if (typeof window !== "undefined" && !isShallow) {
     try {
       const cached = sessionStorage.getItem(cacheKey);
-      if (cached) return JSON.parse(cached) as T;
+      if (cached) {
+        const entry = JSON.parse(cached);
+        if (entry?.cachedAt && Date.now() - entry.cachedAt < 15000) return entry.data as T;
+        sessionStorage.removeItem(cacheKey);
+      }
     } catch {}
   }
   const controller = new AbortController();
@@ -60,7 +64,7 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
   try {
     const res = await fetch(firebaseRestUrl(path, requestParams), {
       method: "GET",
-      cache: isShallow ? "no-store" : "force-cache",
+      cache: "no-store",
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Firebase REST ${res.status}`);
@@ -68,7 +72,7 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
     if (typeof window !== "undefined" && !params?.shallow) {
       try {
         const text = JSON.stringify(data);
-        if (text.length < 750_000) sessionStorage.setItem(cacheKey, text);
+        if (text.length < 750_000) sessionStorage.setItem(cacheKey, JSON.stringify({ cachedAt: Date.now(), data }));
       } catch {}
     }
     return data;
