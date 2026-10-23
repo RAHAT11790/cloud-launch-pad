@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorWaitComplete, type DownloadFlowRequest } from "@/lib/downloadFlow";
 import { useDownloadManagerConfig, recordDownloadEvent } from "@/lib/downloadManagerSettings";
