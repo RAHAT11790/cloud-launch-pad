@@ -26,6 +26,7 @@ const mapAudioTracks = (tracks: any): AudioTrack[] | undefined => {
       link: at?.link || at?.audioUrl || at?.rawAudioUrl || "",
       audioUrl: at?.audioUrl || at?.link || at?.rawAudioUrl || undefined,
       rawAudioUrl: at?.rawAudioUrl || at?.audioUrl || at?.link || undefined,
+      qualityLinks: at?.qualityLinks && typeof at.qualityLinks === "object" ? at.qualityLinks : undefined,
       isDefault: at?.isDefault === true,
       link480: at?.link480 || undefined,
       link720: at?.link720 || undefined,
@@ -48,6 +49,7 @@ const mapSubtitleTracks = (tracks: any): SubtitleTrack[] | undefined => {
 };
 
 const mapEpisode = (ep: any): Episode => ({
+  qualityLinks: ep?.qualityLinks && typeof ep.qualityLinks === "object" ? ep.qualityLinks : undefined,
   episodeNumber: Number(ep?.episodeNumber || ep?.number || 0) || 0,
   title: ep?.title || "",
   link: ep?.link || "",

@@ -1108,8 +1108,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentLangLabel, selectedDownloadLanguageLabel]);
 
   const primarySeriesLanguageLabel = useMemo(() => {
-    return getPrimaryLanguageToken(anime?.language) || normalizedLanguageTracks[0]?.label || currentLangLabel;
-  }, [anime?.language, currentLangLabel, normalizedLanguageTracks]);
+    return getPrimaryLanguageToken(anime?.baseLanguage || anime?.language) || normalizedLanguageTracks[0]?.label || currentLangLabel;
+  }, [anime?.baseLanguage, anime?.language, currentLangLabel, normalizedLanguageTracks]);
 
   const activeDownloadLanguageTrack = useMemo(() => {
     const selectedKey = currentDownloadLanguageLabel.trim().toLowerCase();
@@ -1201,7 +1201,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       Object.entries(qualityMap).forEach(([k, v]) => {
         const url = String(v || "").trim();
         if (!url) return;
-        const key = String(k).trim();
+        const normalized = String(k).trim().toLowerCase().replace(/^p(?=\d)/, "");
+        const key = normalized === "default" ? "Default" : normalized === "4k" ? "4K" : /^(480|720|1080)p?$/.test(normalized) ? `${normalized.replace(/p$/, "")}P` : String(k).trim();
         if (!result[key]) result[key] = url;
       });
     }
