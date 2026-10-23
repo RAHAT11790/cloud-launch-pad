@@ -1,5 +1,12 @@
 # Roadmap
 
+## Stability and guest privacy (approved 2026-10-23)
+- [ ] Fix download warning loading flash, unavailable-service guidance, exact ad step count and no-ad fallback.
+- [ ] Fix repeat card clicks, stale resume episode links and stale application data.
+- [ ] Keep guest personal data local; retain only minimal guest registry/count in Firebase.
+- [ ] Batch existing guest cleanup safely without deleting real accounts.
+- [ ] Run regression tests and real-content browser checks; report external blockers.
+
 ## Download corrections (2026-10-23)
 - [x] Restore original selection with free episodes initially unselected; keep premium direct dispatch with filename relay.
 - [x] Remove free quality locks and recover stored resolutions; final Telegram action respects its existing enabled setting (currently off).
