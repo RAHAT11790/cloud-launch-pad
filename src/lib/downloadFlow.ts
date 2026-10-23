@@ -1,7 +1,15 @@
 export type DownloadChoice = { quality: string; url: string; fileName: string; locked?: boolean };
 export type DownloadEpisode = { number: number; title: string; choices: DownloadChoice[] };
-export type DownloadFlowRequest = { title: string; poster?: string; episodes: DownloadEpisode[]; returnPath: string };
+export type DownloadFlowRequest = { title: string; poster?: string; season?: number; episodes: DownloadEpisode[]; telegramUrl?: string; returnPath: string };
 export const DOWNLOAD_FLOW_KEY = "rs_download_flow_v1";
+export const DOWNLOAD_FINAL_KEY = "rs_download_final_v1";
+export function downloadNeedsAdFlow(premium: boolean | null) { return premium === false; }
+export function sponsorWaitComplete(seconds: number, awayMs: number) { return awayMs >= seconds * 1000; }
+export function freeDownloadQuality(value: string) {
+  const label = value.trim().toLowerCase();
+  const match = label.match(/^(480|720|1080)p?$/);
+  return match ? `${match[1]}p` : label === "default" ? "Original file" : "";
+}
 export const DEFAULT_DOWNLOAD_ADS = {
   socialBar: '<script data-cfasync="false" src="https://bauval.org/14/76179d54c872b5d668d5a5bd3c60cc20"></script>',
   banner: `<script>var atOptions = {'key':'a50e44c4616d20c203054f1729493757','format':'iframe','height':300,'width':160,'params':{}};</script><script src="https://bauval.org/22/a50e44c4616d20c203054f1729493757"></script>`,
@@ -30,6 +38,7 @@ export function sourceDownloadFilename(filename: string, source: string) {
   } catch { return filename; }
 }
 export function openDownloadFlow(request: DownloadFlowRequest) {
+  sessionStorage.removeItem(DOWNLOAD_FINAL_KEY);
   sessionStorage.setItem(DOWNLOAD_FLOW_KEY, JSON.stringify(request));
   // Full navigation tears down player ad hooks; final page never inherits them.
   window.location.assign("/download");
