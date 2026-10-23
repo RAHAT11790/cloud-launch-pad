@@ -42,6 +42,7 @@ export default function DownloadPage() {
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [smartlink, setSmartlink] = useState("");
   const [sponsorPending, setSponsorPending] = useState(false);
+  const [ready, setReady] = useState(false);
   const busy = useRef(false);
   const sponsor = useRef<{ awayAt: number; left: boolean; openedAt: number } | null>(null);
   const sponsorTab = useRef<Window | null>(null);
@@ -58,7 +59,8 @@ export default function DownloadPage() {
     advancing.current = true;
     sponsor.current = null; setSponsorPending(false);
     const next = nextDownloadStep(step, steps.length);
-    if (next === "final") finish();
+    // Last step done: show the "links ready" screen; the user taps Get Link to continue.
+    if (next === "final") setReady(true);
     else { setStep(next); setElapsed(0); }
   };
   useEffect(() => { advancing.current = false; }, [step]);
@@ -84,7 +86,7 @@ export default function DownloadPage() {
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (!final && request && steps?.length === 0) finish();
+    if (!final && request && steps?.length === 0) setReady(true);
   }, [steps, final, request]);
   useEffect(() => {
     if (final || !sponsorPending) return;
@@ -110,9 +112,8 @@ export default function DownloadPage() {
     };
     const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
     const closedCheck = window.setInterval(() => {
+      // Only a real tab close counts; never auto-advance while the sponsor still has focus.
       if (sponsor.current && sponsorTab.current?.closed) returned();
-      // A blocked/empty sponsor that never took focus is not a user violation.
-      else if (sponsor.current && !sponsor.current.left && performance.now() - sponsor.current.openedAt > 1500) returned();
     }, 250);
     window.addEventListener("blur", leave); window.addEventListener("focus", returned); document.addEventListener("visibilitychange", visibility);
     return () => { clearInterval(closedCheck); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
@@ -168,7 +169,13 @@ export default function DownloadPage() {
     <header className="shrink-0 border-b border-border"><div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-2"><Button variant="ghost" size="icon" aria-label="Back to episode" onClick={back}><ArrowLeft /></Button><span className="text-sm font-bold">RS ANIME03 · Downloads</span><ShieldCheck className="ml-auto text-primary" size={20} /></div></header>
     {!request ? <div className="mx-auto py-16 text-center"><Download className="mx-auto mb-4" /><h1 className="text-xl font-bold">No episodes selected</h1><Button className="mt-6" onClick={back}>Back to anime</Button></div> : <>
       <div className="mx-auto flex w-full max-w-lg shrink-0 items-center gap-3 px-4 py-3">{request.poster && <img src={request.poster} alt="" className="h-12 w-9 rounded object-cover" />}<div className="min-w-0"><h1 className="break-words text-base font-bold">{request.title}</h1><p className="mt-1 text-xs text-muted-foreground">Season {request.season || 1} · Episode {request.episodes.map(ep => ep.number).join(", ")}</p></div></div>
-      {!final && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-4">
+      {!final && ready && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/15"><ShieldCheck className="text-primary" size={44} /></span>
+        <h2 className="text-xl font-bold">Your links are ready!</h2>
+        <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">Your website download and Telegram download links are ready. Tap the button below to get them.</p>
+        <Button className="h-12 w-full max-w-xs text-base font-bold" onClick={finish}>Get Link<ArrowRight /></Button>
+      </div>}
+      {!final && !ready && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-4">
         <div className="flex shrink-0 items-center justify-between border-b border-border pb-2 text-xs text-muted-foreground"><span>DOWNLOAD ACCESS</span><span>{steps === null ? "Loading steps…" : `Step ${step + 1} / ${steps.length}`}</span></div>
         <div className="flex shrink-0 items-center gap-3 py-3">
           <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
@@ -178,7 +185,7 @@ export default function DownloadPage() {
           <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${seconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${seconds} seconds, then return here.`}</p></div>
         </div>
         <div className="download-ad-slot">{guard === "clear" ? <StepAds key={step} socialBar={config.socialBar} banner={config.banner} /> : <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">{guard === "checking" ? <Loader2 className="animate-spin text-primary" /> : <ShieldAlert className="text-destructive" />}<h2 className="text-sm font-semibold">{guard === "checking" ? "Checking ad access…" : guard === "blocked" ? "Ad blocker detected" : "Unable to verify ad access"}</h2><p className="max-w-xs text-xs text-muted-foreground">{guard === "blocked" ? "Turn off ad blocking or filtering DNS, then retry." : "Check your connection and retry."}</p>{guard !== "checking" && <Button variant="outline" onClick={() => void verify()}><RefreshCw />Check again</Button>}</div>}</div>
-        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending} onClick={next}>{sponsorPending ? `Return after ${wait}s` : step + 1 === steps?.length ? "Get download links" : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {seconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
+        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending} onClick={next}>{sponsorPending ? `Return after ${wait}s` : step + 1 === steps?.length ? "Get Link" : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {seconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
       </div>}
       {final && <>
         <div className="mx-auto w-full max-w-lg min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
