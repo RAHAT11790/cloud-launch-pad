@@ -6321,7 +6321,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const startFreeDownloads = () => {
             const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
             const seasonNumber = Number(seasonLabel.match(/\d+/)?.[0]) || downloadPanelSeasonIdx + 1;
-            const picked = hasMultiEpisodes ? panelEpisodes.filter(ep => dlSelectedEpisodes.has(ep.index)).slice(0, downloadManager.maxEpisodes) : [{ episodeNumber: 1, title, qualityLinks: movieQualityLinks, directLink: "" }];
+            const picked: Array<{ episodeNumber: number; title: string; qualityLinks: Record<string, string>; directLink?: string }> = hasMultiEpisodes ? panelEpisodes.filter(ep => dlSelectedEpisodes.has(ep.index)).slice(0, downloadManager.maxEpisodes) : [{ episodeNumber: 1, title, qualityLinks: movieQualityLinks, directLink: "" }];
             if (!picked.length) { toast.error("Select at least one episode"); return; }
             const episodes = picked.map(ep => ({
               number: ep.episodeNumber, title: ep.title,
