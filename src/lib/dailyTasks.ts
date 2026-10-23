@@ -3,6 +3,7 @@
 import { db, ref, get, set, onValue, runTransaction, update } from "@/lib/firebase";
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
+import { currentGuestId } from "@/lib/guestPersistence";
 
 export type TaskId = "login" | "visit30" | "visit120" | "share" | "comment";
 
@@ -248,6 +249,7 @@ export const captureReferralFromUrl = () => {
 
       const me = getLocalUserId() || ensureGuestUser();
       if (!me || me === refUid) return;
+      if (currentGuestId()) { localStorage.setItem(REFERRED_BY_KEY, refUid); return; }
 
       // Persist referrer for future 30-min upgrade check.
       try {
@@ -293,6 +295,7 @@ export const captureReferralFromUrl = () => {
 /** Called periodically; when visitor has 30+ min today, credits referrer +9. */
 export const checkReferralUpgrade = async () => {
   if (typeof window === "undefined") return;
+  if (currentGuestId()) return;
   try {
     const refUid = localStorage.getItem(REFERRED_BY_KEY);
     if (!refUid) return;
