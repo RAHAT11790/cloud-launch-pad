@@ -119,3 +119,9 @@
 - [x] Merge renumbers as one list (no double counters); range split keeps order across per-season numbering.
 - [x] Ads: popunder favoured 2:1 over smartlink; analytics no longer flags popunder/smartlink "0 clicks".
 - [x] Supplied Social Bar + 160×300 banner stored only in Download controller; non-download ad settings unchanged. Native Banner not supplied.
+
+## Download page polish (2026-10-23)
+- [x] Free users: Download opens the episode selector directly; rows show "All Quality Free Download". Premium keeps Telegram/Website choice.
+- [x] Ad steps: timer ring + clear 5-second instructions; Continue visible without scrolling.
+- [x] Final page: green quality buttons (quality, size, type), no big episode title; first tap on each button opens a sponsor, next tap downloads.
+- [x] Telegram button with official logo fixed in a bottom bar.
