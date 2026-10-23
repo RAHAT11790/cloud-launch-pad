@@ -6625,7 +6625,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                 <p className="mt-2 text-[10.5px] leading-snug text-white/50">Tap a quality next to each episode. Only the qualities that episode really has are shown.</p>
                               </>
                             ) : (
-                              {!freeWebsite && <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                              <div className="mt-2.5 border-t border-white/10 pt-2.5">
                                 <p className="text-[10px] text-white/50 mb-1.5">Select one or more qualities</p>
                                 <div className={`grid gap-2 ${tgAvailableQualities.length >= 3 ? 'grid-cols-3' : tgAvailableQualities.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                   {tgAvailableQualities.length === 0 && (<p className="text-[11px] text-white/50">No Telegram quality available.</p>)}
@@ -6759,7 +6759,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           <div className="h-10 rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white/70 flex items-center">Movie</div>
                         )}
                       </div>
-                      <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                      {!freeWebsite && <div className="mt-2.5 border-t border-white/10 pt-2.5">
                         <div className="grid grid-cols-4 gap-2">
                           {qualityChoices.map((label) => {
                             const available = isQualityAvailable(label);
