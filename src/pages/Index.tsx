@@ -1,4 +1,5 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
+import { resolveResumeTarget } from "@/lib/resumeTarget";
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { countRealEpisodes, episodeNumberAt, findEpisodeIndexByNumber, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
@@ -592,7 +593,7 @@ import { supabase } from "@/integrations/supabase/client";
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAILS_LOADING_TOAST_ID = "rs-an-details-loading-toast";
-const FIREBASE_FULL_ITEM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const FIREBASE_FULL_ITEM_CACHE_TTL = 15000;
 
 const sanitizeFirebaseKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 
@@ -1809,6 +1810,7 @@ const Index = () => {
         const mapped = collection === "movies"
           ? mapFirebaseMovieItem(liveAnimeId, row, { full: true })
           : mapFirebaseWebseriesItem(liveAnimeId, row, { full: true });
+        writeFullFirebaseItemCache(mapped.type, liveAnimeId, mapped);
         setSelectedAnime((prev) => (prev && prev.id === liveAnimeId ? { ...prev, ...mapped } : prev));
         setPlayerState((prev) => (prev && prev.anime?.id === liveAnimeId
           ? { ...prev, anime: { ...prev.anime, ...mapped } }
@@ -2222,7 +2224,7 @@ const Index = () => {
       const meta = await loadAnimeSaltPremiumMeta(anime);
       if (meta) preflightAnime = { ...anime, ...meta };
     } else if (anime.premium === undefined && !anime.premiumEpisodes) {
-      preflightFullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime);
+      preflightFullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime, 8000, { forceFresh: true });
       if (preflightFullAnime) preflightAnime = preflightFullAnime;
     }
 
@@ -2244,8 +2246,9 @@ const Index = () => {
       navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
     }
 
-    const fullAnime = isAnimeSaltCard ? null : (preflightFullAnime || await loadFullFirebaseAnimeItemWithTimeout(preflightAnime));
-    const playableAnime = fullAnime || preflightAnime;
+    const fullAnime = isAnimeSaltCard ? null : (preflightFullAnime || await loadFullFirebaseAnimeItemWithTimeout(preflightAnime, 8000, { forceFresh: true }));
+    if (!isAnimeSaltCard && !fullAnime) { toast.error("Unable to load the latest episode links. Please try again."); return; }
+    const playableAnime = fullAnime ? { ...fullAnime, __rsForceFreshPlayback: false, __rsEpisodeNumber: (anime as any).__rsEpisodeNumber } as AnimeItem : preflightAnime;
 
     // AN cards are admin-curated metadata only — playback URLs are resolved
     // LIVE from the AnimeSalt API on click (CDN links expire if stored).
@@ -2428,6 +2431,7 @@ const Index = () => {
         if (wantedNumber > 0) {
           const byNumber = findEpisodeIndexByNumber(eps, wantedNumber);
           if (byNumber >= 0) resolvedEpIdx = byNumber;
+          else { toast.error("This episode is no longer available. Please select another episode."); return; }
         }
         // Never point past the end of the list (that made taps do nothing).
         if (eps.length && resolvedEpIdx !== undefined && resolvedEpIdx >= eps.length) resolvedEpIdx = eps.length - 1;
@@ -2695,7 +2699,8 @@ const Index = () => {
     if (!pending?.animeId) return;
 
     const anime = allAnime.find((item) => item.id === pending?.animeId);
-    if (!anime) return;
+    if (!anime) anime = await loadFirebaseAnimeItemByRouteId(String(item.id || "")) || undefined;
+    if (!anime) { toast.error("This title is no longer available. Please refresh the list."); return; }
 
     try { sessionStorage.removeItem("rs_pendingUnlockPlayback"); } catch {}
     handlePlay(anime, pending.seasonIdx, pending.epIdx);
@@ -2871,7 +2876,11 @@ const Index = () => {
       || String(anime.id || "").startsWith("an_mv_")
       || !!anime.anSlug
       || !!anime.animeSaltSlug;
-    if (!isAnimeSaltContinue) anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
+    if (!isAnimeSaltContinue) {
+      const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, 8000, { forceFresh: true });
+      if (!latest) { toast.error("Unable to load the latest episode links. Please try again."); return; }
+      anime = latest;
+    }
 
     if (isAnimeSaltContinue || anime.source === "animesalt") {
       // Route AN continue-watching through the live-API click flow so playback
@@ -2885,8 +2894,8 @@ const Index = () => {
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
       if (item.episodeInfo) {
-      const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
-      const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
+      let sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
+      let eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
       let src = "";
       let subtitle = "";
       let episode: Episode | undefined;
@@ -2894,8 +2903,12 @@ const Index = () => {
         const selectedLanguage = resolvePlayableLanguage(anime, item.language || anime.baseLanguage || anime.language || "");
         const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, selectedLanguage);
         if (resolvedSeasons) {
+          const target = resolveResumeTarget(resolvedSeasons, item.episodeInfo);
+          if (!target) { toast.error("Your saved episode is no longer available. Please select another episode."); void handleCardClick(anime); return; }
+          sIdx = target.seasonIdx; eIdx = target.epIdx;
           const season = resolvedSeasons[sIdx];
-        episode = season.episodes[eIdx];
+        episode = season?.episodes?.[eIdx];
+        if (!episode || !season) { toast.error("This episode is unavailable. Please select another episode."); return; }
         src = getEpisodeSrc(episode);
         subtitle = `${season.name} - ${formatEpisodeLabel(episode)}`;
         if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
@@ -2931,7 +2944,7 @@ const Index = () => {
         }
         addToWatchHistory(anime, sIdx, eIdx, true);
         setSelectedAnime(null);
-      }
+      } else { toast.error("This episode has no playable link. Please select another episode."); void handleCardClick(anime); }
     } else {
       // MOVIE continue-watching. Previously gated on `anime.movieLink` which
       // silently swallowed clicks when the lightweight card object had no

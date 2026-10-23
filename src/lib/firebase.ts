@@ -66,7 +66,8 @@ export const runTransaction: typeof remoteTransaction = (target, action, options
   try {
     const next = action(readGuestPath(path));
     if (next !== undefined) writeGuestPath(path, next);
-    return Promise.resolve({ committed: next !== undefined, snapshot: localSnapshot(target) });
+    const snapshot = localSnapshot(target);
+    return Promise.resolve({ committed: next !== undefined, snapshot, toJSON: () => ({ committed: next !== undefined, snapshot: snapshot.toJSON() }) });
   } catch (error) { return Promise.reject(error); }
 };
 export const onValue: typeof remoteOnValue = ((target: Parameters<typeof remoteGet>[0], callback: (snapshot: DataSnapshot) => unknown, ...args: unknown[]) => {

@@ -120,6 +120,7 @@ export const setupTvNavigation = () => {
   };
 
   const onPointerDown = (event: PointerEvent) => {
+    dragged = false;
     if (!isTvMode() || event.button !== 0) return;
     const row = horizontalRowFrom(event.target);
     if (!row) return;
@@ -140,7 +141,7 @@ export const setupTvNavigation = () => {
 
   const endPointerDrag = () => { dragRow = null; };
   const stopClickAfterDrag = (event: MouseEvent) => {
-    if (!dragged) return;
+    if (!isTvMode() || !dragged) return;
     event.preventDefault();
     event.stopPropagation();
     dragged = false;
