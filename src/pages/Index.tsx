@@ -2415,7 +2415,9 @@ const Index = () => {
     if (!isAnimeSaltContentEarlyReload) {
       const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
       if (needsFullHydration) {
-        anime = (await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 3600 : 1400, { forceFresh: forceFreshPlayback })) || anime;
+        const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 8000 : 1400, { forceFresh: forceFreshPlayback });
+        if (forceFreshPlayback && !latest) { toast.error("Unable to load the latest episode links. Please try again."); return; }
+        anime = latest || anime;
       }
       if (resolvedSeasonIdx === undefined || resolvedEpIdx === undefined) {
         const fullDefaultTarget = getDefaultWatchTarget(anime);
