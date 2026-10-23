@@ -169,7 +169,13 @@ export default function DownloadPage() {
     <header className="shrink-0 border-b border-border"><div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-2"><Button variant="ghost" size="icon" aria-label="Back to episode" onClick={back}><ArrowLeft /></Button><span className="text-sm font-bold">RS ANIME03 · Downloads</span><ShieldCheck className="ml-auto text-primary" size={20} /></div></header>
     {!request ? <div className="mx-auto py-16 text-center"><Download className="mx-auto mb-4" /><h1 className="text-xl font-bold">No episodes selected</h1><Button className="mt-6" onClick={back}>Back to anime</Button></div> : <>
       <div className="mx-auto flex w-full max-w-lg shrink-0 items-center gap-3 px-4 py-3">{request.poster && <img src={request.poster} alt="" className="h-12 w-9 rounded object-cover" />}<div className="min-w-0"><h1 className="break-words text-base font-bold">{request.title}</h1><p className="mt-1 text-xs text-muted-foreground">Season {request.season || 1} · Episode {request.episodes.map(ep => ep.number).join(", ")}</p></div></div>
-      {!final && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-4">
+      {!final && ready && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/15"><ShieldCheck className="text-primary" size={44} /></span>
+        <h2 className="text-xl font-bold">Your links are ready!</h2>
+        <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">Your website download and Telegram download links are ready. Tap the button below to get them.</p>
+        <Button className="h-12 w-full max-w-xs text-base font-bold" onClick={finish}>Get Link<ArrowRight /></Button>
+      </div>}
+      {!final && !ready && <div className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-4">
         <div className="flex shrink-0 items-center justify-between border-b border-border pb-2 text-xs text-muted-foreground"><span>DOWNLOAD ACCESS</span><span>{steps === null ? "Loading steps…" : `Step ${step + 1} / ${steps.length}`}</span></div>
         <div className="flex shrink-0 items-center gap-3 py-3">
           <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
