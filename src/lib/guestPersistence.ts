@@ -14,11 +14,13 @@ export function currentGuestId(): string | null {
 export function isLegacyGuestCleanupCandidate(id: string, value: { email?: string; guest?: boolean } = {}) {
   const email = String(value.email || "").trim().toLowerCase();
   if (email && email !== "guest@rsanime.com" && !email.endsWith("@guest.local")) return false;
-  return id.startsWith("guest_") || value.guest === true || email === "guest@rsanime.com" || email.endsWith("@guest.local");
+  return id.startsWith("guest_") || email === "guest@rsanime.com" || email.endsWith("@guest.local");
 }
 export function localGuestPath(path: string, guestId: string | null): boolean {
-  if (!guestId) return false;
   const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "guestRegistry") return false;
+  if (parts.some(part => part.startsWith("guest_"))) return true;
+  if (!guestId) return false;
   return parts.includes(guestId) || ["coinDeviceDaily", "deviceTransferClaims"].includes(parts[0] || "");
 }
 export const GUEST_DATA_KEY = "rs_guest_data_v2";
