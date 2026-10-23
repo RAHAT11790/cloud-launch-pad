@@ -30,7 +30,7 @@ export const googleProvider = new GoogleAuthProvider();
 const referencePath = (target: Parameters<typeof remoteGet>[0]) => {
   try { return decodeURIComponent(new URL(target.toString()).pathname).replace(/^\/+|\/+$/g, ""); } catch { return ""; }
 };
-const useLocal = (path: string) => !auth.currentUser && localGuestPath(path, currentGuestId());
+const useLocal = (path: string) => localGuestPath(path, currentGuestId());
 function localSnapshot(target: Parameters<typeof remoteGet>[0]): DataSnapshot {
   const path = referencePath(target);
   const value = readGuestPath(path);

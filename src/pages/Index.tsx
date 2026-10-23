@@ -2699,8 +2699,7 @@ const Index = () => {
     if (!pending?.animeId) return;
 
     const anime = allAnime.find((item) => item.id === pending?.animeId);
-    if (!anime) anime = await loadFirebaseAnimeItemByRouteId(String(item.id || "")) || undefined;
-    if (!anime) { toast.error("This title is no longer available. Please refresh the list."); return; }
+    if (!anime) return;
 
     try { sessionStorage.removeItem("rs_pendingUnlockPlayback"); } catch {}
     handlePlay(anime, pending.seasonIdx, pending.epIdx);
@@ -2869,7 +2868,8 @@ const Index = () => {
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
-    if (!anime) return;
+    if (!anime) anime = (await loadFirebaseAnimeItemByRouteId(String(item.id || ""))) || undefined;
+    if (!anime) { toast.error("This title is no longer available. Please refresh the list."); return; }
     const isAnimeSaltContinue = anime.source === "animesalt"
       || String(anime.id || "").startsWith("as_")
       || String(anime.id || "").startsWith("an_")
