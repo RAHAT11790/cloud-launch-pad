@@ -40,6 +40,7 @@ export default function DownloadPage() {
   const [sponsorPending, setSponsorPending] = useState(false);
   const busy = useRef(false);
   const sponsor = useRef<{ awayAt: number; left: boolean } | null>(null);
+  const sponsorTab = useRef<Window | null>(null);
   const seconds = config.adSteps[step] || 5;
   const finish = () => {
     sessionStorage.setItem(DOWNLOAD_FINAL_KEY, sessionStorage.getItem(DOWNLOAD_FLOW_KEY) || "");
@@ -90,8 +91,11 @@ export default function DownloadPage() {
       void verify();
     };
     const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
+    const closedCheck = window.setInterval(() => {
+      if (sponsor.current && sponsorTab.current?.closed) returned();
+    }, 250);
     window.addEventListener("blur", leave); window.addEventListener("focus", returned); document.addEventListener("visibilitychange", visibility);
-    return () => { window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
+    return () => { clearInterval(closedCheck); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
   }, [step, seconds, final]);
   useEffect(() => {
     if (!final || !base || !request) return;
@@ -111,8 +115,9 @@ export default function DownloadPage() {
   const next = () => {
     if (guard !== "clear" || wait || sponsorPending) return;
     if (!/^https?:\/\//i.test(smartlink)) { advance(); return; }
-    sponsor.current = { awayAt: performance.now(), left: false }; setSponsorPending(true);
+    sponsor.current = { awayAt: performance.now(), left: true }; setSponsorPending(true);
     const tab = window.open(smartlink, "_blank");
+    sponsorTab.current = tab;
     if (!tab) { sponsor.current = null; setSponsorPending(false); toast.error("Allow the sponsor tab, then try again."); return; }
     try { tab.opener = null; } catch {}
   };

@@ -1207,6 +1207,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       });
     }
 
+    if (Object.keys(result).some(key => key !== "Default")) delete result.Default;
     return result;
   }, [getTrackQualityLinks, primarySeriesLanguageLabel]);
 
