@@ -228,4 +228,4 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   );
 };
 
-export default memo(AnimeCard, (prev, next) => prev.anime === next.anime);
+export default memo(AnimeCard, (prev, next) => prev.anime === next.anime && prev.onClick === next.onClick);

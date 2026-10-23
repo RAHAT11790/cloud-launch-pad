@@ -1,5 +1,6 @@
 // Premium access helpers — coin economy, series/episode/quality locks
-import { db, ref, get, set, update, onValue, runTransaction } from "@/lib/firebase";
+import { db, ref, get, set, update, onValue, runTransaction, registerGuestId } from "@/lib/firebase";
+import { isGuestRecord, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
 import { getLocalUserId } from "@/lib/unlockAccess";
 
 export interface PremiumStatus {
@@ -274,7 +275,10 @@ export const ensureGuestUser = (): string => {
   try {
     const raw = localStorage.getItem("rsanime_user");
     const existing = raw ? JSON.parse(raw) : null;
-    if (existing?.id) return existing.id;
+    if (existing?.id) {
+      if (isGuestRecord(String(existing.id), existing)) void registerGuestId(existing.id).catch(() => {});
+      return existing.id;
+    }
     const uid = `guest_${getDeviceId()}_${Date.now().toString(36)}`;
     localStorage.setItem("rsanime_user", JSON.stringify({
       id: uid,
@@ -283,6 +287,7 @@ export const ensureGuestUser = (): string => {
       guest: true,
     }));
     try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
+    void registerGuestId(uid).catch(() => {});
     return uid;
   } catch {
     return getDeviceId();
@@ -341,11 +346,10 @@ export const transferGuestCoinsToUser = async (guestId: string, targetUid: strin
     const claimSnap = await get(ref(db, `deviceTransferClaims/${deviceId}`));
     if (claimSnap.exists()) return { transferred: 0 };
 
-    const gSnap = await get(ref(db, `users/${guestId}/coinWallet`));
-    const guestWallet = gSnap.val() || {};
+    const guestWallet = readGuestPath(`users/${guestId}/coinWallet`) || {};
     const coins = Number(guestWallet.coins || 0);
     if (coins <= 0) {
-      await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), guestId, targetUid, coins: 0 });
+      await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), targetUid, coins: 0 });
       return { transferred: 0 };
     }
 
@@ -355,13 +359,13 @@ export const transferGuestCoinsToUser = async (guestId: string, targetUid: strin
       return { ...w, coins: (w.coins || 0) + coins };
     });
     // Zero out guest wallet & lock it
-    await set(ref(db, `users/${guestId}/coinWallet`), {
+    writeGuestPath(`users/${guestId}/coinWallet`, {
       coins: 0,
       adWatchLog: guestWallet.adWatchLog || {},
       transferredTo: targetUid,
       transferredAt: Date.now(),
     });
-    await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), guestId, targetUid, coins });
+    await set(ref(db, `deviceTransferClaims/${deviceId}`), { at: Date.now(), targetUid, coins });
     return { transferred: coins };
   } catch {
     return { transferred: 0 };

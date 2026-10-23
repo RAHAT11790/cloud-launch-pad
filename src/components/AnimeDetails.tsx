@@ -3,6 +3,7 @@ import { X, Play, Heart, Star, BookOpen, List, ArrowLeft, MessageCircle, Send, T
 import type { AnimeItem } from "@/data/animeData";
 import { motion } from "framer-motion";
 import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
+import { currentGuestId } from "@/lib/guestPersistence";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 // FCM removed — in-app notifications only
 import { SITE_URL } from "@/lib/siteConfig";
@@ -115,6 +116,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
 
   const postComment = useCallback(() => {
     if (!userId || !commentText.trim()) return;
+    if (currentGuestId()) { import("sonner").then(({ toast }) => toast.info("Please sign in to post a comment.")); return; }
     const text = commentText.trim();
     const userName = getUserName();
     // Optimistic: clear input immediately
@@ -130,6 +132,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
 
   const postReply = useCallback(async (commentKey: string) => {
     if (!userId || !replyText.trim()) return;
+    if (currentGuestId()) { import("sonner").then(({ toast }) => toast.info("Please sign in to reply.")); return; }
 
     const text = replyText.trim();
     const userName = getUserName();

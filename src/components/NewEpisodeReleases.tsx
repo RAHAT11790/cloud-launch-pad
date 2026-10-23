@@ -49,7 +49,7 @@ const readReleaseCache = (): EpisodeRelease[] => {
     const raw = localStorage.getItem(RELEASE_CACHE_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.filter(item => item?.timestamp && item.active !== false && Date.now() - item.timestamp < NEW_RELEASE_TTL_MS) : [];
   } catch { return []; }
 };
 
@@ -195,7 +195,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     openingRef.current = release.id;
     window.setTimeout(() => { if (openingRef.current === release.id) openingRef.current = null; }, 180);
     const content = getContent(release.contentId);
-    const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
+    const sIdx = (getSeason(release) ?? 1) - 1;
     const wanted = typeof startEpisode === "number" ? startEpisode : getEpStart(release);
     const eps: any[] = (content as any)?.seasons?.[sIdx]?.episodes || [];
     // Map the episode NUMBER to its real position (lists can be offset/combined).
@@ -208,7 +208,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
           return wanted >= st && wanted <= en;
         })
       : -1;
-    const eIdx = byNumber >= 0 ? byNumber : byRange >= 0 ? byRange : (typeof wanted === "number" ? Math.max(0, wanted - 1) : 0);
+    const eIdx = byNumber >= 0 ? byNumber : byRange >= 0 ? byRange : 0;
     if (content) {
       onCardClick({ ...(content as any), __rsForceFreshPlayback: true, __rsEpisodeNumber: wanted } as AnimeItem, sIdx, eIdx);
       return;

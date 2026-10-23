@@ -5,6 +5,12 @@ export const DOWNLOAD_FLOW_KEY = "rs_download_flow_v1";
 export const DOWNLOAD_FINAL_KEY = "rs_download_final_v1";
 export function downloadNeedsAdFlow(premium: boolean | null) { return premium === false; }
 export function sponsorWaitComplete(seconds: number, awayMs: number) { return awayMs >= seconds * 1000; }
+export function sponsorReturnOutcome(seconds: number, awayMs: number, delivered: boolean) {
+  return !delivered || sponsorWaitComplete(seconds, awayMs) ? "advance" : "retry";
+}
+export function nextDownloadStep(step: number, count: number): number | "final" {
+  return step + 1 >= count ? "final" : step + 1;
+}
 export function freeDownloadQuality(value: string) {
   const label = value.trim().toLowerCase();
   const match = label.match(/^(480|720|1080)p?$/);

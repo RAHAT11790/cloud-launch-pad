@@ -63,6 +63,12 @@ export const parseDownloadManagerConfig = (raw: any): DownloadManagerConfig => {
 
 let config: DownloadManagerConfig = DEFAULT_DOWNLOAD_MANAGER_CONFIG;
 const listeners = new Set<(cfg: DownloadManagerConfig) => void>();
+let configReady = false;
+const readyListeners = new Set<(ready: boolean) => void>();
+function markConfigReady() {
+  configReady = true;
+  readyListeners.forEach(fn => fn(true));
+}
 
 try {
   if (typeof window !== "undefined") {
@@ -77,11 +83,17 @@ try {
       config = parseDownloadManagerConfig(snap.val() || {});
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(config)); } catch {}
       listeners.forEach((fn) => { try { fn(config); } catch {} });
-    });
+      markConfigReady();
+    }, markConfigReady);
   }
 } catch {}
 
 export const getDownloadManagerConfig = () => config;
+export function useDownloadConfigReady() {
+  const [ready, setReady] = useState(configReady);
+  useEffect(() => { readyListeners.add(setReady); setReady(configReady); return () => { readyListeners.delete(setReady); }; }, []);
+  return ready;
+}
 
 export const subscribeDownloadManagerConfig = (fn: (cfg: DownloadManagerConfig) => void) => {
   listeners.add(fn);

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink, Globe, Loader2, ShieldCheck, Sparkles } from "lucide-react";
-import { onValue } from "firebase/database";
 import { toast } from "sonner";
 
-import { db, ref } from "@/lib/firebase";
+import { db, ref, onValue } from "@/lib/firebase";
 import { createTelegramBotUnlockLink, createUnlockLinksForAllServices, claimAccessCode, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { openExternalBrowser, openTelegramDeepLink } from "@/lib/openExternal";
 

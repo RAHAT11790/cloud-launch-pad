@@ -34,4 +34,14 @@ if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-s
 
 setupTvNavigation();
 
-createRoot(document.getElementById("root")!).render(<App />);
+// A deployment can retire a lazy-loaded bundle while a tab is still open.
+// Retry the document once, not indefinitely, and never clear personal caches.
+window.addEventListener("vite:preloadError", event => {
+  const last = Number(sessionStorage.getItem("rs_chunk_reload_at") || 0);
+  if (Date.now() - last < 60000) return;
+  event.preventDefault();
+  sessionStorage.setItem("rs_chunk_reload_at", String(Date.now()));
+  window.location.reload();
+});
+const root = document.getElementById("root");
+if (root) createRoot(root).render(<App />);

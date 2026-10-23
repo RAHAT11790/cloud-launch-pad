@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { downloadWaitRemaining, normalizeDownloadFlowSettings, selectDownloadEpisode, freeDownloadQuality, downloadNeedsAdFlow, sponsorWaitComplete } from "@/lib/downloadFlow";
+import { downloadWaitRemaining, normalizeDownloadFlowSettings, selectDownloadEpisode, freeDownloadQuality, downloadNeedsAdFlow, sponsorWaitComplete, sponsorReturnOutcome, nextDownloadStep } from "@/lib/downloadFlow";
 describe("Download controller rules", () => {
+  it("never adds a third step to two configured steps", () => {
+    expect(nextDownloadStep(0, 2)).toBe(1);
+    expect(nextDownloadStep(1, 2)).toBe("final");
+  });
+  it("missing sponsor delivery does not penalize the user", () => {
+    expect(sponsorReturnOutcome(5, 0, false)).toBe("advance");
+  });
+  it("a real early return retries the same five-second step", () => {
+    expect(sponsorReturnOutcome(5, 4999, true)).toBe("retry");
+    expect(sponsorReturnOutcome(5, 5000, true)).toBe("advance");
+  });
   it("only free users take advertising steps, never premium or unresolved accounts", () => {
     expect(downloadNeedsAdFlow(false)).toBe(true);
     expect(downloadNeedsAdFlow(true)).toBe(false);

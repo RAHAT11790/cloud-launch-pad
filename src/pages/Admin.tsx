@@ -1,4 +1,5 @@
 import { LinkSectionTabs, DirectLinkField, type LinkSection } from "@/components/admin/LinkSourceSwitch";
+import { isGuestRecord, isLegacyGuestCleanupCandidate, guestCleanupBatches } from "@/lib/guestPersistence";
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
@@ -2263,6 +2264,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    return cached?.ts && Date.now() - Number(cached.ts) < 5 * 60 * 1000 && Array.isArray(cached.items) ? cached.items : [];
   } catch { return []; }
  });
+ const [guestRegistryCount, setGuestRegistryCount] = useState(0);
+ const [guestCleanup, setGuestCleanup] = useState<{ running: boolean; removed: number; total: number }>({ running: false, removed: 0, total: 0 });
+ const guestCleanupBusy = useRef(false);
+ useEffect(() => onValue(ref(db, "guestRegistry"), snap => setGuestRegistryCount(Object.keys(snap.val() || {}).length)), []);
  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>(() => {
   try {
    const cached = JSON.parse(sessionStorage.getItem("rs_admin_app_users_cache_v1") || "null");
@@ -3018,7 +3023,6 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
     setUsersData(cached.items);
     const appCached = JSON.parse(sessionStorage.getItem("rs_admin_app_users_cache_v1") || "null");
     if (appCached?.items) setAppUsersGlobal(appCached.items);
-    return;
    }
   } catch {}
 
@@ -4170,9 +4174,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  }, [usersData, liveTick]);
  const offlineUsers = useMemo(() => Math.max(0, usersData.length - onlineUsers), [usersData.length, onlineUsers]);
 
- // Strict guest detection (per user spec):
- // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
- // Anything else — entries whose id looks like `user_1773xxx...` and have no email — is a guest.
+ // Positive guest markers only; incomplete real profiles are protected.
  const isValidEmail = (val: any): boolean => {
  if (!val || typeof val !== "string") return false;
  const s = val.trim().toLowerCase();
@@ -4183,8 +4185,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  const guests = new Set<string>();
  usersData.forEach((u: any) => {
  if (!u || !u.id) return;
- if (isValidEmail(u.email)) return; // real user (email or Google sign-in)
- guests.add(String(u.id));
+ if (isGuestRecord(String(u.id), u)) guests.add(String(u.id));
  });
  return guests;
  }, [usersData]);
@@ -7772,7 +7773,7 @@ ${tgBulkFooter}
  <Trash2 size={14} className="text-red-400" /> Delete All Guest Users
  </h3>
  <p className="text-[11px] text-[#957DAD] mb-3">
- Real users = those registered in Firebase Auth (Email or Google). Everyone else in the database is a guest and will be removed in one click.
+ Guest data stays on visitors' devices. Cleanup removes positively identified legacy guest records in batches of 50; real-email and ambiguous accounts are protected.
  </p>
  {(() => {
  const guestList = usersData.filter(u => guestUidSet.has(String(u.id)));
@@ -7780,6 +7781,7 @@ ${tgBulkFooter}
  <>
  <div className="text-xs text-[#D1C4E9] mb-3">
  Guest accounts found: <span className="text-red-400 font-bold">{guestList.length}</span>
+ <span className="block mt-1">Guest visitors: {guestRegistryCount} · Real account records: {usersData.length - guestList.length}</span>
  <span className="block text-[10px] text-[#957DAD] mt-1">
  Email & Google sign-ins are protected and will never be deleted.
  </span>
@@ -7787,23 +7789,40 @@ ${tgBulkFooter}
  <button
  onClick={async () => {
  if (guestList.length === 0) { toast.info("No guest users to delete"); return; }
- if (!window.confirm(`Delete ${guestList.length} guest user(s)? They will be auto-logged out.`)) return;
+ if (guestCleanupBusy.current) return;
+ if (!window.confirm(`Delete ${guestList.length} legacy guest records in batches of 50? Visitors' on-device data is retained.`)) return;
+ guestCleanupBusy.current = true;
+ setGuestCleanup({ running: true, removed: 0, total: guestList.length });
  try {
- await Promise.all(guestList.map(u =>
- update(ref(db), {
- [`users/${u.id}`]: null,
- [`deletedAccounts/${u.id}`]: { at: Date.now(), reason: "guest-bulk-delete" },
- })
- ));
- toast.success(`✅ Deleted ${guestList.length} guest user(s)`);
+ let removed = 0;
+ for (const batch of guestCleanupBatches(guestList)) {
+   const changes: Record<string, unknown> = {};
+   // Re-read immediately before deletion; never trust the cached candidate list.
+   for (const user of batch) {
+     const current = (await get(ref(db, `users/${user.id}`))).val();
+     if (!current || !isLegacyGuestCleanupCandidate(String(user.id), current)) continue;
+     changes[`users/${user.id}`] = null;
+     changes[`freeAccessUsers/${user.id}`] = null;
+     changes[`watchHistory/${user.id}`] = null;
+     changes[`library/${user.id}`] = null;
+     changes[`userProfiles/${user.id}`] = null;
+     changes[`guestRegistry/${user.id}`] = true;
+     removed++;
+   }
+   if (Object.keys(changes).length) await update(ref(db), changes);
+   setGuestCleanup({ running: true, removed, total: guestList.length });
+   await new Promise(resolve => window.setTimeout(resolve, 300));
+ }
+ sessionStorage.removeItem("rs_admin_users_cache_v1");
+ toast.success(`Deleted ${removed} legacy guest records; local visitor data retained.`);
  } catch (e: any) {
  toast.error(`Failed: ${e?.message || "unknown"}`);
- }
+ } finally { guestCleanupBusy.current = false; setGuestCleanup(state => ({ ...state, running: false })); }
  }}
- disabled={guestList.length === 0}
+ disabled={guestList.length === 0 || guestCleanup.running}
  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
  >
- <Trash2 size={14} /> Delete All Guest Users ({guestList.length})
+ <Trash2 size={14} /> {guestCleanup.running ? `Removing ${guestCleanup.removed} / ${guestCleanup.total}` : `Delete All Guest Users (${guestList.length})`}
  </button>
  </>
  );
