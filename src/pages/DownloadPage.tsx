@@ -121,7 +121,7 @@ export default function DownloadPage() {
     if (!tab) { sponsor.current = null; setSponsorPending(false); toast.error("Allow the sponsor tab, then try again."); return; }
     try { tab.opener = null; } catch {}
   };
-  return <main className={`bg-background text-foreground ${final ? "min-h-dvh pb-6" : "download-step-screen"}`}>
+  return <main className={`download-page bg-background text-foreground ${final ? "min-h-dvh pb-6" : "download-step-screen"}`}>
     <header className="shrink-0 border-b border-border"><div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-2"><Button variant="ghost" size="icon" aria-label="Back to episode" onClick={back}><ArrowLeft /></Button><span className="text-sm font-bold">RS ANIME03 · Downloads</span><ShieldCheck className="ml-auto text-primary" size={20} /></div></header>
     {!request ? <div className="mx-auto py-16 text-center"><Download className="mx-auto mb-4" /><h1 className="text-xl font-bold">No episodes selected</h1><Button className="mt-6" onClick={back}>Back to anime</Button></div> : <>
       <div className="mx-auto flex w-full max-w-lg shrink-0 items-center gap-3 px-4 py-3">{request.poster && <img src={request.poster} alt="" className="h-12 w-9 rounded object-cover" />}<div className="min-w-0"><h1 className="break-words text-base font-bold">{request.title}</h1><p className="mt-1 text-xs text-muted-foreground">Season {request.season || 1} · Episode {request.episodes.map(ep => ep.number).join(", ")}</p></div></div>
