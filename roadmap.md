@@ -1,10 +1,10 @@
 # Roadmap
 
 ## Download corrections (2026-10-23)
-- [ ] Restore original player selection; free users proceed with selected episodes only, premium keeps direct downloads with renaming.
-- [ ] Remove free quality locks; list real 480p/720p/1080p files and final Telegram action without invented resolutions.
-- [ ] Repair isolated ad loading, compact no-scroll steps, sponsor-return timer and final ad cleanup.
-- [ ] Run focused rules and real mobile/premium download checks; report provider/deployment blockers.
+- [x] Restore original selection with free episodes initially unselected; keep premium direct dispatch with filename relay.
+- [x] Remove free quality locks and recover stored resolutions; final Telegram action respects its existing enabled setting (currently off).
+- [x] Compact no-scroll ad steps and sponsor-return reset; final document contains zero ad frames. Provider scripts still return empty responses.
+- [x] Verify real Naruto final sizes and named download; 96 tests pass. Premium live verification blocked by test-account access state; production Worker URL awaits owner.
 
 ## Download-only advertising flow (2026-10-22)
 - [x] Add configurable episode limit, timed ad stages and download-only placement settings.

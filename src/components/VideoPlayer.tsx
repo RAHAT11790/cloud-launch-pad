@@ -1523,10 +1523,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList" | "allEpisodes", origin: "resource" | "download" | "share" = "resource") => {
     if (sheet === "download") {
       const initialSeasonIdx = currentSeasonIdx ?? 0;
-      const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
+      const activeEpisode = episodeList?.find((episode) => episode.active);
+      const activeIdx = seasons?.[initialSeasonIdx]?.episodes?.findIndex((episode) => episode.episodeNumber === activeEpisode?.episodeNumber) ?? -1;
       setDownloadPanelSeasonIdx(initialSeasonIdx);
       setSelectedDownloadLanguageLabel(currentLangLabel);
-      setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setDlSelectedEpisodes(isPremium === true && activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setSelectedDownloadQuality(preferredDownloadQuality);
       const cfg = getDownloadManagerConfig();
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
@@ -1545,7 +1546,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowDownloadQualityPicker(sheet === "download");
     setShowAllEpisodesSheet(sheet === "allEpisodes");
     setSheetOrigin(origin);
-  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
+  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality, seasons, isPremium]);
 
   // Download opens instantly. A single pop-under fires alongside it (optional,
   // never blocking) so the sponsor still gets a chance to count.
