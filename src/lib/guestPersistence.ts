@@ -10,6 +10,12 @@ export function currentGuestId(): string | null {
     return user?.id && isGuestRecord(String(user.id), user) ? String(user.id) : null;
   } catch { return null; }
 }
+/** Destructive cleanup requires an explicit marker, never just an absent email. */
+export function isLegacyGuestCleanupCandidate(id: string, value: { email?: string; guest?: boolean } = {}) {
+  const email = String(value.email || "").trim().toLowerCase();
+  if (email && email !== "guest@rsanime.com" && !email.endsWith("@guest.local")) return false;
+  return id.startsWith("guest_") || value.guest === true || email === "guest@rsanime.com" || email.endsWith("@guest.local");
+}
 export function localGuestPath(path: string, guestId: string | null): boolean {
   if (!guestId) return false;
   const parts = path.split("/").filter(Boolean);

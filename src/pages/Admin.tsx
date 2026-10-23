@@ -1,5 +1,5 @@
 import { LinkSectionTabs, DirectLinkField, type LinkSection } from "@/components/admin/LinkSourceSwitch";
-import { isGuestRecord, guestCleanupBatches } from "@/lib/guestPersistence";
+import { isGuestRecord, isLegacyGuestCleanupCandidate, guestCleanupBatches } from "@/lib/guestPersistence";
 import { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue, useTransition, startTransition, forwardRef, memo, lazy, Suspense } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
@@ -7800,7 +7800,7 @@ ${tgBulkFooter}
    // Re-read immediately before deletion; never trust the cached candidate list.
    for (const user of batch) {
      const current = (await get(ref(db, `users/${user.id}`))).val();
-     if (!current || !isGuestRecord(String(user.id), current)) continue;
+     if (!current || !isLegacyGuestCleanupCandidate(String(user.id), current)) continue;
      changes[`users/${user.id}`] = null;
      changes[`freeAccessUsers/${user.id}`] = null;
      changes[`watchHistory/${user.id}`] = null;

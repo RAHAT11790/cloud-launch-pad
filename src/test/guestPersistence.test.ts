@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { isGuestRecord, localGuestPath, guestCleanupBatches, writeGuestPath, readGuestPath } from "@/lib/guestPersistence";
+import { isGuestRecord, isLegacyGuestCleanupCandidate, localGuestPath, guestCleanupBatches, writeGuestPath, readGuestPath } from "@/lib/guestPersistence";
 describe("Guest-only persistence", () => {
   beforeEach(() => localStorage.clear());
   it("keeps guest personal and device coin data on device", () => {
@@ -17,5 +17,10 @@ describe("Guest-only persistence", () => {
   });
   it("cleans 101 guests in sequential batches of at most 50", () => {
     expect(guestCleanupBatches(Array.from({ length: 101 }, (_, i) => i)).map(batch => batch.length)).toEqual([50, 50, 1]);
+  });
+  it("never deletes ambiguous missing-email accounts or real email accounts", () => {
+    expect(isLegacyGuestCleanupCandidate("user_123", {})).toBe(false);
+    expect(isLegacyGuestCleanupCandidate("guest_123", { email: "real@example.com", guest: true })).toBe(false);
+    expect(isLegacyGuestCleanupCandidate("guest_123", { guest: true })).toBe(true);
   });
 });
