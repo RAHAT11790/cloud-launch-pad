@@ -14,6 +14,7 @@ export interface AudioTrack {
   link: string;
   audioUrl?: string;
   rawAudioUrl?: string;
+  qualityLinks?: Record<string, string>;
   link480?: string;
   link720?: string;
   link1080?: string;
@@ -42,6 +43,7 @@ export interface MoviePart {
 }
 
 export interface Episode {
+  qualityLinks?: Record<string, string>;
   episodeNumber: number;
   /** Combo episode: last real episode inside this link (e.g. 2 → 4). */
   episodeEnd?: number;

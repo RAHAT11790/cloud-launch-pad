@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Download advertisements</title><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:flex;justify-content:center}#banner{width:160px;height:300px}iframe{max-width:100%}</style></head><body><div id="banner"></div><script>
+window.addEventListener('message', (event) => {
+  if(event.origin !== location.origin || event.source !== parent || event.data?.type !== 'download-placements') return;
+  if(document.body.dataset.loaded) return;
+  document.body.dataset.loaded='true';
+  const {banner,socialBar}=event.data;
+  // Only the administrator's supplied provider scripts execute in this disposable document.
+  function load(snippet,container) {
+    const doc=new DOMParser().parseFromString(String(snippet||''),'text/html');
+    for(const source of doc.querySelectorAll('script')) {
+      if(!source.src) continue;
+      const url=new URL(source.src);
+      if(url.protocol!=='https:' || url.hostname!=='bauval.org') continue;
+      const script=document.createElement('script');
+      script.src=url.href; script.async=false;
+      script.setAttribute('data-cfasync','false'); container.appendChild(script);
+    }
+  }
+  const key=String(banner||'').match(/['"]key['"]\s*:\s*['"]([a-f0-9]+)['"]/i)?.[1];
+  if(key) window.atOptions={key,format:'iframe',height:300,width:160,params:{}};
+  load(banner,document.getElementById('banner'));
+  load(socialBar,document.body);
+});
+parent.postMessage({type:'download-ads-ready'},location.origin);
+</script></body></html>

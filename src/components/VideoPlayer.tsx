@@ -1,5 +1,7 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
-import { openDownloadFlow, sourceDownloadFilename } from "@/lib/downloadFlow";
+import { openDownloadFlow, sourceDownloadFilename, freeDownloadQuality, downloadNeedsAdFlow } from "@/lib/downloadFlow";
+import { getFilenameRelayBase, filenameRelayUrl } from "@/lib/filenameRelay";
+import { Button } from "@/components/ui/button";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
@@ -1106,8 +1108,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentLangLabel, selectedDownloadLanguageLabel]);
 
   const primarySeriesLanguageLabel = useMemo(() => {
-    return getPrimaryLanguageToken(anime?.language) || normalizedLanguageTracks[0]?.label || currentLangLabel;
-  }, [anime?.language, currentLangLabel, normalizedLanguageTracks]);
+    return getPrimaryLanguageToken(anime?.baseLanguage || anime?.language) || normalizedLanguageTracks[0]?.label || currentLangLabel;
+  }, [anime?.baseLanguage, anime?.language, currentLangLabel, normalizedLanguageTracks]);
 
   const activeDownloadLanguageTrack = useMemo(() => {
     const selectedKey = currentDownloadLanguageLabel.trim().toLowerCase();
@@ -1199,11 +1201,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       Object.entries(qualityMap).forEach(([k, v]) => {
         const url = String(v || "").trim();
         if (!url) return;
-        const key = String(k).trim();
+        const normalized = String(k).trim().toLowerCase().replace(/^p(?=\d)/, "");
+        const key = normalized === "default" ? "Default" : normalized === "4k" ? "4K" : /^(480|720|1080)p?$/.test(normalized) ? `${normalized.replace(/p$/, "")}P` : String(k).trim();
         if (!result[key]) result[key] = url;
       });
     }
 
+    if (Object.keys(result).some(key => key !== "Default")) delete result.Default;
     return result;
   }, [getTrackQualityLinks, primarySeriesLanguageLabel]);
 
@@ -1273,16 +1277,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     [seasons],
   );
 
-  const isDownloadAllowedForFree = useCallback((quality: string, episodeIndex?: number) => {
-    if (isPremium) return true;
-    const key = normalizeDownloadQualityKey(quality);
-    if (key === "480p") return true;
-    // Movies have no episode list: allow the only available quality when the
-    // title simply has no 480P file (same spirit as the Episode 1–2 rule).
-    if (!hasEpisodeTree) return !selectedSeasonHas480p;
-    if (typeof episodeIndex !== "number") return false;
-    return !selectedSeasonHas480p && episodeIndex < 2;
-  }, [hasEpisodeTree, isPremium, selectedSeasonHas480p]);
+  const isDownloadAllowedForFree = useCallback((_quality: string, _episodeIndex?: number) => true, []);
 
 
   const shareSeason = useMemo(() => {
@@ -1412,7 +1407,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSelectedDownloadQuality("");
       return;
     }
-    const selectedBlocked = !!selectedDownloadQuality && !isPremium && normalizeDownloadQualityKey(selectedDownloadQuality) !== "480p" && selectedSeasonHas480p;
+    const selectedBlocked = false;
     if (!selectedDownloadQuality || !availableDownloadQualities.includes(selectedDownloadQuality) || selectedBlocked) {
       setSelectedDownloadQuality(preferredDownloadQuality);
       setDlSelectedEpisodes(new Set());
@@ -1528,10 +1523,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList" | "allEpisodes", origin: "resource" | "download" | "share" = "resource") => {
     if (sheet === "download") {
       const initialSeasonIdx = currentSeasonIdx ?? 0;
-      const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
+      const activeEpisode = episodeList?.find((episode) => episode.active);
+      const activeIdx = seasons?.[initialSeasonIdx]?.episodes?.findIndex((episode) => episode.episodeNumber === activeEpisode?.number) ?? -1;
       setDownloadPanelSeasonIdx(initialSeasonIdx);
       setSelectedDownloadLanguageLabel(currentLangLabel);
-      setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setDlSelectedEpisodes(isPremium === true && activeIdx >= 0 ? new Set([activeIdx]) : new Set());
       setSelectedDownloadQuality(preferredDownloadQuality);
       const cfg = getDownloadManagerConfig();
       const onlyTelegram = cfg.telegramEnabled && !cfg.websiteEnabled;
@@ -1550,17 +1546,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowDownloadQualityPicker(sheet === "download");
     setShowAllEpisodesSheet(sheet === "allEpisodes");
     setSheetOrigin(origin);
-  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
+  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality, seasons, isPremium]);
 
   // Download opens instantly. A single pop-under fires alongside it (optional,
   // never blocking) so the sponsor still gets a chance to count.
   const openDownloadWithAd = useCallback(() => {
-    if (!isPremium && !downloadAdPassedRef.current) {
-      downloadAdPassedRef.current = true;
-      fireAdOnly("download", isPremium);
-    }
     openInlineSheet("download", "download");
-  }, [isPremium, openInlineSheet]);
+  }, [openInlineSheet]);
 
 
 
@@ -6304,30 +6296,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               .filter(Boolean);
             return `${parts.join(" - ") || "video"}.mp4`;
           };
-          const getDownloadUrl = (u: string, quality: string, sub?: string, fallbackUrls: string[] = []): string => {
-            const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls]
-              .filter(Boolean)
-              .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
-
-            const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download"));
-            if (managedAlready) {
-              const unwrapped = unwrapManagedVideoUrl(managedAlready);
-              if (unwrapped && isDirectDownloadCandidate(unwrapped)) {
-                return buildVideoDownloadUrl(unwrapped, buildDownloadFileName(String(sub || title), quality)) || unwrapped;
-              }
-            }
-
-            const directCandidates = [u, ...candidates]
-              .map((candidate) => String(candidate).includes("/functions/v1/video-") ? unwrapManagedVideoUrl(candidate) : candidate)
-              .filter((candidate) => isDirectDownloadCandidate(candidate));
-            const directCandidate = directCandidates[0] || "";
-            if (!directCandidate) return "";
-
-            return buildVideoDownloadUrl(
-              directCandidate,
-              buildDownloadFileName(String(sub || title), quality),
-              directCandidates.slice(1),
-            ) || "";
+          const getDownloadUrl = (u: string, _quality: string, _sub?: string, fallbackUrls: string[] = []) => {
+            return [u, ...deriveServerDownloadCandidates(u), ...fallbackUrls].map(url => unwrapManagedVideoUrl(url) || url).find(isDirectDownloadCandidate) || "";
           };
 
           const pickEpUrlForQuality = (ep: DownloadEpisodeOption, quality: string): string => {
@@ -6338,25 +6308,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const panelSeason = seasons && seasons[downloadPanelSeasonIdx] ? seasons[downloadPanelSeasonIdx] : null;
           const panelEpisodes = downloadEpisodes;
 
+          const freeWebsite = downloadNeedsAdFlow(isPremium);
           const toggleEpisode = (idx: number) => {
-            if (activeQuality && !isDownloadAllowedForFree(activeQuality, idx)) {
-              toast.error("Free users can download this quality only for Episode 1–2 when 480P is missing.");
-              return;
-            }
             setDlSelectedEpisodes((prev) => {
               const next = new Set(prev);
-              if (next.has(idx)) next.delete(idx); else next.add(idx);
+              if (next.has(idx)) next.delete(idx);
+              else if (!freeWebsite || next.size < downloadManager.maxEpisodes) next.add(idx);
               return next;
             });
           };
-
           const toggleAll = () => {
-            setDlSelectedEpisodes((prev) => {
-              const allowedEpisodes = panelEpisodes.filter((episode) => !activeQuality || isDownloadAllowedForFree(activeQuality, episode.index));
-              if (allowedEpisodes.length === 0) return new Set();
-              if (allowedEpisodes.every((episode) => prev.has(episode.index))) return new Set();
-              return new Set(allowedEpisodes.map((episode) => episode.index));
-            });
+            const limit = freeWebsite ? downloadManager.maxEpisodes : panelEpisodes.length;
+            setDlSelectedEpisodes((prev) => prev.size ? new Set() : new Set(panelEpisodes.filter(ep => Object.values(ep.qualityLinks).some(Boolean)).slice(0, limit).map(ep => ep.index)));
+          };
+          const startFreeDownloads = () => {
+            const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
+            const seasonNumber = Number(seasonLabel.match(/\d+/)?.[0]) || downloadPanelSeasonIdx + 1;
+            const picked: Array<{ episodeNumber: number; title: string; qualityLinks: Record<string, string>; directLink?: string }> = hasMultiEpisodes ? panelEpisodes.filter(ep => dlSelectedEpisodes.has(ep.index)).slice(0, downloadManager.maxEpisodes) : [{ episodeNumber: 1, title, qualityLinks: movieQualityLinks, directLink: "" }];
+            if (!picked.length) { toast.error("Select at least one episode"); return; }
+            const episodes = picked.map(ep => ({
+              number: ep.episodeNumber, title: ep.title,
+              choices: Object.entries(ep.qualityLinks).flatMap(([key, value]) => {
+                const quality = freeDownloadQuality(key);
+                const url = unwrapManagedVideoUrl(value) || value;
+                if (!quality || !isDirectDownloadCandidate(url)) return [];
+                const label = buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber);
+                return [{ quality, url, fileName: sourceDownloadFilename(buildDownloadFileName(label, quality === "Original file" ? undefined : quality), url) }];
+              }),
+            }));
+            const telegramQualities = Array.from(new Set(picked.flatMap(ep => Object.entries(ep.qualityLinks).filter(([,url]) => url && url !== ep.directLink && !isAbyssLink(url)).map(([q]) => normalizeTelegramQuality(q))))).filter(q => ["480p","720p","1080p"].includes(q));
+            const telegramUrl = telegramDownloadEnabled && telegramQualities.length ? buildTelegramDownloadUrl({title, season: seasonNumber, episodes: picked.map(ep => ep.episodeNumber), qualities: telegramQualities}) : "";
+            try { videoRef.current?.pause(); } catch {}
+            openDownloadFlow({ title, poster, season: seasonNumber, episodes, telegramUrl, returnPath: window.location.pathname + window.location.search });
+          };
+          const sendNamedDownloads = async (items: Array<{url: string; fileName: string}>) => {
+            const base = await getFilenameRelayBase();
+            if (!base) { toast.error("Download service is unavailable"); return 0; }
+            let count = 0;
+            for (const item of items) {
+              const raw = unwrapManagedVideoUrl(item.url) || item.url;
+              const fileName = sourceDownloadFilename(item.fileName, raw);
+              const url = filenameRelayUrl(base, raw, fileName);
+              if (!url) continue;
+              const anchor = document.createElement("a"); anchor.href = url; anchor.download = fileName;
+              document.body.appendChild(anchor); anchor.click(); anchor.remove(); count++;
+            }
+            return count;
           };
 
           const closePanel = () => {
@@ -6386,7 +6383,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const directFallbacks = linkPool.slice(1)
               .map((candidate) => unwrapManagedVideoUrl(candidate) || candidate)
               .filter((candidate) => isDirectDownloadCandidate(candidate));
-            const started = triggerBackgroundVideoDownload(directMovieUrl, buildDownloadFileName(movieLabel, quality), directFallbacks);
+            const started = await sendNamedDownloads([{ url: directMovieUrl, fileName: buildDownloadFileName(movieLabel, quality) }]);
             if (started) { recordDownloadEvent("website", 1); toast.success("Download sent to browser"); }
             else toast.error("Could not start the download");
             closePanel();
@@ -6419,7 +6416,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 fileName: buildDownloadFileName(episodeLabel, quality),
               });
             }
-            const startedCount = triggerBulkBackgroundDownloads(browserBatch);
+            const startedCount = await sendNamedDownloads(browserBatch);
             if (startedCount > 0) recordDownloadEvent("website", startedCount);
             closePanel();
             if (startedCount === 0) toast.error("No free downloadable links found for this selection");
@@ -6516,20 +6513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       {websiteDownloadEnabled && (
                       <button
                         onClick={() => {
-                          const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
-                          const episodes = hasMultiEpisodes
-                            ? panelEpisodes.map((ep) => ({
-                                number: ep.episodeNumber,
-                                title: ep.title,
-                                choices: Object.entries(ep.qualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({
-                                  quality, url: unwrapManagedVideoUrl(url) || url,
-                                  fileName: sourceDownloadFilename(buildDownloadFileName(buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber), quality), unwrapManagedVideoUrl(url) || url),
-                                  locked: !isDownloadAllowedForFree(quality, ep.index),
-                                })),
-                              }))
-                            : [{ number: 1, title, choices: Object.entries(movieQualityLinks).filter(([, url]) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)).map(([quality, url]) => ({ quality, url: unwrapManagedVideoUrl(url) || url, fileName: sourceDownloadFilename(buildDownloadFileName(title, quality), unwrapManagedVideoUrl(url) || url), locked: !isDownloadAllowedForFree(quality) })) }];
-                          try { videoRef.current?.pause(); } catch {}
-                          openDownloadFlow({ title, poster, episodes, returnPath: window.location.pathname + window.location.search });
+                          setDownloadMode("website");
                         }}
                         className="w-full rounded-[14px] border border-emerald-400/25 bg-gradient-to-r from-emerald-500/15 to-cyan-500/10 p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
                       >
@@ -6778,13 +6762,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           <div className="h-10 rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white/70 flex items-center">Movie</div>
                         )}
                       </div>
-                      <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                      {!freeWebsite && <div className="mt-2.5 border-t border-white/10 pt-2.5">
                         <div className="grid grid-cols-4 gap-2">
                           {qualityChoices.map((label) => {
                             const available = isQualityAvailable(label);
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
-                            const lockedByFreeRule = !isPremium && normalizeDownloadQualityKey(label) !== "480p" && selectedSeasonHas480p;
+                            const lockedByFreeRule = false;
                             const lockedQuality = available && (locked4K || lockedByFreeRule);
                             const isActive = available && label === activeQuality;
                             return (
@@ -6805,12 +6789,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           })}
                         </div>
 
-                        {!isPremium && (
-                          <p className="mt-2 text-[10px] leading-snug text-white/45">
-                            Free: all 480P episodes. If 480P is missing, only Episode 1–2 can be downloaded in higher quality.
-                          </p>
-                        )}
-                      </div>
+                      </div>}
+
                     </div>
 
                     {hasMultiEpisodes && panelSeason && (() => {
@@ -6825,12 +6805,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           <div className="space-y-2.5">
                             {panelEpisodes.map((ep) => {
                               const selected = dlSelectedEpisodes.has(ep.index);
-                              const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
+                              const qualityUrl = freeWebsite ? Object.values(ep.qualityLinks).find(url => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)) || "" : activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                               const lockedByRule = !!qualityUrl && activeQuality ? !isDownloadAllowedForFree(activeQuality, ep.index) : false;
                               const sizeBytes = getCachedDownloadSize(qualityUrl);
                               const sizeLabel = fmtSize(sizeBytes);
                               return (
-                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
+                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule || (freeWebsite && !selected && dlSelectedEpisodes.size >= downloadManager.maxEpisodes)} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
                                   <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${lockedByRule ? 'border-amber-400/50 text-amber-300' : selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
                                     {lockedByRule ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
                                   </span>
@@ -6849,7 +6829,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       );
                     })()}
 
-                    {!hasMultiEpisodes && (() => {
+                    {!hasMultiEpisodes && !freeWebsite && (() => {
                       const fmtSize = (bytes: number) => {
                         if (!bytes || bytes <= 0) return "";
                         const mb = bytes / (1024 * 1024);
@@ -6930,13 +6910,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <div className="flex items-center gap-2.5">
                           <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${allAllowedSelected ? 'text-white' : 'text-white/55'}`}>
                             <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allAllowedSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
-                            <span>All</span>
+                            <span>{freeWebsite ? `${dlSelectedEpisodes.size}/${downloadManager.maxEpisodes}` : "All"}</span>
                           </button>
                           <button
                             onClick={() => {
                               const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
                               if (!preferred) return;
-                              fireAdOnly("download-start", isPremium);
+                              if (freeWebsite) { startFreeDownloads(); return; }
+                              if (isPremium === null) return;
                               if (hasMultiEpisodes) startSelectedDownloads(preferred);
                               else startMovieDownload(preferred);
                             }}
@@ -6944,8 +6925,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           >
                             <Download className="w-4 h-4" />
                             <span className="truncate">
-                              {activeQuality ? `Download • ${activeQuality}` : 'Download'}
-                              {totalLabel ? ` • ${totalLabel}` : ''}
+                              {freeWebsite ? `Continue • ${hasMultiEpisodes ? dlSelectedEpisodes.size : 1} selected` : activeQuality ? `Download • ${activeQuality}` : 'Download'}
+                              {!freeWebsite && totalLabel ? ` • ${totalLabel}` : ''}
                             </span>
                           </button>
                         </div>
