@@ -6821,7 +6821,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="block text-[11px] text-white/55 mt-0.5 truncate">{lockedByRule ? `${ep.metaText} • Premium required` : qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                   </span>
                                   {freeWebsite && qualityUrl && (
-                                    <span className="shrink-0 self-center rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-300">All Quality Free Download</span>
+                                    <span className="shrink-0 self-center max-w-[116px] text-center leading-tight rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-[9.5px] font-bold uppercase tracking-wide text-emerald-300">All Quality Free Download</span>
                                   )}
                                   <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
                                     {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-white/40 font-normal">N/A</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">Not available</span>}
