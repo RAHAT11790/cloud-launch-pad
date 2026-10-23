@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, orderByKey, equalTo, get, runTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt } from "firebase/database";
+import { getDatabase, ref, onValue as remoteOnValue, push, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, orderByKey, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt, type DataSnapshot } from "firebase/database";
+import { currentGuestId, localGuestPath, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
 import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
 
 const firebaseConfig = {
@@ -26,4 +27,59 @@ export const db = g.__rs_firebase_db__ || (g.__rs_firebase_db__ = getDatabase(ap
 export const auth = g.__rs_firebase_auth__ || (g.__rs_firebase_auth__ = getAuth(app));
 export const googleProvider = new GoogleAuthProvider();
 
-export { ref, onValue, push, set, remove, update, query, orderByChild, orderByKey, equalTo, get, runTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+const referencePath = (target: Parameters<typeof remoteGet>[0]) => {
+  try { return decodeURIComponent(new URL(target.toString()).pathname).replace(/^\/+|\/+$/g, ""); } catch { return ""; }
+};
+const useLocal = (path: string) => !auth.currentUser && localGuestPath(path, currentGuestId());
+function localSnapshot(target: Parameters<typeof remoteGet>[0]): DataSnapshot {
+  const path = referencePath(target);
+  const value = readGuestPath(path);
+  return { key: target.ref.key, ref: target.ref, val: () => value, exists: () => value !== null,
+    toJSON: () => value, size: value && typeof value === "object" ? Object.keys(value).length : 0,
+    child: (child: string) => localSnapshot(ref(db, `${path}/${child}`)),
+    hasChild: (child: string) => readGuestPath(`${path}/${child}`) !== null,
+    hasChildren: () => !!value && typeof value === "object" && Object.keys(value).length > 0,
+    forEach: (action: (snapshot: DataSnapshot) => boolean | void) => {
+      for (const key of Object.keys(value || {})) if (action(localSnapshot(ref(db, `${path}/${key}`))) return true;
+      return false;
+    }, priority: null } as unknown as DataSnapshot;
+}
+export const get: typeof remoteGet = (target) => useLocal(referencePath(target)) ? Promise.resolve(localSnapshot(target)) : remoteGet(target);
+export const set: typeof remoteSet = (target, value) => {
+  const path = referencePath(target);
+  if (!useLocal(path)) return remoteSet(target, value);
+  try { writeGuestPath(path, value); return Promise.resolve(); } catch (error) { return Promise.reject(error); }
+};
+export const remove: typeof remoteRemove = target => useLocal(referencePath(target)) ? set(target, null) : remoteRemove(target);
+export const update: typeof remoteUpdate = (target, values) => {
+  const path = referencePath(target);
+  const remote: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const child = [path, key].filter(Boolean).join("/");
+    if (useLocal(child)) writeGuestPath(child, value); else remote[key] = value;
+  }
+  return Object.keys(remote).length ? remoteUpdate(target, remote) : Promise.resolve();
+};
+export const runTransaction: typeof remoteTransaction = (target, action, options) => {
+  const path = referencePath(target);
+  if (!useLocal(path)) return remoteTransaction(target, action, options);
+  try {
+    const next = action(readGuestPath(path));
+    if (next !== undefined) writeGuestPath(path, next);
+    return Promise.resolve({ committed: next !== undefined, snapshot: localSnapshot(target) });
+  } catch (error) { return Promise.reject(error); }
+};
+export const onValue: typeof remoteOnValue = ((target: Parameters<typeof remoteGet>[0], callback: (snapshot: DataSnapshot) => unknown, ...args: unknown[]) => {
+  if (!useLocal(referencePath(target))) return (remoteOnValue as Function)(target, callback, ...args);
+  const emit = () => callback(localSnapshot(target));
+  emit();
+  if (args.some(value => value && typeof value === "object" && "onlyOnce" in value && value.onlyOnce)) return () => {};
+  window.addEventListener("rs_guest_data_changed", emit);
+  window.addEventListener("storage", emit);
+  return () => { window.removeEventListener("rs_guest_data_changed", emit); window.removeEventListener("storage", emit); };
+}) as typeof remoteOnValue;
+/** Only an ID bit is persisted for guest counting; no profile or activity. */
+export function registerGuestId(id: string) {
+  return remoteSet(ref(db, `guestRegistry/${id}`), true);
+}
+export { ref, push, query, orderByChild, orderByKey, equalTo, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };

@@ -4,6 +4,7 @@
 // live here until they log in (then you can optionally migrate).
 // ============================================
 
+import { isGuestRecord } from "@/lib/guestPersistence";
 type AnyJson = unknown;
 
 const PREFIX = "guest:";
@@ -16,7 +17,7 @@ export function isGuest(): boolean {
     const raw = localStorage.getItem("rsanime_user");
     if (!raw) return true;
     const u = JSON.parse(raw);
-    return !(u?.id && u?.email);
+    return !u?.id || isGuestRecord(String(u.id), u);
   } catch { return true; }
 }
 
