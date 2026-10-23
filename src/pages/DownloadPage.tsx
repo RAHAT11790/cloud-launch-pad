@@ -86,7 +86,7 @@ export default function DownloadPage() {
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (!final && request && steps?.length === 0) finish();
+    if (!final && request && steps?.length === 0) setReady(true);
   }, [steps, final, request]);
   useEffect(() => {
     if (final || !sponsorPending) return;
@@ -112,9 +112,8 @@ export default function DownloadPage() {
     };
     const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
     const closedCheck = window.setInterval(() => {
+      // Only a real tab close counts; never auto-advance while the sponsor still has focus.
       if (sponsor.current && sponsorTab.current?.closed) returned();
-      // A blocked/empty sponsor that never took focus is not a user violation.
-      else if (sponsor.current && !sponsor.current.left && performance.now() - sponsor.current.openedAt > 1500) returned();
     }, 250);
     window.addEventListener("blur", leave); window.addEventListener("focus", returned); document.addEventListener("visibilitychange", visibility);
     return () => { clearInterval(closedCheck); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
