@@ -1524,7 +1524,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (sheet === "download") {
       const initialSeasonIdx = currentSeasonIdx ?? 0;
       const activeEpisode = episodeList?.find((episode) => episode.active);
-      const activeIdx = seasons?.[initialSeasonIdx]?.episodes?.findIndex((episode) => episode.episodeNumber === activeEpisode?.episodeNumber) ?? -1;
+      const activeIdx = seasons?.[initialSeasonIdx]?.episodes?.findIndex((episode) => episode.episodeNumber === activeEpisode?.number) ?? -1;
       setDownloadPanelSeasonIdx(initialSeasonIdx);
       setSelectedDownloadLanguageLabel(currentLangLabel);
       setDlSelectedEpisodes(isPremium === true && activeIdx >= 0 ? new Set([activeIdx]) : new Set());
