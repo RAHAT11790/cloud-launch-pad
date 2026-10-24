@@ -22,6 +22,7 @@ import BanGate from "./components/BanGate";
 import AdBlockerDetected from "./pages/AdBlockerDetected";
 import AdBlockerRemoved from "./pages/AdBlockerRemoved";
 import { initAdShield } from "@/lib/adShield";
+import ChromeBrowserGate from "./components/ChromeBrowserGate";
 
 const RouteAttrSync = () => {
   const loc = useLocation();
@@ -72,6 +73,7 @@ const RouteFallback = () => (
 );
 
 const App = () => (
+  <ChromeBrowserGate>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
@@ -108,6 +110,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ChromeBrowserGate>
 );
 
 export default App;

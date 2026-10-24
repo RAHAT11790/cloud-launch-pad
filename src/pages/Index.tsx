@@ -1372,14 +1372,15 @@ const Index = () => {
     setSelectedAnime(null);
     setShowProfile(false);
     setCustomPostDetail(null);
-    navigate("/", { replace: true });
+    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    else navigate(MAIN_PAGE_PATH[activePage], { replace: true });
     cleanupPlaybackAfterUnmount();
-  }, [cleanupPlaybackAfterUnmount, navigate]);
+  }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate(fallback, { replace: true });
+    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    else navigate(fallback === "/" ? MAIN_PAGE_PATH[activePage] : fallback, { replace: true });
     cleanupPlaybackAfterUnmount();
-  }, [cleanupPlaybackAfterUnmount, navigate]);
+  }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
 
   // Persist activePage to sessionStorage
   useEffect(() => {
@@ -1729,7 +1730,7 @@ const Index = () => {
   // has finished loading — otherwise the lookup fires too early, finds nothing,
   // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
-    if (!pendingAnimeId) return;
+    if (!pendingAnimeId || isWatchRoute) return;
 
     const isSaltLink = pendingAnimeId.startsWith("as_");
     if (isSaltLink && saltLoading) return; // wait for AN data
@@ -3347,7 +3348,7 @@ const Index = () => {
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isRoutedOverlay) return;
     const fromPath = pathToMainPage(pathname);
     if (fromPath && fromPath !== activePage) {
@@ -3440,6 +3441,11 @@ const Index = () => {
 
   if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
+  }
+
+  // Routed content must resolve before showing any tab beneath it.
+  if ((isWatchRoute && !playerState && !saltPlayerState) || (isAnimeRoute && !selectedAnime)) {
+    return <div className="fixed inset-0 flex items-center justify-center bg-background text-foreground"><Loader2 className="animate-spin text-primary" aria-label="Loading episode" /></div>;
   }
 
   const getPageContent_series = () => (
