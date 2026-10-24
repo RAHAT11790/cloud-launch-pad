@@ -1696,34 +1696,8 @@ const Index = () => {
     }
   }, [animeRouteId, isAnimeRoute, isWatchRoute, selectedAnime]);
 
-  useEffect(() => {
-    // Routed pages (/search, watch/details) own their own history entry — do NOT
-    // push our rsAnime guard state on top of them, otherwise the browser back
-    // button needs two clicks (one to pop our duplicate, one to actually leave).
-    if (isRoutedOverlay) return;
-
-    if (window.history.state?.rsAnime !== true) {
-      window.history.pushState({ rsAnime: true, page: "home" }, "");
-    }
-    let lastBackPress = 0;
-    const onPopState = () => {
-      window.history.pushState({ rsAnime: true }, "");
-      const handled = handleBackPress();
-      if (!handled) {
-        const now = Date.now();
-        if (now - lastBackPress < 2000) { window.close(); }
-        else { lastBackPress = now; toast.info("Press back again to exit"); }
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [handleBackPress, isRoutedOverlay]);
-
-  useEffect(() => {
-    if (isRoutedOverlay) return;
-    const layer = getCurrentLayer();
-    if (layer !== "home") window.history.pushState({ rsAnime: true, page: layer }, "");
-  }, [getCurrentLayer, isRoutedOverlay]);
+  // React Router owns tab and overlay history. Never insert duplicate guards
+  // or replace its idx/key metadata: browser Back should reach the prior URL.
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   // For AnimeSalt shared links (as_<slug>) we must wait until the salt data
