@@ -2216,7 +2216,7 @@ const Index = () => {
     }
 
     const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
-    if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
+    if (window.location.pathname + window.location.search !== immediateRoute) {
       const fromRoutedOverlay = isSearchRoute;
       navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
     }
@@ -2392,7 +2392,7 @@ const Index = () => {
       const missingRequestedEpisode = anime.type === "webseries" && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined && !requestedSeasons?.[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx];
       const needsFullHydration = forceFreshPlayback || missingRequestedEpisode || !hasStoredFirebasePlayback(anime);
       if (needsFullHydration) {
-        const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 8000 : 1400, { forceFresh: forceFreshPlayback });
+        const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback || missingRequestedEpisode ? 8000 : 1400, { forceFresh: forceFreshPlayback || missingRequestedEpisode });
         if (forceFreshPlayback && !latest) { toast.error("Unable to load the latest episode links. Please try again."); return; }
         anime = latest || anime;
       }
@@ -2434,7 +2434,7 @@ const Index = () => {
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
-    if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
+    if (window.location.pathname + window.location.search !== targetWatchRoute) {
       navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
 
