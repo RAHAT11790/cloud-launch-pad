@@ -165,6 +165,14 @@ export type TelegramDownloadRequest = {
   qualities: string[];
 };
 
+/** Batch endpoint picks request the inclusive range, never just the endpoints. */
+export const telegramEpisodeRange = (episodes: number[]): number[] => {
+  const valid = episodes.filter(n => Number.isSafeInteger(n) && n > 0);
+  if (!valid.length) return [];
+  const first = Math.min(...valid), last = Math.max(...valid);
+  return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+};
+
 /** The `?start=` payload only (without the bot url). Empty when invalid. */
 export const buildTelegramStartPayload = ({
   title,
@@ -174,7 +182,8 @@ export const buildTelegramStartPayload = ({
 }: Omit<TelegramDownloadRequest, "botUrl">): string => {
   const hash = telegramTitleHash(title);
   if (!hash) return "";
-  let epSegment = buildTelegramEpisodeSegment(episodes);
+  const range = telegramEpisodeRange(episodes);
+  let epSegment = range.length === 1 ? pad2(range[0]) : range.length ? `${range[0]}-${range[range.length - 1]}` : "";
   if (!epSegment) return "";
   const qualitySegment = sortTelegramQualities(qualities).join("-");
   if (!qualitySegment) return "";

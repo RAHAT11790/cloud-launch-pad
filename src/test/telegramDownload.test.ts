@@ -17,12 +17,21 @@ import {
   sha1Hex,
   sortTelegramQualities,
   telegramTitleHash,
+  telegramEpisodeRange,
 } from "@/lib/telegramDownload";
 
 const nodeHash = (title: string) =>
   createHash("sha1").update(title.trim().toLowerCase(), "utf8").digest("hex").slice(0, 8);
 
 describe("telegram deep link", () => {
+  it("selecting episodes 1 and 12 requests all twelve, not two endpoints", () => {
+    expect(telegramEpisodeRange([1, 12])).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(buildTelegramDownloadUrl({botUrl: BOT, title: "Naruto", season: 1, episodes: [1, 12], qualities: ["720p"]})).toBe(`${BOT}?start=ep_01_1-12_720p_${nodeHash("Naruto")}`);
+  });
+  it("an independent episode action requests only that episode", () => {
+    expect(telegramEpisodeRange([12])).toEqual([12]);
+    expect(buildTelegramStartPayload({title: "Naruto", season: 1, episodes: [12], qualities: ["720p"]})).toBe(`ep_01_12_720p_${nodeHash("Naruto")}`);
+  });
   it("matches node SHA1 exactly", () => {
     expect(sha1Hex("abc")).toBe("a9993e364706816aba3e25717850c26c9cd0d89d");
     ["Bottom-Tier Character Tomozaki", "  Naruto Shippuden ", "進撃の巨人", "One Piece"].forEach((t) => {
