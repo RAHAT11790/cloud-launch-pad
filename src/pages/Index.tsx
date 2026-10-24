@@ -2435,7 +2435,8 @@ const Index = () => {
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
     if (window.location.pathname + window.location.search !== targetWatchRoute) {
-      navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
+      const alreadyWatching = !!matchPath("/watch/:animeId", window.location.pathname);
+      navigate(targetWatchRoute, { replace: alreadyWatching || isInlineSwitch || inPlayerSwitchRef.current });
     }
 
     const isAnimeSaltContent = anime.source === "animesalt"
