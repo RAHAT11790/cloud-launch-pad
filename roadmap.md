@@ -1,11 +1,13 @@
 # Roadmap
 
 ## Approved download and navigation corrections (2026-10-24)
-- [ ] Add an initial timed wait to every ad step, auto-advance after a completed sponsor visit, and restart on early return.
-- [ ] Center the ad between the timer and Continue; verify the countdown on real content.
-- [ ] Limit the unsupported-browser screen to Chrome and Close, with browser/version/IP details.
-- [ ] Make Telegram endpoint selections inclusive ranges and add independent episode buttons.
-- [ ] Restore the exact previous page without a Home flash; verify with mobile screenshots.
+- [x] Add an initial timed wait to every ad step, auto-advance after a completed sponsor visit, and restart on early return; real Naruto flow verified (headless early-return check explicitly dispatched the blur signal).
+- [x] Center the ad container between the timer and Continue; real countdown and no-scroll layout verified.
+- [x] Limit the unsupported-browser screen to Chrome and Close, with browser/version/IP details; Firefox gate screenshot verified.
+- [x] Make Telegram endpoint selections inclusive ranges and add independent episode buttons; 1–12 payload and one-episode payload tests pass, real final-page buttons verified.
+- [x] Restore the exact previous page without a Home flash; Naruto player → /series and /download → original watch URL verified without page errors.
+- [ ] Verify actual paid ad image centering — provider delivered no creative during live checks.
+- [ ] Verify Telegram bot sends all requested files — requires active bot delivery outside the browser; payload and UI verified only.
 
 ## Stability and guest privacy (approved 2026-10-23)
 - [x] Fix download warning loading flash, unavailable-service guidance, exact ad step count and no-ad fallback.
