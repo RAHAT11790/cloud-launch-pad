@@ -1,5 +1,11 @@
 # Roadmap
 
+## New request awaiting confirmation (2026-10-24)
+- [ ] Replace marked bottom Telegram Download with Go back watch page; preserve individual episode links and clarify batch action placement during implementation. Blocker: user confirmation.
+- [ ] Restore notification bell near Home profile and synchronize release notifications with release deletion. Blocker: user confirmation.
+- [ ] Add admin normal/one-time popup announcements with title, description, compact optional image and expiry/cleanup. Blocker: user confirmation.
+- [ ] Show separate real-user/guest totals and actual online/offline presence without storing guest personal data. Blocker: user confirmation.
+
 ## Approved download and navigation corrections (2026-10-24)
 - [x] Add an initial timed wait to every ad step, auto-advance after a completed sponsor visit, and restart on early return; real Naruto flow verified (headless early-return check explicitly dispatched the blur signal).
 - [x] Center the ad container between the timer and Continue; real countdown and no-scroll layout verified.
