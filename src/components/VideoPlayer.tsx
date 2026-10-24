@@ -59,7 +59,7 @@ interface VideoServerOption {
 import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { formatEpisodeChip, formatEpisodeLabel, getEpisodeEnd } from "@/lib/episodeCombo";
 import { groupTelegramSelections } from "@/lib/telegramQuality";
-import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality } from "@/lib/telegramDownload";
+import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality, telegramEpisodeRange } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
@@ -6330,6 +6330,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             if (!picked.length) { toast.error("Select at least one episode"); return; }
             const episodes = picked.map(ep => ({
               number: ep.episodeNumber, title: ep.title,
+              telegramUrl: telegramDownloadEnabled ? buildTelegramDownloadUrl({title, season: seasonNumber, episodes: [ep.episodeNumber], qualities: Object.entries(ep.qualityLinks).filter(([,url]) => url && url !== ep.directLink && !isAbyssLink(url)).map(([q]) => normalizeTelegramQuality(q)).filter(q => ["480p", "720p", "1080p"].includes(q))}) : "",
               choices: Object.entries(ep.qualityLinks).flatMap(([key, value]) => {
                 const quality = freeDownloadQuality(key);
                 const url = unwrapManagedVideoUrl(value) || value;
@@ -6341,7 +6342,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const telegramQualities = Array.from(new Set(picked.flatMap(ep => Object.entries(ep.qualityLinks).filter(([,url]) => url && url !== ep.directLink && !isAbyssLink(url)).map(([q]) => normalizeTelegramQuality(q))))).filter(q => ["480p","720p","1080p"].includes(q));
             const telegramUrl = telegramDownloadEnabled && telegramQualities.length ? buildTelegramDownloadUrl({title, season: seasonNumber, episodes: picked.map(ep => ep.episodeNumber), qualities: telegramQualities}) : "";
             try { videoRef.current?.pause(); } catch {}
-            openDownloadFlow({ title, poster, season: seasonNumber, episodes, telegramUrl, returnPath: window.location.pathname + window.location.search });
+            openDownloadFlow({ title, poster, season: seasonNumber, episodes, telegramUrl, telegramEpisodeCount: telegramEpisodeRange(picked.map(ep => ep.episodeNumber)).length, returnPath: window.location.pathname + window.location.search });
           };
           const sendNamedDownloads = async (items: Array<{url: string; fileName: string}>) => {
             const base = await getFilenameRelayBase();
@@ -6568,10 +6569,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       const avail = epTgQuals(ep);
                       return (tgEpQualityMap[ep.index] || []).filter((q) => avail.includes(q));
                     };
+                    const selectedNumbers = tgEpisodeList.filter(ep => resolveEpQuals(ep).length > 0).map(ep => ep.episodeNumber);
+                    const rangeNumbers = telegramEpisodeRange(selectedNumbers);
+                    const rangeQualities = Array.from(new Set(tgEpisodeList.flatMap(ep => resolveEpQuals(ep))));
                     const groups = hasMultiEpisodes
                       ? groupTelegramSelections(
                           tgEpisodeList
-                            .map((ep) => ({ episode: Number(ep.episodeNumber) || 0, qualities: resolveEpQuals(ep) }))
+                            .filter(ep => rangeNumbers.includes(ep.episodeNumber))
+                            .map((ep) => ({ episode: Number(ep.episodeNumber) || 0, qualities: epTgQuals(ep).filter(q => rangeQualities.includes(q)) }))
                             .filter((s) => s.qualities.length > 0),
                         )
                       : (quickPick.length ? [{ episodes: [1], qualities: quickPick }] : []);
@@ -6685,6 +6690,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                           );
                                         })}
                                       </div>
+                                      <Button variant="ghost" size="icon" className="shrink-0 text-primary" aria-label={`Telegram episode ${ep.episodeNumber}`} disabled={!botUrl} onClick={() => {
+                                        const url = buildTelegramDownloadUrl({botUrl, title: animeTitle, season: seasonNumber, episodes: [ep.episodeNumber], qualities: using.length ? using : avail});
+                                        if (!url) return;
+                                        recordDownloadEvent("telegram", 1);
+                                        window.open(url, "_blank", "noopener,noreferrer");
+                                      }}><Send size={16} /></Button>
                                     </div>
                                   );
                                 })}

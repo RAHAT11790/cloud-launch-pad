@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { downloadWaitRemaining, normalizeDownloadFlowSettings, selectDownloadEpisode, freeDownloadQuality, downloadNeedsAdFlow, sponsorWaitComplete, sponsorReturnOutcome, nextDownloadStep } from "@/lib/downloadFlow";
 describe("Download controller rules", () => {
+  it("starts every five-second countdown disabled until the full wait ends", () => {
+    expect([0, 1000, 2000, 3000, 4000, 5000].map(ms => downloadWaitRemaining(5, ms))).toEqual([5, 4, 3, 2, 1, 0]);
+    expect(downloadWaitRemaining(5, 4999)).toBe(1);
+  });
   it("never adds a third step to two configured steps", () => {
     expect(nextDownloadStep(0, 2)).toBe(1);
     expect(nextDownloadStep(1, 2)).toBe("final");

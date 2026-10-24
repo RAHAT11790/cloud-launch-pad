@@ -1,6 +1,6 @@
 export type DownloadChoice = { quality: string; url: string; fileName: string; locked?: boolean };
-export type DownloadEpisode = { number: number; title: string; choices: DownloadChoice[] };
-export type DownloadFlowRequest = { title: string; poster?: string; season?: number; episodes: DownloadEpisode[]; telegramUrl?: string; returnPath: string };
+export type DownloadEpisode = { number: number; title: string; choices: DownloadChoice[]; telegramUrl?: string };
+export type DownloadFlowRequest = { title: string; poster?: string; season?: number; episodes: DownloadEpisode[]; telegramUrl?: string; telegramEpisodeCount?: number; returnPath: string };
 export const DOWNLOAD_FLOW_KEY = "rs_download_flow_v1";
 export const DOWNLOAD_FINAL_KEY = "rs_download_final_v1";
 export function downloadNeedsAdFlow(premium: boolean | null) { return premium === false; }

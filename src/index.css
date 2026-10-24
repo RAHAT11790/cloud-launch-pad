@@ -7,7 +7,7 @@
 /* Telegram publishing workspace — locked Ocean Deep direction. */
 .download-step-screen { height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); display: flex; flex-direction: column; overflow: hidden; }
 .download-page { --background: 0 0% 0%; --foreground: 0 0% 96%; --secondary: 0 0% 9%; --secondary-foreground: 0 0% 96%; --border: 0 0% 16%; --muted-foreground: 0 0% 60%; --primary: 174 78% 46%; --primary-foreground: 0 0% 0%; --ring: 174 78% 46%; }
-.download-ad-slot { flex: 1; min-height: 0; max-height: 300px; overflow: hidden; }
+.download-ad-slot { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .download-step-footer { flex-shrink: 0; margin-top: auto; padding: 12px 0 max(10px, env(safe-area-inset-bottom)); }
 .download-telegram { --download-telegram: 201 88% 44%; --download-telegram-foreground: 0 0% 100%; background: hsl(var(--download-telegram)); color: hsl(var(--download-telegram-foreground)); }
 .download-telegram:hover { background: hsl(var(--download-telegram) / .85); }

@@ -1372,14 +1372,15 @@ const Index = () => {
     setSelectedAnime(null);
     setShowProfile(false);
     setCustomPostDetail(null);
-    navigate("/", { replace: true });
+    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    else navigate(MAIN_PAGE_PATH[activePage], { replace: true });
     cleanupPlaybackAfterUnmount();
-  }, [cleanupPlaybackAfterUnmount, navigate]);
+  }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate(fallback, { replace: true });
+    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    else navigate(fallback === "/" ? MAIN_PAGE_PATH[activePage] : fallback, { replace: true });
     cleanupPlaybackAfterUnmount();
-  }, [cleanupPlaybackAfterUnmount, navigate]);
+  }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
 
   // Persist activePage to sessionStorage
   useEffect(() => {
@@ -1695,41 +1696,15 @@ const Index = () => {
     }
   }, [animeRouteId, isAnimeRoute, isWatchRoute, selectedAnime]);
 
-  useEffect(() => {
-    // Routed pages (/search, watch/details) own their own history entry — do NOT
-    // push our rsAnime guard state on top of them, otherwise the browser back
-    // button needs two clicks (one to pop our duplicate, one to actually leave).
-    if (isRoutedOverlay) return;
-
-    if (window.history.state?.rsAnime !== true) {
-      window.history.pushState({ rsAnime: true, page: "home" }, "");
-    }
-    let lastBackPress = 0;
-    const onPopState = () => {
-      window.history.pushState({ rsAnime: true }, "");
-      const handled = handleBackPress();
-      if (!handled) {
-        const now = Date.now();
-        if (now - lastBackPress < 2000) { window.close(); }
-        else { lastBackPress = now; toast.info("Press back again to exit"); }
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [handleBackPress, isRoutedOverlay]);
-
-  useEffect(() => {
-    if (isRoutedOverlay) return;
-    const layer = getCurrentLayer();
-    if (layer !== "home") window.history.pushState({ rsAnime: true, page: layer }, "");
-  }, [getCurrentLayer, isRoutedOverlay]);
+  // React Router owns tab and overlay history. Never insert duplicate guards
+  // or replace its idx/key metadata: browser Back should reach the prior URL.
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   // For AnimeSalt shared links (as_<slug>) we must wait until the salt data
   // has finished loading — otherwise the lookup fires too early, finds nothing,
   // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
-    if (!pendingAnimeId) return;
+    if (!pendingAnimeId || isWatchRoute) return;
 
     const isSaltLink = pendingAnimeId.startsWith("as_");
     if (isSaltLink && saltLoading) return; // wait for AN data
@@ -2241,7 +2216,7 @@ const Index = () => {
     }
 
     const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
-    if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
+    if (window.location.pathname + window.location.search !== immediateRoute) {
       const fromRoutedOverlay = isSearchRoute;
       navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
     }
@@ -2413,9 +2388,11 @@ const Index = () => {
     if (wantedEpisodeNumber) { anime = { ...anime }; delete (anime as any).__rsEpisodeNumber; }
     const alreadyRetriedFresh = !!(anime as any).__rsRetriedFreshPlayback;
     if (!isAnimeSaltContentEarlyReload) {
-      const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
+      const requestedSeasons = resolveAnimeSeasonsForLanguage(anime, resolveDefaultLanguage(anime));
+      const missingRequestedEpisode = anime.type === "webseries" && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined && !requestedSeasons?.[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx];
+      const needsFullHydration = forceFreshPlayback || missingRequestedEpisode || !hasStoredFirebasePlayback(anime);
       if (needsFullHydration) {
-        const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 8000 : 1400, { forceFresh: forceFreshPlayback });
+        const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback || missingRequestedEpisode ? 8000 : 1400, { forceFresh: forceFreshPlayback || missingRequestedEpisode });
         if (forceFreshPlayback && !latest) { toast.error("Unable to load the latest episode links. Please try again."); return; }
         anime = latest || anime;
       }
@@ -2457,8 +2434,9 @@ const Index = () => {
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
-    if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
-      navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
+    if (window.location.pathname + window.location.search !== targetWatchRoute) {
+      const alreadyWatching = !!matchPath("/watch/:animeId", window.location.pathname);
+      navigate(targetWatchRoute, { replace: alreadyWatching || isInlineSwitch || inPlayerSwitchRef.current });
     }
 
     const isAnimeSaltContent = anime.source === "animesalt"
@@ -2485,7 +2463,8 @@ const Index = () => {
     let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
     if (anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined) {
       const season = resolvedSeasons[resolvedSeasonIdx];
-      const episode = season.episodes[resolvedEpIdx];
+      const episode = season?.episodes?.[resolvedEpIdx];
+      if (!season || !episode) { inPlayerSwitchRef.current = false; toast.error("This episode is no longer available. Please select another episode."); return; }
       if (isAnimeSaltContent && isAnimeSaltSentinel(episode.link)) {
         const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link), { seriesSlug: anime.anSlug || anime.animeSaltSlug || anime.slug });
         if (resolved) Object.assign(episode, resolved);
@@ -3347,7 +3326,7 @@ const Index = () => {
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isRoutedOverlay) return;
     const fromPath = pathToMainPage(pathname);
     if (fromPath && fromPath !== activePage) {
@@ -3440,6 +3419,11 @@ const Index = () => {
 
   if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
+  }
+
+  // Routed content must resolve before showing any tab beneath it.
+  if ((isWatchRoute && !playerState && !saltPlayerState) || (isAnimeRoute && !selectedAnime)) {
+    return <div className="fixed inset-0 flex items-center justify-center bg-background text-foreground"><Loader2 className="animate-spin text-primary" aria-label="Loading episode" /></div>;
   }
 
   const getPageContent_series = () => (
