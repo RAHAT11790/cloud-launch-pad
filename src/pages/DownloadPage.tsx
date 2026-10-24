@@ -36,6 +36,7 @@ export default function DownloadPage() {
   const [step, setStep] = useState(0);
   const [guard, setGuard] = useState<DownloadBlockState>("checking");
   const [elapsed, setElapsed] = useState(0);
+  const [waitAttempt, setWaitAttempt] = useState(0);
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
   const [fileState, setFileState] = useState<Record<string, "ready" | "unavailable">>({});
@@ -89,13 +90,16 @@ export default function DownloadPage() {
     if (!final && request && steps?.length === 0) setReady(true);
   }, [steps, final, request]);
   useEffect(() => {
-    if (final || !sponsorPending) return;
+    if (final || ready || guard !== "clear" || steps === null) return;
+    const startedAt = performance.now();
     const timer = window.setInterval(() => {
       const pending = sponsor.current;
-      if (pending?.left) setElapsed(performance.now() - pending.awayAt);
-    }, 200);
+      if (sponsorPending) {
+        if (pending?.left) setElapsed(performance.now() - pending.awayAt);
+      } else setElapsed(performance.now() - startedAt);
+    }, 100);
     return () => clearInterval(timer);
-  }, [final, sponsorPending]);
+  }, [final, ready, guard, steps, step, sponsorPending, waitAttempt]);
   useEffect(() => {
     if (final) return;
     const leave = () => {
@@ -107,7 +111,7 @@ export default function DownloadPage() {
       // Consume before changing state: focus, visibility and tab-close may fire together.
       sponsor.current = null;
       if (sponsorReturnOutcome(seconds, performance.now() - pending.awayAt, pending.left) === "advance") advance();
-      else { sponsor.current = null; setSponsorPending(false); setElapsed(0); toast("Stay on the sponsor page until the wait is complete."); }
+      else { setSponsorPending(false); setElapsed(0); setWaitAttempt(n => n + 1); toast.error("Returned too early. Please wait and try again."); }
       void verify();
     };
     const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
@@ -132,10 +136,10 @@ export default function DownloadPage() {
     })).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
   }, [final, base, request]);
-  const wait = sponsorPending ? downloadWaitRemaining(seconds, elapsed) : 0;
+  const wait = downloadWaitRemaining(seconds, elapsed);
   const back = () => window.location.assign(request?.returnPath || "/");
   const next = () => {
-    if (guard !== "clear" || steps === null || sponsorPending || advancing.current) return;
+    if (guard !== "clear" || steps === null || wait > 0 || sponsorPending || advancing.current) return;
     if (!/^https?:\/\//i.test(smartlink)) { advance(); return; }
     sponsor.current = { awayAt: performance.now(), openedAt: performance.now(), left: false }; setElapsed(0); setSponsorPending(true);
     const tab = window.open(smartlink, "_blank");
@@ -162,7 +166,7 @@ export default function DownloadPage() {
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = choice.fileName;
     document.body.appendChild(anchor); anchor.click(); anchor.remove(); recordDownloadEvent("website");
   };
-  const startTelegram = () => { if (!request?.telegramUrl) return; window.open(request.telegramUrl, "_blank", "noopener,noreferrer"); recordDownloadEvent("telegram", request.episodes.length); };
+  const startTelegram = (url = request?.telegramUrl, count = request?.telegramEpisodeCount || request?.episodes.length || 1) => { if (!url) return; window.open(url, "_blank", "noopener,noreferrer"); recordDownloadEvent("telegram", count); };
   const progress = Math.min(1, elapsed / (seconds * 1000));
   const showTelegram = !!(final && config.telegramEnabled && request?.telegramUrl);
   return <main className={`download-page bg-background text-foreground ${final ? "download-final-screen" : "download-step-screen"}`}>
@@ -179,13 +183,13 @@ export default function DownloadPage() {
         <div className="flex shrink-0 items-center justify-between border-b border-border pb-2 text-xs text-muted-foreground"><span>DOWNLOAD ACCESS</span><span>{steps === null ? "Loading steps…" : `Step ${step + 1} / ${steps.length}`}</span></div>
         <div className="flex shrink-0 items-center gap-3 py-3">
           <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
-            <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden><circle cx="24" cy="24" r="21" className="download-ring-track" /><circle cx="24" cy="24" r="21" className="download-ring-fill" strokeDasharray={131.95} strokeDashoffset={131.95 * (1 - (sponsorPending ? 1 : progress))} /></svg>
-            <span className="text-lg font-bold tabular-nums">{sponsorPending ? wait || <Check className="text-primary" /> : <Check className="text-primary" />}</span>
+            <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden><circle cx="24" cy="24" r="21" className="download-ring-track" /><circle cx="24" cy="24" r="21" className="download-ring-fill" strokeDasharray={131.95} strokeDashoffset={131.95 * (1 - progress)} /></svg>
+            <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{wait > 0 ? wait : <Check className="text-primary" />}</span>
           </span>
           <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${seconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${seconds} seconds, then return here.`}</p></div>
         </div>
         <div className="download-ad-slot">{guard === "clear" ? <StepAds key={step} socialBar={config.socialBar} banner={config.banner} /> : <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">{guard === "checking" ? <Loader2 className="animate-spin text-primary" /> : <ShieldAlert className="text-destructive" />}<h2 className="text-sm font-semibold">{guard === "checking" ? "Checking ad access…" : guard === "blocked" ? "Ad blocker detected" : "Unable to verify ad access"}</h2><p className="max-w-xs text-xs text-muted-foreground">{guard === "blocked" ? "Turn off ad blocking or filtering DNS, then retry." : "Check your connection and retry."}</p>{guard !== "checking" && <Button variant="outline" onClick={() => void verify()}><RefreshCw />Check again</Button>}</div>}</div>
-        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending} onClick={next}>{sponsorPending ? `Return after ${wait}s` : step + 1 === steps?.length ? "Get Link" : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {seconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
+        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending || wait > 0} onClick={next}>{sponsorPending ? `Return after ${wait}s` : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {seconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
       </div>}
       {final && <>
         <div className="mx-auto w-full max-w-lg min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
@@ -195,9 +199,10 @@ export default function DownloadPage() {
           <div className="space-y-4">{request.episodes.map(ep => <section key={ep.number} className="download-card rounded-xl border border-border p-3">
             <div className="mb-2.5 flex items-center gap-2.5">{request.poster && <img src={request.poster} alt="" className="h-9 w-7 rounded object-cover" />}<span className="text-sm font-bold">Episode {String(ep.number).padStart(2, "0")}</span><span className="ml-auto text-[11px] text-muted-foreground">{ep.choices.length} {ep.choices.length === 1 ? "quality" : "qualities"}</span></div>
             <div className="space-y-2">{ep.choices.map(choice => { const key = `w:${ep.number}:${choice.quality}`; const ext = (choice.fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "file").toUpperCase(); return <Button key={choice.quality} type="button" className="download-go flex min-h-14 h-auto w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left disabled:opacity-50" disabled={!base || !config.websiteEnabled || fileState[choice.url] === "unavailable"} onClick={() => tapWithAd(key, () => startWebsite(choice))}><Download size={20} className="shrink-0" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{qualityLabel(choice.quality)}</span><span className="block text-xs opacity-90">{fileState[choice.url] === "unavailable" ? "File unavailable" : sizes[choice.url] ? `${(sizes[choice.url] / 1048576).toFixed(1)} MB` : "Size unavailable"} • {ext}</span></span><span className="shrink-0 text-[11px] font-semibold">{adSeen.has(key) ? "Download now" : "Download"}</span></Button>; })}{!ep.choices.length && <p className="text-xs text-muted-foreground">No website files available.</p>}</div>
+            {config.telegramEnabled && ep.telegramUrl && <Button className="download-telegram mt-3 h-11 w-full" onClick={() => tapWithAd(`telegram:${ep.number}`, () => startTelegram(ep.telegramUrl, 1))}><TelegramLogo />Telegram · Episode {ep.number}</Button>}
           </section>)}</div>
         </div>
-        <footer className="download-final-footer"><div className="mx-auto w-full max-w-lg px-4">{showTelegram ? <button type="button" className="download-telegram flex h-12 w-full items-center justify-center gap-2.5 rounded-lg text-sm font-bold" onClick={() => tapWithAd("telegram", startTelegram)}><TelegramLogo />{adSeen.has("telegram") ? "Open Telegram now" : "Telegram Download"}</button> : <Button variant="outline" className="h-11 w-full" onClick={back}><ArrowLeft />Back to anime</Button>}</div></footer>
+        <footer className="download-final-footer"><div className="mx-auto w-full max-w-lg px-4">{showTelegram ? <Button type="button" className="download-telegram flex h-12 w-full items-center justify-center gap-2.5 rounded-lg text-sm font-bold" onClick={() => tapWithAd("telegram", () => startTelegram())}><TelegramLogo />{adSeen.has("telegram") ? "Open Telegram now" : "Telegram Download"}</Button> : <Button variant="outline" className="h-11 w-full" onClick={back}><ArrowLeft />Back to anime</Button>}</div></footer>
       </>}
     </>}
   </main>;
