@@ -2388,7 +2388,9 @@ const Index = () => {
     if (wantedEpisodeNumber) { anime = { ...anime }; delete (anime as any).__rsEpisodeNumber; }
     const alreadyRetriedFresh = !!(anime as any).__rsRetriedFreshPlayback;
     if (!isAnimeSaltContentEarlyReload) {
-      const needsFullHydration = forceFreshPlayback || !hasStoredFirebasePlayback(anime);
+      const requestedSeasons = resolveAnimeSeasonsForLanguage(anime, resolveDefaultLanguage(anime));
+      const missingRequestedEpisode = anime.type === "webseries" && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined && !requestedSeasons?.[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx];
+      const needsFullHydration = forceFreshPlayback || missingRequestedEpisode || !hasStoredFirebasePlayback(anime);
       if (needsFullHydration) {
         const latest = await loadFullFirebaseAnimeItemWithTimeout(anime, forceFreshPlayback ? 8000 : 1400, { forceFresh: forceFreshPlayback });
         if (forceFreshPlayback && !latest) { toast.error("Unable to load the latest episode links. Please try again."); return; }
@@ -2460,7 +2462,8 @@ const Index = () => {
     let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
     if (anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined) {
       const season = resolvedSeasons[resolvedSeasonIdx];
-      const episode = season.episodes[resolvedEpIdx];
+      const episode = season?.episodes?.[resolvedEpIdx];
+      if (!season || !episode) { inPlayerSwitchRef.current = false; toast.error("This episode is no longer available. Please select another episode."); return; }
       if (isAnimeSaltContent && isAnimeSaltSentinel(episode.link)) {
         const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link), { seriesSlug: anime.anSlug || anime.animeSaltSlug || anime.slug });
         if (resolved) Object.assign(episode, resolved);
