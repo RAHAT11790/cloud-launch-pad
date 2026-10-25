@@ -1,26 +1,23 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { Chrome, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { chromeLaunchUrl, detectBrowser } from "@/lib/browserEligibility";
+import { browserBrands, browserGateApplies, chromeLaunchUrl, detectBrowser } from "@/lib/browserEligibility";
 
+/** Decided synchronously from the browser's brand list, so there is no waiting screen. */
 export default function ChromeBrowserGate({ children }: { children: ReactNode }) {
-  const [browser, setBrowser] = useState(() => detectBrowser(navigator.userAgent));
-  const [checking, setChecking] = useState(() => !!(navigator as Navigator & { brave?: unknown }).brave);
+  const { pathname } = useLocation();
+  const browser = useMemo(() => detectBrowser(navigator.userAgent, { brands: browserBrands(navigator) }), []);
+  const blocked = !browser.supported && browserGateApplies(pathname);
   const [ip, setIp] = useState("Checking…");
   useEffect(() => {
-    const brave = (navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }).brave;
-    if (brave?.isBrave) brave.isBrave().then(value => setBrowser(detectBrowser(navigator.userAgent, value))).catch(() => setBrowser(detectBrowser(navigator.userAgent, true))).finally(() => setChecking(false));
-    else setChecking(false);
-  }, []);
-  useEffect(() => {
-    if (browser.supported || checking) return;
+    if (!blocked) return;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    fetch("https://api.ipify.org?format=json", { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject()).then(data => setIp(typeof data.ip === "string" ? data.ip : "Unavailable")).catch(() => { if (!controller.signal.aborted) setIp("Unavailable"); else setIp("Unavailable"); }).finally(() => clearTimeout(timeout));
+    fetch("https://api.ipify.org?format=json", { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject()).then(data => setIp(typeof data.ip === "string" ? data.ip : "Unavailable")).catch(() => setIp("Unavailable")).finally(() => clearTimeout(timeout));
     return () => { controller.abort(); clearTimeout(timeout); };
-  }, [browser.supported, checking]);
-  if (checking) return <div className="fixed inset-0 flex items-center justify-center bg-background"><ShieldAlert className="text-primary" /></div>;
-  if (browser.supported) return <>{children}</>;
+  }, [blocked]);
+  if (!blocked) return <>{children}</>;
   return <main className="flex min-h-dvh items-center justify-center bg-background px-5 py-8 text-foreground">
     <section className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-lg">
       <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"><ShieldAlert size={28} /></div>

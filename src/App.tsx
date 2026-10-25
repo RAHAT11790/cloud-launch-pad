@@ -75,10 +75,10 @@ const RouteFallback = () => (
 );
 
 const App = () => (
-  <ChromeBrowserGate>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
+        <ChromeBrowserGate>
         <DynamicMeta />
         <RouteAttrSync />
         <AdBlockGateWatcher />
@@ -109,10 +109,10 @@ const App = () => (
           <Route path="/live-tv" element={<Index />} />
           <Route path="*" element={<Index />} />
         </Routes>
+        </ChromeBrowserGate>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-  </ChromeBrowserGate>
 );
 
 export default App;

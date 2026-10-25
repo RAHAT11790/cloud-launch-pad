@@ -1,5 +1,5 @@
 import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
-import { openDownloadFlow, sourceDownloadFilename, freeDownloadQuality, downloadNeedsAdFlow } from "@/lib/downloadFlow";
+import { openDownloadFlow, sourceDownloadFilename, freeDownloadQuality, downloadNeedsAdFlow, downloadSelectionLimit, downloadStepsFor } from "@/lib/downloadFlow";
 import { getFilenameRelayBase, filenameRelayUrl } from "@/lib/filenameRelay";
 import { Button } from "@/components/ui/button";
 import { getDeviceId } from "@/lib/premiumDevice";
@@ -6311,22 +6311,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const panelEpisodes = downloadEpisodes;
 
           const freeWebsite = downloadNeedsAdFlow(isPremium);
+          const freeLimit = downloadSelectionLimit(downloadManager, panelEpisodes.length);
+          const freeStepCount = downloadStepsFor(downloadManager, hasMultiEpisodes ? dlSelectedEpisodes.size : 1).length;
           const toggleEpisode = (idx: number) => {
             setDlSelectedEpisodes((prev) => {
               const next = new Set(prev);
               if (next.has(idx)) next.delete(idx);
-              else if (!freeWebsite || next.size < downloadManager.maxEpisodes) next.add(idx);
+              else if (!freeWebsite || next.size < freeLimit) next.add(idx);
               return next;
             });
           };
           const toggleAll = () => {
-            const limit = freeWebsite ? downloadManager.maxEpisodes : panelEpisodes.length;
+            const limit = freeWebsite ? freeLimit : panelEpisodes.length;
             setDlSelectedEpisodes((prev) => prev.size ? new Set() : new Set(panelEpisodes.filter(ep => Object.values(ep.qualityLinks).some(Boolean)).slice(0, limit).map(ep => ep.index)));
           };
           const startFreeDownloads = () => {
             const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
             const seasonNumber = Number(seasonLabel.match(/\d+/)?.[0]) || downloadPanelSeasonIdx + 1;
-            const picked: Array<{ episodeNumber: number; title: string; qualityLinks: Record<string, string>; directLink?: string }> = hasMultiEpisodes ? panelEpisodes.filter(ep => dlSelectedEpisodes.has(ep.index)).slice(0, downloadManager.maxEpisodes) : [{ episodeNumber: 1, title, qualityLinks: movieQualityLinks, directLink: "" }];
+            const picked: Array<{ episodeNumber: number; title: string; qualityLinks: Record<string, string>; directLink?: string }> = hasMultiEpisodes ? panelEpisodes.filter(ep => dlSelectedEpisodes.has(ep.index)).slice(0, freeLimit) : [{ episodeNumber: 1, title, qualityLinks: movieQualityLinks, directLink: "" }];
             if (!picked.length) { toast.error("Select at least one episode"); return; }
             const episodes = picked.map(ep => ({
               number: ep.episodeNumber, title: ep.title,
@@ -6823,7 +6825,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               const sizeBytes = getCachedDownloadSize(qualityUrl);
                               const sizeLabel = fmtSize(sizeBytes);
                               return (
-                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule || (freeWebsite && !selected && dlSelectedEpisodes.size >= downloadManager.maxEpisodes)} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
+                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule || (freeWebsite && !selected && dlSelectedEpisodes.size >= freeLimit)} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
                                   <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${lockedByRule ? 'border-amber-400/50 text-amber-300' : selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
                                     {lockedByRule ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
                                   </span>
@@ -6926,7 +6928,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <div className="flex items-center gap-2.5">
                           <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${allAllowedSelected ? 'text-white' : 'text-white/55'}`}>
                             <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${allAllowedSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
-                            <span>{freeWebsite ? `${dlSelectedEpisodes.size}/${downloadManager.maxEpisodes}` : "All"}</span>
+                            <span>{freeWebsite ? `${dlSelectedEpisodes.size}/${freeLimit >= panelEpisodes.length ? "All" : freeLimit}` : "All"}</span>
                           </button>
                           <button
                             onClick={() => {
@@ -6941,7 +6943,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           >
                             <Download className="w-4 h-4" />
                             <span className="truncate">
-                              {freeWebsite ? `Continue • ${hasMultiEpisodes ? dlSelectedEpisodes.size : 1} selected` : activeQuality ? `Download • ${activeQuality}` : 'Download'}
+                              {freeWebsite ? `Continue • ${hasMultiEpisodes ? dlSelectedEpisodes.size : 1} selected • ${freeStepCount} ad ${freeStepCount === 1 ? "step" : "steps"}` : activeQuality ? `Download • ${activeQuality}` : 'Download'}
                               {!freeWebsite && totalLabel ? ` • ${totalLabel}` : ''}
                             </span>
                           </button>
