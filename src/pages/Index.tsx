@@ -1369,9 +1369,6 @@ const Index = () => {
     window.requestAnimationFrame(() => window.setTimeout(stopAllPlayback, 0));
   }, [stopAllPlayback]);
 
-  useEffect(() => {
-    if (playerState || saltPlayerState || !isWatchRoute) { try { sessionStorage.removeItem(BACK_TO_WATCH_KEY); } catch {} }
-  }, [playerState, saltPlayerState, isWatchRoute]);
   const hardCloseToHome = useCallback(() => {
     setPlayerState(null);
     setSaltPlayerState(null);
@@ -1653,6 +1650,9 @@ const Index = () => {
     } catch {}
   }, [isLoggedIn]);
   // Push notifications fully removed from the app.
+  useEffect(() => {
+    if (playerState || saltPlayerState || !isWatchRoute) { try { sessionStorage.removeItem(BACK_TO_WATCH_KEY); } catch {} }
+  }, [playerState, saltPlayerState, isWatchRoute]);
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
