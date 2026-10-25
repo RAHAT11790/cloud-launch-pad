@@ -46,7 +46,7 @@ export default function DownloadPage() {
     return () => window.removeEventListener("pageshow", shown);
   }, []);
   const [guard, setGuard] = useState<DownloadBlockState>("checking");
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(() => savedTimer ? Math.max(0, Date.now() - savedTimer.startedAt) : 0);
   const [waitAttempt, setWaitAttempt] = useState(0);
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
@@ -110,6 +110,7 @@ export default function DownloadPage() {
     const timerState = resumeDownloadTimer(readDownloadTimer(), flowId, step, Date.now());
     saveDownloadTimer(timerState);
     const startedAt = timerState.startedAt;
+    if (!sponsorPending) setElapsed(Date.now() - startedAt);
     const timer = window.setInterval(() => {
       const pending = sponsor.current;
       if (sponsorPending) {
@@ -211,7 +212,7 @@ export default function DownloadPage() {
         <div className="flex shrink-0 items-center gap-3 py-3">
           <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
             <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden><circle cx="24" cy="24" r="21" className="download-ring-track" /><circle cx="24" cy="24" r="21" className="download-ring-fill" strokeDasharray={131.95} strokeDashoffset={131.95 * (1 - progress)} /></svg>
-            <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{wait > 0 ? wait : <Check className="text-primary" />}</span>
+            <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{steps === null ? "…" : wait > 0 ? wait : <Check className="text-primary" />}</span>
           </span>
           <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${seconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${seconds} seconds, then return here.`}</p></div>
         </div>
