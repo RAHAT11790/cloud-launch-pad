@@ -3422,7 +3422,7 @@ const Index = () => {
   }
 
   // Routed content must resolve before showing any tab beneath it. A plain, spinner-free
-  // surface (the player's own black for watch pages) so returning never looks like loading.
+  // surface so returning never looks like loading.
   if ((isWatchRoute && !playerState && !saltPlayerState) || (isAnimeRoute && !selectedAnime)) {
     return <div aria-busy="true" className="fixed inset-0 bg-background" />;
   }
