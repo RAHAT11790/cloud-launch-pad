@@ -154,3 +154,10 @@
 - [x] Last step no longer reloads straight to links: a "Your links are ready!" screen with a Get Link button appears first; Get Link redirects to the final download page.
 - [x] Last-step button reads "Get Link"; early sponsor return still restarts the step timer without penalty.
 - [x] Live mobile test on real Naruto: Step 1 Continue → sponsor → Step 2 Get Link → sponsor → ready screen → Get Link → final links (1080P FHD, real sizes, Telegram bar). 11 download tests + build pass.
+
+## Chrome gate, per-count ad steps, popup, no-spinner back (2026-10-25)
+- [x] Chrome-only now instant and catches Chrome-lookalike browsers (Booyah etc.); admin panel open in any browser (Telegram mini app).
+- [x] Ad steps per selected-episode count + optional "All episodes" box; selector shows ad step count; no daily limit.
+- [x] Download page ad codes moved to Ad Manager; Download Manager keeps only download rules.
+- [x] After each countdown an instruction popup appears; only its cross closes it.
+- [x] Back from download/player shows no loading spinner; download page Back returns to the previous page directly.
