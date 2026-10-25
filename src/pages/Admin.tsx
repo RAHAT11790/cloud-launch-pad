@@ -6,6 +6,8 @@ import InlineBackdropAi from "@/components/admin/InlineBackdropAi";
 import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
+import AnnouncementsManager from "@/components/admin/AnnouncementsManager";
+import { usePresenceCounts } from "@/lib/presence";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
@@ -4189,6 +4191,9 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  });
  return guests;
  }, [usersData]);
+ const liveCounts = usePresenceCounts();
+ const realTotal = Math.max(usersData.length - guestUidSet.size, liveCounts.real);
+ const guestTotal = Math.max(guestRegistryCount, liveCounts.guest);
  const recentContent = useMemo(() => [
  ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
  ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
@@ -5950,16 +5955,10 @@ ${tgBulkFooter}
  </div>
 
  <div className={`${glassCard} p-4 mb-3`}>
- <h3 className="text-sm font-semibold mb-2.5">User Activity</h3>
- <div className="flex gap-4 items-center">
- <div className="flex items-center gap-1.5">
- <div className="w-2 h-2 rounded-full bg-green-500" />
- <span className="text-[13px] text-zinc-300">Online: <strong>{onlineUsers}</strong></span>
- </div>
- <div className="flex items-center gap-1.5">
- <div className="w-2 h-2 rounded-full bg-red-500" />
- <span className="text-[13px] text-zinc-300">Offline: <strong>{offlineUsers}</strong></span>
- </div>
+ <h3 className="text-sm font-semibold mb-2.5">Live Visitors</h3>
+ <div className="grid grid-cols-2 gap-2 text-[12px] text-zinc-300">
+ <div><span className="text-zinc-400">Real users</span><div className="flex items-center gap-1.5 mt-1"><div className="w-2 h-2 rounded-full bg-green-500" />Online <strong>{liveCounts.real}</strong><div className="w-2 h-2 rounded-full bg-red-500 ml-2" />Offline <strong>{Math.max(0, realTotal - liveCounts.real)}</strong></div></div>
+ <div><span className="text-zinc-400">Guests</span><div className="flex items-center gap-1.5 mt-1"><div className="w-2 h-2 rounded-full bg-green-500" />Online <strong>{liveCounts.guest}</strong><div className="w-2 h-2 rounded-full bg-red-500 ml-2" />Offline <strong>{Math.max(0, guestTotal - liveCounts.guest)}</strong></div></div>
  </div>
  </div>
 
@@ -7747,26 +7746,24 @@ ${tgBulkFooter}
  </div>
 
  <div className={`${glassCard} p-4 mb-4`}>
- <div className="flex justify-between items-center mb-3.5">
- <h3 className="text-sm font-semibold">User Statistics</h3>
- <button onClick={() => toast.info("Users auto-synced!")} className="text-purple-500"><RefreshCw size={16} /></button>
+ <div className="flex justify-between items-center mb-1">
+ <h3 className="text-sm font-semibold">Live Visitors</h3>
+ <span className="flex items-center gap-1.5 text-[10px] text-green-400"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />Live</span>
  </div>
- <div className="grid grid-cols-2 gap-3">
- <div className="bg-green-500/10 p-4 rounded-xl border border-green-500/20">
- <div className="flex items-center gap-2 mb-2">
- <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
- <span className="text-xs text-green-400">Online</span>
- </div>
- <div className="text-2xl font-bold">{onlineUsers}</div>
- </div>
- <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20">
- <div className="flex items-center gap-2 mb-2">
- <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
- <span className="text-xs text-red-400">Offline</span>
- </div>
- <div className="text-2xl font-bold">{offlineUsers}</div>
+ <p className="text-[10px] text-[#957DAD] mb-3">Only devices with the site open right now (checked every minute). Closed or backgrounded tabs drop out within ~2 minutes.</p>
+ {[
+   { name: "Real users", sub: "Email / Google accounts", total: realTotal, online: liveCounts.real },
+   { name: "Guest users", sub: "Visitors without an account", total: guestTotal, online: liveCounts.guest },
+ ].map(row => (
+ <div key={row.name} className="mb-3 last:mb-0 rounded-xl border border-white/6 p-3">
+ <div className="flex items-baseline justify-between mb-2"><span className="text-sm font-semibold">{row.name}</span><span className="text-[11px] text-zinc-400">Total <strong className="text-white text-sm">{row.total}</strong></span></div>
+ <p className="text-[10px] text-[#957DAD] -mt-1.5 mb-2">{row.sub}</p>
+ <div className="grid grid-cols-2 gap-2">
+ <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/20"><div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /><span className="text-[11px] text-green-400">Online</span></div><div className="text-xl font-bold">{row.online}</div></div>
+ <div className="bg-red-500/10 p-3 rounded-lg border border-red-500/20"><div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[11px] text-red-400">Offline</span></div><div className="text-xl font-bold">{Math.max(0, row.total - row.online)}</div></div>
  </div>
  </div>
+ ))}
  </div>
  <div className={`${glassCard} p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
@@ -7932,6 +7929,7 @@ ${tgBulkFooter}
  {/* ==================== NEW RELEASES ==================== */}
  {activeSection === "new-releases" && (
  <div>
+ <AnnouncementsManager />
  <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
  <Zap size={14} className="text-pink-500" /> Manage New Episode Releases
