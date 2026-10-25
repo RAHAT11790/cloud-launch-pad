@@ -39,6 +39,12 @@ export default function DownloadPage() {
   const [savedTimer] = useState(() => { const t = readDownloadTimer(); return t && t.flow === flowId ? t : null; });
   const [step, setStep] = useState(savedTimer?.step ?? 0);
   const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    // Returning from the browser's page cache must show this page again, not the leave screen.
+    const shown = (event: PageTransitionEvent) => { if (event.persisted) setLeaving(false); };
+    window.addEventListener("pageshow", shown);
+    return () => window.removeEventListener("pageshow", shown);
+  }, []);
   const [guard, setGuard] = useState<DownloadBlockState>("checking");
   const [elapsed, setElapsed] = useState(0);
   const [waitAttempt, setWaitAttempt] = useState(0);
