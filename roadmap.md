@@ -1,10 +1,11 @@
 # Roadmap
 
-## New request awaiting confirmation (2026-10-24)
-- [ ] Replace marked bottom Telegram Download with Go back watch page; preserve individual episode links and clarify batch action placement during implementation. Blocker: user confirmation.
-- [ ] Restore notification bell near Home profile and synchronize release notifications with release deletion. Blocker: user confirmation.
-- [ ] Add admin normal/one-time popup announcements with title, description, compact optional image and expiry/cleanup. Blocker: user confirmation.
-- [ ] Show separate real-user/guest totals and actual online/offline presence without storing guest personal data. Blocker: user confirmation.
+## Bell, popups, live visitors (2026-10-25)
+- [x] Bottom bar is "Go back watch page"; per-episode Telegram buttons + one "All N episodes" button.
+- [x] Notification bell beside profile: live New Release notices (deleted/expired releases vanish) + admin messages.
+- [x] Admin (New Releases section): normal or one-time popup with title, details, small 3:1 image, expiry; expired rows auto-deleted. Popup verified once-per-device on phone size.
+- [x] Admin Users + Dashboard: separate Real/Guest total, online, offline from live `presence` rows (no personal data).
+- [ ] Admin panel screens not visually checked in this run (PIN login).
 
 ## Approved download and navigation corrections (2026-10-24)
 - [x] Add an initial timed wait to every ad step, auto-advance after a completed sponsor visit, and restart on early return; real Naruto flow verified (headless early-return check explicitly dispatched the blur signal).

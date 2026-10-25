@@ -17,3 +17,4 @@
 - Browser eligibility is centralized in browserEligibility.ts and enforced before route content mounts; this keeps unsupported-browser actions and identity consistent.
 - Route-backed navigation must preserve React Router history metadata and wait for routed content before painting a main tab; synthetic history guards cause incorrect back targets.
 - Telegram batch endpoints are expanded centrally into inclusive ranges, while episode actions build single-episode payloads; direct media sources remain independent.
+- Bell items come only from `src/lib/announcements.ts` (Firebase `announcements` + live `newEpisodeReleases`), and online counts only from `src/lib/presence.ts` (`presence/{r_uid|g_device}` = {k,t}, removed on disconnect/hidden) — one place decides expiry, one-time popups and real/guest liveness without touching user profiles.
