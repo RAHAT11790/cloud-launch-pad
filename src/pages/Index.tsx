@@ -573,6 +573,9 @@ import { isLegacyAnEntry } from "@/lib/legacyAn";
 import { contentCategoryLabels, metadataLabelMatches } from "@/lib/contentMetadata";
 import { usePremium } from "@/hooks/usePremium";
 import { isEpisodeLocked, isSeriesLocked } from "@/lib/premiumAccess";
+import { canGoBackInApp } from "@/lib/historyBoot";
+import { backToWatchPending, BACK_TO_WATCH_KEY } from "@/lib/downloadFlow";
+import BackToWatchLoader from "@/components/BackToWatchLoader";
 import {
   GUEST_EPISODE_MESSAGE,
   GUEST_MOVIE_MESSAGE,
@@ -1366,18 +1369,21 @@ const Index = () => {
     window.requestAnimationFrame(() => window.setTimeout(stopAllPlayback, 0));
   }, [stopAllPlayback]);
 
+  useEffect(() => {
+    if (playerState || saltPlayerState || !isWatchRoute) { try { sessionStorage.removeItem(BACK_TO_WATCH_KEY); } catch {} }
+  }, [playerState, saltPlayerState, isWatchRoute]);
   const hardCloseToHome = useCallback(() => {
     setPlayerState(null);
     setSaltPlayerState(null);
     setSelectedAnime(null);
     setShowProfile(false);
     setCustomPostDetail(null);
-    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    if (canGoBackInApp()) navigate(-1);
     else navigate(MAIN_PAGE_PATH[activePage], { replace: true });
     cleanupPlaybackAfterUnmount();
   }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
-    if (typeof window.history.state?.idx === "number" && window.history.state.idx > 0) navigate(-1);
+    if (canGoBackInApp()) navigate(-1);
     else navigate(fallback === "/" ? MAIN_PAGE_PATH[activePage] : fallback, { replace: true });
     cleanupPlaybackAfterUnmount();
   }, [cleanupPlaybackAfterUnmount, navigate, activePage]);
@@ -3423,6 +3429,7 @@ const Index = () => {
 
   // Routed content must resolve before showing any tab beneath it. A plain, spinner-free
   // surface so returning never looks like loading.
+  if (isWatchRoute && !playerState && !saltPlayerState && backToWatchPending()) return <BackToWatchLoader />;
   if ((isWatchRoute && !playerState && !saltPlayerState) || (isAnimeRoute && !selectedAnime)) {
     return <div aria-busy="true" className="fixed inset-0 bg-background" />;
   }
