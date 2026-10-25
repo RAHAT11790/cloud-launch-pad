@@ -3329,3 +3329,11 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .pg-in-next, .pg-in-prev, .pg-out-next, .pg-out-prev, .route-enter { animation-duration: 1ms; animation-delay: 0ms; }
   .pg-host { transition: none; }
 }
+
+/* Notification bell */
+@keyframes bell-ring { 0%,60%,100% { transform: rotate(0) } 10%,30% { transform: rotate(14deg) } 20%,40% { transform: rotate(-12deg) } }
+.bell-ring { transform-origin: 50% 10%; animation: bell-ring 2.6s ease-in-out infinite; }
+@keyframes notif-in { from { opacity: 0; transform: translateY(-8px) scale(.98) } to { opacity: 1; transform: none } }
+.notif-panel { animation: notif-in .18s ease-out; transform-origin: top right; }
+.notif-popup { animation: notif-in .25s ease-out; }
+@media (prefers-reduced-motion: reduce) { .bell-ring, .notif-panel, .notif-popup { animation: none; } }
