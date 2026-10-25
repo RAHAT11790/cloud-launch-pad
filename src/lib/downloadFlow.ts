@@ -70,6 +70,7 @@ export function sourceDownloadFilename(filename: string, source: string) {
 }
 export function openDownloadFlow(request: DownloadFlowRequest) {
   sessionStorage.removeItem(DOWNLOAD_FINAL_KEY);
+  sessionStorage.removeItem("rs_download_timer_v1");
   sessionStorage.setItem(DOWNLOAD_FLOW_KEY, JSON.stringify(request));
   // Full navigation tears down player ad hooks; final page never inherits them.
   window.location.assign("/download");
