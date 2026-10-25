@@ -23,9 +23,11 @@ import AdBlockerDetected from "./pages/AdBlockerDetected";
 import AdBlockerRemoved from "./pages/AdBlockerRemoved";
 import { initAdShield } from "@/lib/adShield";
 import ChromeBrowserGate from "./components/ChromeBrowserGate";
+import { startPresence } from "@/lib/presence";
 
 const RouteAttrSync = () => {
   const loc = useLocation();
+  useEffect(() => startPresence(), []);
   useEffect(() => {
     try { document.documentElement.setAttribute("data-route", loc.pathname); } catch {}
   }, [loc.pathname]);
