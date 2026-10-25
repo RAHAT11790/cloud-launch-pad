@@ -3421,9 +3421,10 @@ const Index = () => {
     return <SplashLoader />;
   }
 
-  // Routed content must resolve before showing any tab beneath it.
+  // Routed content must resolve before showing any tab beneath it. A plain, spinner-free
+  // surface (the player's own black for watch pages) so returning never looks like loading.
   if ((isWatchRoute && !playerState && !saltPlayerState) || (isAnimeRoute && !selectedAnime)) {
-    return <div className="fixed inset-0 flex items-center justify-center bg-background text-foreground"><Loader2 className="animate-spin text-primary" aria-label="Loading episode" /></div>;
+    return <div aria-busy="true" className={`fixed inset-0 ${isWatchRoute ? "bg-black" : "bg-background"}`} />;
   }
 
   const getPageContent_series = () => (
