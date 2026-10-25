@@ -71,6 +71,7 @@ const PremiumUsersManager = lazySection(() => import("@/components/admin/Premium
 const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "Edge Function Manager");
 const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
 const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
+const DownloadAdPlacements = lazySection(() => import("@/components/admin/DownloadAdPlacements"), "Download page ads");
 const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
 const DownloadManagerPanel = lazySection(() => import("@/components/admin/DownloadManagerPanel"), "Download Manager");
 const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
@@ -9442,6 +9443,7 @@ ${tgBulkFooter}
  <div className="space-y-5">
    <AdsterraAnalytics />
    <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+   <DownloadAdPlacements />
  </div>
  )}
 
