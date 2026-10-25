@@ -6312,7 +6312,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           const freeWebsite = downloadNeedsAdFlow(isPremium);
           const freeLimit = downloadSelectionLimit(downloadManager, panelEpisodes.length);
-          const freeStepCount = downloadStepsFor(downloadManager, dlSelectedEpisodes.size).length;
+          const freeStepCount = downloadStepsFor(downloadManager, hasMultiEpisodes ? dlSelectedEpisodes.size : 1).length;
           const toggleEpisode = (idx: number) => {
             setDlSelectedEpisodes((prev) => {
               const next = new Set(prev);
@@ -6943,7 +6943,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           >
                             <Download className="w-4 h-4" />
                             <span className="truncate">
-                              {freeWebsite ? `Continue • ${hasMultiEpisodes ? dlSelectedEpisodes.size : 1} selected` : activeQuality ? `Download • ${activeQuality}` : 'Download'}
+                              {freeWebsite ? `Continue • ${hasMultiEpisodes ? dlSelectedEpisodes.size : 1} selected • ${freeStepCount} ad ${freeStepCount === 1 ? "step" : "steps"}` : activeQuality ? `Download • ${activeQuality}` : 'Download'}
                               {!freeWebsite && totalLabel ? ` • ${totalLabel}` : ''}
                             </span>
                           </button>
