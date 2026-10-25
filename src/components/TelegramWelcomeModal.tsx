@@ -133,6 +133,7 @@ const TelegramWelcomeModal = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
+          data-welcome-modal
           className="fixed inset-0 z-[500] flex items-center justify-center bg-black/60 backdrop-blur-[6px] p-4"
           onClick={close}
           style={{ willChange: "opacity" }}

@@ -25,13 +25,18 @@ export default function NotificationBell({ onOpenContent }: { onOpenContent?: (c
   const items = useMemo(() => bellItems(announcements, releaseNotices(relRaw, now)), [announcements, relRaw, now]);
   const unread = unreadCount(items, readAt);
 
-  // One-time popup: shown once per device, a moment after the page settles.
+  // One-time popup: shown once per device, after the page settles and any welcome window is closed.
   useEffect(() => {
     if (popup) return;
     const next = nextPopup(announcements, readSeenPopups());
     if (!next) return;
-    const t = setTimeout(() => { markPopupSeen(next.id, announcements); setPopup(next); }, 1200);
-    return () => clearTimeout(t);
+    let calm = 0;
+    const t = setInterval(() => {
+      calm = document.querySelector("[data-welcome-modal]") ? 0 : calm + 1;
+      if (calm < 2) return;
+      clearInterval(t); markPopupSeen(next.id, announcements); setPopup(next);
+    }, 700);
+    return () => clearInterval(t);
   }, [announcements, popup]);
 
   const close = () => {
