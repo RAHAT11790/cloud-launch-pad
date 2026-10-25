@@ -70,7 +70,26 @@ export function sourceDownloadFilename(filename: string, source: string) {
 }
 export function openDownloadFlow(request: DownloadFlowRequest) {
   sessionStorage.removeItem(DOWNLOAD_FINAL_KEY);
+  sessionStorage.removeItem("rs_download_timer_v1");
   sessionStorage.setItem(DOWNLOAD_FLOW_KEY, JSON.stringify(request));
   // Full navigation tears down player ad hooks; final page never inherits them.
   window.location.assign("/download");
+}
+/** Per-flow step timer, persisted so leaving and returning never restarts a running countdown. */
+export const DOWNLOAD_TIMER_KEY = "rs_download_timer_v1";
+export const BACK_TO_WATCH_KEY = "rs_back_to_watch_v1";
+export type DownloadTimerState = { flow: string; step: number; startedAt: number; ready?: boolean };
+export function resumeDownloadTimer(saved: DownloadTimerState | null, flow: string, step: number, now: number): DownloadTimerState {
+  if (saved && saved.flow === flow && saved.step === step && Number.isFinite(saved.startedAt) && saved.startedAt <= now) return saved;
+  return { flow, step, startedAt: now };
+}
+export function readDownloadTimer(): DownloadTimerState | null {
+  try { const v = JSON.parse(sessionStorage.getItem(DOWNLOAD_TIMER_KEY) || "null"); return v && typeof v.flow === "string" ? v : null; } catch { return null; }
+}
+export function saveDownloadTimer(state: DownloadTimerState) {
+  try { sessionStorage.setItem(DOWNLOAD_TIMER_KEY, JSON.stringify(state)); } catch {}
+}
+/** True while a "back to watch page" return started in the last 30 seconds. */
+export function backToWatchPending(now = Date.now()) {
+  try { const at = Number(sessionStorage.getItem(BACK_TO_WATCH_KEY) || 0); return at > 0 && now - at < 30000; } catch { return false; }
 }

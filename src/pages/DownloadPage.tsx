@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorReturnOutcome, nextDownloadStep, downloadStepsFor, type DownloadFlowRequest } from "@/lib/downloadFlow";
+import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorReturnOutcome, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
+import BackToWatchLoader from "@/components/BackToWatchLoader";
 import { useDownloadManagerConfig, useDownloadConfigReady, recordDownloadEvent } from "@/lib/downloadManagerSettings";
 import { checkDownloadBlocker, type DownloadBlockState } from "@/lib/downloadBlockCheck";
 import { filenameRelayUrl, getFilenameRelayBase } from "@/lib/filenameRelay";
@@ -33,9 +34,19 @@ export default function DownloadPage() {
   const [steps, setSteps] = useState<number[] | null>(null);
   const [request] = useState(readRequest);
   const [final] = useState(() => sessionStorage.getItem(DOWNLOAD_FINAL_KEY) === sessionStorage.getItem(DOWNLOAD_FLOW_KEY));
-  const [step, setStep] = useState(0);
+  const flowId = useRef(sessionStorage.getItem(DOWNLOAD_FLOW_KEY) || "").current;
+  // The running step and its countdown survive leaving and returning to this page.
+  const [savedTimer] = useState(() => { const t = readDownloadTimer(); return t && t.flow === flowId ? t : null; });
+  const [step, setStep] = useState(savedTimer?.step ?? 0);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    // Returning from the browser's page cache must show this page again, not the leave screen.
+    const shown = (event: PageTransitionEvent) => { if (event.persisted) setLeaving(false); };
+    window.addEventListener("pageshow", shown);
+    return () => window.removeEventListener("pageshow", shown);
+  }, []);
   const [guard, setGuard] = useState<DownloadBlockState>("checking");
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(() => savedTimer ? Math.max(0, Date.now() - savedTimer.startedAt) : 0);
   const [waitAttempt, setWaitAttempt] = useState(0);
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
@@ -43,7 +54,7 @@ export default function DownloadPage() {
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [smartlink, setSmartlink] = useState("");
   const [sponsorPending, setSponsorPending] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(!!savedTimer?.ready);
   const busy = useRef(false);
   const sponsor = useRef<{ awayAt: number; left: boolean; openedAt: number } | null>(null);
   const sponsorTab = useRef<Window | null>(null);
@@ -63,8 +74,8 @@ export default function DownloadPage() {
     sponsor.current = null; setSponsorPending(false);
     const next = nextDownloadStep(step, steps.length);
     // Last step done: show the "links ready" screen; the user taps Get Link to continue.
-    if (next === "final") setReady(true);
-    else { setStep(next); setElapsed(0); }
+    if (next === "final") { setReady(true); saveDownloadTimer({ flow: flowId, step, startedAt: Date.now(), ready: true }); }
+    else { saveDownloadTimer({ flow: flowId, step: next, startedAt: Date.now() }); setStep(next); setElapsed(0); }
   };
   useEffect(() => { advancing.current = false; }, [step]);
   const resolveRelay = async () => {
@@ -92,13 +103,19 @@ export default function DownloadPage() {
     if (!final && request && steps?.length === 0) setReady(true);
   }, [steps, final, request]);
   useEffect(() => {
+    if (steps !== null && steps.length > 0 && step >= steps.length) setStep(steps.length - 1);
+  }, [steps, step]);
+  useEffect(() => {
     if (final || ready || guard !== "clear" || steps === null) return;
-    const startedAt = performance.now();
+    const timerState = resumeDownloadTimer(readDownloadTimer(), flowId, step, Date.now());
+    saveDownloadTimer(timerState);
+    const startedAt = timerState.startedAt;
+    if (!sponsorPending) setElapsed(Date.now() - startedAt);
     const timer = window.setInterval(() => {
       const pending = sponsor.current;
       if (sponsorPending) {
         if (pending?.left) setElapsed(performance.now() - pending.awayAt);
-      } else setElapsed(performance.now() - startedAt);
+      } else setElapsed(Date.now() - startedAt);
     }, 100);
     return () => clearInterval(timer);
   }, [final, ready, guard, steps, step, sponsorPending, waitAttempt]);
@@ -113,7 +130,7 @@ export default function DownloadPage() {
       // Consume before changing state: focus, visibility and tab-close may fire together.
       sponsor.current = null;
       if (sponsorReturnOutcome(seconds, performance.now() - pending.awayAt, pending.left) === "advance") advance();
-      else { setSponsorPending(false); setElapsed(0); setWaitAttempt(n => n + 1); toast.error("Returned too early. Please wait and try again."); }
+      else { saveDownloadTimer({ flow: flowId, step, startedAt: Date.now() }); setSponsorPending(false); setElapsed(0); setWaitAttempt(n => n + 1); toast.error("Returned too early. Please wait and try again."); }
       void verify();
     };
     const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
@@ -143,6 +160,8 @@ export default function DownloadPage() {
     // The watch page is the previous document: going back restores it (often instantly) instead of rebuilding the app.
     let sameOrigin = false;
     try { sameOrigin = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch {}
+    setLeaving(true);
+    try { sessionStorage.setItem(BACK_TO_WATCH_KEY, String(Date.now())); } catch {}
     if (sameOrigin && history.length > 1) history.back();
     else window.location.assign(request?.returnPath || "/");
   };
@@ -177,6 +196,7 @@ export default function DownloadPage() {
   const startTelegram = (url = request?.telegramUrl, count = request?.telegramEpisodeCount || request?.episodes.length || 1) => { if (!url) return; window.open(url, "_blank", "noopener,noreferrer"); recordDownloadEvent("telegram", count); };
   const progress = Math.min(1, elapsed / (seconds * 1000));
   const showTelegram = !!(final && config.telegramEnabled && request?.telegramUrl);
+  if (leaving) return <BackToWatchLoader />;
   return <main className={`download-page bg-background text-foreground ${final ? "download-final-screen" : "download-step-screen"}`}>
     <header className="shrink-0 border-b border-border"><div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-2"><Button variant="ghost" size="icon" aria-label="Back to episode" onClick={back}><ArrowLeft /></Button><span className="text-sm font-bold">RS ANIME03 · Downloads</span><ShieldCheck className="ml-auto text-primary" size={20} /></div></header>
     {!request ? <div className="mx-auto py-16 text-center"><Download className="mx-auto mb-4" /><h1 className="text-xl font-bold">No episodes selected</h1><Button className="mt-6" onClick={back}>Back to anime</Button></div> : <>
@@ -192,7 +212,7 @@ export default function DownloadPage() {
         <div className="flex shrink-0 items-center gap-3 py-3">
           <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
             <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden><circle cx="24" cy="24" r="21" className="download-ring-track" /><circle cx="24" cy="24" r="21" className="download-ring-fill" strokeDasharray={131.95} strokeDashoffset={131.95 * (1 - progress)} /></svg>
-            <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{wait > 0 ? wait : <Check className="text-primary" />}</span>
+            <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{steps === null ? "…" : wait > 0 ? wait : <Check className="text-primary" />}</span>
           </span>
           <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${seconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${seconds} seconds, then return here.`}</p></div>
         </div>
