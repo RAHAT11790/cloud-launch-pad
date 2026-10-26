@@ -1659,21 +1659,6 @@ const Index = () => {
     if (playerState || saltPlayerState || !isWatchRoute) { try { sessionStorage.removeItem(BACK_TO_WATCH_KEY); } catch {} }
   }, [playerState, saltPlayerState, isWatchRoute]);
   useEffect(() => { closingBackRef.current = false; }, [pathname]);
-  // Leaving the player paints the visible top of the page first; below-the-fold rails and
-  // other tabs mount two frames later, so Back never shows a frozen black player.
-  const playerOpenNow = !!(playerState || saltPlayerState);
-  const [prevPlayerOpen, setPrevPlayerOpen] = useState(playerOpenNow);
-  const [liteReturn, setLiteReturn] = useState(false);
-  if (prevPlayerOpen !== playerOpenNow) {
-    setPrevPlayerOpen(playerOpenNow);
-    if (!playerOpenNow) setLiteReturn(true);
-  }
-  useEffect(() => {
-    if (!liteReturn) return;
-    let second = 0;
-    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => setLiteReturn(false)); });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [liteReturn]);
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
@@ -3581,20 +3566,20 @@ const Index = () => {
           {trendingSeries.length > 0 && (
             <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
           )}
-          {!liteReturn && filteredMovies.length > 0 && (
+          {filteredMovies.length > 0 && (
             <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
           )}
-          {!liteReturn && categoryGroups
+          {categoryGroups
             .map(({ key, title, items }) => (
               <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={handleCardClick} showWhenEmpty />
             ))}
         </>
       )}
-      {!liteReturn && <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
+      <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
         <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{displaySiteName}</div>
         <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
         <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
-      </footer>}
+      </footer>
     </>
   );
 
@@ -3789,7 +3774,7 @@ const Index = () => {
         {pageOrder.map((page) => {
           const isActive = page === activePage;
           const isLeaving = !isActive && page === pageFx.from;
-          const shouldRender = isActive || isLeaving || (!liteReturn && mountedPages.has(page));
+          const shouldRender = isActive || isLeaving || mountedPages.has(page);
           const fxClass = isActive && pageFx.from
             ? (pageFx.dir > 0 ? "pg-in-next" : "pg-in-prev")
             : isLeaving ? (pageFx.dir > 0 ? "pg-out-next" : "pg-out-prev") : "";
