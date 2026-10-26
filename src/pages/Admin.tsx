@@ -207,7 +207,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "download-manager" | "profile-shop";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "download-manager" | "profile-shop";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -2120,7 +2120,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // and the browser treats each as a real page (less overlay lag).
   const ROUTED_SECTIONS = useMemo(() => new Set<Section>([
     "categories", "webseries", "weekly-episode", "movies", "users",
-    "new-releases", "tmdb-fetch", "add-content",
+    "new-releases", "notifications", "tmdb-fetch", "add-content",
     "redeem-codes", "bkash-payments", "premium-users", "device-limits", "maintenance", "free-access",
     "settings", "comments", "analytics", "auto-import", "animesalt-manager",
     "telegram-post", "tg-url-changer", "live-support", "ui-themes", "hero-pinned",
@@ -3437,6 +3437,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  movies: "Movies",
  users: "Users",
  "new-releases": "New Releases",
+ notifications: "Notifications",
  "tmdb-fetch": "TMDB Fetch",
  "add-content": "Add Content",
  "redeem-codes": "Redeem Codes",
@@ -5598,6 +5599,7 @@ ${tgBulkFooter}
  { section: "users", icon: <Users size={16} />, label: "Users" },
  { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
  { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
+ { section: "notifications", icon: <Bell size={16} />, label: "Notifications" },
  { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
  { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
@@ -7925,12 +7927,12 @@ ${tgBulkFooter}
  </div>
  )}
 
- {/* NOTIFICATIONS section fully removed — Telegram posts handle release announcements now */}
+ {/* ==================== NOTIFICATIONS (bell + one-time popup messages) ==================== */}
+ {activeSection === "notifications" && <AnnouncementsManager />}
 
  {/* ==================== NEW RELEASES ==================== */}
  {activeSection === "new-releases" && (
  <div>
- <AnnouncementsManager />
  <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
  <Zap size={14} className="text-pink-500" /> Manage New Episode Releases
