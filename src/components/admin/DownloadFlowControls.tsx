@@ -23,8 +23,8 @@ function StepEditor({ label, steps, onChange }: { label: string; steps: number[]
   return <div className="space-y-2">
     <div className="grid grid-cols-2 gap-2">
       {steps.map((seconds, i) => <div key={i} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 py-1.5 pl-2.5 pr-1">
-        <span className="flex-1 text-[11px] font-bold uppercase tracking-wide text-zinc-400">Step {i + 1}</span>
-        <input aria-label={`${label} step ${i + 1} wait seconds`} className={num} type="number" inputMode="numeric" min={1} max={120} value={seconds} onChange={(e) => onChange(steps.map((n, idx) => idx === i ? Number(e.target.value) : n))} />
+        <span className="flex-1 whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-zinc-400">Step {i + 1}</span>
+        <input aria-label={`${label} step ${i + 1} wait seconds`} className={`${num} !w-12`} type="number" inputMode="numeric" min={1} max={120} value={seconds} onChange={(e) => onChange(steps.map((n, idx) => idx === i ? Number(e.target.value) : n))} />
         <span className="text-[10px] text-zinc-500">s</span>
         <button type="button" aria-label={`Remove ${label} step ${i + 1}`} disabled={steps.length <= 1} onClick={() => onChange(steps.filter((_, idx) => idx !== i))} className="flex h-8 w-7 items-center justify-center rounded-md text-zinc-500 hover:text-red-400 disabled:opacity-30"><Trash2 size={14} /></button>
       </div>)}
