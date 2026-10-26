@@ -130,7 +130,8 @@ export default function DownloadPage() {
   /** Judge the sponsor visit once: enough wall-clock time since Continue → next step, otherwise retry this step. */
   const evaluateVisit = () => {
     const at = sponsorRef.current;
-    if (at === null || advancing.current) return;
+    // Steps load asynchronously; judging before they exist would drop the visit.
+    if (at === null || advancing.current || steps === null) return;
     const needed = visitSeconds.current || sponsorSeconds;
     setVisit(null); leftAt.current = 0;
     const t = Date.now();
@@ -143,7 +144,6 @@ export default function DownloadPage() {
   evaluateRef.current = evaluateVisit;
   // Page was reloaded or discarded while the sponsor was open: finish the visit as a return.
   useEffect(() => {
-    console.debug('[dl-restore]', steps, restoredPending.current, sponsorRef.current, savedTimer);
     if (steps !== null && restoredPending.current) { restoredPending.current = false; evaluateRef.current(); }
   }, [steps]);
   useEffect(() => {
