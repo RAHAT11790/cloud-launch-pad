@@ -13,3 +13,11 @@ describe("Ad steps per episode count", () => {
     expect(downloadSelectionLimit(normalizeDownloadFlowSettings({ maxEpisodes: 2 }), 24)).toBe(2);
   });
 });
+describe("Continue button timer is separate from step timers", () => {
+  it("uses the admin's own Continue timer, not the step seconds", () => {
+    const r = normalizeDownloadFlowSettings({ adSteps: [5, 5], sponsorSeconds: 10 });
+    expect(r.sponsorSeconds).toBe(10);
+    expect(r.adSteps).toEqual([5, 5]);
+  });
+  it("defaults to 10 seconds when not set", () => { expect(normalizeDownloadFlowSettings({}).sponsorSeconds).toBe(10); });
+});
