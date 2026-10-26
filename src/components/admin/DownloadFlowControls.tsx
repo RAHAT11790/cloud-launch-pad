@@ -52,7 +52,7 @@ export default function DownloadFlowControls() {
   };
   const boxes = Math.min(MAX_BOXES, Math.max(1, Math.trunc(draft.maxEpisodes) || 1));
   const allSteps = draft.adStepsByCount.all;
-  return <section className="border-y border-border py-5 text-foreground space-y-5" aria-label="Download controller">
+  return <section className="dark border-y border-border py-5 text-foreground space-y-5" aria-label="Download controller">
     <div><h3 className="text-base font-bold">Download controller</h3><p className="text-xs text-muted-foreground mt-1">Website downloads only · no daily limit</p></div>
     <label className="flex items-center justify-between gap-4 text-sm font-medium">Episodes per request
       <Input aria-label="Episodes per request" type="number" min={1} value={draft.maxEpisodes} className="w-20" onChange={(e) => setDraft({ ...draft, maxEpisodes: Number(e.target.value) })} />
