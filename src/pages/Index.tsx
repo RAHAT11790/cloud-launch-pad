@@ -3796,6 +3796,9 @@ const Index = () => {
                 // Opacity (not inherited) hides parked tabs: toggling `visibility` forced a style
                 // pass over every element of every tab (~7k nodes) on each switch.
                 opacity: shown ? undefined : 0,
+                // Parked tabs skip style, animation ticks and paint but keep their rendered state
+                // (and scroll), so the many looping category labels only run on the visible tab.
+                contentVisibility: shown ? "visible" : "hidden",
                 zIndex: isActive ? 2 : isLeaving ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
                 // Hidden tabs keep their layout (visibility only skips paint), so
