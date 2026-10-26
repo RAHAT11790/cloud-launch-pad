@@ -27,6 +27,11 @@ export function countPresence(raw: Record<string, any> | null | undefined, now =
   return { real, guest };
 }
 
+/** Real account total from the users node's key list alone (guest_* keys are visitors), so the dashboard needs no full profile download. */
+export function realAccountKeyCount(keys: string[]) {
+  return keys.filter(k => k && !k.startsWith("guest_")).length;
+}
+
 function deviceId() {
   try {
     let id = localStorage.getItem(DEVICE_KEY);

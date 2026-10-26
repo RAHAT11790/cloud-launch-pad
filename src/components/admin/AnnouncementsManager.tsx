@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Megaphone, Sparkles, Trash2, Send, Loader2, ImagePlus, X } from "lucide-react";
 import { db, ref, onValue, push, set, remove, update } from "@/lib/firebase";
-import { activeAnnouncements, expiredAnnouncementIds, ANNOUNCEMENT_EXPIRY_HOURS, timeAgo, type AnnouncementKind } from "@/lib/announcements";
+import { activeAnnouncements, expiredAnnouncementIds, ANNOUNCEMENT_EXPIRY_HOURS, ANNOUNCEMENT_IMAGE_RATIOS, imageRatioClass, timeAgo, type AnnouncementKind, type AnnouncementImageRatio } from "@/lib/announcements";
 import { uploadToImgbb } from "@/lib/imgbbUpload";
 import { toast } from "sonner";
 
 const label = (h: number) => h < 24 ? `${h} hours` : h < 168 ? `${h / 24} days` : h === 168 ? "1 week" : "30 days";
-const field = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/8 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none placeholder:text-zinc-500";
+const field = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none placeholder:text-zinc-500";
 
 export default function AnnouncementsManager() {
   const [raw, setRaw] = useState<Record<string, any>>({});
@@ -14,6 +14,7 @@ export default function AnnouncementsManager() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [ratio, setRatio] = useState<AnnouncementImageRatio>("16:9");
   const [hours, setHours] = useState(24);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -36,9 +37,9 @@ export default function AnnouncementsManager() {
     setBusy(true);
     try {
       const now = Date.now();
-      await set(push(ref(db, "announcements")), { kind, title: title.trim(), description: description.trim(), ...(image ? { image } : {}), createdAt: now, expiresAt: now + hours * 3600_000 });
+      await set(push(ref(db, "announcements")), { kind, title: title.trim(), description: description.trim(), ...(image ? { image, imageRatio: ratio } : {}), createdAt: now, expiresAt: now + hours * 3600_000 });
       toast.success(kind === "popup" ? "Popup sent to all visitors" : "Message added to the bell");
-      setTitle(""); setDescription(""); setImage("");
+      setTitle(""); setDescription(""); setImage(""); setRatio("16:9");
     } catch (e: any) { toast.error("Could not send: " + (e?.message || "error")); }
     finally { setBusy(false); }
   };
@@ -53,9 +54,18 @@ export default function AnnouncementsManager() {
     </div>
     <input className={`${field} mb-2`} placeholder="Title" maxLength={90} value={title} onChange={e => setTitle(e.target.value)} />
     <textarea className={`${field} mb-2 min-h-[90px]`} placeholder="Details (what you updated, new features…)" maxLength={1200} value={description} onChange={e => setDescription(e.target.value)} />
-    {image ? <div className="relative mb-2"><img src={image} alt="" className="aspect-[3/1] w-full rounded-lg object-cover" /><button onClick={() => setImage("")} aria-label="Remove image" className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1"><X size={14} /></button></div>
+    {image ? <div className="mb-3 rounded-lg border border-white/10 bg-[#141422] p-2.5">
+        <p className="mb-2 text-[11px] font-semibold text-[#D1C4E9]">Image shape — the popup box takes this shape</p>
+        <div className="mb-2.5 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Image shape">
+          {ANNOUNCEMENT_IMAGE_RATIOS.map(r => { const [w, h] = r.split(":").map(Number); return <button key={r} type="button" role="radio" aria-checked={ratio === r} onClick={() => setRatio(r)}
+            className={`flex flex-col items-center gap-1 rounded-md border py-2 text-[11px] font-bold ${ratio === r ? "border-indigo-500 bg-indigo-600/20 text-white" : "border-white/10 text-zinc-400"}`}>
+            <span className="flex h-6 items-center"><span className="block rounded-[2px] border-2 border-current" style={{ width: w >= h ? 24 : 24 * w / h, height: w >= h ? 24 * h / w : 24 }} /></span>{r}</button>; })}
+        </div>
+        <div className="relative"><img src={image} alt="Popup image preview" className={`${imageRatioClass(ratio)} rounded-lg object-cover`} />
+          <button onClick={() => setImage("")} aria-label="Remove image" className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1"><X size={14} /></button></div>
+      </div>
       : <label className="mb-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 py-3 text-xs text-zinc-400">
-        {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={15} />}Optional small wide image (3:1)
+        {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={15} />}{uploading ? "Uploading…" : "Optional image — upload, then pick its shape"}
         <input type="file" accept="image/*" className="hidden" onChange={e => upload(e.target.files?.[0])} />
       </label>}
     <div className="flex items-center gap-2 mb-3">

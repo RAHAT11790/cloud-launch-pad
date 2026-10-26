@@ -166,3 +166,10 @@
 - [x] Continue button timer is its own admin field (default 10s), separate from step timers; tested 7s vs 10s step, early return restarts, full wait advances.
 - [x] Admin menu has its own "Notifications" page with Normal/Popup messages; test popup reached a visitor and was deleted.
 - [x] Player Back no longer leaves a blank screen before Home (slowed-phone test: player → Home with no gap).
+
+## Stuck Continue step, popup image shape, smoothness, DM redesign, real counter (2026-10-26)
+- [x] Sponsor visit judged by real clock time and survives reloads; normal, early, reload, 30s-wait and tab-switch runs all reach "Your links are ready!".
+- [x] Popup/bell image: upload first, then pick 3:1, 16:9, 1:1 or 9:16; box follows the chosen shape.
+- [x] Tab switching / player close smoother: no whole-page restyle on navigation, hidden tabs paused, cards skip re-render (about 2x fewer dropped frames on a slowed phone).
+- [x] Download Manager redesigned into clean grouped cards.
+- [x] Dashboard real-user counter loads (no more permanent zero).

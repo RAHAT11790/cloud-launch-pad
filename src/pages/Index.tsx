@@ -1,6 +1,6 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
 import { resolveResumeTarget } from "@/lib/resumeTarget";
-import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { memo, useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { countRealEpisodes, episodeNumberAt, findEpisodeIndexByNumber, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
@@ -767,8 +767,8 @@ const getCardSourceBadge = (anime: AnimeItem | any) => {
 // Expose so AnimeCard (separate file) can warm too without prop drilling.
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
-const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
-  <button key={anime.id} type="button" data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
+const PosterGridCard = memo(({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
+  <button key={anime.id} type="button" data-anime-card="true" className="poster-grid-cell relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
@@ -787,7 +787,7 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
       )}
     </div>
   </button>
-);
+));
 
 const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
 
@@ -1659,21 +1659,6 @@ const Index = () => {
     if (playerState || saltPlayerState || !isWatchRoute) { try { sessionStorage.removeItem(BACK_TO_WATCH_KEY); } catch {} }
   }, [playerState, saltPlayerState, isWatchRoute]);
   useEffect(() => { closingBackRef.current = false; }, [pathname]);
-  // Leaving the player paints the visible top of the page first; below-the-fold rails and
-  // other tabs mount two frames later, so Back never shows a frozen black player.
-  const playerOpenNow = !!(playerState || saltPlayerState);
-  const [prevPlayerOpen, setPrevPlayerOpen] = useState(playerOpenNow);
-  const [liteReturn, setLiteReturn] = useState(false);
-  if (prevPlayerOpen !== playerOpenNow) {
-    setPrevPlayerOpen(playerOpenNow);
-    if (!playerOpenNow) setLiteReturn(true);
-  }
-  useEffect(() => {
-    if (!liteReturn) return;
-    let second = 0;
-    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => setLiteReturn(false)); });
-    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [liteReturn]);
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
@@ -2343,6 +2328,10 @@ const Index = () => {
     // avoid stacking duplicate entries; push from anywhere else.
     await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
+  // Stable identity for card lists: memoized cards/rows skip re-rendering on every tab change.
+  const cardClickRef = useRef(handleCardClick);
+  cardClickRef.current = handleCardClick;
+  const onCardClick = useCallback((anime: AnimeItem, sIdx?: number, eIdx?: number) => cardClickRef.current(anime, sIdx, eIdx), []);
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
     if (unlockBlocked) {
@@ -3471,7 +3460,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredSeries.slice(0, tabGridVisibleCount.series).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+          <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}
       </div>
       {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -3494,7 +3483,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredMovies.slice(0, tabGridVisibleCount.movies).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+          <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}
       </div>
       {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -3511,7 +3500,7 @@ const Index = () => {
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.slice(0, HOME_CATEGORY_GRID_LIMIT).map((anime) => (
-                <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+                <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
               ))}
             </div>
           ) : (
@@ -3579,22 +3568,22 @@ const Index = () => {
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
-            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
+            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={onCardClick} onViewAll={() => navigate("/series")} />
           )}
-          {!liteReturn && filteredMovies.length > 0 && (
-            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
+          {filteredMovies.length > 0 && (
+            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={onCardClick} onViewAll={() => navigate("/movies")} />
           )}
-          {!liteReturn && categoryGroups
+          {categoryGroups
             .map(({ key, title, items }) => (
-              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={handleCardClick} showWhenEmpty />
+              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={onCardClick} showWhenEmpty />
             ))}
         </>
       )}
-      {!liteReturn && <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
+      <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
         <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{displaySiteName}</div>
         <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
         <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
-      </footer>}
+      </footer>
     </>
   );
 
@@ -3789,7 +3778,7 @@ const Index = () => {
         {pageOrder.map((page) => {
           const isActive = page === activePage;
           const isLeaving = !isActive && page === pageFx.from;
-          const shouldRender = isActive || isLeaving || (!liteReturn && mountedPages.has(page));
+          const shouldRender = isActive || isLeaving || mountedPages.has(page);
           const fxClass = isActive && pageFx.from
             ? (pageFx.dir > 0 ? "pg-in-next" : "pg-in-prev")
             : isLeaving ? (pageFx.dir > 0 ? "pg-out-next" : "pg-out-prev") : "";
@@ -3804,7 +3793,12 @@ const Index = () => {
                 overflowY: "auto",
                 overflowX: "hidden",
                 WebkitOverflowScrolling: "touch",
-                visibility: shown ? "visible" : "hidden",
+                // Opacity (not inherited) hides parked tabs: toggling `visibility` forced a style
+                // pass over every element of every tab (~7k nodes) on each switch.
+                opacity: shown ? undefined : 0,
+                // Parked tabs skip style, animation ticks and paint but keep their rendered state
+                // (and scroll), so the many looping category labels only run on the visible tab.
+                contentVisibility: shown ? "visible" : "hidden",
                 zIndex: isActive ? 2 : isLeaving ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
                 // Hidden tabs keep their layout (visibility only skips paint), so
@@ -3838,7 +3832,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => { setShowProfile(false); if (window.location.pathname === "/profile") navigate(MAIN_PAGE_PATH[activePage] || "/"); }} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <ProfilePage onClose={() => { setShowProfile(false); if (window.location.pathname === "/profile") navigate(MAIN_PAGE_PATH[activePage] || "/"); }} allAnime={allAnime} onCardClick={onCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 

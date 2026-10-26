@@ -164,7 +164,6 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <DownloadFlowControls />
       {/* Sources */}
       <div className={card}>
         <div className="mb-4 flex items-center gap-3">
@@ -203,6 +202,8 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           </p>
         )}
       </div>
+
+      <DownloadFlowControls card={card} />
 
       {/* Server modes */}
       <div className={card}>

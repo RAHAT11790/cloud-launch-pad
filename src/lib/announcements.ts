@@ -1,11 +1,26 @@
 /** Bell items: admin messages (normal / one-time popup) + live New Release notices. */
 export type AnnouncementKind = "normal" | "popup";
+/** Image shapes the admin can pick after uploading; the popup/bell image box takes this shape. */
+export const ANNOUNCEMENT_IMAGE_RATIOS = ["3:1", "16:9", "1:1", "9:16"] as const;
+export type AnnouncementImageRatio = typeof ANNOUNCEMENT_IMAGE_RATIOS[number];
+export const normalizeImageRatio = (v: unknown): AnnouncementImageRatio =>
+  (ANNOUNCEMENT_IMAGE_RATIOS as readonly string[]).includes(String(v)) ? v as AnnouncementImageRatio : "3:1";
+/** Tailwind classes for an image box of that shape (tall shapes are width-capped so they fit on a phone). */
+export const imageRatioClass = (r: AnnouncementImageRatio | undefined, place: "popup" | "list" = "popup") => {
+  switch (r) {
+    case "16:9": return "aspect-video w-full";
+    case "1:1": return place === "popup" ? "aspect-square mx-auto w-[min(100%,40vh)]" : "aspect-square w-2/3";
+    case "9:16": return place === "popup" ? "aspect-[9/16] mx-auto w-[min(100%,26vh)]" : "aspect-[9/16] w-2/5";
+    default: return "aspect-[3/1] w-full";
+  }
+};
 export interface Announcement {
   id: string;
   kind: AnnouncementKind;
   title: string;
   description: string;
   image?: string;
+  imageRatio: AnnouncementImageRatio;
   createdAt: number;
   expiresAt: number;
 }
@@ -15,6 +30,7 @@ export interface BellItem {
   title: string;
   body: string;
   image?: string;
+  imageRatio?: AnnouncementImageRatio;
   time: number;
   expiresAt?: number;
   contentId?: string;
@@ -33,6 +49,7 @@ export function activeAnnouncements(raw: Record<string, any> | null | undefined,
       title: String(v?.title || "").trim(),
       description: String(v?.description || "").trim(),
       image: /^https?:\/\//i.test(String(v?.image || "")) ? String(v.image) : undefined,
+      imageRatio: normalizeImageRatio(v?.imageRatio),
       createdAt: Number(v?.createdAt) || 0,
       expiresAt: Number(v?.expiresAt) || 0,
     }) as Announcement)
@@ -63,7 +80,7 @@ export function releaseNotices(raw: Record<string, any> | null | undefined, now 
 
 export function bellItems(announcements: Announcement[], releases: BellItem[]): BellItem[] {
   return [
-    ...announcements.map(a => ({ id: `ann:${a.id}`, type: a.kind, title: a.title, body: a.description, image: a.image, time: a.createdAt, expiresAt: a.expiresAt }) as BellItem),
+    ...announcements.map(a => ({ id: `ann:${a.id}`, type: a.kind, title: a.title, body: a.description, image: a.image, imageRatio: a.imageRatio, time: a.createdAt, expiresAt: a.expiresAt }) as BellItem),
     ...releases,
   ].sort((a, b) => b.time - a.time);
 }

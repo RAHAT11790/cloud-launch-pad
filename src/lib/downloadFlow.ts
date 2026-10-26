@@ -81,10 +81,15 @@ export function openDownloadFlow(request: DownloadFlowRequest) {
 /** Per-flow step timer, persisted so leaving and returning never restarts a running countdown. */
 export const DOWNLOAD_TIMER_KEY = "rs_download_timer_v1";
 export const BACK_TO_WATCH_KEY = "rs_back_to_watch_v1";
-export type DownloadTimerState = { flow: string; step: number; startedAt: number; ready?: boolean };
+/** `sponsorAt` = wall-clock time Continue opened the sponsor page; saved so a reloaded/discarded tab still finishes the step. */
+export type DownloadTimerState = { flow: string; step: number; startedAt: number; ready?: boolean; sponsorAt?: number; sponsorSeconds?: number };
 export function resumeDownloadTimer(saved: DownloadTimerState | null, flow: string, step: number, now: number): DownloadTimerState {
   if (saved && saved.flow === flow && saved.step === step && Number.isFinite(saved.startedAt) && saved.startedAt <= now) return saved;
   return { flow, step, startedAt: now };
+}
+/** Sponsor visit is judged by wall-clock time since Continue was tapped (survives sleep, tab switches and reloads). */
+export function sponsorVisitOutcome(sponsorAt: number, seconds: number, now: number): "advance" | "retry" {
+  return now - sponsorAt >= seconds * 1000 ? "advance" : "retry";
 }
 export function readDownloadTimer(): DownloadTimerState | null {
   try { const v = JSON.parse(sessionStorage.getItem(DOWNLOAD_TIMER_KEY) || "null"); return v && typeof v.flow === "string" ? v : null; } catch { return null; }

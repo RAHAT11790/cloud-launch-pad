@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ChevronRight } from "lucide-react";
 import AnimeCard from "./AnimeCard";
 import AnimatedTitle from "./AnimatedTitle";
@@ -35,4 +36,6 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll, showWhenEmpty = fa
   );
 };
 
-export default AnimeSection;
+// Rows get fresh `items` arrays each parent render; skip work when the same anime are shown.
+const sameItems = (a: AnimeItem[], b: AnimeItem[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+export default memo(AnimeSection, (p, n) => p.title === n.title && p.onCardClick === n.onCardClick && p.showWhenEmpty === n.showWhenEmpty && !!p.onViewAll === !!n.onViewAll && sameItems(p.items, n.items));

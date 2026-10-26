@@ -4,7 +4,7 @@ import { Bell, Megaphone, Sparkles, X, CheckCheck, Play } from "lucide-react";
 import { db, ref, onValue } from "@/lib/firebase";
 import {
   activeAnnouncements, releaseNotices, bellItems, unreadCount, nextPopup, readSeenPopups, markPopupSeen,
-  timeAgo, BELL_READ_KEY, type Announcement, type BellItem,
+  timeAgo, BELL_READ_KEY, imageRatioClass, type Announcement, type BellItem,
 } from "@/lib/announcements";
 
 const readReadAt = () => { try { return Number(localStorage.getItem(BELL_READ_KEY)) || 0; } catch { return 0; } };
@@ -90,7 +90,7 @@ export default function NotificationBell({ onOpenContent }: { onOpenContent?: (c
                 </div>
                 <h3 className="mt-1 text-[13px] font-bold leading-snug line-clamp-2">{item.title}</h3>
                 {item.body && <p className={`mt-0.5 text-xs leading-relaxed text-muted-foreground ${release ? "" : "whitespace-pre-line line-clamp-4"}`}>{item.body}</p>}
-                {!release && item.image && <img src={item.image} alt="" loading="lazy" className="mt-2 aspect-[3/1] w-full rounded-lg object-cover" />}
+                {!release && item.image && <img src={item.image} alt="" loading="lazy" className={`mt-2 ${imageRatioClass(item.imageRatio, "list")} rounded-lg object-cover`} />}
               </div>
             </article>;
           })}
@@ -100,8 +100,8 @@ export default function NotificationBell({ onOpenContent }: { onOpenContent?: (c
 
     {popup && createPortal(<div className="fixed inset-0 z-[210] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label={popup.title}>
       <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={() => setPopup(null)} />
-      <section className="notif-popup relative w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
-        {popup.image && <img src={popup.image} alt="" className="aspect-[3/1] w-full object-cover" />}
+      <section className="notif-popup relative flex max-h-[92dvh] w-full max-w-sm flex-col overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
+        {popup.image && <div className="bg-muted/40"><img src={popup.image} alt="" className={`${imageRatioClass(popup.imageRatio)} object-cover`} /></div>}
         <button onClick={() => setPopup(null)} aria-label="Close" className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 text-foreground"><X size={15} /></button>
         <div className="p-5">
           <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-primary"><Sparkles size={14} />What's new</div>
