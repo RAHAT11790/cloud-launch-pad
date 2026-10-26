@@ -19,3 +19,4 @@
 - Route-backed navigation must preserve React Router history metadata and wait for routed content before painting a main tab; synthetic history guards cause incorrect back targets.
 - Telegram batch endpoints are expanded centrally into inclusive ranges, while episode actions build single-episode payloads; direct media sources remain independent.
 - Bell items come only from `src/lib/announcements.ts` (Firebase `announcements` + live `newEpisodeReleases`), and online counts only from `src/lib/presence.ts` (`presence/{r_uid|g_device}` = {k,t}, removed on disconnect/hidden) — one place decides expiry, one-time popups and real/guest liveness without touching user profiles.
+- Chrome-only gate switch and IP allow list live in Firebase `settings/browserGate`, decided only by `browserGateBlocks` in `src/lib/browserAccess.ts` (missing switch = on, cached locally) — one tested place decides who may bypass the gate.
