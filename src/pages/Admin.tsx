@@ -5652,7 +5652,7 @@ ${tgBulkFooter}
  { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
  { section: "settings", icon: <Settings size={16} />, label: "Settings" },
    { section: "security-center", icon: <Shield size={16} />, label: "Security & Access", group: "Security" },
-   { section: "browser-access", icon: <Globe size={16} />, label: "Browser Access" },
+   { section: "browser-access", icon: <Shield size={16} />, label: "Browser Access" },
    { section: "task-manager", icon: <Sparkles size={16} />, label: "Daily Task Manager", group: "Economy" },
   
   ];
