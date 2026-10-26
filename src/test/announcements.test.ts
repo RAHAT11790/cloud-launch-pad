@@ -40,3 +40,16 @@ describe("presence", () => {
     expect(presenceKeyFor({ id: "u1", email: "a@b.com" }, "dev1")).toEqual({ key: "r_u1", kind: "r" });
   });
 });
+
+describe("popup image shape", () => {
+  it("keeps the admin's chosen shape and falls back to 3:1", async () => {
+    const { activeAnnouncements } = await import("@/lib/announcements");
+    const list = activeAnnouncements({ a: { title: "A", expiresAt: 2e12, createdAt: 1, imageRatio: "9:16" }, b: { title: "B", expiresAt: 2e12, createdAt: 2 }, c: { title: "C", expiresAt: 2e12, createdAt: 3, imageRatio: "4:3" } }, 1);
+    const byTitle = Object.fromEntries(list.map(a => [a.title, a.imageRatio]));
+    expect(byTitle).toEqual({ A: "9:16", B: "3:1", C: "3:1" });
+  });
+  it("offers exactly four shapes", async () => {
+    const { ANNOUNCEMENT_IMAGE_RATIOS } = await import("@/lib/announcements");
+    expect([...ANNOUNCEMENT_IMAGE_RATIOS]).toEqual(["3:1", "16:9", "1:1", "9:16"]);
+  });
+});
