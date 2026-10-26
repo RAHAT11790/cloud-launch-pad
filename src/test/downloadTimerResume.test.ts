@@ -16,3 +16,20 @@ describe("download step timer survives leaving the page", () => {
     expect(resumeDownloadTimer({ flow: "old", step: 0, startedAt: 1000 }, "new", 0, 5000).startedAt).toBe(5000);
   });
 });
+
+describe("Continue (sponsor) visit uses the admin's global seconds", () => {
+  it("5 second setting: coming back after 5s or 30s finishes the step", async () => {
+    const { sponsorVisitOutcome } = await import("@/lib/downloadFlow");
+    expect(sponsorVisitOutcome(1000, 5, 6000)).toBe("advance");
+    expect(sponsorVisitOutcome(1000, 5, 31000)).toBe("advance");
+  });
+  it("5 second setting: coming back after 3s retries the step", async () => {
+    const { sponsorVisitOutcome } = await import("@/lib/downloadFlow");
+    expect(sponsorVisitOutcome(1000, 5, 4000)).toBe("retry");
+  });
+  it("10 second setting: 5s is too early, 10s finishes", async () => {
+    const { sponsorVisitOutcome } = await import("@/lib/downloadFlow");
+    expect(sponsorVisitOutcome(0, 10, 5000)).toBe("retry");
+    expect(sponsorVisitOutcome(0, 10, 10000)).toBe("advance");
+  });
+});

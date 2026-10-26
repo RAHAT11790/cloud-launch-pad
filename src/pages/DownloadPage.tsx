@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorReturnOutcome, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, sponsorVisitOutcome, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
+import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, sponsorVisitOutcome, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
 import BackToWatchLoader from "@/components/BackToWatchLoader";
 import { useDownloadManagerConfig, useDownloadConfigReady, recordDownloadEvent } from "@/lib/downloadManagerSettings";
 import { checkDownloadBlocker, type DownloadBlockState } from "@/lib/downloadBlockCheck";
