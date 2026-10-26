@@ -29,7 +29,13 @@ const RouteAttrSync = () => {
   const loc = useLocation();
   useEffect(() => startPresence(), []);
   useEffect(() => {
-    try { document.documentElement.setAttribute("data-route", loc.pathname); } catch {}
+    // Only "/admin" is styled (a `body *` rule), so store just that distinction:
+    // writing every pathname re-styled the whole page on each tab switch.
+    try {
+      const value = loc.pathname === "/admin" ? "/admin" : "app";
+      const root = document.documentElement;
+      if (root.getAttribute("data-route") !== value) root.setAttribute("data-route", value);
+    } catch {}
   }, [loc.pathname]);
   return null;
 };
