@@ -6,7 +6,7 @@ import { uploadToImgbb } from "@/lib/imgbbUpload";
 import { toast } from "sonner";
 
 const label = (h: number) => h < 24 ? `${h} hours` : h < 168 ? `${h / 24} days` : h === 168 ? "1 week" : "30 days";
-const field = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/8 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none placeholder:text-zinc-500";
+const field = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none placeholder:text-zinc-500";
 
 export default function AnnouncementsManager() {
   const [raw, setRaw] = useState<Record<string, any>>({});
