@@ -161,3 +161,8 @@
 - [x] Download page ad codes moved to Ad Manager; Download Manager keeps only download rules.
 - [x] After each countdown an instruction popup appears; only its cross closes it.
 - [x] Back from download/player shows no loading spinner; download page Back returns to the previous page directly.
+
+## Separate Continue timer, Notifications menu, player Back (2026-10-26)
+- [x] Continue button timer is its own admin field (default 10s), separate from step timers; tested 7s vs 10s step, early return restarts, full wait advances.
+- [x] Admin menu has its own "Notifications" page with Normal/Popup messages; test popup reached a visitor and was deleted.
+- [x] Player Back no longer leaves a blank screen before Home (slowed-phone test: player → Home with no gap).
