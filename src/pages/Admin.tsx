@@ -87,6 +87,7 @@ const LiveTvManager = lazySection(() => import("@/components/admin/LiveTvManager
 const TgUrlChangerManager = lazySection(() => import("@/components/admin/TgUrlChangerManager"), "TG URL Changer");
 const UrlChangerManager = lazySection(() => import("@/components/admin/UrlChangerManager"), "URL Changer");
 const SecurityCenter = lazySection(() => import("@/components/admin/SecurityCenter"), "Security Center");
+const BrowserAccessManager = lazySection(() => import("@/components/admin/BrowserAccessManager"), "Browser Access");
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
@@ -208,7 +209,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "task-manager" | "tg-download" | "download-manager" | "profile-shop";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "browser-access" | "task-manager" | "tg-download" | "download-manager" | "profile-shop";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -2128,7 +2129,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
     "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
     "egd-manager", "cf-manager", "fb-analytics", "adsterra", "backdrop-ai",
-    "security-center", "task-manager", "tg-download", "download-manager", "profile-shop"
+    "security-center", "browser-access", "task-manager", "tg-download", "download-manager", "profile-shop"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
   const routeNavigate = useNavigate();
@@ -3474,6 +3475,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   "adsterra": "Adsterra Ads",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
+  "browser-access": "Browser Access",
   "task-manager": "Daily Task Manager",
   "tg-download": "Telegram Download",
   "download-manager": "Download Manager",
@@ -5650,6 +5652,7 @@ ${tgBulkFooter}
  { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
  { section: "settings", icon: <Settings size={16} />, label: "Settings" },
    { section: "security-center", icon: <Shield size={16} />, label: "Security & Access", group: "Security" },
+   { section: "browser-access", icon: <Globe size={16} />, label: "Browser Access" },
    { section: "task-manager", icon: <Sparkles size={16} />, label: "Daily Task Manager", group: "Economy" },
   
   ];
@@ -9472,6 +9475,8 @@ ${tgBulkFooter}
  {activeSection === "security-center" && (
  <SecurityCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
+
+ {activeSection === "browser-access" && <BrowserAccessManager />}
 
  {/* ==================== DAILY TASK MANAGER ==================== */}
  {activeSection === "task-manager" && (
