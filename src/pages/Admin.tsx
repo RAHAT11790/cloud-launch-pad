@@ -7,7 +7,8 @@ import CachedImg, { preloadCachedImages } from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, query, orderByChild, limitToLast, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import AnnouncementsManager from "@/components/admin/AnnouncementsManager";
-import { usePresenceCounts } from "@/lib/presence";
+import { usePresenceCounts, realAccountKeyCount } from "@/lib/presence";
+import { firebaseRestShallowKeys } from "@/lib/firebaseRest";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
@@ -4194,7 +4195,20 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  return guests;
  }, [usersData]);
  const liveCounts = usePresenceCounts();
- const realTotal = Math.max(usersData.length - guestUidSet.size, liveCounts.real);
+ // Dashboard has no full user list: count real accounts from the users key list (cached for instant paint).
+ const [realKeyCount, setRealKeyCount] = useState(() => { try { return Number(localStorage.getItem("rs_admin_real_users_v1")) || 0; } catch { return 0; } });
+ useEffect(() => {
+  if (activeSection !== "dashboard" && activeSection !== "users") return;
+  let alive = true;
+  firebaseRestShallowKeys("users").then(keys => {
+   const n = realAccountKeyCount(keys);
+   if (!alive || !n) return;
+   setRealKeyCount(n);
+   try { localStorage.setItem("rs_admin_real_users_v1", String(n)); } catch {}
+  }).catch(() => {});
+  return () => { alive = false; };
+ }, [activeSection]);
+ const realTotal = Math.max(usersData.length ? usersData.length - guestUidSet.size : realKeyCount, liveCounts.real);
  const guestTotal = Math.max(guestRegistryCount, liveCounts.guest);
  const recentContent = useMemo(() => [
  ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
