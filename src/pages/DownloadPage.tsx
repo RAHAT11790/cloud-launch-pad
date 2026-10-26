@@ -32,6 +32,8 @@ export default function DownloadPage() {
   const config = useDownloadManagerConfig();
   const configReady = useDownloadConfigReady();
   const [steps, setSteps] = useState<number[] | null>(null);
+  // Continue-button (sponsor) timer is its own admin setting, snapshotted with the steps.
+  const [sponsorSeconds, setSponsorSeconds] = useState(10);
   const [request] = useState(readRequest);
   const [final] = useState(() => sessionStorage.getItem(DOWNLOAD_FINAL_KEY) === sessionStorage.getItem(DOWNLOAD_FLOW_KEY));
   const flowId = useRef(sessionStorage.getItem(DOWNLOAD_FLOW_KEY) || "").current;
@@ -60,7 +62,7 @@ export default function DownloadPage() {
   const sponsorTab = useRef<Window | null>(null);
   const advancing = useRef(false);
   const seconds = steps?.[step] ?? 5;
-  useEffect(() => { if (configReady && steps === null) setSteps([...downloadStepsFor(config, request?.episodes.length || 1)]); }, [configReady, config, request, steps]);
+  useEffect(() => { if (configReady && steps === null) { setSponsorSeconds(config.sponsorSeconds); setSteps([...downloadStepsFor(config, request?.episodes.length || 1)]); } }, [configReady, config, request, steps]);
   // Instruction popup after each countdown; only the user's cross closes it.
   const [hintClosed, setHintClosed] = useState("");
   const finish = () => {
@@ -129,7 +131,7 @@ export default function DownloadPage() {
       if (!pending) return;
       // Consume before changing state: focus, visibility and tab-close may fire together.
       sponsor.current = null;
-      if (sponsorReturnOutcome(seconds, performance.now() - pending.awayAt, pending.left) === "advance") advance();
+      if (sponsorReturnOutcome(sponsorSeconds, performance.now() - pending.awayAt, pending.left) === "advance") advance();
       else { saveDownloadTimer({ flow: flowId, step, startedAt: Date.now() }); setSponsorPending(false); setElapsed(0); setWaitAttempt(n => n + 1); toast.error("Returned too early. Please wait and try again."); }
       void verify();
     };
@@ -140,7 +142,7 @@ export default function DownloadPage() {
     }, 250);
     window.addEventListener("blur", leave); window.addEventListener("focus", returned); document.addEventListener("visibilitychange", visibility);
     return () => { clearInterval(closedCheck); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
-  }, [step, seconds, final, steps]);
+  }, [step, sponsorSeconds, final, steps]);
   useEffect(() => {
     if (!final || !base || !request) return;
     const controller = new AbortController();
@@ -155,7 +157,8 @@ export default function DownloadPage() {
     })).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
   }, [final, base, request]);
-  const wait = downloadWaitRemaining(seconds, elapsed);
+  const timerSeconds = sponsorPending ? sponsorSeconds : seconds;
+  const wait = downloadWaitRemaining(timerSeconds, elapsed);
   const back = () => {
     // The watch page is the previous document: going back restores it (often instantly) instead of rebuilding the app.
     let sameOrigin = false;
@@ -194,7 +197,7 @@ export default function DownloadPage() {
     document.body.appendChild(anchor); anchor.click(); anchor.remove(); recordDownloadEvent("website");
   };
   const startTelegram = (url = request?.telegramUrl, count = request?.telegramEpisodeCount || request?.episodes.length || 1) => { if (!url) return; window.open(url, "_blank", "noopener,noreferrer"); recordDownloadEvent("telegram", count); };
-  const progress = Math.min(1, elapsed / (seconds * 1000));
+  const progress = Math.min(1, elapsed / (timerSeconds * 1000));
   const showTelegram = !!(final && config.telegramEnabled && request?.telegramUrl);
   if (leaving) return <BackToWatchLoader />;
   return <main className={`download-page bg-background text-foreground ${final ? "download-final-screen" : "download-step-screen"}`}>
@@ -214,16 +217,16 @@ export default function DownloadPage() {
             <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden><circle cx="24" cy="24" r="21" className="download-ring-track" /><circle cx="24" cy="24" r="21" className="download-ring-fill" strokeDasharray={131.95} strokeDashoffset={131.95 * (1 - progress)} /></svg>
             <span role="timer" aria-label="Seconds remaining" className="text-lg font-bold tabular-nums">{steps === null ? "…" : wait > 0 ? wait : <Check className="text-primary" />}</span>
           </span>
-          <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${seconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${seconds} seconds, then return here.`}</p></div>
+          <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${sponsorSeconds} seconds, then come back.` : `Tap Continue, stay on the sponsor page for ${sponsorSeconds} seconds, then return here.`}</p></div>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col"><div className="download-ad-slot">{guard === "clear" ? <StepAds key={step} socialBar={config.socialBar} banner={config.banner} /> : <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">{guard === "checking" ? <Loader2 className="animate-spin text-primary" /> : <ShieldAlert className="text-destructive" />}<h2 className="text-sm font-semibold">{guard === "checking" ? "Checking ad access…" : guard === "blocked" ? "Ad blocker detected" : "Unable to verify ad access"}</h2><p className="max-w-xs text-xs text-muted-foreground">{guard === "blocked" ? "Turn off ad blocking or filtering DNS, then retry." : "Check your connection and retry."}</p>{guard !== "checking" && <Button variant="outline" onClick={() => void verify()}><RefreshCw />Check again</Button>}</div>}</div>
           {guard === "clear" && steps !== null && wait === 0 && !sponsorPending && hintClosed !== `${step}:${waitAttempt}` && <div role="dialog" aria-label="How to continue" className="download-hint absolute inset-x-0 bottom-2 z-10 mx-auto w-full max-w-sm rounded-xl border border-primary/40 bg-secondary p-4 pr-10 text-foreground shadow-lg">
             <button type="button" aria-label="Close message" className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground" onClick={() => setHintClosed(`${step}:${waitAttempt}`)}><X size={18} /></button>
             <p className="flex items-center gap-2 text-sm font-bold"><Info size={18} className="shrink-0 text-primary" />Your step is ready</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Tap <b className="text-foreground">Continue</b>, stay on the sponsor page for <b className="text-foreground">{seconds} seconds</b>, then come back here. The next step opens by itself.</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Tap <b className="text-foreground">Continue</b>, stay on the sponsor page for <b className="text-foreground">{sponsorSeconds} seconds</b>, then come back here. The next step opens by itself.</p>
           </div>}
         </div>
-        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending || wait > 0} onClick={next}>{sponsorPending ? `Return after ${wait}s` : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {seconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
+        <footer className="download-step-footer"><Button className="h-12 w-full" disabled={steps === null || guard !== "clear" || sponsorPending || wait > 0} onClick={next}>{sponsorPending ? `Return after ${wait}s` : "Continue"}<ArrowRight /></Button><p className="mt-2 text-center text-[11px] text-muted-foreground">Coming back before {sponsorSeconds} seconds restarts this step. If no sponsor opens, you can continue without an extra wait.</p></footer>
       </div>}
       {final && <>
         <div className="mx-auto w-full max-w-lg min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
