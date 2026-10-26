@@ -143,6 +143,7 @@ export default function DownloadPage() {
   evaluateRef.current = evaluateVisit;
   // Page was reloaded or discarded while the sponsor was open: finish the visit as a return.
   useEffect(() => {
+    console.debug('[dl-restore]', steps, restoredPending.current, sponsorRef.current, savedTimer);
     if (steps !== null && restoredPending.current) { restoredPending.current = false; evaluateRef.current(); }
   }, [steps]);
   useEffect(() => {
