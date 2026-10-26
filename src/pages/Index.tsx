@@ -767,7 +767,7 @@ const getCardSourceBadge = (anime: AnimeItem | any) => {
 // Expose so AnimeCard (separate file) can warm too without prop drilling.
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
-const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
+const PosterGridCard = memo(({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
   <button key={anime.id} type="button" data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
@@ -787,7 +787,7 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
       )}
     </div>
   </button>
-);
+));
 
 const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
 
@@ -2328,6 +2328,10 @@ const Index = () => {
     // avoid stacking duplicate entries; push from anywhere else.
     await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
+  // Stable identity for card lists: memoized cards/rows skip re-rendering on every tab change.
+  const cardClickRef = useRef(handleCardClick);
+  cardClickRef.current = handleCardClick;
+  const onCardClick = useCallback((anime: AnimeItem, sIdx?: number, eIdx?: number) => cardClickRef.current(anime, sIdx, eIdx), []);
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
     if (unlockBlocked) {
@@ -3456,7 +3460,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredSeries.slice(0, tabGridVisibleCount.series).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+          <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}
       </div>
       {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -3479,7 +3483,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredMovies.slice(0, tabGridVisibleCount.movies).map((anime) => (
-          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+          <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}
       </div>
       {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -3496,7 +3500,7 @@ const Index = () => {
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.slice(0, HOME_CATEGORY_GRID_LIMIT).map((anime) => (
-                <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
+                <PosterGridCard key={anime.id} anime={anime} onClick={onCardClick} />
               ))}
             </div>
           ) : (
@@ -3564,14 +3568,14 @@ const Index = () => {
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
-            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
+            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={onCardClick} onViewAll={() => navigate("/series")} />
           )}
           {filteredMovies.length > 0 && (
-            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/movies")} />
+            <AnimeSection title="🎬 Most Favorite Movies" items={filteredMovies.slice(0, 10)} onCardClick={onCardClick} onViewAll={() => navigate("/movies")} />
           )}
           {categoryGroups
             .map(({ key, title, items }) => (
-              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={handleCardClick} showWhenEmpty />
+              <AnimeSection key={key} title={title} items={items.slice(0, 10)} onCardClick={onCardClick} showWhenEmpty />
             ))}
         </>
       )}
@@ -3823,7 +3827,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => { setShowProfile(false); if (window.location.pathname === "/profile") navigate(MAIN_PAGE_PATH[activePage] || "/"); }} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <ProfilePage onClose={() => { setShowProfile(false); if (window.location.pathname === "/profile") navigate(MAIN_PAGE_PATH[activePage] || "/"); }} allAnime={allAnime} onCardClick={onCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 
