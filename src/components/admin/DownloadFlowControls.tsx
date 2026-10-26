@@ -44,7 +44,7 @@ export default function DownloadFlowControls() {
     try {
       const clean = normalizeDownloadFlowSettings(draft as unknown as Record<string, unknown>);
       // Only download rules are written here; ad codes are managed in Ad Manager.
-      await update(ref(db, "settings/downloadManager"), { maxEpisodes: clean.maxEpisodes, adSteps: clean.adSteps, adStepsByCount: clean.adStepsByCount });
+      await update(ref(db, "settings/downloadManager"), { maxEpisodes: clean.maxEpisodes, sponsorSeconds: clean.sponsorSeconds, adSteps: clean.adSteps, adStepsByCount: clean.adStepsByCount });
       toast.success("Download flow saved");
     }
     catch { toast.error("Could not save download flow"); }
@@ -52,12 +52,18 @@ export default function DownloadFlowControls() {
   };
   const boxes = Math.min(MAX_BOXES, Math.max(1, Math.trunc(draft.maxEpisodes) || 1));
   const allSteps = draft.adStepsByCount.all;
-  return <section className="border-y border-border py-5 text-foreground space-y-5" aria-label="Download controller">
+  return <section className="dark border-y border-border py-5 text-foreground space-y-5" aria-label="Download controller">
     <div><h3 className="text-base font-bold">Download controller</h3><p className="text-xs text-muted-foreground mt-1">Website downloads only · no daily limit</p></div>
     <label className="flex items-center justify-between gap-4 text-sm font-medium">Episodes per request
       <Input aria-label="Episodes per request" type="number" min={1} value={draft.maxEpisodes} className="w-20" onChange={(e) => setDraft({ ...draft, maxEpisodes: Number(e.target.value) })} />
     </label>
-    <StepBox title="Default steps" note="Used for any episode count without its own box" steps={draft.adSteps} onChange={(adSteps) => setDraft({ ...draft, adSteps })} />
+    <div className="rounded-lg border border-primary/40 p-3 space-y-1.5">
+      <label className="flex items-center justify-between gap-3 text-sm font-semibold">Continue button timer
+        <span className="flex items-center gap-2"><Input aria-label="Continue button timer seconds" className="w-20" type="number" min={1} max={120} value={draft.sponsorSeconds} onChange={(e) => setDraft({ ...draft, sponsorSeconds: Number(e.target.value) })} /><span className="text-xs font-normal text-muted-foreground">sec</span></span>
+      </label>
+      <p className="text-[11px] text-muted-foreground">After tapping Continue, the user stays this long on the sponsor page. Separate from the step timers below.</p>
+    </div>
+    <StepBox title="Default steps" note="Step timer before Continue unlocks · used for any count without its own box" steps={draft.adSteps} onChange={(adSteps) => setDraft({ ...draft, adSteps })} />
     <div className="space-y-2">
       <h4 className="text-sm font-semibold">Steps by episodes selected</h4>
       {Array.from({ length: boxes }, (_, i) => String(i + 1)).map(key => {

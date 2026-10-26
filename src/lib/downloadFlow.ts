@@ -34,8 +34,11 @@ export function normalizeDownloadFlowSettings(raw: Record<string, unknown> = {})
     const steps = clampSteps(value);
     if (steps && (/^[1-9]\d*$/.test(key) || key === "all")) adStepsByCount[key] = steps;
   }
+  const sponsor = Number(raw.sponsorSeconds);
   return {
     maxEpisodes: Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 2,
+    /** Continue-button timer: how long the user must stay on the sponsor page. Separate from the step countdowns. */
+    sponsorSeconds: Number.isFinite(sponsor) && sponsor > 0 ? Math.max(1, Math.min(120, Math.trunc(sponsor))) : 10,
     adSteps: clampSteps(raw.adSteps) ?? [5, 5],
     adStepsByCount,
     socialBar: typeof raw.socialBar === "string" ? raw.socialBar : "",

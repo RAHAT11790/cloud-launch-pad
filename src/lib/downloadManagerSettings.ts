@@ -30,6 +30,7 @@ export type DownloadManagerConfig = {
   activeServerDomain: string;
   maxEpisodes: number;
   adSteps: number[];
+  sponsorSeconds: number;
   adStepsByCount: Record<string, number[]>;
   socialBar: string;
   banner: string;

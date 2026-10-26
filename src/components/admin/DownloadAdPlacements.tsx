@@ -20,7 +20,7 @@ export default function DownloadAdPlacements() {
     catch { toast.error("Could not save download page ads"); }
     finally { setSaving(false); }
   };
-  return <section className="rounded-xl border border-border bg-card p-4 text-foreground space-y-3" aria-label="Download page ad codes">
+  return <section className="dark rounded-xl border border-border bg-card p-4 text-foreground space-y-3" aria-label="Download page ad codes">
     <div><h3 className="text-base font-bold">Download page ads</h3><p className="text-xs text-muted-foreground mt-1">Shown between the timer and the Continue button on each download step</p></div>
     <label className="block text-sm font-medium">Social Bar<Textarea aria-label="Download Social Bar code" value={socialBar} onChange={(e) => setSocialBar(e.target.value)} className="mt-2 min-h-24 font-mono text-xs" /></label>
     <label className="block text-sm font-medium">Banner · 160 × 300<Textarea aria-label="Download Banner code" value={banner} onChange={(e) => setBanner(e.target.value)} className="mt-2 min-h-32 font-mono text-xs" /></label>
