@@ -768,7 +768,7 @@ const getCardSourceBadge = (anime: AnimeItem | any) => {
 if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
 
 const PosterGridCard = memo(({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
-  <button key={anime.id} type="button" data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
+  <button key={anime.id} type="button" data-anime-card="true" className="poster-grid-cell relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover text-left appearance-none border-0 p-0" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
@@ -3793,7 +3793,9 @@ const Index = () => {
                 overflowY: "auto",
                 overflowX: "hidden",
                 WebkitOverflowScrolling: "touch",
-                visibility: shown ? "visible" : "hidden",
+                // Opacity (not inherited) hides parked tabs: toggling `visibility` forced a style
+                // pass over every element of every tab (~7k nodes) on each switch.
+                opacity: shown ? undefined : 0,
                 zIndex: isActive ? 2 : isLeaving ? 1 : 0,
                 pointerEvents: isActive ? "auto" : "none",
                 // Hidden tabs keep their layout (visibility only skips paint), so
