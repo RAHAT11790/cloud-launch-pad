@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Chrome, Globe, Plus, Trash2, Wifi, ShieldCheck, ShieldOff, Loader2, Smartphone } from "lucide-react";
+import { Chrome, Globe, Plus, Trash2, Wifi, ShieldCheck, ShieldOff, Loader2, Smartphone, Fingerprint } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { addAllowedIp, fetchNetworkIp, isValidIp, normalizeIp, removeAllowedIp, setBrowserGateEnabled, useBrowserGateConfig } from "@/lib/browserAccess";
+import { addAllowedDevice, removeAllowedDevice, isValidDeviceId, normalizeDeviceId, getGateDeviceId, addAllowedIp, fetchNetworkIp, isValidIp, normalizeIp, removeAllowedIp, setBrowserGateEnabled, useBrowserGateConfig } from "@/lib/browserAccess";
 
 const card = "rounded-2xl border border-white/10 bg-[#16162A] p-4";
 const input = "h-11 w-full rounded-xl border border-white/10 bg-[#0f0f1d] px-3 text-sm text-white placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none";
@@ -13,6 +13,19 @@ export default function BrowserAccessManager() {
   const [ip, setIp] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dev, setDev] = useState("");
+  const [devLabel, setDevLabel] = useState("");
+  const myDevice = useMemo(() => getGateDeviceId(), []);
+  const devList = useMemo(() => Object.entries(cfg.allowDevices).sort((a, b) => (b[1].addedAt || 0) - (a[1].addedAt || 0)), [cfg.allowDevices]);
+  const addDev = async (value: string, name: string) => {
+    const v = normalizeDeviceId(value);
+    if (!isValidDeviceId(v)) { toast.error("Enter a valid Device ID — e.g. RS-AB12-CD34"); return; }
+    if (devList.some(([, d]) => normalizeDeviceId(d.deviceId) === v)) { toast.error("This Device ID is already allowed"); return; }
+    setBusy(true);
+    try { await addAllowedDevice(v, name); setDev(""); setDevLabel(""); toast.success("Device allowed — any browser on it can open the site"); }
+    catch { toast.error("Could not save Device ID"); }
+    finally { setBusy(false); }
+  };
   useEffect(() => { fetchNetworkIp().then(setMyIp); }, []);
   const list = useMemo(() => Object.entries(cfg.allowIps).sort((a, b) => (b[1].addedAt || 0) - (a[1].addedAt || 0)), [cfg.allowIps]);
   const myAllowed = !!myIp && list.some(([, a]) => normalizeIp(a.ip) === normalizeIp(myIp));
@@ -43,7 +56,30 @@ export default function BrowserAccessManager() {
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-white/10 bg-black/25 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Status</p><p className={`mt-1 text-sm font-bold ${cfg.enabled ? "text-emerald-300" : "text-zinc-300"}`}>{cfg.enabled ? "Active" : "Disabled"}</p></div>
-        <div className="rounded-xl border border-white/10 bg-black/25 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Allowed IPs</p><p className="mt-1 text-sm font-bold text-white tabular-nums">{list.length}</p></div>
+        <div className="rounded-xl border border-white/10 bg-black/25 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Allowed IPs</p><p className="mt-1 text-sm font-bold text-white tabular-nums">{list.length} IP · {devList.length} device</p></div>
+      </div>
+    </div>
+
+    <div className={card}>
+      <div className="mb-3 flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300"><Fingerprint size={18} /></span>
+        <div className="min-w-0"><h4 className="text-[14px] font-bold text-white">Allow by Device ID</h4><p className="text-[11px] text-zinc-400">Device ID never changes with IP or Wi-Fi. User copies it from the "Unsupported browser" page.</p></div>
+      </div>
+      <div className="space-y-2">
+        <input aria-label="Device ID" className={`${input} font-mono uppercase`} autoCapitalize="characters" placeholder="e.g. RS-AB12-CD34" value={dev} onChange={e => setDev(e.target.value)} maxLength={20} />
+        <input aria-label="Device label" className={input} placeholder="Label (optional) — e.g. Rahat Booyah" value={devLabel} onChange={e => setDevLabel(e.target.value)} maxLength={40} />
+        <button type="button" disabled={busy || !dev.trim()} onClick={() => addDev(dev, devLabel)} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-bold text-white disabled:opacity-40">{busy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}Allow this device</button>
+        <p className="pt-1 text-[11px] text-zinc-500">This device: <span className="font-mono text-zinc-300">{myDevice}</span></p>
+      </div>
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <div className="mb-2 flex items-center justify-between"><h5 className="text-[13px] font-bold text-white">Allowed devices</h5><span className="text-[11px] text-zinc-500">{devList.length} total</span></div>
+        {devList.length === 0
+          ? <p className="rounded-xl border border-dashed border-white/10 py-5 text-center text-[12px] text-zinc-400">No device allowed yet.</p>
+          : <ul className="space-y-2">{devList.map(([key, d]) => <li key={key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/25 p-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><Fingerprint size={16} /></span>
+            <div className="min-w-0 flex-1"><p className="break-all font-mono text-[13px] font-semibold text-white">{d.deviceId}</p><p className="truncate text-[11px] text-zinc-500">{d.label || "No label"} · {new Date(d.addedAt).toLocaleDateString()}</p></div>
+            <button type="button" aria-label={`Remove ${d.deviceId}`} onClick={() => removeAllowedDevice(key).then(() => toast.success("Device removed"), () => toast.error("Could not remove"))} className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-500/10 hover:text-red-400"><Trash2 size={16} /></button>
+          </li>)}</ul>}
       </div>
     </div>
 
