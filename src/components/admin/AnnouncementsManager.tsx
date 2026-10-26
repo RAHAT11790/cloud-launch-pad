@@ -54,7 +54,7 @@ export default function AnnouncementsManager() {
     </div>
     <input className={`${field} mb-2`} placeholder="Title" maxLength={90} value={title} onChange={e => setTitle(e.target.value)} />
     <textarea className={`${field} mb-2 min-h-[90px]`} placeholder="Details (what you updated, new features…)" maxLength={1200} value={description} onChange={e => setDescription(e.target.value)} />
-    {image ? <div className="mb-3 rounded-lg border border-white/8 bg-[#141422] p-2.5">
+    {image ? <div className="mb-3 rounded-lg border border-white/10 bg-[#141422] p-2.5">
         <p className="mb-2 text-[11px] font-semibold text-[#D1C4E9]">Image shape — the popup box takes this shape</p>
         <div className="mb-2.5 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Image shape">
           {ANNOUNCEMENT_IMAGE_RATIOS.map(r => { const [w, h] = r.split(":").map(Number); return <button key={r} type="button" role="radio" aria-checked={ratio === r} onClick={() => setRatio(r)}

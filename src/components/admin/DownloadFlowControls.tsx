@@ -67,7 +67,7 @@ export default function DownloadFlowControls({ card = "rounded-2xl border border
         <div className="min-w-0 flex-1"><h3 className="text-[15px] font-bold leading-tight text-white">Download flow</h3><p className="mt-0.5 text-[11px] text-zinc-400">Free website downloads · no daily limit · ad-block protection on</p></div>
       </div>
       <div className="mt-3.5 grid grid-cols-3 gap-2">
-        {[["Per request", `${draft.maxEpisodes || 1} ep`], ["Continue", `${draft.sponsorSeconds || 1}s`], ["Custom boxes", String(custom + (allSteps ? 1 : 0))]].map(([k, v]) => <div key={k} className="rounded-xl border border-white/8 bg-black/25 px-2.5 py-2">
+        {[["Per request", `${draft.maxEpisodes || 1} ep`], ["Continue", `${draft.sponsorSeconds || 1}s`], ["Custom boxes", String(custom + (allSteps ? 1 : 0))]].map(([k, v]) => <div key={k} className="rounded-xl border border-white/10 bg-black/25 px-2.5 py-2">
           <p className="text-[9.5px] font-bold uppercase tracking-wider text-zinc-500">{k}</p><p className="mt-0.5 text-[15px] font-extrabold text-white tabular-nums">{v}</p></div>)}
       </div>
     </div>
@@ -75,7 +75,7 @@ export default function DownloadFlowControls({ card = "rounded-2xl border border
     {/* Limits & timers */}
     <div className={card}>
       <SectionHead icon={<Timer size={17} />} title="Limits & timers" note="Two separate timers: the step timer unlocks Continue, the Continue timer is the sponsor-page stay." />
-      <div className="divide-y divide-white/8 rounded-xl border border-white/10 bg-black/20">
+      <div className="divide-y divide-white/10 rounded-xl border border-white/10 bg-black/20">
         <label className="flex items-center gap-3 px-3.5 py-3">
           <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold text-white">Episodes per request</span><span className="block text-[11px] text-zinc-400">How many episodes a free user may pick at once</span></span>
           <input aria-label="Episodes per request" className={num} type="number" inputMode="numeric" min={1} value={draft.maxEpisodes} onChange={(e) => setDraft({ ...draft, maxEpisodes: Number(e.target.value) })} />
@@ -103,7 +103,7 @@ export default function DownloadFlowControls({ card = "rounded-2xl border border
           const steps = own || draft.adSteps;
           const expanded = open === key;
           const name = `${key} ${key === "1" ? "episode" : "episodes"}`;
-          return <div key={key} className="border-b border-white/8 bg-black/20 last:border-b-0">
+          return <div key={key} className="border-b border-white/10 bg-black/20 last:border-b-0">
             <button type="button" aria-expanded={expanded} aria-label={`${name} steps`} onClick={() => setOpen(expanded ? null : key)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-[13px] font-extrabold text-white tabular-nums">{key}</span>
               <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold text-white">{name}</span><span className="block truncate text-[11px] text-zinc-400">{summary(steps)}</span></span>
@@ -131,7 +131,7 @@ export default function DownloadFlowControls({ card = "rounded-2xl border border
       <p className="mt-3 text-[11px] text-zinc-500">After the last step the user sees “Your links are ready” → Get Link. Ad codes live in Ad Manager → Download page ads.</p>
     </div>
 
-    <div className="sticky bottom-2 z-10">
+    <div>
       <button type="button" disabled={saving} onClick={save} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-lg shadow-black/40 hover:bg-indigo-500 disabled:opacity-60">{saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}Save download flow</button>
     </div>
   </section>;
