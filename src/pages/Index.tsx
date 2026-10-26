@@ -1,6 +1,6 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
 import { resolveResumeTarget } from "@/lib/resumeTarget";
-import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { memo, useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { countRealEpisodes, episodeNumberAt, findEpisodeIndexByNumber, formatEpisodeChip, formatEpisodeLabel, isComboEpisode } from "@/lib/episodeCombo";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
