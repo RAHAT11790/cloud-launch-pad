@@ -53,3 +53,10 @@ describe("popup image shape", () => {
     expect([...ANNOUNCEMENT_IMAGE_RATIOS]).toEqual(["3:1", "16:9", "1:1", "9:16"]);
   });
 });
+
+describe("dashboard real account total", () => {
+  it("counts every users key except guest_ visitors", async () => {
+    const { realAccountKeyCount } = await import("@/lib/presence");
+    expect(realAccountKeyCount(["user_1_a", "a@gmail,com", "guest_x", "guest_y", "user_2_b"])).toBe(3);
+  });
+});
