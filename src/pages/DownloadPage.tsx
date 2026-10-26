@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorReturnOutcome, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
+import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, sponsorReturnOutcome, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, sponsorVisitOutcome, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
 import BackToWatchLoader from "@/components/BackToWatchLoader";
 import { useDownloadManagerConfig, useDownloadConfigReady, recordDownloadEvent } from "@/lib/downloadManagerSettings";
 import { checkDownloadBlocker, type DownloadBlockState } from "@/lib/downloadBlockCheck";
@@ -37,7 +37,7 @@ export default function DownloadPage() {
   const [request] = useState(readRequest);
   const [final] = useState(() => sessionStorage.getItem(DOWNLOAD_FINAL_KEY) === sessionStorage.getItem(DOWNLOAD_FLOW_KEY));
   const flowId = useRef(sessionStorage.getItem(DOWNLOAD_FLOW_KEY) || "").current;
-  // The running step and its countdown survive leaving and returning to this page.
+  // The running step, its countdown and an open sponsor visit survive leaving, reloading and returning.
   const [savedTimer] = useState(() => { const t = readDownloadTimer(); return t && t.flow === flowId ? t : null; });
   const [step, setStep] = useState(savedTimer?.step ?? 0);
   const [leaving, setLeaving] = useState(false);
@@ -48,18 +48,25 @@ export default function DownloadPage() {
     return () => window.removeEventListener("pageshow", shown);
   }, []);
   const [guard, setGuard] = useState<DownloadBlockState>("checking");
-  const [elapsed, setElapsed] = useState(() => savedTimer ? Math.max(0, Date.now() - savedTimer.startedAt) : 0);
+  const [startedAt, setStartedAt] = useState(() => savedTimer?.startedAt ?? Date.now());
+  const [now, setNow] = useState(Date.now);
   const [waitAttempt, setWaitAttempt] = useState(0);
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
   const [fileState, setFileState] = useState<Record<string, "ready" | "unavailable">>({});
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [smartlink, setSmartlink] = useState("");
-  const [sponsorPending, setSponsorPending] = useState(false);
+  const restoredVisit = !savedTimer?.ready && Number(savedTimer?.sponsorAt) > 0 ? Number(savedTimer!.sponsorAt) : null;
+  // Wall-clock time Continue opened the sponsor page (null = no visit running).
+  const [sponsorAt, setSponsorAtState] = useState<number | null>(restoredVisit);
+  const sponsorRef = useRef<number | null>(restoredVisit);
+  const visitSeconds = useRef(Number(savedTimer?.sponsorSeconds) || 0);
+  const restoredPending = useRef(restoredVisit !== null);
+  const leftAt = useRef(0);
+  const sponsorPending = sponsorAt !== null;
+  const setVisit = (at: number | null) => { sponsorRef.current = at; setSponsorAtState(at); };
   const [ready, setReady] = useState(!!savedTimer?.ready);
   const busy = useRef(false);
-  const sponsor = useRef<{ awayAt: number; left: boolean; openedAt: number } | null>(null);
-  const sponsorTab = useRef<Window | null>(null);
   const advancing = useRef(false);
   const seconds = steps?.[step] ?? 5;
   useEffect(() => { if (configReady && steps === null) { setSponsorSeconds(config.sponsorSeconds); setSteps([...downloadStepsFor(config, request?.episodes.length || 1)]); } }, [configReady, config, request, steps]);
@@ -73,11 +80,11 @@ export default function DownloadPage() {
   const advance = () => {
     if (advancing.current || steps === null) return;
     advancing.current = true;
-    sponsor.current = null; setSponsorPending(false);
+    setVisit(null);
     const next = nextDownloadStep(step, steps.length);
     // Last step done: show the "links ready" screen; the user taps Get Link to continue.
     if (next === "final") { setReady(true); saveDownloadTimer({ flow: flowId, step, startedAt: Date.now(), ready: true }); }
-    else { saveDownloadTimer({ flow: flowId, step: next, startedAt: Date.now() }); setStep(next); setElapsed(0); }
+    else { const t = Date.now(); saveDownloadTimer({ flow: flowId, step: next, startedAt: t }); setStartedAt(t); setStep(next); }
   };
   useEffect(() => { advancing.current = false; }, [step]);
   const resolveRelay = async () => {
@@ -107,42 +114,61 @@ export default function DownloadPage() {
   useEffect(() => {
     if (steps !== null && steps.length > 0 && step >= steps.length) setStep(steps.length - 1);
   }, [steps, step]);
+  // Preparation countdown for the current step: resumes its saved wall-clock start.
   useEffect(() => {
     if (final || ready || guard !== "clear" || steps === null) return;
-    const timerState = resumeDownloadTimer(readDownloadTimer(), flowId, step, Date.now());
-    saveDownloadTimer(timerState);
-    const startedAt = timerState.startedAt;
-    if (!sponsorPending) setElapsed(Date.now() - startedAt);
-    const timer = window.setInterval(() => {
-      const pending = sponsor.current;
-      if (sponsorPending) {
-        if (pending?.left) setElapsed(performance.now() - pending.awayAt);
-      } else setElapsed(Date.now() - startedAt);
-    }, 100);
+    const saved = readDownloadTimer();
+    const timerState = resumeDownloadTimer(saved, flowId, step, Date.now());
+    if (timerState !== saved) saveDownloadTimer(timerState);
+    setStartedAt(timerState.startedAt);
+  }, [final, ready, guard, steps, step, waitAttempt]);
+  useEffect(() => {
+    if (final || ready) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(timer);
-  }, [final, ready, guard, steps, step, sponsorPending, waitAttempt]);
+  }, [final, ready]);
+  /** Judge the sponsor visit once: enough wall-clock time since Continue → next step, otherwise retry this step. */
+  const evaluateVisit = () => {
+    const at = sponsorRef.current;
+    if (at === null || advancing.current) return;
+    const needed = visitSeconds.current || sponsorSeconds;
+    setVisit(null); leftAt.current = 0;
+    const t = Date.now();
+    if (sponsorVisitOutcome(at, needed, t) === "advance") { advance(); return; }
+    saveDownloadTimer({ flow: flowId, step, startedAt: t });
+    setStartedAt(t); setWaitAttempt(n => n + 1);
+    toast.error(`You came back after ${Math.floor((t - at) / 1000)}s. Stay ${needed} seconds on the sponsor page.`);
+  };
+  const evaluateRef = useRef(evaluateVisit);
+  evaluateRef.current = evaluateVisit;
+  // Page was reloaded or discarded while the sponsor was open: finish the visit as a return.
+  useEffect(() => {
+    if (steps !== null && restoredPending.current) { restoredPending.current = false; evaluateRef.current(); }
+  }, [steps]);
   useEffect(() => {
     if (final) return;
-    const leave = () => {
-      if (sponsor.current && !sponsor.current.left) { sponsor.current.left = true; sponsor.current.awayAt = performance.now(); }
+    const away = () => {
+      // Tapping an ad frame on this page also blurs the window; that is not leaving.
+      if (sponsorRef.current !== null && document.activeElement?.tagName !== "IFRAME") leftAt.current ||= Date.now();
     };
-    const returned = () => {
-      const pending = sponsor.current;
-      if (!pending) return;
-      // Consume before changing state: focus, visibility and tab-close may fire together.
-      sponsor.current = null;
-      if (sponsorReturnOutcome(sponsorSeconds, performance.now() - pending.awayAt, pending.left) === "advance") advance();
-      else { saveDownloadTimer({ flow: flowId, step, startedAt: Date.now() }); setSponsorPending(false); setElapsed(0); setWaitAttempt(n => n + 1); toast.error("Returned too early. Please wait and try again."); }
-      void verify();
+    const back = () => {
+      const at = sponsorRef.current;
+      if (at === null || document.visibilityState !== "visible") return;
+      // Focus noise right after window.open is not a return.
+      if (!leftAt.current || Date.now() - at < 1500) return;
+      evaluateRef.current();
     };
-    const visibility = () => document.visibilityState === "hidden" ? leave() : returned();
-    const closedCheck = window.setInterval(() => {
-      // Only a real tab close counts; never auto-advance while the sponsor still has focus.
-      if (sponsor.current && sponsorTab.current?.closed) returned();
-    }, 250);
-    window.addEventListener("blur", leave); window.addEventListener("focus", returned); document.addEventListener("visibilitychange", visibility);
-    return () => { clearInterval(closedCheck); window.removeEventListener("blur", leave); window.removeEventListener("focus", returned); document.removeEventListener("visibilitychange", visibility); };
-  }, [step, sponsorSeconds, final, steps]);
+    const visibility = () => { if (document.visibilityState === "hidden") { if (sponsorRef.current !== null) leftAt.current ||= Date.now(); } else back(); };
+    const shown = () => back();
+    window.addEventListener("blur", away); window.addEventListener("focus", back); window.addEventListener("pageshow", shown); document.addEventListener("visibilitychange", visibility);
+    return () => { window.removeEventListener("blur", away); window.removeEventListener("focus", back); window.removeEventListener("pageshow", shown); document.removeEventListener("visibilitychange", visibility); };
+  }, [final]);
+  // The sponsor never took focus (user stayed here): finish once its time has passed.
+  useEffect(() => {
+    const at = sponsorRef.current;
+    if (at === null || document.visibilityState !== "visible" || !document.hasFocus()) return;
+    if (now - at >= (visitSeconds.current || sponsorSeconds) * 1000) evaluateRef.current();
+  }, [now, sponsorSeconds]);
   useEffect(() => {
     if (!final || !base || !request) return;
     const controller = new AbortController();
@@ -157,7 +183,9 @@ export default function DownloadPage() {
     })).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
   }, [final, base, request]);
-  const timerSeconds = sponsorPending ? sponsorSeconds : seconds;
+  const visitSecs = visitSeconds.current || sponsorSeconds;
+  const timerSeconds = sponsorPending ? visitSecs : seconds;
+  const elapsed = sponsorPending ? Math.max(0, now - (sponsorAt as number)) : guard === "clear" ? Math.max(0, now - startedAt) : 0;
   const wait = downloadWaitRemaining(timerSeconds, elapsed);
   const back = () => {
     // The watch page is the previous document: going back restores it (often instantly) instead of rebuilding the app.
@@ -171,11 +199,13 @@ export default function DownloadPage() {
   const next = () => {
     if (guard !== "clear" || steps === null || wait > 0 || sponsorPending || advancing.current) return;
     if (!/^https?:\/\//i.test(smartlink)) { advance(); return; }
-    sponsor.current = { awayAt: performance.now(), openedAt: performance.now(), left: false }; setElapsed(0); setSponsorPending(true);
+    const at = Date.now();
     const tab = window.open(smartlink, "_blank");
-    sponsorTab.current = tab;
-    if (!tab) { sponsor.current = null; setSponsorPending(false); advance(); return; }
+    if (!tab) { advance(); return; }
     try { tab.opener = null; } catch {}
+    visitSeconds.current = sponsorSeconds; leftAt.current = 0;
+    setVisit(at); setNow(at);
+    saveDownloadTimer({ flow: flowId, step, startedAt, sponsorAt: at, sponsorSeconds });
   };
   // Final page: the first tap on each button opens one sponsor page, the next tap downloads.
   const [adSeen, setAdSeen] = useState<Set<string>>(() => new Set());
