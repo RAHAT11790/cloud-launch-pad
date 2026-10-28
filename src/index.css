@@ -3509,5 +3509,6 @@ html.tv-mode .rs-remote-rail {
 }
 html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
 @media (max-height: 620px) {
-  .rs-remote-btn, html.tv-mode .rs-remote-btn { width: 34px; height: 34px; }
+  .rs-remote-btn, html.tv-mode .rs-remote-btn { width: 30px; height: 30px; }
+  .rs-remote-sep { height: 34px; }
 }

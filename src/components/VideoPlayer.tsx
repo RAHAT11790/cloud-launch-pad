@@ -5384,7 +5384,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* TV-style side remote: shown with the controls on PC / laptop / TV only (CSS hides it on phones). */}
           {showControls && !locked && !adGateActive && (
             <div
-              className="rs-remote-rail absolute right-3 top-1/2 -translate-y-1/2 z-[75] items-center gap-1 rounded-2xl p-1.5"
+              className="rs-remote-rail absolute right-3 top-[45%] -translate-y-1/2 z-[75] items-center gap-1 rounded-2xl p-1.5"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
