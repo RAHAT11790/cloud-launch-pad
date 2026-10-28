@@ -5919,7 +5919,7 @@ ${tgBulkFooter}
  <ChevronRight size={16} className="text-blue-300" />
  </button>
 
- <div className="grid grid-cols-2 gap-2.5 mb-4">
+ <div className="admin-stat-grid grid grid-cols-2 gap-2.5 mb-4">
  {[
   { icon: <Film size={18} />, value: adminFastCounts.webseries || webseriesData.length, label: "Web Series", color: "text-indigo-400" },
   { icon: <Video size={18} />, value: adminFastCounts.movies || moviesData.length, label: "Movies", color: "text-emerald-400" },

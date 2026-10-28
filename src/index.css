@@ -3422,3 +3422,20 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .nv-lbl { font-size: 15px; }
   .site-search { flex-basis: 440px !important; max-width: 440px !important; }
 }
+
+/* Admin panel on laptop / PC / TV — centred workspace, floating tab bar */
+@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+  .admin-topbar { padding-left: max(16px, calc((100vw - 1280px) / 2)) !important; padding-right: max(16px, calc((100vw - 1280px) / 2)) !important; }
+  .admin-main { max-width: 1280px; margin: 0 auto; padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 120px !important; }
+  .admin-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 14px !important; }
+  .admin-bottom-nav {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 16px !important;
+    transform: translateX(-50%);
+    width: min(760px, calc(100vw - 48px));
+    border-radius: 18px;
+    border: 1px solid rgb(255 255 255 / 0.1) !important;
+    box-shadow: 0 20px 50px -20px rgb(0 0 0 / 0.8);
+  }
+}
