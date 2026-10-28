@@ -112,8 +112,11 @@ export function remoteActionFor(input: RemoteKeyInput, ctx: RemoteKeyContext): R
   switch (key) {
     case "Enter":
     case " ":
+      return "playPause";
     case "ArrowLeft":
+      return "seekBack";
     case "ArrowRight":
+      return "seekFwd";
     case "ArrowUp":
       if (ctx.arrowsNavigate) return null;
       return ctx.hasChannels ? "chUp" : "volUp";

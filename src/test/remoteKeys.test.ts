@@ -42,6 +42,13 @@ describe("remote key mapping", () => {
     expect(remoteActionFor({ key: "ArrowLeft" }, ctx)).toBeNull();
   });
 
+  it("M mutes and +/- change volume even when a button is focused", () => {
+    const ctx = { ...free, onControl: true };
+    expect(remoteActionFor({ key: "m" }, ctx)).toBe("mute");
+    expect(remoteActionFor({ key: "+" }, ctx)).toBe("volUp");
+    expect(remoteActionFor({ key: "-" }, ctx)).toBe("volDown");
+  });
+
   it("with TV controls visible, up/down move focus", () => {
     expect(remoteActionFor({ key: "ArrowDown" }, { ...live, arrowsNavigate: true })).toBeNull();
     expect(remoteActionFor({ key: "ArrowLeft" }, { ...live, arrowsNavigate: true })).toBe("seekBack");
