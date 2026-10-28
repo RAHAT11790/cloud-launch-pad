@@ -3408,6 +3408,39 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   }
 }
 
+/* Short landscape screens (phone "Desktop site" landscape, small windows) and
+   tall portrait desktop views: one column — the video never fills the whole
+   screen, the title peeks below it and the page scrolls to episodes & picks. */
+@media (min-width: 960px) and (max-height: 640px), (min-width: 960px) and (orientation: portrait) {
+  .rs-video-player-root[data-player-fs="off"] > .rs-player-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    padding-top: 12px !important;
+  }
+  .rs-player-layout > .rs-video-player-shell:not(.player-fs-enter) {
+    max-width: calc((100vh - 92px) * 16 / 9) !important;
+    border-radius: 14px !important;
+  }
+  .rs-player-layout > .rs-player-info { max-width: 1100px; width: 100%; padding-top: 12px !important; }
+  .rs-player-layout > .rs-player-side {
+    grid-column: 1;
+    grid-row: 3;
+    position: relative;
+    top: auto;
+    max-height: none;
+    overflow: visible;
+    width: 100%;
+    max-width: 1100px;
+    justify-self: center;
+    margin-top: 14px;
+  }
+  .rs-player-side .rs-foryou-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important; }
+  .rs-inline-sheet { top: 12px !important; bottom: 12px !important; }
+}
+@media (min-width: 960px) and (orientation: portrait) {
+  .rs-player-layout > .rs-video-player-shell:not(.player-fs-enter) { max-width: 100% !important; }
+}
+
 /* Small laptops / TVs: tabs + search must share one bar */
 @media (min-width: 960px) and (max-width: 1279px) {
   .site-search { flex: 0 0 42px !important; max-width: 42px !important; }
