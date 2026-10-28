@@ -3426,6 +3426,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .rs-video-player-root[data-player-fs="off"] > .rs-player-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
+    align-content: start;
     padding-top: 12px !important;
   }
   .rs-video-player-root { --pl-w: min(var(--pl-inner), calc((100vh - 92px) * 16 / 9)); }
