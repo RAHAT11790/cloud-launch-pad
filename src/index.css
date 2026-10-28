@@ -3033,7 +3033,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 /* Rail page buttons exist only for mouse / TV-remote layouts */
 .rail-arrow { display: none; }
 
-@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+@media (min-width: 960px) {
 
   /* ---------- HEADER: logo · tabs · search · actions in one bar ---------- */
   .site-header {
@@ -3409,7 +3409,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 }
 
 /* Small laptops / TVs: tabs + search must share one bar */
-@media (min-width: 900px) and (max-width: 1279px) {
+@media (min-width: 960px) and (max-width: 1279px) {
   .site-search { flex: 0 0 42px !important; max-width: 42px !important; }
   .site-search > div > span { opacity: 0 !important; }
   .nv-item { padding: 0 12px; }
@@ -3424,7 +3424,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 }
 
 /* Admin panel on laptop / PC / TV — centred workspace, floating tab bar */
-@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+@media (min-width: 960px) {
   .admin-topbar { padding-left: max(16px, calc((100vw - 1280px) / 2)) !important; padding-right: max(16px, calc((100vw - 1280px) / 2)) !important; }
   .admin-main { max-width: 1280px; margin: 0 auto; padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 120px !important; }
   .admin-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 14px !important; }
@@ -3494,7 +3494,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   background: hsl(0 0% 100% / 0.18);
 }
 
-@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+@media (min-width: 960px) {
   .rs-remote-rail {
     display: flex;
     background: hsl(0 0% 0% / 0.55);
