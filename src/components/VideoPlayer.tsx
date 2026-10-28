@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
@@ -357,6 +358,8 @@ interface VideoPlayerProps {
   preferProxy?: boolean;
   /** Extra, non-RS servers (e.g. Direct Link) shown in the same Server panel. */
   extraServers?: { id: string; label: string; active: boolean; onSelect: () => void }[];
+  /** Live TV channel list for remote CH+/CH-/number zapping. Episodes are derived from episodeList. */
+  remoteChannels?: { items: { id: string; name: string; logo?: string }[]; activeIndex: number; onSelect: (index: number) => void };
 }
 
 type DownloadEpisodeOption = {
@@ -483,7 +486,7 @@ const normalizeDownloadQualityKey = (label: string) => {
   return value || "default";
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [] }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [], remoteChannels }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -4941,60 +4944,189 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const handlePlayerRemoteKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!document.documentElement.classList.contains("tv-mode")) return;
+  // ===== TV remote + keyboard + mouse-hover control =====
+  // One window-level listener (capture, before the TV focus navigator) so a
+  // remote works whether focus sits on the video, the page body or a hidden control.
+  type RemoteOsd =
+    | { kind: "channel"; num: number; total: number; name: string; logo?: string; live: boolean }
+    | { kind: "volume"; value: number; muted: boolean }
+    | { kind: "play"; playing: boolean }
+    | { kind: "digits"; text: string };
+  const [remoteOsd, setRemoteOsd] = useState<RemoteOsd | null>(null);
+  const remoteOsdTimerRef = useRef<number | null>(null);
+  const flashRemoteOsd = useCallback((osd: RemoteOsd, ms = 1600) => {
+    setRemoteOsd(osd);
+    if (remoteOsdTimerRef.current) window.clearTimeout(remoteOsdTimerRef.current);
+    remoteOsdTimerRef.current = window.setTimeout(() => setRemoteOsd(null), ms);
+  }, []);
+  useEffect(() => () => { if (remoteOsdTimerRef.current) window.clearTimeout(remoteOsdTimerRef.current); }, []);
+
+  // Channels (Live TV) or episodes (series) the remote can step through.
+  const remoteList = useMemo(() => {
+    if (remoteChannels && remoteChannels.items.length > 0) {
+      return {
+        live: true,
+        names: remoteChannels.items.map((c) => c.name),
+        logos: remoteChannels.items.map((c) => c.logo),
+        active: remoteChannels.activeIndex,
+        select: remoteChannels.onSelect,
+      };
+    }
+    if (episodeList && episodeList.length > 1) {
+      return {
+        live: false,
+        names: episodeList.map((ep) => ep.label || `Episode ${ep.number}`),
+        logos: episodeList.map(() => undefined as string | undefined),
+        active: episodeList.findIndex((ep) => ep.active),
+        select: (i: number) => episodeList[i]?.onClick(),
+      };
+    }
+    return null;
+  }, [remoteChannels, episodeList]);
+
+  const zapTo = useCallback((index: number) => {
+    if (!remoteList) return;
+    if (index === remoteList.active) return;
+    flashRemoteOsd({ kind: "channel", num: index + 1, total: remoteList.names.length, name: remoteList.names[index] || "", logo: remoteList.logos[index], live: remoteList.live }, 2200);
+    remoteList.select(index);
+  }, [flashRemoteOsd, remoteList]);
+
+  const zapStep = useCallback((dir: 1 | -1) => {
+    if (!remoteList) return;
+    const next = stepIndex(remoteList.names.length, remoteList.active, dir, remoteList.live);
+    if (next === null) {
+      flashRemoteOsd({ kind: "channel", num: remoteList.active + 1, total: remoteList.names.length, name: dir > 0 ? "Last episode" : "First episode", live: false }, 1200);
+      return;
+    }
+    zapTo(next);
+  }, [flashRemoteOsd, remoteList, zapTo]);
+
+  const nudgeVolume = useCallback((dir: 1 | -1, step?: number) => {
+    const base = muted ? 0 : boostedVolume;
+    const next = stepVolume(base, dir, step);
+    applyPlayerVolume(next, next <= 0);
+    flashRemoteOsd({ kind: "volume", value: next, muted: next <= 0 });
+  }, [applyPlayerVolume, boostedVolume, flashRemoteOsd, muted]);
+
+  const toggleRemoteMute = useCallback(() => {
+    const nextMuted = !(muted || boostedVolume <= 0);
+    const level = boostedVolume <= 0 ? 50 : boostedVolume;
+    applyPlayerVolume(level, nextMuted);
+    flashRemoteOsd({ kind: "volume", value: nextMuted ? 0 : level, muted: nextMuted });
+  }, [applyPlayerVolume, boostedVolume, flashRemoteOsd, muted]);
+
+  const digitBufferRef = useRef("");
+  const digitTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (digitTimerRef.current) window.clearTimeout(digitTimerRef.current); }, []);
+
+  const remoteKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  remoteKeyRef.current = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     const target = e.target as HTMLElement | null;
-    if (target && target !== e.currentTarget && target.matches("button, a, input, select, textarea, [role='button'], [tabindex]")) return;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+    if (adGateActive) return;
 
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      togglePlay();
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      seek(-10);
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      seek(10);
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "MediaPlayPause") {
-      e.preventDefault();
-      togglePlay();
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "Escape" || e.key === "Backspace" || e.key === "BrowserBack") {
-      e.preventDefault();
-      handleBackPress();
-    }
-  }, [handleBackPress, resetHideTimer, seek, togglePlay]);
+    const tv = document.documentElement.classList.contains("tv-mode");
+    const shell = videoContainerRef.current;
+    const active = document.activeElement as HTMLElement | null;
+    const panelOpen = showServerPanel || showQualityPanel || showAudioPanel || showCcPanel || showSettings;
+    const sheetOpen = showDownloadQualityPicker || showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet;
+    const focusable = !!active && active !== document.body && active !== shell
+      && active.matches("button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])");
+    const insideShell = !!active && !!shell && shell.contains(active);
+    const onControl = panelOpen || sheetOpen || (focusable && (!insideShell || showControls));
 
-  // Android TV: the remote BACK key must always be able to leave fullscreen so the
-  // episode / season / download / suggestion rows below the player come back,
-  // even when focus currently sits on a control inside the player shell.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!document.documentElement.classList.contains("tv-mode")) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" && e.key !== "Backspace" && e.key !== "BrowserBack" && e.key !== "GoBack") return;
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-      if (isFullscreen) {
-        e.preventDefault();
-        e.stopPropagation();
-        void toggleFullscreen();
+    const action = remoteActionFor(
+      { key: e.key, keyCode: e.keyCode },
+      { onControl, hasChannels: !!remoteList?.live, arrowsNavigate: tv && showControls && !locked },
+    );
+    if (!action) return;
+    if (locked && action !== "back") { resetHideTimer(); return; }
+
+    const consume = () => { e.preventDefault(); e.stopPropagation(); };
+    switch (action) {
+      case "playPause":
+      case "play":
+      case "pause": {
+        if ((action === "play" && playing) || (action === "pause" && !playing)) { consume(); resetHideTimer(); return; }
+        consume();
+        togglePlay();
+        flashRemoteOsd({ kind: "play", playing: !playing }, 900);
+        // Keep the video focused so the next OK press pauses again.
+        if (shell && (!active || active === document.body || insideShell)) shell.focus({ preventScroll: true });
+        return;
       }
+      case "seekBack": consume(); seek(-10); return;
+      case "seekFwd": consume(); seek(10); return;
+      case "volUp": consume(); nudgeVolume(1); return;
+      case "volDown": consume(); nudgeVolume(-1); return;
+      case "mute": consume(); toggleRemoteMute(); return;
+      case "chUp": if (!remoteList) return; consume(); zapStep(-1); return;
+      case "chDown": if (!remoteList) return; consume(); zapStep(1); return;
+      case "fullscreen": consume(); void toggleFullscreen(); return;
+      case "digit": {
+        if (!remoteList) return;
+        consume();
+        digitBufferRef.current = (digitBufferRef.current + e.key).slice(-3);
+        const typed = digitBufferRef.current;
+        flashRemoteOsd({ kind: "digits", text: typed }, 2000);
+        if (digitTimerRef.current) window.clearTimeout(digitTimerRef.current);
+        digitTimerRef.current = window.setTimeout(() => {
+          digitBufferRef.current = "";
+          const idx = channelIndexFromDigits(typed, remoteList.names.length);
+          if (idx === null) { flashRemoteOsd({ kind: "digits", text: `${typed} — no channel` }, 1400); return; }
+          zapTo(idx);
+        }, 1300);
+        return;
+      }
+      case "back": {
+        consume();
+        if (panelOpen) {
+          setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
+          return;
+        }
+        if (sheetOpen) {
+          setShowDownloadQualityPicker(false); setShowInfoSheet(false); setShowLanguageSheet(false); setShowSeasonSheet(false);
+          setShowShareSheet(false); setShowAddToListSheet(false); setShowLibrarySheet(false);
+          return;
+        }
+        handleBackPress();
+        return;
+      }
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => remoteKeyRef.current(e);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // Mouse: moving over the video shows the controls (TV-style overlay), the wheel
+  // changes volume. Touch phones never fire these, so mobile stays untouched.
+  const lastHoverRef = useRef(0);
+  const handleShellMouseMove = useCallback((e: React.MouseEvent) => {
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    const now = performance.now();
+    if (now - lastHoverRef.current < 200) return;
+    lastHoverRef.current = now;
+    resetHideTimer();
+  }, [resetHideTimer]);
+  const nudgeVolumeRef = useRef(nudgeVolume);
+  nudgeVolumeRef.current = nudgeVolume;
+  useEffect(() => {
+    const shell = videoContainerRef.current;
+    if (!shell || typeof window === "undefined") return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const onWheel = (e: WheelEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("[data-player-panel], .rs-inline-sheet")) return;
+      if (Math.abs(e.deltaY) < 4 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      nudgeVolumeRef.current(e.deltaY < 0 ? 1 : -1, WHEEL_VOLUME_STEP);
     };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [isFullscreen, toggleFullscreen]);
+    shell.addEventListener("wheel", onWheel, { passive: false });
+    return () => shell.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
@@ -5030,7 +5162,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             overscrollBehavior: "contain",
           }}
           onContextMenu={(e) => e.preventDefault()}
-          onKeyDown={handlePlayerRemoteKey}
+          onMouseMove={handleShellMouseMove}
           onClick={handleVideoClick}
           onPointerDown={startSpeedHold}
           onPointerUp={endSpeedHold}
