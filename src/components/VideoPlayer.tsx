@@ -5323,26 +5323,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {remoteOsd?.kind === "channel" && (
             <div className="rs-remote-osd rs-remote-osd-channel absolute top-4 left-4 z-[85] pointer-events-none flex items-center gap-3 rounded-2xl px-4 py-3">
               {remoteOsd.logo ? (
-                <img src={remoteOsd.logo} alt="" className="w-11 h-11 rounded-xl object-cover bg-background/40" />
+                <img src={remoteOsd.logo} alt="" className="w-11 h-11 rounded-xl object-cover bg-white/10" />
               ) : null}
               <div className="min-w-0">
                 <div className="text-[11px] font-bold tracking-[0.18em] text-primary">
                   {remoteOsd.live ? "CH" : "EP"} {String(remoteOsd.num).padStart(2, "0")}
-                  <span className="text-muted-foreground font-semibold tracking-normal"> / {remoteOsd.total}</span>
+                  <span className="opacity-60 font-semibold tracking-normal"> / {remoteOsd.total}</span>
                 </div>
-                <div className="text-base font-bold text-foreground truncate max-w-[52vw]">{remoteOsd.name}</div>
+                <div className="text-base font-bold truncate max-w-[52vw]">{remoteOsd.name}</div>
               </div>
             </div>
           )}
           {remoteOsd?.kind === "digits" && (
-            <div className="rs-remote-osd absolute top-4 right-4 z-[85] pointer-events-none rounded-2xl px-5 py-3 text-2xl font-black tracking-[0.2em] text-foreground font-mono">
+            <div className="rs-remote-osd absolute top-4 right-4 z-[85] pointer-events-none rounded-2xl px-5 py-3 text-2xl font-black tracking-[0.2em] font-mono">
               {remoteOsd.text}<span className="animate-pulse text-primary">_</span>
             </div>
           )}
           {remoteOsd?.kind === "volume" && (
             <div className="rs-remote-osd absolute top-1/2 right-5 -translate-y-1/2 z-[85] pointer-events-none flex flex-col items-center gap-2 rounded-2xl px-3 py-4">
-              <span className="text-xs font-bold text-foreground tabular-nums">{remoteOsd.muted ? 0 : remoteOsd.value}</span>
-              <div className="relative w-1.5 h-32 rounded-full bg-foreground/20 overflow-hidden">
+              <span className="text-xs font-bold tabular-nums">{remoteOsd.muted ? 0 : remoteOsd.value}</span>
+              <div className="relative w-1.5 h-32 rounded-full bg-white/20 overflow-hidden">
                 <div className="absolute bottom-0 left-0 right-0 rounded-full bg-primary transition-[height] duration-150" style={{ height: `${remoteOsd.muted ? 0 : remoteOsd.value}%` }} />
               </div>
               {remoteOsd.muted ? <VolumeX className="w-4 h-4 text-primary" /> : <Volume2 className="w-4 h-4 text-primary" />}
@@ -5350,7 +5350,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
           {remoteOsd?.kind === "play" && (
             <div className="rs-remote-osd absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[85] pointer-events-none w-16 h-16 rounded-full flex items-center justify-center">
-              {remoteOsd.playing ? <Play className="w-7 h-7 text-foreground ml-1" /> : <Pause className="w-7 h-7 text-foreground" />}
+              {remoteOsd.playing ? <Play className="w-7 h-7 ml-1" /> : <Pause className="w-7 h-7" />}
             </div>
           )}
 

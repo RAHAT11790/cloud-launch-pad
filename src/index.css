@@ -3444,8 +3444,10 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
    On-screen channel / volume / play feedback for remote, keyboard and mouse.
    The side remote rail only exists on PC / laptop / TV — phones never see it. */
 .rs-remote-osd {
-  background: hsl(var(--background) / 0.82);
-  border: 1px solid hsl(var(--foreground) / 0.12);
+  /* Always dark glass: it sits on top of the video, in light and dark theme alike. */
+  background: hsl(0 0% 0% / 0.74);
+  color: hsl(0 0% 100%);
+  border: 1px solid hsl(0 0% 100% / 0.12);
   box-shadow: 0 18px 40px -18px hsl(0 0% 0% / 0.85);
   animation: rs-osd-in 160ms ease-out;
 }
@@ -3466,7 +3468,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: hsl(var(--foreground));
+  color: hsl(0 0% 100%);
   transition: background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
 .rs-remote-btn:hover { background: hsl(var(--primary) / 0.22); }
@@ -3480,7 +3482,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  color: hsl(var(--muted-foreground));
+  color: hsl(0 0% 100% / 0.62);
   line-height: 1;
   padding: 2px 0;
 }
@@ -3488,20 +3490,20 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   width: 18px;
   height: 1px;
   margin: 4px 0;
-  background: hsl(var(--foreground) / 0.15);
+  background: hsl(0 0% 100% / 0.18);
 }
 
 @media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
   .rs-remote-rail {
     display: flex;
-    background: hsl(var(--background) / 0.72);
-    border: 1px solid hsl(var(--foreground) / 0.12);
+    background: hsl(0 0% 0% / 0.55);
+    border: 1px solid hsl(0 0% 100% / 0.12);
     animation: rs-osd-fade 160ms ease-out;
   }
 }
 html.tv-mode .rs-remote-rail {
   display: flex;
-  background: hsl(var(--background) / 0.78);
-  border: 1px solid hsl(var(--foreground) / 0.14);
+  background: hsl(0 0% 0% / 0.62);
+  border: 1px solid hsl(0 0% 100% / 0.14);
 }
 html.tv-mode .rs-remote-btn { width: 48px; height: 48px; }
