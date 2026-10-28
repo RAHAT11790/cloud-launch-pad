@@ -3258,13 +3258,21 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     margin: 0 auto;
     padding: 22px var(--dk-gutter) 28px !important;
   }
+  /* The video gets an explicit size: a percentage width + aspect-ratio inside an
+     auto grid row resolves to a 0px row, which let the details cover the video. */
+  .rs-video-player-root {
+    --pl-inner: calc(min(100vw - 12px, var(--pl-max)) - 2 * var(--dk-gutter));
+    --pl-w: min(calc(var(--pl-inner) - var(--pl-side) - 24px), calc((100vh - 170px) * 16 / 9));
+  }
   .rs-player-layout > .rs-video-player-shell:not(.player-fs-enter) {
     grid-column: 1;
     grid-row: 1;
     position: relative !important;
     top: auto !important;
-    width: 100% !important;
-    max-width: calc((100vh - 170px) * 16 / 9) !important;
+    width: var(--pl-w) !important;
+    height: calc(var(--pl-w) * 9 / 16) !important;
+    max-width: 100% !important;
+    aspect-ratio: auto !important;
     justify-self: center;
     border-radius: 18px !important;
     box-shadow: 0 30px 80px -34px rgb(0 0 0 / 0.75), 0 0 0 1px hsl(var(--border) / 0.5) !important;
@@ -3273,7 +3281,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     grid-column: 1;
     grid-row: 2;
     padding: 16px 2px 0 !important;
-    max-width: calc((100vh - 170px) * 16 / 9);
+    width: var(--pl-w);
+    max-width: 100%;
     justify-self: center;
   }
   .rs-player-info h2 { font-size: 20px !important; }
