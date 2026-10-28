@@ -116,6 +116,14 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           const ch = channels.find(c => c.id === anime.id);
           if (ch) setActiveChannel(ch);
         }}
+        remoteChannels={{
+          items: channels.map(ch => ({ id: ch.id, name: ch.name, logo: ch.logo })),
+          activeIndex: channels.findIndex(ch => ch.id === activeChannel.id),
+          onSelect: (index) => {
+            const ch = channels[index];
+            if (ch) setActiveChannel(ch);
+          },
+        }}
       />,
       document.body,
     );
@@ -187,7 +195,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           {filtered.map((channel) => (
             <div
               key={channel.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Channel ${channels.indexOf(channel) + 1}: ${channel.name}`}
               onClick={() => setActiveChannel(channel)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveChannel(channel); } }}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >
