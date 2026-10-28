@@ -6467,12 +6467,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
           return (
-            <div className="w-full">
+            <div className="rs-player-extra w-full">
               {/* ============ Download Picker Overlay ============ */}
               {showDownloadQualityPicker && (
                 <div
                   ref={downloadPanelRef}
-                  className="fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
+                  className="rs-inline-sheet fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
                   style={inlineSheetStyle}
                   data-player-panel="true"
                 >
