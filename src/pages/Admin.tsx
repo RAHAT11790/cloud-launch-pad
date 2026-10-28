@@ -5851,7 +5851,7 @@ ${tgBulkFooter}
  </div>
 
  {/* Header */}
- <header className="fixed top-0 left-0 right-0 h-[56px] bg-[#0D0D1A]/95 z-[100] flex items-center justify-between px-3 border-b border-white/6">
+ <header className="admin-topbar fixed top-0 left-0 right-0 h-[56px] bg-[#0D0D1A]/95 z-[100] flex items-center justify-between px-3 border-b border-white/6">
  <div className="flex items-center gap-2.5">
  <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-indigo-500/20 transition-colors">
  <Menu size={18} />
@@ -5900,7 +5900,7 @@ ${tgBulkFooter}
  </header>
 
  {/* Main Content */}
-<main className="admin-scroll-smooth pt-[64px] px-3 pb-[220px] min-h-screen">
+<main className="admin-main admin-scroll-smooth pt-[64px] px-3 pb-[220px] min-h-screen">
  {/* ==================== DASHBOARD ==================== */}
  {activeSection === "dashboard" && (
  <div>
@@ -5919,7 +5919,7 @@ ${tgBulkFooter}
  <ChevronRight size={16} className="text-blue-300" />
  </button>
 
- <div className="grid grid-cols-2 gap-2.5 mb-4">
+ <div className="admin-stat-grid grid grid-cols-2 gap-2.5 mb-4">
  {[
   { icon: <Film size={18} />, value: adminFastCounts.webseries || webseriesData.length, label: "Web Series", color: "text-indigo-400" },
   { icon: <Video size={18} />, value: adminFastCounts.movies || moviesData.length, label: "Movies", color: "text-emerald-400" },
@@ -9610,7 +9610,7 @@ ${tgBulkFooter}
  </main>
 
  {/* Bottom Navigation */}
- <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-1">
+ <nav className="admin-bottom-nav fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-1">
  {[
  { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
  { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },

@@ -545,6 +545,7 @@ import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
+import RailArrows from "@/components/RailArrows";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
@@ -3304,6 +3305,7 @@ const Index = () => {
     return () => window.clearTimeout(t);
   }, [pageFx.key, pageFx.from]);
 
+  const continueRowRef = useRef<HTMLDivElement>(null);
   const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
 
   const restorePageScroll = useCallback((_page: MainPage) => {
@@ -3445,7 +3447,7 @@ const Index = () => {
   }
 
   const getPageContent_series = () => (
-    <div className="pt-[65px] pb-24 px-4">
+    <div className="tab-page pt-[65px] pb-24 px-4">
       <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
       <div className="flex gap-2 mb-4">
         {(["all", "official", "fandub"] as const).map(dt => (
@@ -3468,7 +3470,7 @@ const Index = () => {
   );
 
   const getPageContent_movies = () => (
-    <div className="pt-[65px] pb-24 px-4">
+    <div className="tab-page pt-[65px] pb-24 px-4">
       <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
       <div className="flex gap-2 mb-4">
         {(["all", "official", "fandub"] as const).map(dt => (
@@ -3510,9 +3512,10 @@ const Index = () => {
       ) : (
         <>
           {visibleContinueWatching.length > 0 && (
-            <div className="px-4 mb-5">
-              <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
-              <div data-no-swipe="true" className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
+            <div className="rail-section rail-cw px-4 mb-5">
+              <h3 className="rail-head text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
+              <div className="rail-body relative">
+              <div ref={continueRowRef} data-no-swipe="true" className="rail-row flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
                 {visibleContinueWatching.slice(0, 10).map((item: any) => {
                   const pct = (item.currentTime && item.duration) ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
                   const sn = item.episodeInfo?.season;
@@ -3531,7 +3534,7 @@ const Index = () => {
                   const badge = getCardSourceBadge(item);
                   return (
                     <div key={item.id} role="button" tabIndex={0} onClick={() => handleContinueWatching(item)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleContinueWatching(item); } }}
-                      className="flex-shrink-0 w-[130px] cursor-pointer outline-none">
+                      className="cw-card flex-shrink-0 w-[130px] cursor-pointer outline-none">
                       <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
                         <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
@@ -3562,6 +3565,8 @@ const Index = () => {
                     </div>
                   );
                 })}
+              </div>
+              <RailArrows targetRef={continueRowRef} />
               </div>
             </div>
           )}

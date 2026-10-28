@@ -1607,7 +1607,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [inlineSheetOpen]);
 
   const inlineSheetFixedClass =
-    "fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white overflow-y-auto overscroll-contain";
+    "rs-inline-sheet fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white overflow-y-auto overscroll-contain";
   const inlineSheetStyle = { top: videoBottomPx } as React.CSSProperties;
 
   // Check IndexedDB for already downloaded episodes matching this title
@@ -5009,7 +5009,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
-      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-0'}`}>
+      <div className={`rs-player-layout w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-0'}`}>
 
         {/* Video Container - will-change for GPU compositing */}
         <div
@@ -5668,7 +5668,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         </div>
 
         {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="w-full px-5 pt-4 pb-2">
+          <>
+          <div className="rs-player-info w-full px-5 pt-4">
             <button
               type="button"
               onClick={() => openInlineSheet("info")}
@@ -5699,7 +5700,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-            <div className={`grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3`}>
+            <div className={`rs-player-actions grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3`}>
               <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <Bookmark className={`w-3 h-3 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
                 <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add'}</span>
@@ -5720,6 +5721,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <span className="whitespace-nowrap truncate">Library</span>
               </button>
             </div>
+          </div>
+
+          <div className="rs-player-side w-full px-5 pb-2">
 
 
 
@@ -5741,15 +5745,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </button>
                   )}
                 </div>
-                <div className="relative -mx-5">
+                <div className="rs-ep-wrap relative -mx-5">
                   <div
                     aria-hidden="true"
-                    className="absolute left-0 top-0 bottom-0 z-10 w-[68px] bg-background pointer-events-none"
+                    className="rs-ep-mask absolute left-0 top-0 bottom-0 z-10 w-[68px] bg-background pointer-events-none"
                   />
                   {/* Hard left mask: episode cards can only enter from the right side of All; once behind it they never reappear from left/top/bottom. */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
-                    className="absolute left-5 top-2.5 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"
+                    className="rs-ep-all absolute left-5 top-2.5 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"
                     aria-label="All episodes"
                   >
                     All
@@ -5789,7 +5793,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       };
                       requestAnimationFrame(step);
                     }}
-                    className="relative flex items-center gap-1.5 overflow-x-auto overflow-y-visible scrollbar-hide py-2.5"
+                    className="rs-ep-row relative flex items-center gap-1.5 overflow-x-auto overflow-y-visible scrollbar-hide py-2.5"
                     style={{ paddingLeft: 76, paddingRight: 20, WebkitOverflowScrolling: "touch", scrollPaddingLeft: 76 }}
                   >
                     {episodeList.map((ep) => (
@@ -5838,7 +5842,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
 
                 {bottomTab === "foryou" && suggestedAnime && suggestedAnime.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="rs-foryou-grid grid grid-cols-3 gap-2.5">
                     {suggestedAnime.slice(0, 15).map((anime, idx) => {
                       const isPending = pendingSuggestion?.id === anime.id;
                       return (
@@ -5879,6 +5883,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
             )}
           </div>
+          </>
         )}
 
         {/* Device limit is now enforced at login time - no overlay needed */}
@@ -6462,12 +6467,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
           return (
-            <div className="w-full">
+            <div className="rs-player-extra w-full">
               {/* ============ Download Picker Overlay ============ */}
               {showDownloadQualityPicker && (
                 <div
                   ref={downloadPanelRef}
-                  className="fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
+                  className="rs-inline-sheet fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
                   style={inlineSheetStyle}
                   data-player-panel="true"
                 >
