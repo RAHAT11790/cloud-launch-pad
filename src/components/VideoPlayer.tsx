@@ -4975,7 +4975,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (episodeList && episodeList.length > 1) {
       return {
         live: false,
-        names: episodeList.map((ep) => ep.label || `Episode ${ep.number}`),
+        names: episodeList.map((ep) => (ep.title ? `Episode ${ep.number} · ${ep.title}` : `Episode ${ep.number}`)),
         logos: episodeList.map(() => undefined as string | undefined),
         active: episodeList.findIndex((ep) => ep.active),
         select: (i: number) => episodeList[i]?.onClick(),
@@ -5323,7 +5323,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
 
           {remoteOsd?.kind === "channel" && (
-            <div className="rs-remote-osd rs-remote-osd-channel absolute top-4 left-4 z-[85] pointer-events-none flex items-center gap-3 rounded-2xl px-4 py-3">
+            <div className="rs-remote-osd rs-remote-osd-channel absolute top-16 left-4 z-[85] pointer-events-none flex items-center gap-3 rounded-2xl px-4 py-3">
               {remoteOsd.logo ? (
                 <img src={remoteOsd.logo} alt="" className="w-11 h-11 rounded-xl object-cover bg-white/10" />
               ) : null}
