@@ -3439,3 +3439,69 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     box-shadow: 0 20px 50px -20px rgb(0 0 0 / 0.8);
   }
 }
+
+/* ============ TV REMOTE OVERLAY (player) ============
+   On-screen channel / volume / play feedback for remote, keyboard and mouse.
+   The side remote rail only exists on PC / laptop / TV — phones never see it. */
+.rs-remote-osd {
+  background: hsl(var(--background) / 0.82);
+  border: 1px solid hsl(var(--foreground) / 0.12);
+  box-shadow: 0 18px 40px -18px hsl(0 0% 0% / 0.85);
+  animation: rs-osd-in 160ms ease-out;
+}
+.rs-remote-osd-channel { border-left: 3px solid hsl(var(--primary)); }
+@keyframes rs-osd-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; }
+}
+.rs-remote-osd.-translate-y-1\/2 { animation-name: rs-osd-fade; }
+.rs-remote-osd.-translate-x-1\/2 { animation-name: rs-osd-fade; }
+@keyframes rs-osd-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.rs-remote-rail { display: none; }
+.rs-remote-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--foreground));
+  transition: background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.rs-remote-btn:hover { background: hsl(var(--primary) / 0.22); }
+.rs-remote-btn:active { transform: scale(0.92); }
+.rs-remote-btn:focus-visible {
+  outline: none;
+  background: hsl(var(--primary) / 0.28);
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+}
+.rs-remote-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: hsl(var(--muted-foreground));
+  line-height: 1;
+  padding: 2px 0;
+}
+.rs-remote-sep {
+  width: 18px;
+  height: 1px;
+  margin: 4px 0;
+  background: hsl(var(--foreground) / 0.15);
+}
+
+@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+  .rs-remote-rail {
+    display: flex;
+    background: hsl(var(--background) / 0.72);
+    border: 1px solid hsl(var(--foreground) / 0.12);
+    animation: rs-osd-fade 160ms ease-out;
+  }
+}
+html.tv-mode .rs-remote-rail {
+  display: flex;
+  background: hsl(var(--background) / 0.78);
+  border: 1px solid hsl(var(--foreground) / 0.14);
+}
+html.tv-mode .rs-remote-btn { width: 48px; height: 48px; }
