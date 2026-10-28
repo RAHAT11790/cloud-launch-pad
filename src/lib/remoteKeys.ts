@@ -69,6 +69,7 @@ const ALWAYS_KEYS: Record<string, RemoteAction> = {
   GoBack: "back",
   BrowserBack: "back",
   Escape: "back",
+  Backspace: "back",
 };
 
 export function remoteActionFor(input: RemoteKeyInput, ctx: RemoteKeyContext): RemoteAction | null {
@@ -115,8 +116,6 @@ export function remoteActionFor(input: RemoteKeyInput, ctx: RemoteKeyContext): R
     case "f":
     case "F":
       return "fullscreen";
-    case "Backspace":
-      return "back";
     default:
       if (ctx.hasChannels && /^[0-9]$/.test(key)) return "digit";
       return null;
