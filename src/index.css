@@ -3273,6 +3273,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     height: calc(var(--pl-w) * 9 / 16) !important;
     max-width: 100% !important;
     aspect-ratio: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
     justify-self: center;
     border-radius: 18px !important;
     box-shadow: 0 30px 80px -34px rgb(0 0 0 / 0.75), 0 0 0 1px hsl(var(--border) / 0.5) !important;
