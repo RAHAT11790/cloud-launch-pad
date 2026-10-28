@@ -116,6 +116,14 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           const ch = channels.find(c => c.id === anime.id);
           if (ch) setActiveChannel(ch);
         }}
+        remoteChannels={{
+          items: channels.map(ch => ({ id: ch.id, name: ch.name, logo: ch.logo })),
+          activeIndex: channels.findIndex(ch => ch.id === activeChannel.id),
+          onSelect: (index) => {
+            const ch = channels[index];
+            if (ch) setActiveChannel(ch);
+          },
+        }}
       />,
       document.body,
     );
@@ -187,7 +195,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           {filtered.map((channel) => (
             <div
               key={channel.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Channel ${channels.indexOf(channel) + 1}: ${channel.name}`}
               onClick={() => setActiveChannel(channel)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveChannel(channel); } }}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >
@@ -209,6 +221,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                   background: "linear-gradient(135deg, hsla(var(--background)/0.85) 0%, hsla(var(--background)/0.4) 50%, hsla(var(--background)/0.7) 100%)",
                 }}
               />
+
+              {/* TV channel number — the same number the remote's digit keys jump to */}
+              <span className="absolute top-3 left-3 z-[1] px-2 py-0.5 rounded-md text-[10px] font-black tracking-[0.14em] bg-background/75 text-foreground border border-border/60 font-mono">
+                CH {String(channels.indexOf(channel) + 1).padStart(2, "0")}
+              </span>
 
               {/* Channel Info */}
               <div className="absolute inset-0 flex items-center justify-between px-5">

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
@@ -16,7 +17,7 @@ import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw, Send
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw, Send, ChevronUp, Plus, Minus
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -357,6 +358,8 @@ interface VideoPlayerProps {
   preferProxy?: boolean;
   /** Extra, non-RS servers (e.g. Direct Link) shown in the same Server panel. */
   extraServers?: { id: string; label: string; active: boolean; onSelect: () => void }[];
+  /** Live TV channel list for remote CH+/CH-/number zapping. Episodes are derived from episodeList. */
+  remoteChannels?: { items: { id: string; name: string; logo?: string }[]; activeIndex: number; onSelect: (index: number) => void };
 }
 
 type DownloadEpisodeOption = {
@@ -483,7 +486,7 @@ const normalizeDownloadQualityKey = (label: string) => {
   return value || "default";
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [] }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [], remoteChannels }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -4941,60 +4944,216 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const handlePlayerRemoteKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!document.documentElement.classList.contains("tv-mode")) return;
+  // ===== TV remote + keyboard + mouse-hover control =====
+  // One window-level listener (capture, before the TV focus navigator) so a
+  // remote works whether focus sits on the video, the page body or a hidden control.
+  type RemoteOsd =
+    | { kind: "channel"; num: number; total: number; name: string; logo?: string; live: boolean }
+    | { kind: "volume"; value: number; muted: boolean }
+    | { kind: "play"; playing: boolean }
+    | { kind: "digits"; text: string };
+  const [remoteOsd, setRemoteOsd] = useState<RemoteOsd | null>(null);
+  const remoteOsdTimerRef = useRef<number | null>(null);
+  const flashRemoteOsd = useCallback((osd: RemoteOsd, ms = 1600) => {
+    setRemoteOsd(osd);
+    if (remoteOsdTimerRef.current) window.clearTimeout(remoteOsdTimerRef.current);
+    remoteOsdTimerRef.current = window.setTimeout(() => setRemoteOsd(null), ms);
+  }, []);
+  useEffect(() => () => { if (remoteOsdTimerRef.current) window.clearTimeout(remoteOsdTimerRef.current); }, []);
+
+  // Channels (Live TV) or episodes (series) the remote can step through.
+  const remoteList = useMemo(() => {
+    if (remoteChannels && remoteChannels.items.length > 0) {
+      return {
+        live: true,
+        names: remoteChannels.items.map((c) => c.name),
+        logos: remoteChannels.items.map((c) => c.logo),
+        active: remoteChannels.activeIndex,
+        select: remoteChannels.onSelect,
+      };
+    }
+    if (episodeList && episodeList.length > 1) {
+      return {
+        live: false,
+        names: episodeList.map((ep) => (ep.title ? `Episode ${ep.number} · ${ep.title}` : `Episode ${ep.number}`)),
+        logos: episodeList.map(() => undefined as string | undefined),
+        active: episodeList.findIndex((ep) => ep.active),
+        select: (i: number) => episodeList[i]?.onClick(),
+      };
+    }
+    return null;
+  }, [remoteChannels, episodeList]);
+
+  const zapTo = useCallback((index: number) => {
+    if (!remoteList) return;
+    if (index === remoteList.active) return;
+    flashRemoteOsd({ kind: "channel", num: index + 1, total: remoteList.names.length, name: remoteList.names[index] || "", logo: remoteList.logos[index], live: remoteList.live }, 2200);
+    remoteList.select(index);
+  }, [flashRemoteOsd, remoteList]);
+
+  const zapStep = useCallback((dir: 1 | -1) => {
+    if (!remoteList) return;
+    const next = stepIndex(remoteList.names.length, remoteList.active, dir, remoteList.live);
+    if (next === null) {
+      flashRemoteOsd({ kind: "channel", num: remoteList.active + 1, total: remoteList.names.length, name: dir > 0 ? "Last episode" : "First episode", live: false }, 1200);
+      return;
+    }
+    zapTo(next);
+  }, [flashRemoteOsd, remoteList, zapTo]);
+
+  const nudgeVolume = useCallback((dir: 1 | -1, step?: number) => {
+    const base = muted ? 0 : boostedVolume;
+    const next = stepVolume(base, dir, step);
+    applyPlayerVolume(next, next <= 0);
+    flashRemoteOsd({ kind: "volume", value: next, muted: next <= 0 });
+  }, [applyPlayerVolume, boostedVolume, flashRemoteOsd, muted]);
+
+  const toggleRemoteMute = useCallback(() => {
+    const nextMuted = !(muted || boostedVolume <= 0);
+    const level = boostedVolume <= 0 ? 50 : boostedVolume;
+    applyPlayerVolume(level, nextMuted);
+    flashRemoteOsd({ kind: "volume", value: nextMuted ? 0 : level, muted: nextMuted });
+  }, [applyPlayerVolume, boostedVolume, flashRemoteOsd, muted]);
+
+  const digitBufferRef = useRef("");
+  const digitTimerRef = useRef<number | null>(null);
+  useEffect(() => () => { if (digitTimerRef.current) window.clearTimeout(digitTimerRef.current); }, []);
+
+  const remoteKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  remoteKeyRef.current = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     const target = e.target as HTMLElement | null;
-    if (target && target !== e.currentTarget && target.matches("button, a, input, select, textarea, [role='button'], [tabindex]")) return;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+    if (adGateActive) return;
 
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      togglePlay();
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      seek(-10);
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      seek(10);
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "MediaPlayPause") {
-      e.preventDefault();
-      togglePlay();
-      resetHideTimer();
-      return;
-    }
-    if (e.key === "Escape" || e.key === "Backspace" || e.key === "BrowserBack") {
-      e.preventDefault();
-      handleBackPress();
-    }
-  }, [handleBackPress, resetHideTimer, seek, togglePlay]);
+    const tv = document.documentElement.classList.contains("tv-mode");
+    const shell = videoContainerRef.current;
+    const active = document.activeElement as HTMLElement | null;
+    const panelOpen = showServerPanel || showQualityPanel || showAudioPanel || showCcPanel || showSettings;
+    const sheetOpen = showDownloadQualityPicker || showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet;
+    const focusable = !!active && active !== document.body && active !== shell
+      && active.matches("button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])");
+    const insideShell = !!active && !!shell && shell.contains(active);
+    // On TV the visible on-video buttons keep OK/arrows for focus navigation; with a
+    // mouse/keyboard every key on the video (even after clicking a button) drives the player.
+    const onControl = panelOpen || sheetOpen || (focusable && (!insideShell || (tv && showControls)));
 
-  // Android TV: the remote BACK key must always be able to leave fullscreen so the
-  // episode / season / download / suggestion rows below the player come back,
-  // even when focus currently sits on a control inside the player shell.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!document.documentElement.classList.contains("tv-mode")) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" && e.key !== "Backspace" && e.key !== "BrowserBack" && e.key !== "GoBack") return;
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
-      if (isFullscreen) {
+    // TV: with the controls showing, Up/Down from the video itself steps into the
+    // on-screen buttons (starting from the one nearest the centre, i.e. play/pause).
+    if (tv && showControls && !locked && shell && !panelOpen && !sheetOpen
+      && (e.key === "ArrowUp" || e.key === "ArrowDown")
+      && (!active || active === document.body || active === shell)) {
+      const sr = shell.getBoundingClientRect();
+      const cx = sr.left + sr.width / 2;
+      const cy = sr.top + sr.height / 2;
+      let best: HTMLElement | null = null;
+      let bestD = Infinity;
+      shell.querySelectorAll<HTMLElement>(".player-controls-layer button, .rs-remote-rail button").forEach((b) => {
+        const r = b.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) return;
+        const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+        if (d < bestD) { bestD = d; best = b; }
+      });
+      if (best) {
         e.preventDefault();
         e.stopPropagation();
-        void toggleFullscreen();
+        (best as HTMLElement).focus({ preventScroll: true });
+        resetHideTimer();
+        return;
       }
+    }
+
+    const action = remoteActionFor(
+      { key: e.key, keyCode: e.keyCode },
+      { onControl, hasChannels: !!remoteList?.live, arrowsNavigate: tv && showControls && !locked },
+    );
+    if (!action) return;
+    if (locked && action !== "back") { resetHideTimer(); return; }
+
+    const consume = () => { e.preventDefault(); e.stopPropagation(); };
+    switch (action) {
+      case "playPause":
+      case "play":
+      case "pause": {
+        if ((action === "play" && playing) || (action === "pause" && !playing)) { consume(); resetHideTimer(); return; }
+        consume();
+        togglePlay();
+        flashRemoteOsd({ kind: "play", playing: !playing }, 900);
+        // Keep the video focused so the next OK press pauses again.
+        if (shell && (!active || active === document.body || insideShell)) shell.focus({ preventScroll: true });
+        return;
+      }
+      case "seekBack": consume(); seek(-10); return;
+      case "seekFwd": consume(); seek(10); return;
+      case "volUp": consume(); nudgeVolume(1); return;
+      case "volDown": consume(); nudgeVolume(-1); return;
+      case "mute": consume(); toggleRemoteMute(); return;
+      case "chUp": if (!remoteList) return; consume(); zapStep(-1); return;
+      case "chDown": if (!remoteList) return; consume(); zapStep(1); return;
+      case "fullscreen": consume(); void toggleFullscreen(); return;
+      case "digit": {
+        if (!remoteList) return;
+        consume();
+        digitBufferRef.current = (digitBufferRef.current + e.key).slice(-3);
+        const typed = digitBufferRef.current;
+        flashRemoteOsd({ kind: "digits", text: typed }, 2000);
+        if (digitTimerRef.current) window.clearTimeout(digitTimerRef.current);
+        digitTimerRef.current = window.setTimeout(() => {
+          digitBufferRef.current = "";
+          const idx = channelIndexFromDigits(typed, remoteList.names.length);
+          if (idx === null) { flashRemoteOsd({ kind: "digits", text: `${typed} — no channel` }, 1400); return; }
+          zapTo(idx);
+        }, 1300);
+        return;
+      }
+      case "back": {
+        consume();
+        if (panelOpen) {
+          setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
+          return;
+        }
+        if (sheetOpen) {
+          setShowDownloadQualityPicker(false); setShowInfoSheet(false); setShowLanguageSheet(false); setShowSeasonSheet(false);
+          setShowShareSheet(false); setShowAddToListSheet(false); setShowLibrarySheet(false);
+          return;
+        }
+        handleBackPress();
+        return;
+      }
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => remoteKeyRef.current(e);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // Mouse: moving over the video shows the controls (TV-style overlay), the wheel
+  // changes volume. Touch phones never fire these, so mobile stays untouched.
+  const lastHoverRef = useRef(0);
+  const handleShellMouseMove = useCallback((e: React.MouseEvent) => {
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    const now = performance.now();
+    if (now - lastHoverRef.current < 200) return;
+    lastHoverRef.current = now;
+    resetHideTimer();
+  }, [resetHideTimer]);
+  const nudgeVolumeRef = useRef(nudgeVolume);
+  nudgeVolumeRef.current = nudgeVolume;
+  useEffect(() => {
+    const shell = videoContainerRef.current;
+    if (!shell || typeof window === "undefined") return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const onWheel = (e: WheelEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("[data-player-panel], .rs-inline-sheet")) return;
+      if (Math.abs(e.deltaY) < 4 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      nudgeVolumeRef.current(e.deltaY < 0 ? 1 : -1, WHEEL_VOLUME_STEP);
     };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [isFullscreen, toggleFullscreen]);
+    shell.addEventListener("wheel", onWheel, { passive: false });
+    return () => shell.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
@@ -5030,7 +5189,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             overscrollBehavior: "contain",
           }}
           onContextMenu={(e) => e.preventDefault()}
-          onKeyDown={handlePlayerRemoteKey}
+          onMouseMove={handleShellMouseMove}
           onClick={handleVideoClick}
           onPointerDown={startSpeedHold}
           onPointerUp={endSpeedHold}
@@ -5184,6 +5343,76 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     Play <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {remoteOsd?.kind === "channel" && (
+            <div className="rs-remote-osd rs-remote-osd-channel absolute top-16 left-4 z-[85] pointer-events-none flex items-center gap-3 rounded-2xl px-4 py-3">
+              {remoteOsd.logo ? (
+                <img src={remoteOsd.logo} alt="" className="w-11 h-11 rounded-xl object-cover bg-white/10" />
+              ) : null}
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold tracking-[0.18em] text-primary">
+                  {remoteOsd.live ? "CH" : "EP"} {String(remoteOsd.num).padStart(2, "0")}
+                  <span className="opacity-60 font-semibold tracking-normal"> / {remoteOsd.total}</span>
+                </div>
+                <div className="text-base font-bold truncate max-w-[52vw]">{remoteOsd.name}</div>
+              </div>
+            </div>
+          )}
+          {remoteOsd?.kind === "digits" && (
+            <div className="rs-remote-osd absolute top-4 right-4 z-[85] pointer-events-none rounded-2xl px-5 py-3 text-2xl font-black tracking-[0.2em] font-mono">
+              {remoteOsd.text}<span className="animate-pulse text-primary">_</span>
+            </div>
+          )}
+          {remoteOsd?.kind === "volume" && (
+            <div className="rs-remote-osd absolute top-1/2 right-5 -translate-y-1/2 z-[85] pointer-events-none flex flex-col items-center gap-2 rounded-2xl px-3 py-4">
+              <span className="text-xs font-bold tabular-nums">{remoteOsd.muted ? 0 : remoteOsd.value}</span>
+              <div className="relative w-1.5 h-32 rounded-full bg-white/20 overflow-hidden">
+                <div className="absolute bottom-0 left-0 right-0 rounded-full bg-primary transition-[height] duration-150" style={{ height: `${remoteOsd.muted ? 0 : remoteOsd.value}%` }} />
+              </div>
+              {remoteOsd.muted ? <VolumeX className="w-4 h-4 text-primary" /> : <Volume2 className="w-4 h-4 text-primary" />}
+            </div>
+          )}
+          {remoteOsd?.kind === "play" && (
+            <div className="rs-remote-osd absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[85] pointer-events-none w-16 h-16 rounded-full flex items-center justify-center">
+              {remoteOsd.playing ? <Play className="w-7 h-7 ml-1" /> : <Pause className="w-7 h-7" />}
+            </div>
+          )}
+
+          {/* TV-style side remote: shown with the controls on PC / laptop / TV only (CSS hides it on phones). */}
+          {showControls && !locked && !adGateActive && (
+            <div
+              className="rs-remote-rail absolute right-3 top-[45%] -translate-y-1/2 z-[75] items-center gap-1 rounded-2xl p-1.5"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              {remoteList && (
+                <>
+                  <div className="rs-remote-group">
+                    <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel up (↑ / PgUp)" : "Previous episode (PgUp)"} aria-label={remoteList.live ? "Channel up" : "Previous episode"} onClick={() => { zapStep(-1); resetHideTimer(); }}>
+                      <ChevronUp className="w-5 h-5" />
+                    </button>
+                    <span className="rs-remote-label">{remoteList.live ? "CH" : "EP"}</span>
+                    <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel down (↓ / PgDn)" : "Next episode (PgDn)"} aria-label={remoteList.live ? "Channel down" : "Next episode"} onClick={() => { zapStep(1); resetHideTimer(); }}>
+                      <ChevronDown className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <span className="rs-remote-sep" />
+                </>
+              )}
+              <div className="rs-remote-group">
+                <button type="button" className="rs-remote-btn" title="Volume up (+ / mouse wheel)" aria-label="Volume up" onClick={() => { nudgeVolume(1); resetHideTimer(); }}>
+                  <Plus className="w-5 h-5" />
+                </button>
+                <span className="rs-remote-label tabular-nums">{muted ? 0 : Math.round(boostedVolume)}</span>
+                <button type="button" className="rs-remote-btn" title="Volume down (− / mouse wheel)" aria-label="Volume down" onClick={() => { nudgeVolume(-1); resetHideTimer(); }}>
+                  <Minus className="w-5 h-5" />
+                </button>
               </div>
             </div>
           )}

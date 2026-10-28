@@ -3439,3 +3439,80 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     box-shadow: 0 20px 50px -20px rgb(0 0 0 / 0.8);
   }
 }
+
+/* ============ TV REMOTE OVERLAY (player) ============
+   On-screen channel / volume / play feedback for remote, keyboard and mouse.
+   The side remote rail only exists on PC / laptop / TV — phones never see it. */
+.rs-remote-osd {
+  /* Always dark glass: it sits on top of the video, in light and dark theme alike. */
+  background: hsl(0 0% 0% / 0.74);
+  color: hsl(0 0% 100%);
+  border: 1px solid hsl(0 0% 100% / 0.12);
+  box-shadow: 0 18px 40px -18px hsl(0 0% 0% / 0.85);
+  animation: rs-osd-in 160ms ease-out;
+}
+.rs-remote-osd-channel { border-left: 3px solid hsl(var(--primary)); }
+@keyframes rs-osd-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; }
+}
+.rs-remote-osd.-translate-y-1\/2 { animation-name: rs-osd-fade; }
+.rs-remote-osd.-translate-x-1\/2 { animation-name: rs-osd-fade; }
+@keyframes rs-osd-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.rs-remote-rail { display: none; }
+.rs-remote-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.rs-remote-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(0 0% 100%);
+  transition: background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+.rs-remote-btn:hover { background: hsl(var(--primary) / 0.22); }
+.rs-remote-btn:active { transform: scale(0.92); }
+.rs-remote-btn:focus-visible {
+  outline: none;
+  background: hsl(var(--primary) / 0.28);
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+}
+.rs-remote-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: hsl(0 0% 100% / 0.62);
+  line-height: 1;
+  padding: 2px 0;
+}
+.rs-remote-sep {
+  width: 1px;
+  height: 44px;
+  margin: 0 2px;
+  background: hsl(0 0% 100% / 0.18);
+}
+
+@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+  .rs-remote-rail {
+    display: flex;
+    background: hsl(0 0% 0% / 0.55);
+    border: 1px solid hsl(0 0% 100% / 0.12);
+    animation: rs-osd-fade 160ms ease-out;
+  }
+}
+html.tv-mode .rs-remote-rail {
+  display: flex;
+  background: hsl(0 0% 0% / 0.62);
+  border: 1px solid hsl(0 0% 100% / 0.14);
+}
+html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
+@media (max-height: 620px) {
+  .rs-remote-btn, html.tv-mode .rs-remote-btn { width: 36px; height: 36px; }
+  .rs-remote-sep { height: 38px; }
+  /* The small windowed player is too short for the side remote; the remote keys
+     and the on-screen banners still work, and it returns in fullscreen. */
+  .rs-video-player-root[data-player-fs="off"] .rs-remote-rail,
+  html.tv-mode .rs-video-player-root[data-player-fs="off"] .rs-remote-rail { display: none; }
+}
