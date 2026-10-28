@@ -81,29 +81,8 @@ export function remoteActionFor(input: RemoteKeyInput, ctx: RemoteKeyContext): R
   }
   if (input.keyCode === 10009 || input.keyCode === 461) return "back";
 
-  // Everything below belongs to the focused control when one is focused.
-  if (ctx.onControl) return null;
-
+  // Letter / symbol shortcuts never belong to a focused button.
   switch (key) {
-    case "Enter":
-    case " ":
-    case "k":
-    case "K":
-      return "playPause";
-    case "ArrowLeft":
-    case "j":
-    case "J":
-      return "seekBack";
-    case "ArrowRight":
-    case "l":
-    case "L":
-      return "seekFwd";
-    case "ArrowUp":
-      if (ctx.arrowsNavigate) return null;
-      return ctx.hasChannels ? "chUp" : "volUp";
-    case "ArrowDown":
-      if (ctx.arrowsNavigate) return null;
-      return ctx.hasChannels ? "chDown" : "volDown";
     case "+":
     case "=":
       return "volUp";
@@ -116,6 +95,31 @@ export function remoteActionFor(input: RemoteKeyInput, ctx: RemoteKeyContext): R
     case "f":
     case "F":
       return "fullscreen";
+    case "k":
+    case "K":
+      return "playPause";
+    case "j":
+    case "J":
+      return "seekBack";
+    case "l":
+    case "L":
+      return "seekFwd";
+  }
+
+  // Everything below belongs to the focused control when one is focused.
+  if (ctx.onControl) return null;
+
+  switch (key) {
+    case "Enter":
+    case " ":
+    case "ArrowLeft":
+    case "ArrowRight":
+    case "ArrowUp":
+      if (ctx.arrowsNavigate) return null;
+      return ctx.hasChannels ? "chUp" : "volUp";
+    case "ArrowDown":
+      if (ctx.arrowsNavigate) return null;
+      return ctx.hasChannels ? "chDown" : "volDown";
     default:
       if (ctx.hasChannels && /^[0-9]$/.test(key)) return "digit";
       return null;

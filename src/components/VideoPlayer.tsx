@@ -5034,7 +5034,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const focusable = !!active && active !== document.body && active !== shell
       && active.matches("button, a[href], input, select, textarea, [role='button'], [tabindex]:not([tabindex='-1'])");
     const insideShell = !!active && !!shell && shell.contains(active);
-    const onControl = panelOpen || sheetOpen || (focusable && (!insideShell || showControls));
+    // On TV the visible on-video buttons keep OK/arrows for focus navigation; with a
+    // mouse/keyboard every key on the video (even after clicking a button) drives the player.
+    const onControl = panelOpen || sheetOpen || (focusable && (!insideShell || (tv && showControls)));
 
     const action = remoteActionFor(
       { key: e.key, keyCode: e.keyCode },
