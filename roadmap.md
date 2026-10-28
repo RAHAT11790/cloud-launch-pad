@@ -173,3 +173,8 @@
 - [x] Tab switching / player close smoother: no whole-page restyle on navigation, hidden tabs paused, cards skip re-render (about 2x fewer dropped frames on a slowed phone).
 - [x] Download Manager redesigned into clean grouped cards.
 - [x] Dashboard real-user counter loads (no more permanent zero).
+
+## PC / TV / "Desktop site" layout fix (2026-10-28)
+- [x] Phone "Desktop site" view (980px) now gets the PC layout: 5-column grids instead of 3 huge cards, header tabs on top.
+- [x] Player on short landscape / portrait wide screens: video no longer fills the screen; title shows below and page scrolls to episodes and picks.
+- [x] Player video keeps true 16:9 on laptop, PC and TV (was cropped / squashed on TV).
