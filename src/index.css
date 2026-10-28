@@ -3509,6 +3509,10 @@ html.tv-mode .rs-remote-rail {
 }
 html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
 @media (max-height: 620px) {
-  .rs-remote-btn, html.tv-mode .rs-remote-btn { width: 30px; height: 30px; }
-  .rs-remote-sep { height: 34px; }
+  .rs-remote-btn, html.tv-mode .rs-remote-btn { width: 36px; height: 36px; }
+  .rs-remote-sep { height: 38px; }
+  /* The small windowed player is too short for the side remote; the remote keys
+     and the on-screen banners still work, and it returns in fullscreen. */
+  .rs-video-player-root[data-player-fs="off"] .rs-remote-rail,
+  html.tv-mode .rs-video-player-root[data-player-fs="off"] .rs-remote-rail { display: none; }
 }
