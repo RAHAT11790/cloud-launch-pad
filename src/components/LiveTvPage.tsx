@@ -222,6 +222,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                 }}
               />
 
+              {/* TV channel number — the same number the remote's digit keys jump to */}
+              <span className="absolute top-3 left-3 z-[1] px-2 py-0.5 rounded-md text-[10px] font-black tracking-[0.14em] bg-background/75 text-foreground border border-border/60 font-mono">
+                CH {String(channels.indexOf(channel) + 1).padStart(2, "0")}
+              </span>
+
               {/* Channel Info */}
               <div className="absolute inset-0 flex items-center justify-between px-5">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
