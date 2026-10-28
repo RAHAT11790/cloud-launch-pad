@@ -5038,6 +5038,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // mouse/keyboard every key on the video (even after clicking a button) drives the player.
     const onControl = panelOpen || sheetOpen || (focusable && (!insideShell || (tv && showControls)));
 
+    // TV: with the controls showing, Up/Down from the video itself steps into the
+    // on-screen buttons (starting from the one nearest the centre, i.e. play/pause).
+    if (tv && showControls && !locked && shell && !panelOpen && !sheetOpen
+      && (e.key === "ArrowUp" || e.key === "ArrowDown")
+      && (!active || active === document.body || active === shell)) {
+      const sr = shell.getBoundingClientRect();
+      const cx = sr.left + sr.width / 2;
+      const cy = sr.top + sr.height / 2;
+      let best: HTMLElement | null = null;
+      let bestD = Infinity;
+      shell.querySelectorAll<HTMLElement>(".player-controls-layer button, .rs-remote-rail button").forEach((b) => {
+        const r = b.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2) return;
+        const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+        if (d < bestD) { bestD = d; best = b; }
+      });
+      if (best) {
+        e.preventDefault();
+        e.stopPropagation();
+        (best as HTMLElement).focus({ preventScroll: true });
+        resetHideTimer();
+        return;
+      }
+    }
+
     const action = remoteActionFor(
       { key: e.key, keyCode: e.keyCode },
       { onControl, hasChannels: !!remoteList?.live, arrowsNavigate: tv && showControls && !locked },
@@ -5359,7 +5384,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* TV-style side remote: shown with the controls on PC / laptop / TV only (CSS hides it on phones). */}
           {showControls && !locked && !adGateActive && (
             <div
-              className="rs-remote-rail absolute right-3 top-1/2 -translate-y-1/2 z-[75] flex-col items-center gap-1 rounded-full p-1.5"
+              className="rs-remote-rail absolute right-3 top-1/2 -translate-y-1/2 z-[75] items-center gap-1 rounded-2xl p-1.5"
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
@@ -5368,26 +5393,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             >
               {remoteList && (
                 <>
-                  <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel up (↑ / PgUp)" : "Previous episode (PgUp)"} aria-label={remoteList.live ? "Channel up" : "Previous episode"} onClick={() => { zapStep(-1); resetHideTimer(); }}>
-                    <ChevronUp className="w-5 h-5" />
-                  </button>
-                  <span className="rs-remote-label">{remoteList.live ? "CH" : "EP"}</span>
-                  <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel down (↓ / PgDn)" : "Next episode (PgDn)"} aria-label={remoteList.live ? "Channel down" : "Next episode"} onClick={() => { zapStep(1); resetHideTimer(); }}>
-                    <ChevronDown className="w-5 h-5" />
-                  </button>
+                  <div className="rs-remote-group">
+                    <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel up (↑ / PgUp)" : "Previous episode (PgUp)"} aria-label={remoteList.live ? "Channel up" : "Previous episode"} onClick={() => { zapStep(-1); resetHideTimer(); }}>
+                      <ChevronUp className="w-5 h-5" />
+                    </button>
+                    <span className="rs-remote-label">{remoteList.live ? "CH" : "EP"}</span>
+                    <button type="button" className="rs-remote-btn" title={remoteList.live ? "Channel down (↓ / PgDn)" : "Next episode (PgDn)"} aria-label={remoteList.live ? "Channel down" : "Next episode"} onClick={() => { zapStep(1); resetHideTimer(); }}>
+                      <ChevronDown className="w-5 h-5" />
+                    </button>
+                  </div>
                   <span className="rs-remote-sep" />
                 </>
               )}
-              <button type="button" className="rs-remote-btn" title="Volume up (+)" aria-label="Volume up" onClick={() => { nudgeVolume(1); resetHideTimer(); }}>
-                <Plus className="w-5 h-5" />
-              </button>
-              <span className="rs-remote-label tabular-nums">{muted ? 0 : Math.round(boostedVolume)}</span>
-              <button type="button" className="rs-remote-btn" title="Volume down (−)" aria-label="Volume down" onClick={() => { nudgeVolume(-1); resetHideTimer(); }}>
-                <Minus className="w-5 h-5" />
-              </button>
-              <button type="button" className="rs-remote-btn" title="Mute (M)" aria-label={muted ? "Unmute" : "Mute"} onClick={() => { toggleRemoteMute(); resetHideTimer(); }}>
-                {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
+              <div className="rs-remote-group">
+                <button type="button" className="rs-remote-btn" title="Volume up (+ / mouse wheel)" aria-label="Volume up" onClick={() => { nudgeVolume(1); resetHideTimer(); }}>
+                  <Plus className="w-5 h-5" />
+                </button>
+                <span className="rs-remote-label tabular-nums">{muted ? 0 : Math.round(boostedVolume)}</span>
+                <button type="button" className="rs-remote-btn" title="Volume down (− / mouse wheel)" aria-label="Volume down" onClick={() => { nudgeVolume(-1); resetHideTimer(); }}>
+                  <Minus className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           )}
 
