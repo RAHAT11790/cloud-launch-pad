@@ -9,6 +9,7 @@ import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { isTimeLockedTarget, isSeriesTimeLocked } from "@/lib/contentGating";
 import { PremiumCardFrame } from "@/components/premium/PremiumLockVisuals";
+import RailArrows from "./RailArrows";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
@@ -60,6 +61,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
   const openingRef = useRef<string | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const relRef = ref(db, "newEpisodeReleases");
@@ -336,8 +338,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
   return (
     <>
-      <div className="px-4 mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="rail-section rail-new px-4 mb-6">
+        <div className="rail-head flex items-center justify-between mb-3">
           <h3 className="text-base font-bold flex items-center category-bar">
             <CategoryLabel title="New Episode Release" />
           </h3>
@@ -349,7 +351,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
           </button>
         </div>
 
-        <div data-no-swipe="true" className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
+        <div className="rail-body relative">
+        <div ref={rowRef} data-no-swipe="true" className="rail-row flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
           {groupedReleases.slice(0, 10).map(({ latest: release, all: releaseGroup, minEp, maxEp }) => {
             const content = getContent(release.contentId);
             const poster = content?.poster || release.poster || "";
@@ -492,6 +495,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               </div>
             );
           })}
+        </div>
+        <RailArrows targetRef={rowRef} />
         </div>
 
       </div>
