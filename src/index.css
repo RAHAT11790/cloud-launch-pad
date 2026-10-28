@@ -1725,404 +1725,6 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   -webkit-touch-callout: default;
 }
 
-/* ============================================================
-   LARGE-SCREEN LAYER — laptop / PC / Smart TV
-   Phones never match these queries, so the mobile UI is untouched.
-   TV browsers usually report ~960x540 CSS px, hence the second query.
-   ============================================================ */
-:root {
-  --dk-max: 1760px;
-  --dk-gutter: clamp(20px, 2.6vw, 48px);
-  --dk-pad: max(var(--dk-gutter), calc((100vw - var(--dk-max)) / 2 + var(--dk-gutter)));
-  --dk-header: 68px;
-  --dk-card: clamp(148px, 11.2vw, 196px);
-  --pl-side: clamp(330px, 26vw, 430px);
-  --pl-max: 1880px;
-}
-
-@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
-
-  /* ---------- HEADER: logo · tabs · search · actions in one bar ---------- */
-  .site-header {
-    height: var(--dk-header) !important;
-    padding-left: var(--dk-pad) !important;
-    padding-right: var(--dk-pad) !important;
-    background: hsl(var(--background) / 0.9) !important;
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    box-shadow: 0 1px 0 hsl(var(--border) / 0.7) !important;
-  }
-  .site-header > *:first-child img { height: 42px !important; width: 42px !important; }
-  .site-search {
-    flex: 0 1 380px !important;
-    max-width: 380px !important;
-    margin: 0 14px 0 auto !important;
-  }
-  .site-search > div { height: 42px !important; padding-left: 42px !important; font-size: 14px !important; }
-  .site-search svg { width: 18px !important; height: 18px !important; left: 15px !important; }
-  .site-actions { gap: 8px !important; }
-
-  /* Bottom bar becomes the header's tab strip */
-  .nv-bar {
-    top: 0 !important;
-    bottom: auto !important;
-    left: calc(var(--dk-pad) + 42px + 24px) !important;
-    right: auto !important;
-    height: var(--dk-header) !important;
-    display: flex !important;
-    align-items: center;
-    gap: 4px;
-    padding: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    z-index: 51 !important;
-  }
-  .nv-item {
-    flex-direction: row;
-    height: 40px;
-    padding: 0 16px;
-    gap: 8px;
-    border-radius: 999px;
-    transition: color .2s ease, background-color .2s ease;
-  }
-  .nv-item:hover { color: hsl(var(--foreground)); background: hsl(var(--foreground) / 0.06); }
-  .nv-on, .nv-on:hover { color: hsl(var(--primary)); background: hsl(var(--primary) / 0.13); }
-  .nv-ico { width: 20px; height: 20px; }
-  .nv-ico::before { display: none; }
-  .nv-on .nv-ico, .nv-on .nv-lbl { transform: none; }
-  .nv-svg { width: 19px; height: 19px; }
-  .nv-lbl { font-size: 14px; font-weight: 600; }
-  .nv-on .nv-lbl { font-weight: 700; }
-
-  /* ---------- MAIN AREA ---------- */
-  main.pg-host {
-    height: calc(100vh - var(--dk-header)) !important;
-    margin-top: var(--dk-header) !important;
-  }
-  main.pg-host > div {
-    padding-left: var(--dk-pad) !important;
-    padding-right: var(--dk-pad) !important;
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
-  }
-  main.pg-host > div::-webkit-scrollbar { width: 10px; }
-  main.pg-host > div::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
-  main.pg-host > div::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--primary) / 0.6); }
-
-  /* ---------- HERO: cinematic banner, copy on the left ---------- */
-  main.pg-host section[aria-label="Featured anime"],
-  main.pg-host [class*="h-[50vh]"] {
-    height: clamp(360px, 58vh, 580px) !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    margin-top: 18px;
-    border-radius: 24px;
-    overflow: hidden;
-    box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.55);
-    isolation: isolate;
-  }
-  main.pg-host .hero-vignette {
-    background:
-      linear-gradient(to right, hsl(var(--background) / 0.92) 0%, hsl(var(--background) / 0.55) 32%, hsl(var(--background) / 0) 62%),
-      linear-gradient(to top, hsl(var(--background) / 0.9) 0%, hsl(var(--background) / 0.25) 30%, hsl(var(--background) / 0) 55%);
-  }
-  main.pg-host .hero-title-logo-wrap {
-    top: 40%;
-    right: 42%;
-    justify-content: flex-start;
-    padding: 0 0 0 clamp(28px, 3.4vw, 56px);
-  }
-  main.pg-host .hero-title-text {
-    max-width: 100%;
-    text-align: left;
-    font-size: clamp(34px, 3.6vw, 64px) !important;
-    line-height: 1.02;
-  }
-  main.pg-host .hero-copy-enter {
-    padding: 0 clamp(28px, 3.4vw, 56px) clamp(22px, 3vh, 36px) !important;
-  }
-  main.pg-host .hero-copy-enter > div { justify-content: flex-start !important; }
-  .hero-info-card {
-    width: min(560px, 54%);
-    gap: 14px;
-    padding: 12px 14px;
-    border-radius: 18px;
-  }
-  .hero-info-card:hover { border-color: hsl(var(--primary) / 0.6); }
-  .hero-info-poster { width: 64px; height: 92px; margin-top: -30px; border-radius: 12px; }
-  .hero-info-title { font-size: 17px; }
-  .hero-info-meta { font-size: 12.5px; }
-  .hero-info-lang { font-size: 11px; padding: 4px 9px; }
-  .hero-watch-btn { height: 42px; padding: 0 20px; font-size: 13px; gap: 7px; }
-
-  /* ---------- CATEGORY PILLS ---------- */
-  main.pg-host .cat-pill { padding: 9px 18px !important; font-size: 13px !important; }
-  main.pg-host .cat-pill:hover { border-color: hsl(var(--primary) / 0.5); }
-
-  /* ---------- RAILS (Continue / New Release / sections) ---------- */
-  main.pg-host .rail-section { margin-top: 6px !important; margin-bottom: 0 !important; padding-top: 14px !important; padding-bottom: 6px !important; }
-  main.pg-host .rail-head h3,
-  main.pg-host h3.rail-head { font-size: 20px !important; font-weight: 800 !important; letter-spacing: -0.01em; }
-  main.pg-host .rail-head button { font-size: 13px !important; }
-  main.pg-host .rail-row {
-    gap: 16px !important;
-    scroll-snap-type: none !important;
-    padding-top: 8px !important;
-    padding-bottom: 14px !important;
-    scroll-behavior: smooth;
-  }
-  main.pg-host .rail-row > .poster-hover,
-  main.pg-host .rail-row > [data-new-release-card],
-  main.pg-host .rail-row > .cw-card {
-    width: var(--dk-card) !important;
-    min-width: var(--dk-card) !important;
-    max-width: var(--dk-card) !important;
-  }
-  [data-new-release-card] .poster-hover { min-width: 0 !important; max-width: none !important; width: 100% !important; }
-
-  .rail-arrow {
-    position: absolute;
-    top: calc(50% - 26px);
-    z-index: 30;
-    width: 44px;
-    height: 44px;
-    border-radius: 999px;
-    display: grid;
-    place-items: center;
-    color: hsl(var(--foreground));
-    background: hsl(var(--background) / 0.92);
-    border: 1px solid hsl(var(--border));
-    box-shadow: 0 10px 26px -10px rgb(0 0 0 / 0.55);
-    opacity: 0;
-    transition: opacity .2s ease, transform .2s ease, background-color .2s ease;
-  }
-  .rail-arrow-prev { left: -6px; }
-  .rail-arrow-next { right: -6px; }
-  .rail-body:hover .rail-arrow:not(.is-off),
-  .rail-arrow:focus-visible:not(.is-off) { opacity: 1; }
-  .rail-arrow:hover { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); transform: scale(1.06); }
-  .rail-arrow.is-off { pointer-events: none; }
-
-  /* ---------- CARDS ---------- */
-  .poster-hover {
-    border-radius: 14px !important;
-    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms ease !important;
-  }
-  .poster-hover:hover,
-  [data-new-release-card]:hover .poster-hover,
-  .cw-card:hover .poster-hover {
-    transform: translateY(-5px) !important;
-    box-shadow: 0 18px 34px -14px rgb(0 0 0 / 0.6), 0 0 0 2px hsl(var(--primary) / 0.7) !important;
-    z-index: 5;
-  }
-  .poster-hover p[class*="text-[10px]"],
-  .poster-hover p[class*="text-[11px]"] { font-size: 13px !important; line-height: 1.25 !important; }
-  .poster-hover p[class*="text-[8px]"],
-  .poster-hover p[class*="text-[9px]"] { font-size: 11px !important; }
-  .poster-hover > .absolute.bottom-0,
-  .poster-hover > .absolute.bottom-1\.5 { padding: 10px !important; }
-  .poster-hover span[class*="text-[7px]"],
-  .poster-hover span[class*="text-[8px]"],
-  .poster-hover span[class*="text-[9px]"] { font-size: 10px !important; }
-
-  /* ---------- FULL GRIDS (Series / Movies / category) ---------- */
-  main.pg-host .tab-page { padding-top: 26px !important; padding-bottom: 48px !important; }
-  main.pg-host .tab-page > h2 { font-size: 26px !important; font-weight: 800 !important; margin-bottom: 14px !important; }
-  main.pg-host .grid.grid-cols-3 {
-    grid-template-columns: repeat(auto-fill, minmax(var(--dk-card), 1fr)) !important;
-    gap: 22px 16px !important;
-  }
-  main.pg-host .grid.grid-cols-2 {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
-    gap: 18px !important;
-  }
-  main.pg-host .grid .poster-hover { min-width: 0 !important; max-width: none !important; width: 100% !important; }
-
-  /* ---------- LIVE TV — grid instead of stacked list ---------- */
-  main.pg-host .space-y-3:has(> div[class*="aspect-video"]) {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
-    gap: 20px !important;
-  }
-  main.pg-host .space-y-3:has(> div[class*="aspect-video"]) > * { margin-top: 0 !important; }
-
-  /* ---------- VIDEO PLAYER: video + details left, episodes & picks right ---------- */
-  .rs-video-player-root[data-player-fs="off"] > .rs-player-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--pl-side);
-    grid-template-rows: auto 1fr;
-    column-gap: 24px;
-    align-items: start;
-    max-width: var(--pl-max) !important;
-    min-height: 100%;
-    margin: 0 auto;
-    padding: 22px var(--dk-gutter) 28px !important;
-  }
-  .rs-player-layout > .rs-video-player-shell:not(.player-fs-enter) {
-    grid-column: 1;
-    grid-row: 1;
-    position: relative !important;
-    top: auto !important;
-    width: 100% !important;
-    max-width: calc((100vh - 170px) * 16 / 9) !important;
-    justify-self: center;
-    border-radius: 18px !important;
-    box-shadow: 0 30px 80px -34px rgb(0 0 0 / 0.75), 0 0 0 1px hsl(var(--border) / 0.5) !important;
-  }
-  .rs-player-layout > .rs-player-info {
-    grid-column: 1;
-    grid-row: 2;
-    padding: 16px 2px 0 !important;
-    max-width: calc((100vh - 170px) * 16 / 9);
-    justify-self: center;
-  }
-  .rs-player-info h2 { font-size: 20px !important; }
-  .rs-player-info .rs-player-actions {
-    display: flex !important;
-    flex-wrap: wrap;
-    gap: 8px !important;
-  }
-  .rs-player-info .rs-player-actions > button {
-    padding: 9px 18px !important;
-    font-size: 13px !important;
-    gap: 7px !important;
-  }
-  .rs-player-info .rs-player-actions > button svg { width: 15px !important; height: 15px !important; }
-  .rs-player-layout > .rs-player-side {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    position: sticky;
-    top: 22px;
-    max-height: calc(100vh - 44px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 2px 16px 16px !important;
-    border-radius: 18px;
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    scrollbar-width: thin;
-  }
-  .rs-player-side > div:first-child { margin-top: 14px !important; }
-  .rs-player-layout > .rs-player-extra { display: contents; }
-
-  /* Episodes: wrapping grid instead of a sideways strip */
-  .rs-player-side .rs-ep-wrap {
-    margin: 0 !important;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
-    gap: 8px;
-    max-height: 236px;
-    overflow-y: auto;
-    padding: 4px 2px 6px;
-    scrollbar-width: thin;
-  }
-  .rs-player-side .rs-ep-mask { display: none !important; }
-  .rs-player-side .rs-ep-row { display: contents !important; }
-  .rs-player-side .rs-ep-all,
-  .rs-player-side .rs-ep-row > button {
-    position: relative !important;
-    left: auto !important;
-    top: auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-    height: 44px !important;
-    transform: none !important;
-  }
-  .rs-player-side .rs-ep-row > button:hover { border-color: hsl(var(--primary) / 0.6); }
-
-  .rs-player-side .rs-foryou-grid { gap: 12px !important; }
-  .rs-player-side .rs-foryou-grid p.text-xs { font-size: 12.5px !important; }
-  .rs-player-side .rs-foryou-grid button:hover img { filter: brightness(1.08); }
-
-  /* Info / Language / Season / Download sheets open inside the right column */
-  .rs-inline-sheet {
-    top: 22px !important;
-    bottom: 22px !important;
-    left: auto !important;
-    right: max(var(--dk-gutter), calc((100vw - var(--pl-max)) / 2 + var(--dk-gutter))) !important;
-    width: var(--pl-side) !important;
-    border: 1px solid rgb(255 255 255 / 0.12) !important;
-    border-radius: 18px;
-    box-shadow: 0 30px 70px -30px rgb(0 0 0 / 0.8);
-  }
-
-  /* Controls — comfortable for mouse and remote */
-  .player-controls-layer { padding: 16px 22px !important; }
-  .player-controls-layer button svg { width: 24px !important; height: 24px !important; }
-  .player-controls-layer button { min-width: 38px; min-height: 38px; }
-  .player-controls-layer [class*="text-[10px]"],
-  .player-controls-layer [class*="text-[11px]"],
-  .player-controls-layer [class*="text-[12px]"],
-  .player-controls-layer .text-xs { font-size: 13px !important; }
-  .player-controls-layer .max-w-\[78px\],
-  .player-controls-layer .max-w-\[54px\],
-  .player-controls-layer .max-w-\[62px\] { max-width: none !important; }
-  .player-controls-layer .rounded-full[class*="w-16"],
-  .player-controls-layer .rounded-full[class*="w-14"] { width: 76px !important; height: 76px !important; }
-  .player-controls-layer .rounded-full[class*="w-16"] svg,
-  .player-controls-layer .rounded-full[class*="w-14"] svg { width: 34px !important; height: 34px !important; }
-  .player-controls-layer .h-1 { height: 5px !important; }
-
-  /* ---------- PROFILE: wide two-column dashboard ---------- */
-  .profile-page-inner {
-    max-width: 1240px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-auto-flow: row dense;
-    gap: 14px;
-    padding: 20px var(--dk-gutter) 64px;
-  }
-  .profile-page-inner > .profile-identity-panel,
-  .profile-page-inner > .profile-stat-grid,
-  .profile-page-inner > .profile-content-grid,
-  .profile-page-inner > .profile-menu-grid { grid-column: 1 / -1; }
-  .profile-page-inner > .profile-identity-panel { border-radius: 20px; }
-  .profile-page .profile-cover-pattern { height: 200px; }
-  .profile-page .profile-identity-content { padding-top: 130px; }
-  .profile-page-inner > * { margin-top: 0 !important; margin-bottom: 0 !important; }
-  .profile-content-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 14px;
-  }
-  .profile-content-grid > .profile-content-section {
-    padding: 16px;
-    border-radius: 16px;
-    background: rgb(var(--pf-surface));
-    border: 1px solid rgb(var(--pf-line) / 0.28);
-  }
-  .profile-content-grid > :not(.profile-content-section) { grid-column: 1 / -1; }
-  .profile-media-rail > div { width: 120px !important; }
-  .profile-menu-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px !important; }
-  .profile-menu-grid > a { grid-column: 1 / -1; margin-top: 0 !important; }
-
-  /* ---------- KEYBOARD / TV REMOTE FOCUS ---------- */
-  button:focus-visible,
-  a:focus-visible,
-  [role="button"]:focus-visible,
-  [data-anime-card]:focus-visible {
-    outline: 3px solid hsl(var(--primary)) !important;
-    outline-offset: 3px !important;
-    border-radius: 12px;
-  }
-}
-
-/* Small laptops / TVs: tabs + search must share one bar */
-@media (min-width: 900px) and (max-width: 1279px) {
-  .site-search { flex: 0 0 42px !important; max-width: 42px !important; }
-  .site-search > div > span { opacity: 0 !important; }
-  .nv-item { padding: 0 12px; }
-}
-
-/* Wide desktop / TV */
-@media (min-width: 1600px) {
-  :root { --dk-header: 74px; }
-  .nv-item { height: 44px; padding: 0 20px; }
-  .nv-lbl { font-size: 15px; }
-  .site-search { flex-basis: 440px !important; max-width: 440px !important; }
-}
-
-
 /* ============ Profile Page — Neon Cyber Anime ============ */
 /* ============ Profile Page — Unified System ============ */
 .profile-page,
@@ -3412,3 +3014,400 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
 /* Off-screen grid posters skip style/layout/paint until scrolled near (keeps tab switches light). */
 .poster-grid-cell { content-visibility: auto; contain-intrinsic-size: auto 180px; }
+
+/* ============================================================
+   LARGE-SCREEN LAYER — laptop / PC / Smart TV
+   Phones never match these queries, so the mobile UI is untouched.
+   TV browsers usually report ~960x540 CSS px, hence the second query.
+   ============================================================ */
+:root {
+  --dk-max: 1760px;
+  --dk-gutter: clamp(20px, 2.6vw, 48px);
+  --dk-pad: max(var(--dk-gutter), calc((100vw - var(--dk-max)) / 2 + var(--dk-gutter)));
+  --dk-header: 68px;
+  --dk-card: clamp(148px, 11.2vw, 196px);
+  --pl-side: clamp(330px, 26vw, 430px);
+  --pl-max: 1880px;
+}
+
+@media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
+
+  /* ---------- HEADER: logo · tabs · search · actions in one bar ---------- */
+  .site-header {
+    height: var(--dk-header) !important;
+    padding-left: var(--dk-pad) !important;
+    padding-right: var(--dk-pad) !important;
+    background: hsl(var(--background) / 0.9) !important;
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    box-shadow: 0 1px 0 hsl(var(--border) / 0.7) !important;
+  }
+  .site-header > *:first-child img { height: 42px !important; width: 42px !important; }
+  .site-search {
+    flex: 0 1 380px !important;
+    max-width: 380px !important;
+    margin: 0 14px 0 auto !important;
+  }
+  .site-search > div { height: 42px !important; padding-left: 42px !important; font-size: 14px !important; }
+  .site-search svg { width: 18px !important; height: 18px !important; left: 15px !important; }
+  .site-actions { gap: 8px !important; }
+
+  /* Bottom bar becomes the header's tab strip */
+  .nv-bar {
+    top: 0 !important;
+    bottom: auto !important;
+    left: calc(var(--dk-pad) + 42px + 24px) !important;
+    right: auto !important;
+    height: var(--dk-header) !important;
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    z-index: 51 !important;
+  }
+  .nv-item {
+    flex-direction: row;
+    height: 40px;
+    padding: 0 16px;
+    gap: 8px;
+    border-radius: 999px;
+    transition: color .2s ease, background-color .2s ease;
+  }
+  .nv-item:hover { color: hsl(var(--foreground)); background: hsl(var(--foreground) / 0.06); }
+  .nv-on, .nv-on:hover { color: hsl(var(--primary)); background: hsl(var(--primary) / 0.13); }
+  .nv-ico { width: 20px; height: 20px; }
+  .nv-ico::before { display: none; }
+  .nv-on .nv-ico, .nv-on .nv-lbl { transform: none; }
+  .nv-svg { width: 19px; height: 19px; }
+  .nv-lbl { font-size: 14px; font-weight: 600; }
+  .nv-on .nv-lbl { font-weight: 700; }
+
+  /* ---------- MAIN AREA ---------- */
+  main.pg-host {
+    height: calc(100vh - var(--dk-header)) !important;
+    margin-top: var(--dk-header) !important;
+  }
+  main.pg-host > div {
+    padding-left: var(--dk-pad) !important;
+    padding-right: var(--dk-pad) !important;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  main.pg-host > div::-webkit-scrollbar { width: 10px; }
+  main.pg-host > div::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  main.pg-host > div::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--primary) / 0.6); }
+
+  /* ---------- HERO: cinematic banner, copy on the left ---------- */
+  main.pg-host section[aria-label="Featured anime"],
+  main.pg-host [class*="h-[50vh]"] {
+    height: clamp(360px, 58vh, 580px) !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin-top: 18px;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.55);
+    isolation: isolate;
+  }
+  main.pg-host .hero-vignette {
+    background:
+      linear-gradient(to right, hsl(var(--background) / 0.92) 0%, hsl(var(--background) / 0.55) 32%, hsl(var(--background) / 0) 62%),
+      linear-gradient(to top, hsl(var(--background) / 0.9) 0%, hsl(var(--background) / 0.25) 30%, hsl(var(--background) / 0) 55%);
+  }
+  main.pg-host .hero-title-logo-wrap {
+    top: 40%;
+    right: 42%;
+    justify-content: flex-start;
+    padding: 0 0 0 clamp(28px, 3.4vw, 56px);
+  }
+  main.pg-host .hero-title-text {
+    max-width: 100%;
+    text-align: left;
+    font-size: clamp(34px, 3.6vw, 64px) !important;
+    line-height: 1.02;
+  }
+  main.pg-host .hero-copy-enter {
+    padding: 0 clamp(28px, 3.4vw, 56px) clamp(22px, 3vh, 36px) !important;
+  }
+  main.pg-host .hero-copy-enter > div { justify-content: flex-start !important; }
+  .hero-info-card {
+    width: min(560px, 54%);
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+  .hero-info-card:hover { border-color: hsl(var(--primary) / 0.6); }
+  .hero-info-poster { width: 64px; height: 92px; margin-top: -30px; border-radius: 12px; }
+  .hero-info-title { font-size: 17px; }
+  .hero-info-meta { font-size: 12.5px; }
+  .hero-info-lang { font-size: 11px; padding: 4px 9px; }
+  .hero-watch-btn { height: 42px; padding: 0 20px; font-size: 13px; gap: 7px; }
+
+  /* ---------- CATEGORY PILLS ---------- */
+  main.pg-host .cat-pill { padding: 9px 18px !important; font-size: 13px !important; }
+  main.pg-host .cat-pill:hover { border-color: hsl(var(--primary) / 0.5); }
+
+  /* ---------- RAILS (Continue / New Release / sections) ---------- */
+  main.pg-host .rail-section { margin-top: 6px !important; margin-bottom: 0 !important; padding-top: 14px !important; padding-bottom: 6px !important; }
+  main.pg-host .rail-head h3,
+  main.pg-host h3.rail-head { font-size: 20px !important; font-weight: 800 !important; letter-spacing: -0.01em; }
+  main.pg-host .rail-head button { font-size: 13px !important; }
+  main.pg-host .rail-row {
+    gap: 16px !important;
+    scroll-snap-type: none !important;
+    padding-top: 8px !important;
+    padding-bottom: 14px !important;
+    scroll-behavior: smooth;
+  }
+  main.pg-host .rail-row > .poster-hover,
+  main.pg-host .rail-row > [data-new-release-card],
+  main.pg-host .rail-row > .cw-card {
+    width: var(--dk-card) !important;
+    min-width: var(--dk-card) !important;
+    max-width: var(--dk-card) !important;
+  }
+  [data-new-release-card] .poster-hover { min-width: 0 !important; max-width: none !important; width: 100% !important; }
+
+  .rail-arrow {
+    position: absolute;
+    top: calc(50% - 26px);
+    z-index: 30;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background) / 0.92);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 10px 26px -10px rgb(0 0 0 / 0.55);
+    opacity: 0;
+    transition: opacity .2s ease, transform .2s ease, background-color .2s ease;
+  }
+  .rail-arrow-prev { left: -6px; }
+  .rail-arrow-next { right: -6px; }
+  .rail-body:hover .rail-arrow:not(.is-off),
+  .rail-arrow:focus-visible:not(.is-off) { opacity: 1; }
+  .rail-arrow:hover { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); transform: scale(1.06); }
+  .rail-arrow.is-off { pointer-events: none; }
+
+  /* ---------- CARDS ---------- */
+  .poster-hover {
+    border-radius: 14px !important;
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 200ms ease !important;
+  }
+  .poster-hover:hover,
+  [data-new-release-card]:hover .poster-hover,
+  .cw-card:hover .poster-hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 18px 34px -14px rgb(0 0 0 / 0.6), 0 0 0 2px hsl(var(--primary) / 0.7) !important;
+    z-index: 5;
+  }
+  .poster-hover p[class*="text-[10px]"],
+  .poster-hover p[class*="text-[11px]"] { font-size: 13px !important; line-height: 1.25 !important; }
+  .poster-hover p[class*="text-[8px]"],
+  .poster-hover p[class*="text-[9px]"] { font-size: 11px !important; }
+  .poster-hover > .absolute.bottom-0,
+  .poster-hover > .absolute.bottom-1\.5 { padding: 10px !important; }
+  .poster-hover span[class*="text-[7px]"],
+  .poster-hover span[class*="text-[8px]"],
+  .poster-hover span[class*="text-[9px]"] { font-size: 10px !important; }
+
+  /* ---------- FULL GRIDS (Series / Movies / category) ---------- */
+  main.pg-host .tab-page { padding-top: 26px !important; padding-bottom: 48px !important; }
+  main.pg-host .tab-page > h2 { font-size: 26px !important; font-weight: 800 !important; margin-bottom: 14px !important; }
+  main.pg-host .grid.grid-cols-3 {
+    grid-template-columns: repeat(auto-fill, minmax(var(--dk-card), 1fr)) !important;
+    gap: 22px 16px !important;
+  }
+  main.pg-host .grid.grid-cols-2 {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 18px !important;
+  }
+  main.pg-host .grid .poster-hover { min-width: 0 !important; max-width: none !important; width: 100% !important; }
+
+  /* ---------- LIVE TV — grid instead of stacked list ---------- */
+  main.pg-host .space-y-3:has(> div[class*="aspect-video"]) {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+    gap: 20px !important;
+  }
+  main.pg-host .space-y-3:has(> div[class*="aspect-video"]) > * { margin-top: 0 !important; }
+
+  /* ---------- VIDEO PLAYER: video + details left, episodes & picks right ---------- */
+  .rs-video-player-root[data-player-fs="off"] > .rs-player-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--pl-side);
+    grid-template-rows: auto 1fr;
+    column-gap: 24px;
+    align-items: start;
+    max-width: var(--pl-max) !important;
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 22px var(--dk-gutter) 28px !important;
+  }
+  .rs-player-layout > .rs-video-player-shell:not(.player-fs-enter) {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: calc((100vh - 170px) * 16 / 9) !important;
+    justify-self: center;
+    border-radius: 18px !important;
+    box-shadow: 0 30px 80px -34px rgb(0 0 0 / 0.75), 0 0 0 1px hsl(var(--border) / 0.5) !important;
+  }
+  .rs-player-layout > .rs-player-info {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 16px 2px 0 !important;
+    max-width: calc((100vh - 170px) * 16 / 9);
+    justify-self: center;
+  }
+  .rs-player-info h2 { font-size: 20px !important; }
+  .rs-player-info .rs-player-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .rs-player-info .rs-player-actions > button {
+    padding: 9px 18px !important;
+    font-size: 13px !important;
+    gap: 7px !important;
+  }
+  .rs-player-info .rs-player-actions > button svg { width: 15px !important; height: 15px !important; }
+  .rs-player-layout > .rs-player-side {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 22px;
+    max-height: calc(100vh - 44px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 16px 16px !important;
+    border-radius: 18px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    scrollbar-width: thin;
+  }
+  .rs-player-side > div:first-child { margin-top: 14px !important; }
+  .rs-player-layout > .rs-player-extra { display: contents; }
+
+  /* Episodes: wrapping grid instead of a sideways strip */
+  .rs-player-side .rs-ep-wrap {
+    margin: 0 !important;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+    gap: 8px;
+    max-height: 236px;
+    overflow-y: auto;
+    padding: 4px 2px 6px;
+    scrollbar-width: thin;
+  }
+  .rs-player-side .rs-ep-mask { display: none !important; }
+  .rs-player-side .rs-ep-row { display: contents !important; }
+  .rs-player-side .rs-ep-all,
+  .rs-player-side .rs-ep-row > button {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 44px !important;
+    transform: none !important;
+  }
+  .rs-player-side .rs-ep-row > button:hover { border-color: hsl(var(--primary) / 0.6); }
+
+  .rs-player-side .rs-foryou-grid { gap: 12px !important; }
+  .rs-player-side .rs-foryou-grid p.text-xs { font-size: 12.5px !important; }
+  .rs-player-side .rs-foryou-grid button:hover img { filter: brightness(1.08); }
+
+  /* Info / Language / Season / Download sheets open inside the right column */
+  .rs-inline-sheet {
+    top: 22px !important;
+    bottom: 22px !important;
+    left: auto !important;
+    right: max(var(--dk-gutter), calc((100vw - var(--pl-max)) / 2 + var(--dk-gutter))) !important;
+    width: var(--pl-side) !important;
+    border: 1px solid rgb(255 255 255 / 0.12) !important;
+    border-radius: 18px;
+    box-shadow: 0 30px 70px -30px rgb(0 0 0 / 0.8);
+  }
+
+  /* Controls — comfortable for mouse and remote */
+  .player-controls-layer { padding: 16px 22px !important; }
+  .player-controls-layer button svg { width: 24px !important; height: 24px !important; }
+  .player-controls-layer button { min-width: 38px; min-height: 38px; }
+  .player-controls-layer [class*="text-[10px]"],
+  .player-controls-layer [class*="text-[11px]"],
+  .player-controls-layer [class*="text-[12px]"],
+  .player-controls-layer .text-xs { font-size: 13px !important; }
+  .player-controls-layer .max-w-\[78px\],
+  .player-controls-layer .max-w-\[54px\],
+  .player-controls-layer .max-w-\[62px\] { max-width: none !important; }
+  .player-controls-layer .rounded-full[class*="w-16"],
+  .player-controls-layer .rounded-full[class*="w-14"] { width: 76px !important; height: 76px !important; }
+  .player-controls-layer .rounded-full[class*="w-16"] svg,
+  .player-controls-layer .rounded-full[class*="w-14"] svg { width: 34px !important; height: 34px !important; }
+  .player-controls-layer .h-1 { height: 5px !important; }
+
+  /* ---------- PROFILE: wide two-column dashboard ---------- */
+  .profile-page-inner {
+    max-width: 1240px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-auto-flow: row dense;
+    gap: 14px;
+    padding: 20px var(--dk-gutter) 64px;
+  }
+  .profile-page-inner > .profile-identity-panel,
+  .profile-page-inner > .profile-stat-grid,
+  .profile-page-inner > .profile-content-grid,
+  .profile-page-inner > .profile-menu-grid { grid-column: 1 / -1; }
+  .profile-page-inner > .profile-identity-panel { border-radius: 20px; }
+  .profile-page .profile-cover-pattern { height: 200px; }
+  .profile-page .profile-identity-content { padding-top: 130px; }
+  .profile-page-inner > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+  .profile-content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+  .profile-content-grid > .profile-content-section {
+    padding: 16px;
+    border-radius: 16px;
+    background: rgb(var(--pf-surface));
+    border: 1px solid rgb(var(--pf-line) / 0.28);
+  }
+  .profile-content-grid > :not(.profile-content-section) { grid-column: 1 / -1; }
+  .profile-media-rail > div { width: 120px !important; }
+  .profile-menu-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px !important; }
+  .profile-menu-grid > a { grid-column: 1 / -1; margin-top: 0 !important; }
+
+  /* ---------- KEYBOARD / TV REMOTE FOCUS ---------- */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [data-anime-card]:focus-visible {
+    outline: 3px solid hsl(var(--primary)) !important;
+    outline-offset: 3px !important;
+    border-radius: 12px;
+  }
+}
+
+/* Small laptops / TVs: tabs + search must share one bar */
+@media (min-width: 900px) and (max-width: 1279px) {
+  .site-search { flex: 0 0 42px !important; max-width: 42px !important; }
+  .site-search > div > span { opacity: 0 !important; }
+  .nv-item { padding: 0 12px; }
+}
+
+/* Wide desktop / TV */
+@media (min-width: 1600px) {
+  :root { --dk-header: 74px; }
+  .nv-item { height: 44px; padding: 0 20px; }
+  .nv-lbl { font-size: 15px; }
+  .site-search { flex-basis: 440px !important; max-width: 440px !important; }
+}
