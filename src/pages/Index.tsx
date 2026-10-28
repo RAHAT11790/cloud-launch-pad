@@ -545,6 +545,7 @@ import TelegramWelcomeModal from "@/components/TelegramWelcomeModal";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
+import RailArrows from "@/components/RailArrows";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
@@ -3304,6 +3305,7 @@ const Index = () => {
     return () => window.clearTimeout(t);
   }, [pageFx.key, pageFx.from]);
 
+  const continueRowRef = useRef<HTMLDivElement>(null);
   const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
 
   const restorePageScroll = useCallback((_page: MainPage) => {
