@@ -158,7 +158,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
   const currentPlaceholder = displayTitles[placeholderIdx] || "Search...";
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[60px] z-50 flex items-center justify-between px-4 transition-all duration-300 bg-background"
+    <header className="site-header fixed top-0 left-0 right-0 h-[60px] z-50 flex items-center justify-between px-4 transition-all duration-300 bg-background"
       style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
       
       {/* Logo - clickable for chat only when AI is enabled */}
@@ -177,7 +177,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       )}
 
       {showSearch && (
-        <div className="relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
+        <div className="site-search relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
           <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
             style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
@@ -190,7 +190,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
           </div>
         </div>
       )}
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="site-actions flex items-center gap-1 flex-shrink-0">
         <ThemeToggle />
         <NotificationBell onOpenContent={onOpenContent} />
         {userId ? (
