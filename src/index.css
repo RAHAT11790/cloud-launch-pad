@@ -3030,6 +3030,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   --pl-max: 1880px;
 }
 
+/* Rail page buttons exist only for mouse / TV-remote layouts */
+.rail-arrow { display: none; }
+
 @media (min-width: 1024px), (min-width: 900px) and (min-height: 480px) and (orientation: landscape) {
 
   /* ---------- HEADER: logo · tabs · search · actions in one bar ---------- */
