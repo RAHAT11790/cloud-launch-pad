@@ -3374,8 +3374,9 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .profile-page-inner > .profile-content-grid,
   .profile-page-inner > .profile-menu-grid { grid-column: 1 / -1; }
   .profile-page-inner > .profile-identity-panel { border-radius: 20px; }
-  .profile-page .profile-cover-pattern { height: 200px; }
-  .profile-page .profile-identity-content { padding-top: 130px; }
+  .profile-page .profile-page-inner > .profile-identity-panel { aspect-ratio: auto; height: clamp(260px, 34vh, 340px); max-height: none; }
+  .profile-page .profile-identity-content { padding: 0 22px 18px; }
+  .profile-page-inner > .profile-access-card:empty { display: none; }
   .profile-page-inner > * { margin-top: 0 !important; margin-bottom: 0 !important; }
   .profile-content-grid {
     display: grid;
