@@ -3085,9 +3085,16 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   .nv-on .nv-lbl { font-weight: 700; }
 
   /* ---------- MAIN AREA ---------- */
+  /* Fixed below the header: a margin here would collapse into the page
+     wrapper and let the whole document scroll by the header height. */
   main.pg-host {
-    height: calc(100vh - var(--dk-header)) !important;
-    margin-top: var(--dk-header) !important;
+    position: fixed !important;
+    top: var(--dk-header) !important;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto !important;
+    margin-top: 0 !important;
   }
   main.pg-host > div {
     padding-left: var(--dk-pad) !important;
