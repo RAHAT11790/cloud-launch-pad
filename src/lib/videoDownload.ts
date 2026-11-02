@@ -60,12 +60,10 @@ try {
     const cachedProxy = localStorage.getItem(PROXY_ROUTE_CACHE_KEY) || "";
     if (/^https?:\/\//i.test(cachedDownload)) {
       overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", cachedDownload);
-      overrideEnabled = true;
       overrideIsAdmin = localStorage.getItem(DL_ROUTE_ADMIN_FLAG) === "1";
     }
     if (/^https?:\/\//i.test(cachedProxy)) {
       playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", cachedProxy);
-      playbackProxyEnabled = true;
       playbackProxyIsAdmin = localStorage.getItem(PROXY_ROUTE_ADMIN_FLAG) === "1";
     }
   }
@@ -76,7 +74,6 @@ const applyDownloadRoute = () => {
   const adminEnabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : "";
   overrideBaseUrl = adminUrl;
-  overrideEnabled = Boolean(overrideBaseUrl);
   overrideIsAdmin = Boolean(adminUrl);
   try {
     if (overrideBaseUrl) localStorage.setItem(DL_ROUTE_CACHE_KEY, overrideBaseUrl);
@@ -90,7 +87,6 @@ const applyProxyRoute = () => {
   const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : "";
   playbackProxyBaseUrl = adminUrl;
-  playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
   playbackProxyIsAdmin = Boolean(adminUrl);
   try {
     if (playbackProxyBaseUrl) localStorage.setItem(PROXY_ROUTE_CACHE_KEY, playbackProxyBaseUrl);
