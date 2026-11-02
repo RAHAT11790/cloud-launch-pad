@@ -74,7 +74,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   tur: "Turkish", tr: "Turkish", pol: "Polish", pl: "Polish", may: "Malay", msa: "Malay", ms: "Malay", fil: "Filipino", tgl: "Tagalog",
 };
 
-export const languageName = (code: string): string => {
+const languageName = (code: string): string => {
   const raw = String(code || "").toLowerCase();
   return LANGUAGE_NAMES[raw] || LANGUAGE_NAMES[raw.split(/[-_]/)[0]] || "";
 };
