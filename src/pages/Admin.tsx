@@ -530,9 +530,9 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // self-hosted credits run out, and switch back to their own URL anytime.
 const LOVABLE_DEFAULT_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1` : "";
 const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = [
- // `video-proxy` is intentionally NOT routable anymore — every video server
- // carries its own proxy URL (Admin → Video Servers). No global player proxy.
- ...EDGE_FUNCTION_LIBRARY.filter((e) => e.slug !== "video-proxy").map(
+ // `video-proxy` here is used ONLY to read audio/subtitle tracks from video
+ // servers that refuse direct byte reads; the video itself never plays through it.
+ ...EDGE_FUNCTION_LIBRARY.map(
   (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: LOVABLE_DEFAULT_BASE ? `${LOVABLE_DEFAULT_BASE}/${e.slug}` : "" })
  ),
  {
@@ -658,7 +658,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   )}
  {isVideoProxy && (
  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
- PLAYER PROXY
+ AUDIO TRACKS
  </span>
  )}
  </div>
