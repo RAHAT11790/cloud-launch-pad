@@ -8,9 +8,9 @@
 
 import { db, ref, set } from "@/lib/firebase";
 import { firebaseRestUrl } from "@/lib/firebaseRest";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { resolveServerProxyForUrl } from "@/lib/serverProxy";
+import { hostRefusesDirectRead, orderReadCandidates, rememberDirectRead, trackProxyBase, waitTrackProxyBase } from "@/lib/trackProxy";
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
@@ -206,20 +206,21 @@ const buildProxyUrl = (base: string, target: string) => {
  */
 export function directCorsCandidates(playUrl: string): string[] {
   const raw = unwrapMediaUrl(playUrl);
-  const out: string[] = [];
-  if (/^https:\/\//i.test(raw)) out.push(raw);
-  if (raw !== playUrl && /^https:\/\//i.test(playUrl)) out.push(playUrl);
+  const direct: string[] = [];
+  if (/^https:\/\//i.test(raw)) direct.push(raw);
+  if (raw !== playUrl && /^https:\/\//i.test(playUrl)) direct.push(playUrl);
+  const proxies: string[] = [];
   const serverProxy = resolveServerProxyForUrl(raw);
-  if (serverProxy) out.push(buildProxyUrl(serverProxy, raw));
-  return Array.from(new Set(out));
+  if (serverProxy) proxies.push(buildProxyUrl(serverProxy, raw));
+  const trackProxy = trackProxyBase();
+  if (trackProxy) proxies.push(buildProxyUrl(trackProxy, raw));
+  return orderReadCandidates(direct, proxies, hostRefusesDirectRead(raw));
 }
 
 async function corsCandidates(playUrl: string): Promise<string[]> {
-  const raw = unwrapMediaUrl(playUrl);
-  const out = directCorsCandidates(playUrl);
-  const routed = await getEdgeFunctionUrl("video-proxy").catch(() => "");
-  if (routed) out.push(buildProxyUrl(routed, raw));
-  return Array.from(new Set(out));
+  // First open on a fresh device: give the proxy setting a moment to arrive.
+  if (!trackProxyBase()) await waitTrackProxyBase();
+  return directCorsCandidates(playUrl);
 }
 
 async function readShared(key: string): Promise<EmbeddedTrackList | null> {
