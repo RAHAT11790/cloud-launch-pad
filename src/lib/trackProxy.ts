@@ -94,6 +94,12 @@ export function hostRefusesDirectRead(url: string, now = Date.now()): boolean {
   return !!v && v.ok === false && now - v.at < CORS_VERDICT_TTL;
 }
 
+/** True when this device already knows whether the host allows direct reads. */
+export function hasDirectReadVerdict(url: string, now = Date.now()): boolean {
+  const v = readVerdicts()[hostOf(url)];
+  return !!v && now - v.at < CORS_VERDICT_TTL;
+}
+
 export function rememberDirectRead(url: string, ok: boolean, now = Date.now()) {
   const host = hostOf(url);
   if (!host) return;

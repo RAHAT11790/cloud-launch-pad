@@ -358,9 +358,28 @@ export function loadHeader(playUrl: string): Promise<{ header: MkvHeader; cues: 
   return task;
 }
 
-async function loadHeaderFresh(playUrl: string, key: string): Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> {
-  let lastError: unknown = null;
+type HeaderResult = { header: MkvHeader; cues: MkvCue[]; corsUrl: string };
+
+/** Open one candidate: the header, a NotMatroskaError (real bytes, other format), or a rejection. */
+async function openCandidate(corsUrl: string, sources: HttpRangeSource[]): Promise<HeaderResult | NotMatroskaError> {
+  const source = new HttpRangeSource(corsUrl);
+  sources.push(source);
+  try {
+    const { header, cues } = await openMkv(source);
+    return { header, cues, corsUrl };
+  } catch (error) {
+    if (String((error as Error)?.message || "").includes("not a matroska")) {
+      const head = await source.read(0, 64 * 1024).catch(() => new Uint8Array(0));
+      if (head.length >= 8) return new NotMatroskaError(corsUrl, head);
+    }
+    throw error;
+  }
+}
+
+async function loadHeaderFresh(playUrl: string, key: string): Promise<HeaderResult> {
   const raw = unwrapMediaUrl(playUrl);
+  const candidates = await corsCandidates(playUrl);
+  const sources: HttpRangeSource[] = [];
   let directFailed = false;
   // Remember whether this host lets the site read bytes directly, so the next
   // switch on this device goes straight to the path that works.
@@ -368,24 +387,39 @@ async function loadHeaderFresh(playUrl: string, key: string): Promise<{ header: 
     if (corsUrl === raw) rememberDirectRead(raw, true);
     else if (directFailed) rememberDirectRead(raw, false);
   };
-  for (const corsUrl of await corsCandidates(playUrl)) {
-    const source = new HttpRangeSource(corsUrl);
-    try {
-      const { header, cues } = await openMkv(source);
-      const list = summarize(header);
-      mem.set(key, { list, header, cues, corsUrl });
-      learn(corsUrl);
-      return { header, cues, corsUrl };
-    } catch (error) {
-      lastError = error;
-      if (String((error as Error)?.message || "").includes("not a matroska")) {
-        const head = await source.read(0, 64 * 1024).catch(() => new Uint8Array(0));
-        if (head.length >= 8) { learn(corsUrl); lastError = new NotMatroskaError(corsUrl, head); break; }
+  const finish = (result: HeaderResult | NotMatroskaError): HeaderResult => {
+    learn(result.corsUrl);
+    if (result instanceof NotMatroskaError) throw result;
+    mem.set(key, { list: summarize(result.header), header: result.header, cues: result.cues, corsUrl: result.corsUrl });
+    return result;
+  };
+  try {
+    // Unknown host + a proxy available: race direct and proxy so the first
+    // read never waits for a refused direct request to fail.
+    if (candidates.length > 1 && candidates[0] === raw && !hasDirectReadVerdict(raw)) {
+      const tasks = candidates.map((url) => openCandidate(url, sources).catch((error) => {
+        if (url === raw) directFailed = true;
+        throw error;
+      }));
+      try {
+        return finish(await Promise.any(tasks));
+      } catch (error) {
+        const errors = error instanceof AggregateError ? error.errors : [error];
+        throw errors.find((e) => e instanceof Error) || new Error("track probe failed");
       }
-      if (corsUrl === raw) directFailed = true;
-    } finally {
-      source.abort();
     }
+    let lastError: unknown = null;
+    for (const corsUrl of candidates) {
+      try {
+        return finish(await openCandidate(corsUrl, sources));
+      } catch (error) {
+        if (error instanceof NotMatroskaError) throw error;
+        lastError = error;
+        if (corsUrl === raw) directFailed = true;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("track probe failed");
+  } finally {
+    sources.forEach((s) => s.abort());
   }
-  throw lastError instanceof Error ? lastError : new Error("track probe failed");
 }
