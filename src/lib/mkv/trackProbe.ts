@@ -11,6 +11,7 @@ import { firebaseRestUrl } from "@/lib/firebaseRest";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { SUPABASE_URL } from "@/lib/siteConfig";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { resolveServerProxyForUrl } from "@/lib/serverProxy";
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
@@ -198,11 +199,25 @@ const buildProxyUrl = (base: string, target: string) => {
   return `${clean}?src=${encodeURIComponent(toOpaqueUrlToken(target))}`;
 };
 
-/** CORS-readable candidates for the file: EGD-routed proxy first, then the default copy. */
-export async function corsCandidates(playUrl: string): Promise<string[]> {
+/**
+ * Byte-readable URLs for the file, cheapest first. An HTTPS file is read
+ * DIRECTLY (RS hosts send CORS + Range), so audio/subtitle tracks keep working
+ * with no server at all; proxies are only a fallback (and the only option for
+ * plain http:// files, which an HTTPS page may not fetch).
+ */
+export function directCorsCandidates(playUrl: string): string[] {
   const raw = unwrapMediaUrl(playUrl);
   const out: string[] = [];
-  if (raw !== playUrl && /video-proxy/i.test(playUrl)) out.push(playUrl);
+  if (/^https:\/\//i.test(raw)) out.push(raw);
+  if (raw !== playUrl && /^https:\/\//i.test(playUrl)) out.push(playUrl);
+  const serverProxy = resolveServerProxyForUrl(raw);
+  if (serverProxy) out.push(buildProxyUrl(serverProxy, raw));
+  return Array.from(new Set(out));
+}
+
+export async function corsCandidates(playUrl: string): Promise<string[]> {
+  const raw = unwrapMediaUrl(playUrl);
+  const out = directCorsCandidates(playUrl);
   const routed = await getEdgeFunctionUrl("video-proxy").catch(() => "");
   if (routed) out.push(buildProxyUrl(routed, raw));
   if (SUPABASE_URL) out.push(buildProxyUrl(`${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-proxy`, raw));
