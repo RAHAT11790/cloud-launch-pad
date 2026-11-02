@@ -317,13 +317,3 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Batch downloads
-// ---------------------------------------------------------------------------
-// Chromium keeps "user activation" only for the task the click started, and it
-// also throttles many <a download> clicks fired in the very same tick — that is
-// why 6 selected episodes produced 1 file. The reliable recipe is:
-//   1. fire the FIRST item as a real anchor click inside the user gesture, then
-//   2. hand every remaining item to a hidden <iframe>, spaced out in time.
-// Our download proxy always answers with `Content-Disposition: attachment`, so
-// an iframe navigation never leaves the page — the browser just downloads it.
