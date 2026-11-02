@@ -14,7 +14,7 @@ import { HttpRangeSource, mseAvailable } from "./mkvEngine";
 import { AudioFragmenter, audioInit, audioMime } from "./mkvRemux";
 
 /** Can this browser stream `track` on its own (no video re-mux needed)? */
-export const canPlayAudioOnly = (track?: Pick<MkvTrack, "route"> | null, mime?: string): boolean => {
+const canPlayAudioOnly = (track?: Pick<MkvTrack, "route"> | null, mime?: string): boolean => {
   if (!mseAvailable() || !mime) return false;
   if (track && !track.route) return false;
   try { return (window as any).MediaSource.isTypeSupported(mime); } catch { return false; }

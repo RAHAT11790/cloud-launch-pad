@@ -15,7 +15,7 @@
  *     ANY pending bkashPayments request as soon as a matching SMS lands.
  */
 
-import { db, ref, get, set, update, push, onValue, remove } from "@/lib/firebase";
+import { db, ref, get, set, update, onValue, remove } from "@/lib/firebase";
 
 const SMS_NODE = "XNXANIKPAY";
 const PAYMENTS_NODE = "bkashPayments";
@@ -63,7 +63,7 @@ const normalizeAmt = (a: any) => {
 };
 
 /** Look up an SMS entry by TrxID (case-insensitive scan). */
-export async function findSmsByTrxId(rawTrx: string): Promise<SmsEntry | null> {
+async function findSmsByTrxId(rawTrx: string): Promise<SmsEntry | null> {
   const trx = normalizeTrx(rawTrx);
   if (!trx) return null;
 
@@ -94,7 +94,7 @@ export async function findSmsByTrxId(rawTrx: string): Promise<SmsEntry | null> {
  * - Optional: receiver type check (we don't have receiver in SMS, only sender,
  *   so we trust the txid + amount combo)
  */
-export function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
+function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
   ok: boolean;
   reason?: string;
 } {
@@ -111,7 +111,7 @@ export function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
 }
 
 /** Activate premium + notify user (used by both auto-match and manual approve). */
-export async function autoApprovePayment(
+async function autoApprovePayment(
   req: PaymentRequest,
   opts: { sms?: SmsEntry; source: "auto-sms" | "manual" } = { source: "manual" },
 ): Promise<void> {
@@ -266,4 +266,4 @@ export async function pruneOldSmsEntries(maxAgeDays = 30): Promise<number> {
   return removed;
 }
 
-export const SmsTypeLabel = TYPE_LABEL;
+const SmsTypeLabel = TYPE_LABEL;

@@ -4,21 +4,8 @@ export type LocalAuthUser = {
   email?: string;
 };
 
-export const PROFILE_PHOTO_KEY = "rs_profile_photo";
-export const DISPLAY_NAME_KEY = "rs_display_name";
-
-export const getLocalAuthUser = (): LocalAuthUser | null => {
-  try {
-    const raw = localStorage.getItem("rsanime_user");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-};
-
+const PROFILE_PHOTO_KEY = "rs_profile_photo";
+const DISPLAY_NAME_KEY = "rs_display_name";
 export const buildEmailAliasKey = (email?: string | null) =>
   String(email || "")
     .trim()
@@ -26,10 +13,10 @@ export const buildEmailAliasKey = (email?: string | null) =>
     .replace(/\./g, ",")
     .replace(/[^a-z0-9@,_-]/g, "_");
 
-export const buildScopedLocalKey = (baseKey: string, userId?: string | null) =>
+const buildScopedLocalKey = (baseKey: string, userId?: string | null) =>
   userId ? `${baseKey}_${userId}` : baseKey;
 
-export const readScopedLocalValue = (baseKey: string, userId?: string | null): string | null => {
+const readScopedLocalValue = (baseKey: string, userId?: string | null): string | null => {
   try {
     if (userId) {
       return localStorage.getItem(buildScopedLocalKey(baseKey, userId));
@@ -40,7 +27,7 @@ export const readScopedLocalValue = (baseKey: string, userId?: string | null): s
   }
 };
 
-export const writeScopedLocalValue = (baseKey: string, value: string, userId?: string | null) => {
+const writeScopedLocalValue = (baseKey: string, value: string, userId?: string | null) => {
   try {
     if (userId) {
       localStorage.setItem(buildScopedLocalKey(baseKey, userId), value);
@@ -49,7 +36,7 @@ export const writeScopedLocalValue = (baseKey: string, value: string, userId?: s
   } catch {}
 };
 
-export const removeScopedLocalValue = (baseKey: string, userId?: string | null) => {
+const removeScopedLocalValue = (baseKey: string, userId?: string | null) => {
   try {
     if (userId) {
       localStorage.removeItem(buildScopedLocalKey(baseKey, userId));
@@ -58,7 +45,7 @@ export const removeScopedLocalValue = (baseKey: string, userId?: string | null) 
   } catch {}
 };
 
-export const clearActiveLocalValue = (baseKey: string) => {
+const clearActiveLocalValue = (baseKey: string) => {
   try {
     localStorage.removeItem(baseKey);
   } catch {}
@@ -72,4 +59,3 @@ export const removeProfilePhoto = (userId?: string | null) => removeScopedLocalV
 export const readDisplayName = (userId?: string | null) => readScopedLocalValue(DISPLAY_NAME_KEY, userId);
 export const writeDisplayName = (value: string, userId?: string | null) => writeScopedLocalValue(DISPLAY_NAME_KEY, value, userId);
 export const clearActiveDisplayName = () => clearActiveLocalValue(DISPLAY_NAME_KEY);
-export const removeDisplayName = (userId?: string | null) => removeScopedLocalValue(DISPLAY_NAME_KEY, userId);

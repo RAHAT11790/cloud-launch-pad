@@ -343,36 +343,6 @@ async function runCheck(isRetry = false): Promise<void> {
   }
 }
 
-/**
- * Arm the guard for a video session (hard block: playback is frozen).
- */
-export function startAdGuard(opts: { isPremium?: boolean } = {}) {
-  if (typeof window === "undefined") return;
-  if (opts.isPremium) { stopAdGuard(); return; }
-  if (guardActive) return;
-  guardActive = true;
-  void getShieldBase();
-  window.setTimeout(() => { void runCheck(false); }, 1200);
-  if (recheckTimer !== null) window.clearInterval(recheckTimer);
-  recheckTimer = window.setInterval(() => { void runCheck(false); }, 25_000);
-}
-
-/**
- * Site-wide guard — armed on app boot so a blocked user is caught before
- * they ever reach the player. Uses a slower cadence to stay cheap.
- */
-export function startSiteAdGuard(opts: { isPremium?: boolean } = {}) {
-  if (typeof window === "undefined") return;
-  if (opts.isPremium) { stopAdGuard(); return; }
-  siteMode = true;
-  if (guardActive) return;
-  guardActive = true;
-  void getShieldBase();
-  window.setTimeout(() => { void runCheck(false); }, 2500);
-  if (recheckTimer !== null) window.clearInterval(recheckTimer);
-  recheckTimer = window.setInterval(() => { void runCheck(false); }, 45_000);
-}
-
 export function stopAdGuard() {
   if (siteMode) {
     // A player screen unmounting must not disarm the site-wide guard.

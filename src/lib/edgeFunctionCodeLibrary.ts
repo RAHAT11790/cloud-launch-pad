@@ -106,6 +106,3 @@ export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("verify-admin-pin", "Verify Admin PIN", "Server-side admin PIN verifier. Set ADMIN_PIN secret in your own deployment to control the admin panel PIN privately. Without deploying this, the project default PIN is used.", verifyAdminPinSource, ["ADMIN_PIN"]),
 
 ];
-
-export const getLibraryEntry = (slug: string) =>
-  EDGE_FUNCTION_LIBRARY.find((e) => e.slug === slug);

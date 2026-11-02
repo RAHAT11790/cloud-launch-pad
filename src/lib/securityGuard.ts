@@ -22,7 +22,7 @@ type Geo = { ip?: string; country?: string; city?: string };
 let cachedGeo: Geo | null = null;
 let geoPromise: Promise<Geo> | null = null;
 
-export const fetchGeo = async (): Promise<Geo> => {
+const fetchGeo = async (): Promise<Geo> => {
   if (cachedGeo) return cachedGeo;
   if (geoPromise) return geoPromise;
   geoPromise = (async () => {

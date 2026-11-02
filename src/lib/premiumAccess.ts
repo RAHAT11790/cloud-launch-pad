@@ -86,37 +86,6 @@ export const isEpisodeLocked = (series: SeriesLike | undefined | null, seasonIdx
   const key = `s${seasonIdx + 1}e${episodeIdx + 1}`;
   return !!series.premiumEpisodes?.[key];
 };
-
-export const isQualityLocked = (
-  quality: string,
-  series: SeriesLike | undefined | null,
-  globalLocks: Record<string, boolean>,
-): boolean => {
-  const q = quality.toLowerCase();
-  if (globalLocks?.[q]) return true;
-  if (series?.qualityLocks?.[q]) return true;
-  return false;
-};
-
-/** Check if the current user is allowed to download.
- *  Returns { allowed: true } if the global download lock is off OR the user has active premium.
- */
-export const checkDownloadAllowed = async (): Promise<{ allowed: boolean; reason?: "premium_required" | "no_user" }> => {
-  try {
-    const sSnap = await get(ref(db, "settings/premium"));
-    const s = (sSnap.val() || {}) as Partial<PremiumGlobalSettings>;
-    if (s.globalDownloadLock === false) return { allowed: true };
-    const uid = getLocalUserId();
-    if (!uid) return { allowed: false, reason: "no_user" };
-    const pSnap = await get(ref(db, `users/${uid}/premium`));
-    const status = (pSnap.val() || null) as PremiumStatus | null;
-    if (isPremiumActive(status)) return { allowed: true };
-    return { allowed: false, reason: "premium_required" };
-  } catch {
-    return { allowed: true }; // fail-open on network hiccups
-  }
-};
-
 /** Coin ad watch (returns reason for failure) */
 export type AwardCoinResult = { ok: true; coins: number } | { ok: false; reason: "no_user" | "daily_cap" | "already_watched" | "unknown" };
 
@@ -131,83 +100,6 @@ const readLocalDeviceCoinDay = () => {
     return { all: {}, day: todayKey(), entry: { count: 0, adIds: {} } };
   }
 };
-
-const recordLocalDeviceCoin = (adId: string) => {
-  try {
-    const { all, day, entry } = readLocalDeviceCoinDay();
-    if (entry.adIds?.[adId]) return;
-    const next = {
-      count: (entry.count || 0) + 1,
-      adIds: { ...(entry.adIds || {}), [adId]: Date.now() },
-    };
-    localStorage.setItem(DEVICE_COIN_LOCAL_KEY, JSON.stringify({ [day]: next }));
-  } catch {}
-};
-
-export const awardCoin = async (adId: string, capPerDay = 5): Promise<AwardCoinResult> => {
-  const uid = getLocalUserId() || ensureGuestUser();
-  if (!uid) return { ok: false, reason: "no_user" };
-  const localToday = readLocalDeviceCoinDay().entry;
-  if (localToday?.adIds?.[adId]) return { ok: false, reason: "already_watched" };
-  if ((localToday?.count || 0) >= capPerDay) return { ok: false, reason: "daily_cap" };
-  const day = todayKey();
-  const deviceId = getDeviceId();
-  let outcome: AwardCoinResult = { ok: false, reason: "unknown" };
-
-  // Hard daily cap is per-device, not per account. A user cannot switch from
-  // guest → new login and farm extra coins on the same phone/browser.
-  await runTransaction(ref(db, `coinDeviceDaily/${deviceId}/${day}`), (cur: any) => {
-    const entry = cur || { count: 0, adIds: {} };
-    if (entry.adIds?.[adId]) {
-      outcome = { ok: false, reason: "already_watched" };
-      return cur;
-    }
-    if ((entry.count || 0) >= capPerDay) {
-      outcome = { ok: false, reason: "daily_cap" };
-      return cur;
-    }
-    return {
-      ...entry,
-      count: (entry.count || 0) + 1,
-      adIds: { ...(entry.adIds || {}), [adId]: Date.now() },
-      updatedAt: Date.now(),
-    };
-  });
-  if (!outcome.ok && outcome.reason !== "unknown") return outcome;
-
-  await runTransaction(ref(db, `users/${uid}/coinWallet`), (cur: any) => {
-    const wallet = cur || { coins: 0, adWatchLog: {} };
-    const today = wallet.adWatchLog?.[day] || { count: 0, adIds: {} };
-    if (today.adIds?.[adId]) {
-      outcome = { ok: false, reason: "already_watched" };
-      return cur;
-    }
-    if ((today.count || 0) >= capPerDay) {
-      outcome = { ok: false, reason: "daily_cap" };
-      return cur;
-    }
-    const newCoins = (wallet.coins || 0) + 1;
-    outcome = { ok: true, coins: newCoins };
-    return {
-      ...wallet,
-      coins: newCoins,
-      adWatchLog: {
-        ...(wallet.adWatchLog || {}),
-        [day]: {
-          count: (today.count || 0) + 1,
-          adIds: { ...(today.adIds || {}), [adId]: Date.now() },
-        },
-      },
-    };
-  });
-  if (outcome.ok) recordLocalDeviceCoin(adId);
-  return outcome;
-};
-
-export const clearStaleCoinSession = () => {
-  try { localStorage.removeItem("rs_pending_coin_ad_v2"); } catch {}
-};
-
 /** Buy premium with coins — deducts coins, activates premium */
 export type SpendResult = { ok: true; expiresAt: number } | { ok: false; reason: "no_user" | "insufficient" | "unknown" };
 
@@ -248,12 +140,6 @@ export const getTodayRemaining = (wallet: any, cap = 5): number => {
   const localToday = readLocalDeviceCoinDay().entry;
   return Math.max(0, cap - Math.max(today?.count || 0, localToday?.count || 0));
 };
-
-export const wasAdWatchedToday = (wallet: any, adId: string): boolean => {
-  const day = todayKey();
-  return !!wallet?.adWatchLog?.[day]?.adIds?.[adId] || !!readLocalDeviceCoinDay().entry?.adIds?.[adId];
-};
-
 // ============ Coin Ads (admin-managed direct links) ============
 export interface CoinAd {
   id: string;
@@ -316,11 +202,6 @@ export const saveCoinAd = async (ad: CoinAd) => {
     kind: ad.kind || (ad.url.endsWith(".js") ? "sdk" : "direct"),
   });
 };
-
-export const deleteCoinAd = async (id: string) => {
-  await set(ref(db, `settings/premiumCoinAds/${id}`), null);
-};
-
 // ============ Device fingerprint (stable per browser) ============
 const DEVICE_ID_KEY = "rs_device_id_v1";
 export const getDeviceId = (): string => {
@@ -376,35 +257,4 @@ export const transferGuestCoinsToUser = async (guestId: string, targetUid: strin
 // When a user activates premium (or logs in with active premium), claim a device slot.
 // Returns false if another device already holds the slot.
 export type DeviceClaimResult = { ok: true } | { ok: false; reason: "device_limit"; activeDevice: string };
-export const claimPremiumDevice = async (uid: string): Promise<DeviceClaimResult> => {
-  const deviceId = getDeviceId();
-  const path = `users/${uid}/premiumDevices`;
-  const snap = await get(ref(db, path));
-  const devices = (snap.val() || {}) as Record<string, { at: number }>;
-  const sSnap = await get(ref(db, "settings/premium"));
-  const limit = Math.max(1, Number((sSnap.val() || {}).premiumDeviceLimit) || 1);
-
-  if (devices[deviceId]) {
-    await update(ref(db, `${path}/${deviceId}`), { at: Date.now() });
-    return { ok: true };
-  }
-  const count = Object.keys(devices).length;
-  if (count >= limit) {
-    return { ok: false, reason: "device_limit", activeDevice: Object.keys(devices)[0] };
-  }
-  await set(ref(db, `${path}/${deviceId}`), { at: Date.now() });
-  return { ok: true };
-};
-
-export const releasePremiumDevice = async (uid: string) => {
-  try { await set(ref(db, `users/${uid}/premiumDevices/${getDeviceId()}`), null); } catch {}
-};
-
 // ============ Guest user detection ============
-export const isGuestUser = (): boolean => {
-  try {
-    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-    return !!u.id && (!u.email || u.email.endsWith("@guest.local") || u.email === "guest@rsanime.com");
-  } catch { return true; }
-};
-

@@ -67,7 +67,7 @@ export const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", squ
 
 
 /** Different deployments answer with different shapes — normalise to a URL. */
-export const pickImageUrl = (json: any): string => {
+const pickImageUrl = (json: any): string => {
   if (!json) return "";
   const direct =
     json.url || json.imageUrl || json.image_url || json.backdrop || json.logo ||

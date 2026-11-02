@@ -13,9 +13,9 @@
  *    - profile customisation is disabled
  */
 
-export const GUEST_EPISODE_LIMIT = 3;
+const GUEST_EPISODE_LIMIT = 3;
 
-export const DAY_MS = 86_400_000;
+const DAY_MS = 86_400_000;
 
 /** Sentinel used for "locked forever" (year 2100). */
 export const PERMANENT_LOCK_UNTIL = 4_102_444_800_000;
@@ -23,7 +23,7 @@ export const PERMANENT_LOCK_UNTIL = 4_102_444_800_000;
 export const isPermanentLockValue = (until?: number | null): boolean =>
   Number(until || 0) >= PERMANENT_LOCK_UNTIL - DAY_MS;
 
-export const episodeLockUntil = (episode: any): number => {
+const episodeLockUntil = (episode: any): number => {
   const raw = Number(episode?.lockUntil || 0);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
 };
@@ -55,7 +55,7 @@ export const lockUntilFromDays = (days: number): number => {
 };
 
 /** Reads the episode at (seasonIdx, episodeIdx) from a series-like object. */
-export const getEpisodeAt = (anime: any, seasonIdx = 0, episodeIdx = 0): any => {
+const getEpisodeAt = (anime: any, seasonIdx = 0, episodeIdx = 0): any => {
   const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
   const season = seasons[seasonIdx] || seasons[0];
   const episodes = Array.isArray(season?.episodes) ? season.episodes : [];
@@ -63,14 +63,14 @@ export const getEpisodeAt = (anime: any, seasonIdx = 0, episodeIdx = 0): any => 
 };
 
 /** Lock key used by the lightweight `episodeLocks` index on list payloads. */
-export const lockKeyFor = (anime: any, seasonIdx = 0, episodeIdx = 0): string =>
+const lockKeyFor = (anime: any, seasonIdx = 0, episodeIdx = 0): string =>
   isMovieContent(anime) ? `p${Math.max(0, Number(episodeIdx || 0))}` : `s${Math.max(0, Number(seasonIdx || 0))}e${Math.max(0, Number(episodeIdx || 0))}`;
 
 /**
  * Timed lock read from the lightweight index that every card payload carries,
  * so the gate works even before the full item (with per-episode data) loads.
  */
-export const isTimeLockedByIndex = (anime: any, seasonIdx = 0, episodeIdx = 0): boolean => {
+const isTimeLockedByIndex = (anime: any, seasonIdx = 0, episodeIdx = 0): boolean => {
   const index = anime?.episodeLocks;
   if (!index || typeof index !== "object") return false;
   const now = Date.now();
@@ -110,7 +110,7 @@ export const targetLockRemainingMs = (anime: any, seasonIdx = 0, episodeIdx = 0)
 };
 
 /** Whole-title lock (admin "Lock full series"): `lockUntil` on the item root. */
-export const seriesLockUntil = (anime: any): number => {
+const seriesLockUntil = (anime: any): number => {
   const candidates = [Number(anime?.lockUntil || 0), Number(anime?.episodeLocks?.series || 0)];
   const until = Math.max(...candidates, 0);
   return Number.isFinite(until) && until > 0 ? until : 0;

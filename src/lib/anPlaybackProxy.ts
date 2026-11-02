@@ -8,7 +8,7 @@ let watcherStarted = false;
 
 const stripHlsEndpoint = (value: string) => String(value || "").trim().replace(/\/+$/, "").replace(/\/(?:hls)(?:\?.*)?$/i, "");
 
-export const normalizeAnPlaybackBaseUrl = (value: string): string => {
+const normalizeAnPlaybackBaseUrl = (value: string): string => {
   const normalized = normalizeFunctionEndpointUrl("an-playback", String(value || "").trim());
   return stripHlsEndpoint(normalized);
 };
@@ -29,7 +29,7 @@ const writeCachedRoute = (value: string) => {
   } catch {}
 };
 
-export const getCachedAnPlaybackHlsPrefix = () => {
+const getCachedAnPlaybackHlsPrefix = () => {
   const base = readCachedRoute();
   if (base) {
     // Ensure the prefix always ends with /hls

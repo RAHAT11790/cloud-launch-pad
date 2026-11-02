@@ -97,7 +97,7 @@ export function useDownloadConfigReady() {
   return ready;
 }
 
-export const subscribeDownloadManagerConfig = (fn: (cfg: DownloadManagerConfig) => void) => {
+const subscribeDownloadManagerConfig = (fn: (cfg: DownloadManagerConfig) => void) => {
   listeners.add(fn);
   fn(config);
   return () => { listeners.delete(fn); };
@@ -126,7 +126,7 @@ export const serverModeKey = (domainOrUrl?: string | null): string => {
   return host.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 };
 
-export const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServerMode => {
+const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServerMode => {
   const key = serverModeKey(domainOrUrl);
   if (!key) return "http";
   return config.serverModes[key] === "https" ? "https" : "http";
@@ -137,7 +137,7 @@ export const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServ
 // ---------------------------------------------------------------------------
 
 /** The server the admin selected to serve every download ("" = keep source). */
-export const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
+const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
   const domain = String(config.activeServerDomain || "").trim();
   if (!domain) return null;
   const key = config.activeServerKey || serverModeKey(domain);

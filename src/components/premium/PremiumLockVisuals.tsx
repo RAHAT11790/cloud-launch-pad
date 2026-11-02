@@ -119,5 +119,3 @@ export const PlayerPremiumLock = ({
     </div>
   </div>
 );
-
-export default PremiumCardFrame;

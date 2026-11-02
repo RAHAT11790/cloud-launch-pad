@@ -5,15 +5,7 @@ export interface UiThemeConfig {
   card: string;
 }
 
-export const UI_THEME_STORAGE_KEY = "rs_ui_theme_custom";
-
-export const DEFAULT_UI_THEME: UiThemeConfig = {
-  primary: "#e6aa21",
-  accent: "#e98f11",
-  background: "#e2e7ef",
-  card: "#ebeff5",
-};
-
+const UI_THEME_STORAGE_KEY = "rs_ui_theme_custom";
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 const hexToRgb = (hex: string) => {
@@ -91,7 +83,7 @@ const setVar = (name: string, value: string) => {
   document.documentElement.style.setProperty(name, value);
 };
 
-export const applyCustomUiTheme = (config: UiThemeConfig | null) => {
+const applyCustomUiTheme = (config: UiThemeConfig | null) => {
   if (typeof window === "undefined") return;
 
   const managedVars = [
@@ -141,7 +133,7 @@ export const applyCustomUiTheme = (config: UiThemeConfig | null) => {
   setVar("--sidebar-accent", shiftLightness(background, -4));
 };
 
-export const getStoredUiTheme = (): UiThemeConfig | null => {
+const getStoredUiTheme = (): UiThemeConfig | null => {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(UI_THEME_STORAGE_KEY);
@@ -169,9 +161,4 @@ export const clearUiTheme = () => {
 export const initializeUiTheme = () => {
   if (typeof window === "undefined") return;
   applyCustomUiTheme(getStoredUiTheme());
-};
-
-/** Apply a theme preset by its colors config */
-export const applyThemePresetColors = (colors: UiThemeConfig) => {
-  saveUiTheme(colors);
 };

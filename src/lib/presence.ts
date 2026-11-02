@@ -7,7 +7,7 @@ import { isGuestRecord } from "@/lib/guestPersistence";
  * Live presence: one tiny `presence/{key}` row = { k: "r" | "g", t } per active device.
  * No names, emails, history or guest profile — removed on disconnect / tab hidden.
  */
-export const PRESENCE_WINDOW_MS = 150_000;
+const PRESENCE_WINDOW_MS = 150_000;
 const HEARTBEAT_MS = 60_000;
 const DEVICE_KEY = "rs_presence_device_v1";
 

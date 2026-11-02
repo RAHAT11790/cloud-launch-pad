@@ -183,17 +183,6 @@ export const markDailyLogin = async () => {
     return { ...c, progress: 1 };
   });
 };
-
-export const recordDailyComment = async () => {
-  const uid = getLocalUserId() || ensureGuestUser();
-  if (!uid) return;
-  await runTransaction(ref(db, `users/${uid}/dailyTasks/${todayKey()}/comment`), (cur: any) => {
-    const c = cur || {};
-    if ((c.progress || 0) >= 1) return c;
-    return { ...c, progress: 1 };
-  });
-};
-
 /* ================== Referral system (IP-tracked, anti-fraud) ==================
    Rules:
    - Visitor arriving via ?ref=UID → referrer gets +1 coin instantly (entry bonus).
@@ -317,16 +306,6 @@ export const checkReferralUpgrade = async () => {
     localStorage.setItem(REFERRAL_UPGRADED_KEY, refUid);
   } catch {}
 };
-
-/** Kept for backward compatibility; new callers should use captureReferralFromUrl. */
-export const recordShareReferral = async (refUid: string) => {
-  if (!refUid) return;
-  await runTransaction(ref(db, `users/${refUid}/dailyTasks/${todayKey()}/share`), (cur: any) => {
-    const c = cur || {};
-    return { ...c, progress: (c.progress || 0) + 1 };
-  });
-};
-
 /* ================== Progress helpers ================== */
 export const getTaskProgress = (task: TaskDef, state: DailyTaskState): number => {
   const s = state[task.id];

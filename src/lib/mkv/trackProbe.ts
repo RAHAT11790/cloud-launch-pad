@@ -55,7 +55,7 @@ const mem = new Map<string, { list: EmbeddedTrackList; header?: MkvHeader; cues?
 const inflight = new Map<string, Promise<EmbeddedTrackList | null>>();
 
 /** Unwrap proxy URLs (?src= / ?url=) to the real file URL. */
-export const unwrapMediaUrl = (value: string): string => {
+const unwrapMediaUrl = (value: string): string => {
   const raw = String(value || "");
   try {
     const u = new URL(raw);
@@ -214,7 +214,7 @@ export function directCorsCandidates(playUrl: string): string[] {
   return Array.from(new Set(out));
 }
 
-export async function corsCandidates(playUrl: string): Promise<string[]> {
+async function corsCandidates(playUrl: string): Promise<string[]> {
   const raw = unwrapMediaUrl(playUrl);
   const out = directCorsCandidates(playUrl);
   const routed = await getEdgeFunctionUrl("video-proxy").catch(() => "");
@@ -340,7 +340,7 @@ export function refineSubtitleLabels(playUrl: string, list: EmbeddedTrackList): 
   return task;
 }
 
-export class NotMatroskaError extends Error {
+class NotMatroskaError extends Error {
   constructor(readonly corsUrl: string, readonly head: Uint8Array) { super("not a matroska file"); }
 }
 

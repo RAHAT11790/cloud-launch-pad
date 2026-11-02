@@ -5,11 +5,11 @@ import type { MkvBlock, MkvHeader, MkvTrack } from "./mkvDemux";
 import { buildFragment, buildInitSegment, type Mp4Sample } from "./mp4Writer";
 import { buildWebmCluster, buildWebmInit, type WebmBlock } from "./webmWriter";
 
-export const VIDEO_TIMESCALE = 90_000;
+const VIDEO_TIMESCALE = 90_000;
 
 const AAC_RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
 
-export const buildAudioSpecificConfig = (sampleRate: number, channels: number): Uint8Array => {
+const buildAudioSpecificConfig = (sampleRate: number, channels: number): Uint8Array => {
   const idx = Math.max(0, AAC_RATES.indexOf(Math.round(sampleRate)));
   const ch = Math.min(7, Math.max(1, channels || 2));
   return new Uint8Array([(2 << 3) | ((idx >> 1) & 0x07), ((idx & 1) << 7) | (ch << 3)]);
@@ -33,7 +33,7 @@ export function videoMime(track: MkvTrack): string {
   return `video/mp4; codecs="${codec}"`;
 }
 
-export const isMp3Track = (track: MkvTrack) => /^A_MPEG\/L3$/i.test(track.codecId);
+const isMp3Track = (track: MkvTrack) => /^A_MPEG\/L3$/i.test(track.codecId);
 const mp3FrameSamples = (track: MkvTrack) => ((track.sampleRate || 48000) >= 32000 ? 1152 : 576);
 
 export function audioMime(track: MkvTrack): string {

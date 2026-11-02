@@ -8,7 +8,7 @@ import { getDeviceId } from "@/lib/premiumAccess";
 
 export type BanState = { banned: boolean; reason?: string; scope?: "user" | "email" | "device" };
 
-export const emailKey = (email: string) =>
+const emailKey = (email: string) =>
   String(email || "").trim().toLowerCase().replace(/[.#$/[\]]/g, ",");
 
 const readLocalUser = (): { id?: string; email?: string } => {

@@ -34,21 +34,19 @@ export type AdGateOptions = {
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-export function logAdEvent(kind: string, result: string) {
+function logAdEvent(kind: string, result: string) {
   try {
     const path = `analytics/ads/${todayKey()}/${kind}/${result}`;
     void runTransaction(ref(db, path), (v) => (Number(v) || 0) + 1);
   } catch {}
 }
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /**
  * Measure how long the user stayed away (i.e. on the sponsor tab) after a
  * pop-under fired, then nudge them with a tiny benefit/penalty message.
  * Resolves with the measured dwell time in seconds.
  */
-export function trackPopunderDwell(goalSeconds = 10, notify = true): Promise<number> {
+function trackPopunderDwell(goalSeconds = 10, notify = true): Promise<number> {
   return new Promise((resolve) => {
     let awayAt = 0;
     let awayMs = 0;
@@ -96,107 +94,6 @@ export function trackPopunderDwell(goalSeconds = 10, notify = true): Promise<num
     // No ad ever opened → give up quietly.
     window.setTimeout(() => { if (!awayAt && !awayMs) finish(); }, 6000);
   });
-}
-
-
-/**
- * Fire a pop-under inside the current user gesture and measure engagement.
- * Resolves once we know whether the ad realistically counted.
- */
-export async function runAdGate(opts: AdGateOptions = {}): Promise<AdGateResult> {
-  const minSeconds = Math.max(3, Math.min(15, opts.minSeconds ?? 5));
-  const reason = opts.reason || "continue";
-
-  if (opts.isPremium) return "premium";
-
-  let cfg: Awaited<ReturnType<typeof getAdsterraConfig>> | null = null;
-  try { cfg = await getAdsterraConfig(); } catch {}
-  if (!cfg?.enabled || !String(cfg.popunder || "").trim()) return "disabled";
-
-  const startedAt = Date.now();
-  let awayAt = 0;
-  let awayMs = 0;
-
-  const onVisibility = () => {
-    if (document.visibilityState === "hidden") {
-      if (!awayAt) awayAt = Date.now();
-    } else if (awayAt) {
-      awayMs += Date.now() - awayAt;
-      awayAt = 0;
-    }
-  };
-  const onBlur = () => { if (!awayAt) awayAt = Date.now(); };
-  const onFocus = () => { if (awayAt) { awayMs += Date.now() - awayAt; awayAt = 0; } };
-
-  document.addEventListener("visibilitychange", onVisibility);
-  window.addEventListener("blur", onBlur);
-  window.addEventListener("focus", onFocus);
-
-  // Must run inside the gesture — no awaits before this line beyond config.
-  void firePopunderAd();
-
-  const toastId = toast.loading(`Loading sponsor · please wait ${minSeconds}s`, {
-    description: "Keep the sponsor tab open for a few seconds so it counts.",
-    duration: (minSeconds + 2) * 1000,
-  });
-
-  // Give the pop-under a moment to actually take over the tab.
-  await wait(1600);
-  const opened = awayAt > 0 || awayMs > 0;
-
-  if (!opened) {
-    document.removeEventListener("visibilitychange", onVisibility);
-    window.removeEventListener("blur", onBlur);
-    window.removeEventListener("focus", onFocus);
-    toast.dismiss(toastId);
-    logAdEvent(reason, "not-loaded");
-    return "not-loaded";
-  }
-
-  // Wait until the dwell budget is met (or the user has been back for a while).
-  const deadline = startedAt + (minSeconds + 6) * 1000;
-  while (Date.now() < deadline) {
-    const away = awayMs + (awayAt ? Date.now() - awayAt : 0);
-    if (away >= minSeconds * 1000) break;
-    if (!awayAt && Date.now() - startedAt > 3500) break; // user already returned
-    await wait(250);
-  }
-
-  document.removeEventListener("visibilitychange", onVisibility);
-  window.removeEventListener("blur", onBlur);
-  window.removeEventListener("focus", onFocus);
-  toast.dismiss(toastId);
-
-  const totalAway = awayMs + (awayAt ? Date.now() - awayAt : 0);
-  if (totalAway >= minSeconds * 1000) {
-    logAdEvent(reason, "counted");
-    return "counted";
-  }
-  logAdEvent(reason, "too-fast");
-  return "too-fast";
-}
-
-/** Friendly, on-brand messaging for each gate outcome. */
-export function explainAdGate(result: AdGateResult, minSeconds = 5) {
-  switch (result) {
-    case "counted":
-      toast.success("Thanks for supporting us", {
-        description: "Sponsor verified — enjoy, it stays free because of you.",
-      });
-      return;
-    case "too-fast":
-      toast.warning("That was too quick", {
-        description: `You came back before ${minSeconds}s, so the sponsor didn't count. Try once more and wait a moment — then it unlocks.`,
-      });
-      return;
-    case "not-loaded":
-      toast.error("Sponsor could not load", {
-        description: "An ad blocker / VPN DNS is blocking it. Pause it for this site to keep downloads and HD unlocked.",
-      });
-      return;
-    default:
-      return;
-  }
 }
 
 /**

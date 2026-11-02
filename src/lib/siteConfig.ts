@@ -6,7 +6,6 @@
 
 // --- Branding ---
 export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "";
-export const SITE_DESCRIPTION = import.meta.env.VITE_SITE_DESCRIPTION || "";
 export const SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://rsanime03.lovable.app");
 export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "";
 
@@ -25,10 +24,8 @@ export const CLOUDFLARE_CDN_URL = import.meta.env.VITE_CLOUDFLARE_CDN_URL || "";
 
 // --- Supabase (auto-set, don't change) ---
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-export const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // --- Firebase (auto-set from env) ---
-export const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
-
 // --- FCM ---

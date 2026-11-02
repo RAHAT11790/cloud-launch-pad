@@ -4,12 +4,12 @@ import { CheckCircle2, Link2, Loader2, Send, XCircle } from "lucide-react";
 export type LinkSection = "telegram" | "direct";
 
 /** Pull the src out of pasted <iframe> code; otherwise return trimmed input. */
-export function normalizeDirectInput(input: string): string {
+function normalizeDirectInput(input: string): string {
   const raw = String(input || "").trim();
   return raw.match(/<iframe[^>]*src=["']([^"']+)["']/i)?.[1] || raw;
 }
 
-export const isDirectMediaUrl = (u: string) => /\.(mp4|m3u8|webm|mkv|mov)(?:$|[?#])/i.test(String(u || ""));
+const isDirectMediaUrl = (u: string) => /\.(mp4|m3u8|webm|mkv|mov)(?:$|[?#])/i.test(String(u || ""));
 
 /**
  * Editor-level switch shown ABOVE the season list. Telegram and Direct are two

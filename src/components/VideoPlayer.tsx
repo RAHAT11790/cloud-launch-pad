@@ -17,11 +17,11 @@ import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw, Send, ChevronUp, Plus, Minus
+  ChevronRight, ChevronDown, FastForward, Crop, Check, ExternalLink, Loader2, Download, Server, Subtitles, Languages, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw, Send, ChevronUp, Plus, Minus
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
-import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
-import logoImg from "@/assets/logo.png";
+import { db, ref, onValue, set, remove, get } from "@/lib/firebase";
+import "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
@@ -57,14 +57,14 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, triggerBulkBackgroundDownloads, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { buildVideoDownloadUrlCandidates, unwrapManagedVideoUrl } from "@/lib/videoDownload";
 import { formatEpisodeChip, formatEpisodeLabel, getEpisodeEnd } from "@/lib/episodeCombo";
 import { groupTelegramSelections } from "@/lib/telegramQuality";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality, telegramEpisodeRange } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
-import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
+import "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
-import { wrapWithIosProtection } from "@/lib/iosProtection";
+import "@/lib/iosProtection";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -114,16 +114,10 @@ const VIDEO_PROXY_CACHE_KEY = "rs_video_proxy_url_cache_v1";
 // iOS / iPadOS detection used across the playback pipeline. Safari (even when
 // hls.js reports MSE support on iPadOS) is far more reliable on its NATIVE HLS
 // pipeline, so every HLS decision below prefers native on iOS.
-export const IS_IOS_DEVICE =
-  typeof navigator !== "undefined" &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    ((navigator as any).platform === "MacIntel" && (navigator as any).maxTouchPoints > 1));
 const RS_VALID_SOURCE_TTL_MS = 10 * 60 * 1000;
 const RS_SEEK_GRACE_MS = 60_000;
 const RS_SEEK_PROXY_RESCUE_MS = 18_000;
 const RS_NORMAL_RELOAD_LIMIT = 2;
-const RS_SEEK_RELOAD_LIMIT = 2;
-
 const normalizeVideoServersValue = (val: unknown): VideoServerOption[] => {
   let servers: VideoServerOption[] = [];
   if (val && Array.isArray(val)) {
@@ -7307,7 +7301,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
  *  - "dead":   404/410/5xx or connection refused → switch server
  *  - "unknown": probe timed out → caller decides (counts as slow, not dead)
  */
-export async function probeMediaServer(url: string, timeoutMs = 7000): Promise<"alive" | "dead" | "unknown"> {
+async function probeMediaServer(url: string, timeoutMs = 7000): Promise<"alive" | "dead" | "unknown"> {
   if (!/^https?:\/\//i.test(url || "")) return "unknown";
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), timeoutMs);

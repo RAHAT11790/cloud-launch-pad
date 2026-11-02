@@ -23,7 +23,7 @@ export function localGuestPath(path: string, guestId: string | null): boolean {
   if (!guestId) return false;
   return parts.includes(guestId) || ["coinDeviceDaily", "deviceTransferClaims"].includes(parts[0] || "");
 }
-export const GUEST_DATA_KEY = "rs_guest_data_v2";
+const GUEST_DATA_KEY = "rs_guest_data_v2";
 export function readGuestPath(path: string): any {
   try {
     const data = JSON.parse(localStorage.getItem(GUEST_DATA_KEY) || "{}");

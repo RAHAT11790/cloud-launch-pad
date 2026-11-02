@@ -14,8 +14,8 @@
 // ============================================================
 
 const STORE_KEY = "rs_route_health_v1";
-export const DEAD_TTL_MS = 5 * 60_000;
-export const ALIVE_TTL_MS = 30 * 60_000;
+const DEAD_TTL_MS = 5 * 60_000;
+const ALIVE_TTL_MS = 30 * 60_000;
 const PROBE_TIMEOUT_MS = 3500;
 
 type Verdict = { dead: boolean; at: number };
@@ -23,7 +23,7 @@ type Verdict = { dead: boolean; at: number };
 const memory = new Map<string, Verdict>();
 const inflight = new Map<string, Promise<boolean>>();
 
-export const originOf = (url: string): string => {
+const originOf = (url: string): string => {
   try {
     const u = new URL(String(url || "").trim());
     return /^https?:$/.test(u.protocol) ? u.origin.toLowerCase() : "";

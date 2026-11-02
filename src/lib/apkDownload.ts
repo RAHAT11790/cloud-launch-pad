@@ -11,7 +11,7 @@ const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
  * proxy already supports HTTP-origin files on HTTPS, retries, and proper
  * Content-Disposition — exactly what an APK needs.
  */
-export function buildApkProxyUrl(rawUrl: string, fileName = "app.apk"): string | null {
+function buildApkProxyUrl(rawUrl: string, fileName = "app.apk"): string | null {
   const trimmed = String(rawUrl || "").trim();
   if (!trimmed || !isHttpUrl(trimmed)) return null;
   const safeName = /\.apk$/i.test(fileName) ? fileName : `${fileName.replace(/\.[^.]+$/, "")}.apk`;

@@ -42,10 +42,8 @@ const buildSafeFileName = (rawName: string) => {
 };
 
 let overrideBaseUrl = "";
-let overrideEnabled = false;
 let overrideIsAdmin = false; // true only when a Cloudflare/self-hosted admin override is active
 let playbackProxyBaseUrl = "";
-let playbackProxyEnabled = false;
 let playbackProxyIsAdmin = false;
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
@@ -214,15 +212,6 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   return `${trimmedBase}?${params.toString()}`;
 };
 
-const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
-  const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
-  if (!trimmedBase) return "";
-  if (/\.workers\.dev(?:\/)?$/i.test(trimmedBase.replace(/\?.*$/, ""))) {
-    return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
-  }
-  return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
-};
-
 export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): string[] {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
@@ -261,23 +250,6 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   ]);
 }
 
-export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
-  const trimmedUrl = String(rawUrl || "").trim();
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
-  // Playback proxy is only for insecure http:// media rescue. HTTPS media hosts
-  // must stay direct in the browser/video tag and must not be routed through
-  // video-proxy for probing/download fallback.
-  if (!/^http:\/\//i.test(trimmedUrl)) return [];
-  if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
-  if (isManagedVideoDownloadUrl(trimmedUrl)) {
-    const inner = unwrapProxyTarget(trimmedUrl);
-    if (inner) return buildVideoProxyUrlCandidates(inner);
-    return [];
-  }
-  const bases = playbackProxyEnabled && playbackProxyBaseUrl && !isRouteKnownDead(playbackProxyBaseUrl) ? [playbackProxyBaseUrl] : [];
-  return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
-}
-
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
@@ -303,12 +275,6 @@ export function unwrapManagedVideoUrl(value: string): string {
     return unwrapProxyTarget(trimmed) || "";
   }
   return trimmed;
-}
-
-export function buildDirectDownloadUrl(rawUrl: string): string | null {
-  const trimmedUrl = unwrapManagedVideoUrl(rawUrl);
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  return trimmedUrl;
 }
 
 function clickAnchorDownload(finalUrl: string, fileName: string) {
@@ -365,18 +331,6 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
 //   2. hand every remaining item to a hidden <iframe>, spaced out in time.
 // Our download proxy always answers with `Content-Disposition: attachment`, so
 // an iframe navigation never leaves the page — the browser just downloads it.
-function iframeDownload(finalUrl: string) {
-  const frame = document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  frame.style.opacity = "0";
-  frame.setAttribute("aria-hidden", "true");
-  frame.src = finalUrl;
-  document.body.appendChild(frame);
-  window.setTimeout(() => { try { frame.remove(); } catch {} }, 120_000);
-}
 
 export function triggerBulkBackgroundDownloads(
   items: Array<{ url: string; fileName: string; fallbackUrls?: string[] }>,

@@ -48,12 +48,6 @@ const markSeen = (url: string, el?: HTMLImageElement) => {
     schedulePersist();
   }
 };
-
-export const isImageCacheWarm = (url: unknown) => {
-  const key = typeof url === "string" ? url : "";
-  return !!key && (decodedCache.has(key) || seenSet.has(key));
-};
-
 export const preloadCachedImages = (urls: unknown[], limit = 160) => {
   if (typeof window === "undefined") return Promise.resolve();
   const unique = Array.from(new Set(

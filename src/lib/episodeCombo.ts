@@ -34,7 +34,7 @@ export const formatEpisodeLabel = (ep: any, fallbackNumber?: number): string => 
 };
 
 /** True when a title is just an auto label like "Episode 7" / "Episode 2-4". */
-export const isAutoEpisodeTitle = (title: unknown): boolean =>
+const isAutoEpisodeTitle = (title: unknown): boolean =>
   /^\s*episode\s*\d+(\s*[-–]\s*\d+)?\s*$/i.test(String(title || ""));
 
 /**
