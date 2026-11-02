@@ -72,3 +72,15 @@ describe("track probe", () => {
     expect(list?.audio.find((a) => a.number === 2)?.playable).toBe(true);
   });
 });
+
+describe("track reading without any server", () => {
+  it("reads an https file directly first, before any proxy", async () => {
+    const { directCorsCandidates } = await import("@/lib/mkv/trackProbe");
+    const url = "https://rahat1102-video-hosting-bot.hf.space/16732/Ep.mkv?hash=AgAD2x";
+    expect(directCorsCandidates(url)[0]).toBe(url);
+  });
+  it("never reads a plain http file directly from the https site", async () => {
+    const { directCorsCandidates } = await import("@/lib/mkv/trackProbe");
+    expect(directCorsCandidates("http://fi5.bot-hosting.net:22134/1/Ep.mkv?hash=Ab")).toEqual([]);
+  });
+});
