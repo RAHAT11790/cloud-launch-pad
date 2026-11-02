@@ -360,19 +360,29 @@ export function loadHeader(playUrl: string): Promise<{ header: MkvHeader; cues: 
 
 async function loadHeaderFresh(playUrl: string, key: string): Promise<{ header: MkvHeader; cues: MkvCue[]; corsUrl: string }> {
   let lastError: unknown = null;
+  const raw = unwrapMediaUrl(playUrl);
+  let directFailed = false;
+  // Remember whether this host lets the site read bytes directly, so the next
+  // switch on this device goes straight to the path that works.
+  const learn = (corsUrl: string) => {
+    if (corsUrl === raw) rememberDirectRead(raw, true);
+    else if (directFailed) rememberDirectRead(raw, false);
+  };
   for (const corsUrl of await corsCandidates(playUrl)) {
     const source = new HttpRangeSource(corsUrl);
     try {
       const { header, cues } = await openMkv(source);
       const list = summarize(header);
       mem.set(key, { list, header, cues, corsUrl });
+      learn(corsUrl);
       return { header, cues, corsUrl };
     } catch (error) {
       lastError = error;
       if (String((error as Error)?.message || "").includes("not a matroska")) {
         const head = await source.read(0, 64 * 1024).catch(() => new Uint8Array(0));
-        if (head.length >= 8) { lastError = new NotMatroskaError(corsUrl, head); break; }
+        if (head.length >= 8) { learn(corsUrl); lastError = new NotMatroskaError(corsUrl, head); break; }
       }
+      if (corsUrl === raw) directFailed = true;
     } finally {
       source.abort();
     }
