@@ -10,7 +10,7 @@ import { db, ref, set } from "@/lib/firebase";
 import { firebaseRestUrl } from "@/lib/firebaseRest";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { resolveServerProxyForUrl } from "@/lib/serverProxy";
-import { hostRefusesDirectRead, orderReadCandidates, rememberDirectRead, trackProxyBase, waitTrackProxyBase } from "@/lib/trackProxy";
+import { hasDirectReadVerdict, hostRefusesDirectRead, orderReadCandidates, rememberDirectRead, trackProxyBase, waitTrackProxyBase } from "@/lib/trackProxy";
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
@@ -376,6 +376,18 @@ async function openCandidate(corsUrl: string, sources: HttpRangeSource[]): Promi
   }
 }
 
+/** First task that succeeds; rejects with the first error only when all fail. */
+function firstSuccess<T>(tasks: Promise<T>[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let failed = 0;
+    let firstError: unknown = null;
+    tasks.forEach((t) => t.then(resolve, (error) => {
+      if (firstError === null) firstError = error;
+      if (++failed === tasks.length) reject(firstError instanceof Error ? firstError : new Error("track probe failed"));
+    }));
+  });
+}
+
 async function loadHeaderFresh(playUrl: string, key: string): Promise<HeaderResult> {
   const raw = unwrapMediaUrl(playUrl);
   const candidates = await corsCandidates(playUrl);
@@ -401,12 +413,7 @@ async function loadHeaderFresh(playUrl: string, key: string): Promise<HeaderResu
         if (url === raw) directFailed = true;
         throw error;
       }));
-      try {
-        return finish(await Promise.any(tasks));
-      } catch (error) {
-        const errors = error instanceof AggregateError ? error.errors : [error];
-        throw errors.find((e) => e instanceof Error) || new Error("track probe failed");
-      }
+      return finish(await firstSuccess(tasks));
     }
     let lastError: unknown = null;
     for (const corsUrl of candidates) {
