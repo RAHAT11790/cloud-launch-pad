@@ -95,11 +95,8 @@ const KNOWN_FUNCTION_NAMES = new Set([
   ...SELF_DEPLOYED_FUNCTIONS,
   "generate-backdrop",
   "lovable-backdrop",
-  "rs-bot",
   "send-otp-email",
   "process-email-queue",
-  "episode",
-  "hls",
 ]);
 
 export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): string {

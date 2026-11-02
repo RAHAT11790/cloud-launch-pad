@@ -86,7 +86,7 @@ const entry = (
 });
 
 // Only functions the admin self-deploys via EGD Manager are listed here.
-// Lovable-managed functions (rs-bot, send-otp-email, process-email-queue)
+// Lovable-managed functions (send-otp-email, process-email-queue)
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
