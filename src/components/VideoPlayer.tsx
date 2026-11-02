@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, get } from "@/lib/firebase";
-import "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
@@ -62,7 +61,6 @@ import { formatEpisodeChip, formatEpisodeLabel, getEpisodeEnd } from "@/lib/epis
 import { groupTelegramSelections } from "@/lib/telegramQuality";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality, telegramEpisodeRange } from "@/lib/telegramDownload";
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
-import "@/lib/edgeFunctionRouter";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
 

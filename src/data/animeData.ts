@@ -1,12 +1,3 @@
-import "@/assets/poster-1.jpg";
-import "@/assets/poster-2.jpg";
-import "@/assets/poster-3.jpg";
-import "@/assets/poster-4.jpg";
-import "@/assets/poster-5.jpg";
-import "@/assets/poster-6.jpg";
-import "@/assets/hero-1.jpg";
-import "@/assets/hero-2.jpg";
-import "@/assets/hero-3.jpg";
 
 export interface AudioTrack {
   language: string;

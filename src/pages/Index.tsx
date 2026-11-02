@@ -9,7 +9,12 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
-import type { AnNativeResolvedData } from "@/components/AnNativeView";
+type AnNativeResolvedData = {
+  streams: { url: string; label: string; height: number; resolution: string; bandwidth: number; codecs?: string }[];
+  audio: { language: string; name: string; uri: string }[];
+  preferredQualityIdx?: number;
+  defaultAudioIdx?: number;
+};
 
 // Share links go through the EGD Router `share-preview` row (when enabled) so
 // Telegram/WhatsApp show the anime logo card; otherwise the plain watch link.
