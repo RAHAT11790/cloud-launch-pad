@@ -6,6 +6,7 @@
 // ডাইনামিকভাবে নতুন ফাংশন যোগ করা যায়
 
 import { db, ref, get } from "@/lib/firebase";
+import { aliveOrEmpty } from "@/lib/routeHealth";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
@@ -189,13 +190,16 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Easy Router is the only runtime source of truth. A Default button merely
   // pastes a URL into the same field; no implicit base URL or backend fallback
   // may bypass an empty/disabled row.
+  // A row whose server is gone (paused project, exhausted quota, deleted
+  // worker host) is treated exactly like an empty row, so no feature of the
+  // site ever waits on or breaks because of a dead function server.
   try {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled !== false) {
       const customUrl = String(override?.customUrl || override?.url || "").trim();
       if (customUrl) {
-        return normalizeFunctionEndpointUrl(fnName, customUrl);
+        return aliveOrEmpty(normalizeFunctionEndpointUrl(fnName, customUrl));
       }
     }
   } catch {}
