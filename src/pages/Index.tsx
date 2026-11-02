@@ -592,7 +592,6 @@ import {
 } from "@/lib/contentGating";
 import { PlayerPremiumLock } from "@/components/premium/PremiumLockVisuals";
 import { ensureAnPlaybackRouteWatcher, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
-import { supabase } from "@/integrations/supabase/client";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
