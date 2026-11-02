@@ -34,9 +34,6 @@ export type AdBlockSignals = {
   adsterraFailed: boolean;
   reasons: string[];
 };
-
-export const ADBLOCK_STATE_KEY = "rs_adblock_gate";
-
 // Classes/ids every mainstream filter list hides on sight.
 const BAIT_HTML = `
   <ins class="adsbygoogle adsbygoogle-noablate" style="display:block;width:120px;height:60px;"></ins>
@@ -229,9 +226,4 @@ export async function detectAdBlock(): Promise<AdBlockSignals> {
     score, offline: false, domBait, scriptKilled, networkBlocked,
     edgeReachable, brave, adsterraFailed, reasons,
   };
-}
-
-export function clearBait() {
-  try { baitEl?.remove(); } catch {}
-  baitEl = null;
 }

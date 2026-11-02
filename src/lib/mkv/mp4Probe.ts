@@ -7,7 +7,7 @@
 // requests even when `moov` sits at the end of the file.
 
 import type { RangeSource } from "./mkvDemux";
-import { languageName } from "./mkvDemux";
+import "./mkvDemux";
 
 export interface Mp4Track {
   id: number;
@@ -110,6 +110,3 @@ export async function readMp4Tracks(src: RangeSource, head: Uint8Array): Promise
   }
   throw new Error("moov not found");
 }
-
-export const mp4TrackLabel = (t: Mp4Track, index: number) =>
-  languageName(t.language) || (t.kind === "audio" ? `Audio ${index + 1}` : `Subtitle ${index + 1}`);

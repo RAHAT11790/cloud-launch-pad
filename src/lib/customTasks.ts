@@ -28,15 +28,6 @@ const TASKS_PATH = "settings/customTasks";
 const claimPath = (uid: string, taskId: string) => `users/${uid}/customTaskClaims/${taskId}`;
 
 /* -------- Admin CRUD -------- */
-
-export const listCustomTasks = async (): Promise<CustomTask[]> => {
-  const snap = await get(ref(db, TASKS_PATH));
-  const data = snap.val() || {};
-  return Object.entries(data)
-    .map(([id, item]: [string, any]) => ({ id, ...item }))
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
-};
-
 export const subscribeCustomTasks = (cb: (tasks: CustomTask[]) => void): (() => void) => {
   return onValue(ref(db, TASKS_PATH), (snap) => {
     const data = snap.val() || {};

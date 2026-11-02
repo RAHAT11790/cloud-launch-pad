@@ -21,7 +21,7 @@ export function isGuest(): boolean {
   } catch { return true; }
 }
 
-export function gGet<T = AnyJson>(name: string, fallback: T): T {
+function gGet<T = AnyJson>(name: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(k(name));
@@ -30,12 +30,12 @@ export function gGet<T = AnyJson>(name: string, fallback: T): T {
   } catch { return fallback; }
 }
 
-export function gSet<T = AnyJson>(name: string, value: T) {
+function gSet<T = AnyJson>(name: string, value: T) {
   if (typeof window === "undefined") return;
   try { localStorage.setItem(k(name), JSON.stringify(value)); } catch {}
 }
 
-export function gDel(name: string) {
+function gDel(name: string) {
   if (typeof window === "undefined") return;
   try { localStorage.removeItem(k(name)); } catch {}
 }

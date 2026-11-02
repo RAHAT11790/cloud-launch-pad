@@ -4,7 +4,7 @@ type AudioLike = EmbeddedTrackList["audio"][number];
 
 const langOf = (t?: { language?: string } | null) => String(t?.language || "").toLowerCase().split(/[-_]/)[0];
 
-export const isHindiTrack = (t?: AudioLike | null): boolean => {
+const isHindiTrack = (t?: AudioLike | null): boolean => {
   if (!t) return false;
   const lang = langOf(t);
   if (lang === "hi" || lang === "hin" || lang === "hindi") return true;

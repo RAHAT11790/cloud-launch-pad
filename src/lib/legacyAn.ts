@@ -1,10 +1,6 @@
-export const LEGACY_AN_ROOTS = ["animesaltCache", "anSeries", "anMovies", "animesalt", "animesaltSelected"] as const;
-export const LEGACY_AN_ROOT_SET = new Set<string>(LEGACY_AN_ROOTS);
-export const LEGACY_AN_CARD_ROOTS = ["webseries", "movies", "newEpisodeReleases"] as const;
-
 const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
 
-export const isLegacyAnKey = (key: unknown): boolean => {
+const isLegacyAnKey = (key: unknown): boolean => {
   const lowerKey = normalize(key);
   return (
     lowerKey.startsWith("an_") ||
@@ -15,7 +11,7 @@ export const isLegacyAnKey = (key: unknown): boolean => {
   );
 };
 
-export const isLegacyAnValue = (value: any): boolean => {
+const isLegacyAnValue = (value: any): boolean => {
   if (!value || typeof value !== "object") return false;
   const id = normalize(value.id);
   const source = normalize(value.source);
@@ -40,27 +36,3 @@ export const isLegacyAnEntry = (keyOrValue: unknown, maybeValue?: any): boolean 
 
 export const stripLegacyAnItems = <T,>(items: T[] | undefined | null): T[] =>
   Array.isArray(items) ? (items.filter((item) => !isLegacyAnEntry(item)) as T[]) : [];
-
-export const clearLegacyAnBrowserCaches = () => {
-  if (typeof window === "undefined") return;
-  const directKeys = [
-    "rs_cache_webseries_v1",
-    "rs_cache_movies_v1",
-    "rs_admin_webseries_index_v1",
-    "rs_admin_movies_index_v1",
-    "rs_admin_count_webseries_v1",
-    "rs_admin_count_movies_v1",
-    "rs_admin_count_newEpisodeReleases_v1",
-  ];
-  directKeys.forEach((key) => {
-    try { localStorage.removeItem(key); } catch {}
-    try { sessionStorage.removeItem(key); } catch {}
-  });
-  [localStorage, sessionStorage].forEach((storage) => {
-    try {
-      Object.keys(storage)
-        .filter((key) => key.startsWith("rs_rest_cache:webseries") || key.startsWith("rs_rest_cache:movies") || key.startsWith("rs_rest_cache:newEpisodeReleases") || key.startsWith("rs_rest_cache:adminContentIndex"))
-        .forEach((key) => storage.removeItem(key));
-    } catch {}
-  });
-};

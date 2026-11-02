@@ -23,7 +23,7 @@ const subseqRatio = (q: string, t: string): number => {
   return i / q.length;
 };
 
-export const fuzzyScore = (query: string, target: string): number => {
+const fuzzyScore = (query: string, target: string): number => {
   const q = normalize(query);
   const t = normalize(target);
   if (!q) return 1;

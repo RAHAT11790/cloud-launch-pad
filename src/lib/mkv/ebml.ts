@@ -72,7 +72,7 @@ export interface VintResult {
 }
 
 /** Read an EBML element ID (marker bits kept, matching the spec tables above). */
-export function readId(buf: Uint8Array, pos: number): { id: number; length: number } | null {
+function readId(buf: Uint8Array, pos: number): { id: number; length: number } | null {
   if (pos >= buf.length) return null;
   const first = buf[pos];
   if (first === 0) return null;
@@ -189,13 +189,4 @@ export function eachChild(
     if (stop <= pos) return;
     pos = stop;
   }
-}
-
-/** Find the first occurrence of an element ID inside a buffered range. */
-export function findElement(buf: Uint8Array, start: number, end: number, id: number): EbmlHeader | null {
-  let found: EbmlHeader | null = null;
-  eachChild(buf, start, end, (el) => {
-    if (!found && el.id === id) found = el;
-  });
-  return found;
 }

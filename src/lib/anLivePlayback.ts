@@ -19,7 +19,7 @@ const localKey = (kind: string, slug: string) => `rs_an_playback_v9_codecs:${kin
 // Playback URLs are short-lived and sensitive. Keep them client-local only;
 // never mirror raw media URLs through the realtime database/network payload.
 
-export async function pruneExpiredPlaybackCache() {
+async function pruneExpiredPlaybackCache() {
   const now = Date.now();
   if (now - lastPrune < PRUNE_THROTTLE_MS) return;
   lastPrune = now;
@@ -199,7 +199,7 @@ function upsertBundleEpisode(seriesSlug: string, epSlug: string, payload: Episod
   scheduleBundleSave(seriesSlug);
 }
 
-export function getEpisodeFromBundle(seriesSlug: string, epSlug: string): EpisodePlayback | null {
+function getEpisodeFromBundle(seriesSlug: string, epSlug: string): EpisodePlayback | null {
   if (!seriesSlug || !epSlug) return null;
   const bundle = bundleMem.get(seriesSlug);
   if (!bundle || bundle.expiresAt <= Date.now()) return null;
@@ -208,7 +208,7 @@ export function getEpisodeFromBundle(seriesSlug: string, epSlug: string): Episod
 }
 
 /** Load a series bundle from mem → localStorage only. */
-export async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBundle> {
+async function loadAnSeriesBundle(seriesSlug: string): Promise<SeriesBundle> {
   const now = Date.now();
   if (!seriesSlug) return { expiresAt: now + BUNDLE_TTL_MS, episodes: {} };
   const hit = bundleMem.get(seriesSlug);
@@ -357,19 +357,3 @@ export const isAnimeSaltSentinel = (link?: string | null) =>
 
 export const slugFromSentinel = (link?: string | null) =>
   isAnimeSaltSentinel(link) ? String(link || "").replace(/^animesalt:\/\//, "") : "";
-
-/** Resolve playback for a single episode in-place inside a Seasons array. */
-export async function enrichEpisodeInPlace(
-  seasons: Season[],
-  sIdx: number,
-  eIdx: number,
-  seriesSlug?: string,
-): Promise<Episode | null> {
-  const ep = seasons?.[sIdx]?.episodes?.[eIdx];
-  if (!ep) return null;
-  if (!isAnimeSaltSentinel(ep.link)) return ep;
-  const resolved = await resolveAnEpisodePlayback(slugFromSentinel(ep.link), { seriesSlug });
-  if (!resolved) return null;
-  Object.assign(ep, resolved);
-  return ep;
-}

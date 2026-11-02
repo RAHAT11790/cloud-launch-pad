@@ -45,7 +45,7 @@ const BROKEN_MSE = "rs_mse_video_broken_v1";
 const brokenMse = (): string[] => { try { return JSON.parse(localStorage.getItem(BROKEN_MSE) || "[]"); } catch { return []; } };
 const markBrokenMse = (mime: string) => { try { const l = brokenMse(); if (!l.includes(mime)) localStorage.setItem(BROKEN_MSE, JSON.stringify([...l, mime].slice(-20))); } catch { /* ignore */ } };
 /** Full re-mux only for video the browser reliably decodes via Media Source; HEVC never (black screen on many phones). */
-export const wantsFullEngine = (header: MkvHeader, audioNumber: number): boolean => {
+const wantsFullEngine = (header: MkvHeader, audioNumber: number): boolean => {
   const v = header.video; const a = header.audio.find((x) => x.number === audioNumber) || null;
   if (!v || !canPlayTrackCombo(v, a)) return false;
   const mime = videoMime(v);

@@ -47,7 +47,7 @@ export function normalizeDownloadFlowSettings(raw: Record<string, unknown> = {})
 }
 type FlowRules = { maxEpisodes: number; adSteps: number[]; adStepsByCount?: AdStepsByCount };
 /** Free users may pick every episode only when the admin configured an "All episodes" box. */
-export function downloadAllowsAll(rules: FlowRules) { return Array.isArray(rules.adStepsByCount?.all); }
+function downloadAllowsAll(rules: FlowRules) { return Array.isArray(rules.adStepsByCount?.all); }
 export function downloadSelectionLimit(rules: FlowRules, total: number) {
   return downloadAllowsAll(rules) ? Math.max(total, rules.maxEpisodes) : rules.maxEpisodes;
 }
@@ -79,7 +79,7 @@ export function openDownloadFlow(request: DownloadFlowRequest) {
   window.location.assign("/download");
 }
 /** Per-flow step timer, persisted so leaving and returning never restarts a running countdown. */
-export const DOWNLOAD_TIMER_KEY = "rs_download_timer_v1";
+const DOWNLOAD_TIMER_KEY = "rs_download_timer_v1";
 export const BACK_TO_WATCH_KEY = "rs_back_to_watch_v1";
 /** `sponsorAt` = wall-clock time Continue opened the sponsor page; saved so a reloaded/discarded tab still finishes the step. */
 export type DownloadTimerState = { flow: string; step: number; startedAt: number; ready?: boolean; sponsorAt?: number; sponsorSeconds?: number };

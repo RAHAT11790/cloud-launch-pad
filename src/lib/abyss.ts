@@ -11,7 +11,7 @@ import { firebaseRestUrl } from "@/lib/firebaseRest";
 export interface AbyssSource { label: string; url: string; size: number }
 export interface AbyssResolved { ok: boolean; slug: string; title?: string; sources: AbyssSource[]; embed: string; error?: string }
 
-export function getAbyssSlug(input: string | undefined | null): string {
+function getAbyssSlug(input: string | undefined | null): string {
   const v = String(input || "").trim();
   if (!v) return "";
   const m = v.match(/abyss(?:player|cdn)?\.(?:com|to)\/(?:[^?#]*[?&]v=)?([A-Za-z0-9_-]{6,})/i);
@@ -19,15 +19,6 @@ export function getAbyssSlug(input: string | undefined | null): string {
 }
 
 export const isAbyssLink = (input: string | undefined | null) => Boolean(getAbyssSlug(input));
-
-/** Normalise anything the admin pastes (URL, <iframe> code) into a clean link. */
-export function normalizeAbyssInput(input: string): string {
-  const raw = String(input || "").trim();
-  const src = raw.match(/src=["']([^"']+)["']/i)?.[1] || raw;
-  const slug = getAbyssSlug(src);
-  return slug ? `https://player.abyssplayer.com/${slug}` : raw;
-}
-
 // EGD Router row `abyss` is the ONLY source of the server URL (Default button
 // pastes the Lovable-hosted copy; admin may paste a Cloudflare/own URL).
 async function getBase(): Promise<string> {

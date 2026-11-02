@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db, ref, onValue, set, push, remove } from "@/lib/firebase";
 
 /** Firebase node for the Chrome-only gate switch (missing = on) and the IP allow list. */
-export const BROWSER_GATE_PATH = "settings/browserGate";
+const BROWSER_GATE_PATH = "settings/browserGate";
 const CACHE_KEY = "rs_browser_gate_v1";
 const IP_KEY = "rs_network_ip_v1";
 

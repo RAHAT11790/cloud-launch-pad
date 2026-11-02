@@ -22,7 +22,7 @@ let _cachedDurationMs: number | null = null;
 let _cacheTs = 0;
 const CACHE_DURATION = 60_000; // 1 min cache
 
-export async function getUnlockDurationMs(): Promise<number> {
+async function getUnlockDurationMs(): Promise<number> {
   if (_cachedDurationMs !== null && Date.now() - _cacheTs < CACHE_DURATION) return _cachedDurationMs;
   try {
     const snap = await get(ref(db, "settings/unlockDurationHours"));
@@ -57,7 +57,7 @@ export interface AdService {
 }
 
 // --- Get ad services from Firebase ---
-export async function getAdServices(): Promise<AdService[]> {
+async function getAdServices(): Promise<AdService[]> {
   try {
     const snap = await get(ref(db, "settings/adServices"));
     const val = snap.val();
@@ -159,7 +159,7 @@ export const markAdGateShownNow = (): void => {
   } catch {}
 };
 
-export const getRemainingAdGateCooldownMs = (): number => {
+const getRemainingAdGateCooldownMs = (): number => {
   if (_adGateCooldownMs <= 0) return 0;
   try {
     const lastShownAt = Number(localStorage.getItem(AD_GATE_LAST_SHOWN_KEY) || 0);
@@ -210,7 +210,7 @@ async function shortenWithService(svc: AdService, callbackUrl: string): Promise<
 }
 
 /** Get duration for a specific service */
-export async function getServiceDurationMs(serviceId?: string): Promise<number> {
+async function getServiceDurationMs(serviceId?: string): Promise<number> {
   if (serviceId) {
     try {
       const snap = await get(ref(db, `settings/adServices/${serviceId}/durationHours`));
@@ -262,12 +262,6 @@ export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; 
 };
 
 // Keep backward compat
-export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; shortUrl?: string; error?: string }> => {
-  const result = await createUnlockLinksForAllServices();
-  if (!result.ok || result.links.length === 0) return { ok: false, error: result.error };
-  return { ok: true, shortUrl: result.links[0].shortUrl };
-};
-
 // --- Random Prize Link Creator ---
 export const createRandomPrizeLink = async (): Promise<{
   ok: boolean; shortUrl?: string; error?: string;

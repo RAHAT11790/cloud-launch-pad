@@ -34,7 +34,7 @@ describe("routeHealth — a dead function server behaves like an empty router ro
   });
 
   it("a failure seen by a real call marks the server dead immediately", () => {
-    markRouteDead("https://x.supabase.co/functions/v1/rs-bot");
+    markRouteDead("https://x.supabase.co/functions/v1/gone-bot");
     expect(isRouteKnownDead("https://x.supabase.co/functions/v1/other")).toBe(true);
   });
 

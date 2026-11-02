@@ -11,7 +11,7 @@ const values = (value: unknown): unknown[] => {
   return [value];
 };
 
-export const firstText = (...candidates: unknown[]): string => {
+const firstText = (...candidates: unknown[]): string => {
   for (const candidate of candidates) {
     const value = clean(candidate);
     if (value) return value;
@@ -19,7 +19,7 @@ export const firstText = (...candidates: unknown[]): string => {
   return "";
 };
 
-export const normalizeStringList = (value: unknown): string[] => {
+const normalizeStringList = (value: unknown): string[] => {
   const seen = new Set<string>();
   const out: string[] = [];
   const push = (entry: unknown) => {
@@ -130,7 +130,7 @@ export const normalizeCategoryFrom = (row: any, genres: string[] = [], fallback 
   return genres.length ? genres.join(", ") : (raw || fallback);
 };
 
-export const splitMetadataLabels = (value?: unknown): string[] => normalizeStringList(value);
+const splitMetadataLabels = (value?: unknown): string[] => normalizeStringList(value);
 
 export const contentCategoryLabels = (item: any): string[] => {
   const labels = [...splitMetadataLabels(item?.category), ...normalizeGenresFrom(item)];

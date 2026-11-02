@@ -79,11 +79,6 @@ export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
   entry("telegram-post",   "Telegram Post",   "📮 Channel posts + group link share only. Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.", telegramPostSrc, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]),
   entry("comment-bridge",  "Comment Bridge Bot", "💬 Standalone bot (use a SEPARATE bot token). Website comments → your Telegram group; reply with `/rs your answer` → it lands in the site's comment thread + push notification. Firebase DB URL is hard-coded inside — you only set 3 values: TELEGRAM_BOT_TOKEN, TELEGRAM_ADMIN_USER_ID, TELEGRAM_COMMENT_GROUP_ID. Open the worker URL once to auto-register the webhook.", commentBridgeSrc, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ADMIN_USER_ID", "TELEGRAM_COMMENT_GROUP_ID"], { isNew: true, badgeText: "NEW · 3 VALUES", badgeTone: "emerald" }),
 ];
-
-
-export const getCfLibraryEntry = (slug: string) =>
-  CF_WORKER_LIBRARY.find((e) => e.slug === slug);
-
 // Manager Worker source is bundled separately so users can copy-paste it
 // straight from the setup screen without hunting for the file.
 export { default as CF_MANAGER_WORKER_CODE } from "../../cloudflare-worker/cf-manager-worker.js?raw";

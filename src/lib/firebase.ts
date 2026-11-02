@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue as remoteOnValue, push as remotePush, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, orderByKey, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, limitToFirst, startAfter, startAt, endAt, type DataSnapshot } from "firebase/database";
+import { getDatabase, ref, onValue as remoteOnValue, push as remotePush, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, type DataSnapshot } from "firebase/database";
 import { currentGuestId, localGuestPath, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
-import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyASjrQM27mfAbHXA9ZqYv3YbubZPUxOR50",
@@ -94,4 +94,4 @@ export async function registerGuestId(id: string) {
   try { await remoteSet(ref(db, `guestRegistry/${id}`), true); }
   catch (error) { registeredGuests.delete(id); throw error; }
 }
-export { ref, query, orderByChild, orderByKey, equalTo, limitToLast, limitToFirst, startAfter, startAt, endAt, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
+export { ref, query, orderByChild, equalTo, limitToLast, signInWithPopup };

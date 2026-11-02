@@ -11,11 +11,11 @@
  *   localStorage so the very first paint already shows the right picture.
  * - Entries the shop no longer uses are deleted (live cache, never stale).
  */
-import { db, get, ref, remove, set } from "@/lib/firebase";
+import { db, get, ref, set } from "@/lib/firebase";
 
-export const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 const CHUNK = 900 * 1024; // base64 chars per chunk (well under RTDB limits)
-export const MEDIA_CACHE_NAME = "rs-profile-media-v1";
+const MEDIA_CACHE_NAME = "rs-profile-media-v1";
 const MEDIA_PATH = "profileMedia";
 const POSTER_PREFIX = "rs_pf_poster_v1:";
 
@@ -41,12 +41,6 @@ export const uploadMediaFile = async (file: File): Promise<string> => {
   await putCache(url, new Blob([file], { type: file.type || "video/mp4" })).catch(() => undefined);
   return url;
 };
-
-export const deleteStoredMedia = async (url: string) => {
-  if (!isStoredMedia(url)) return;
-  await remove(ref(db, `${MEDIA_PATH}/${url.slice(5)}`)).catch(() => undefined);
-};
-
 const cacheKey = (url: string) => `https://profile-media.cache/${encodeURIComponent(url)}`;
 const openCache = () => (typeof caches !== "undefined" ? caches.open(MEDIA_CACHE_NAME) : Promise.reject(new Error("no-cache")));
 
@@ -139,7 +133,7 @@ export const resolveMediaUrl = (url: string): Promise<string> => {
 };
 
 /** Warm the cache in the background (e.g. the equipped backdrop). */
-export const prefetchMedia = (url: string) => { if (url) resolveMediaUrl(url).catch(() => undefined); };
+const prefetchMedia = (url: string) => { if (url) resolveMediaUrl(url).catch(() => undefined); };
 
 /* ---------- First-frame posters (instant, correct first paint) ---------- */
 export const readPoster = (url: string): string => {

@@ -23,7 +23,7 @@ export const DEFAULT_FRAME_EFFECTS: FrameEffect[] = ["aura", "shine", "glow"];
 
 export type BackdropMediaType = "image" | "video";
 
-export const looksLikeVideoUrl = (url: string) => String(url || "").startsWith("rtdb:") || /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(String(url || "").trim());
+const looksLikeVideoUrl = (url: string) => String(url || "").startsWith("rtdb:") || /\.(mp4|webm|mov|m4v|ogv)(?:[?#]|$)/i.test(String(url || "").trim());
 
 export type ShopItem = {
   id: string;

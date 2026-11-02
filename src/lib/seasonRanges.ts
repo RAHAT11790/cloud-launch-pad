@@ -13,7 +13,7 @@ import { getComboSpan, renumberEpisodes } from "@/lib/episodeCombo";
 export type NumberingMode = "season" | "continuous";
 export interface SeasonRange { name: string; start: number; end: number }
 
-export const flattenSeasonEpisodes = (seasons: any[]): any[] =>
+const flattenSeasonEpisodes = (seasons: any[]): any[] =>
   (Array.isArray(seasons) ? seasons : []).flatMap((s) => {
     const eps = Array.isArray(s?.episodes) ? s.episodes.slice() : [];
     return eps

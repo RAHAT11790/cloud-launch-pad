@@ -102,9 +102,3 @@ export function useBranding(): BrandingConfig {
 
   return branding;
 }
-
-export function getBrandingSync(): BrandingConfig {
-  return cachedBranding || DEFAULT_BRANDING;
-}
-
-export { DEFAULT_BRANDING };

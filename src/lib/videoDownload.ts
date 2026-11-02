@@ -42,10 +42,8 @@ const buildSafeFileName = (rawName: string) => {
 };
 
 let overrideBaseUrl = "";
-let overrideEnabled = false;
 let overrideIsAdmin = false; // true only when a Cloudflare/self-hosted admin override is active
 let playbackProxyBaseUrl = "";
-let playbackProxyEnabled = false;
 let playbackProxyIsAdmin = false;
 let downloadOverrideRaw: any = null;
 let proxyOverrideRaw: any = null;
@@ -62,12 +60,10 @@ try {
     const cachedProxy = localStorage.getItem(PROXY_ROUTE_CACHE_KEY) || "";
     if (/^https?:\/\//i.test(cachedDownload)) {
       overrideBaseUrl = normalizeFunctionEndpointUrl("video-download", cachedDownload);
-      overrideEnabled = true;
       overrideIsAdmin = localStorage.getItem(DL_ROUTE_ADMIN_FLAG) === "1";
     }
     if (/^https?:\/\//i.test(cachedProxy)) {
       playbackProxyBaseUrl = normalizeFunctionEndpointUrl("video-proxy", cachedProxy);
-      playbackProxyEnabled = true;
       playbackProxyIsAdmin = localStorage.getItem(PROXY_ROUTE_ADMIN_FLAG) === "1";
     }
   }
@@ -78,7 +74,6 @@ const applyDownloadRoute = () => {
   const adminEnabled = Boolean(overrideUrl) && downloadOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : "";
   overrideBaseUrl = adminUrl;
-  overrideEnabled = Boolean(overrideBaseUrl);
   overrideIsAdmin = Boolean(adminUrl);
   try {
     if (overrideBaseUrl) localStorage.setItem(DL_ROUTE_CACHE_KEY, overrideBaseUrl);
@@ -92,7 +87,6 @@ const applyProxyRoute = () => {
   const adminEnabled = Boolean(overrideUrl) && proxyOverrideRaw?.enabled !== false;
   const adminUrl = adminEnabled ? overrideUrl : "";
   playbackProxyBaseUrl = adminUrl;
-  playbackProxyEnabled = Boolean(playbackProxyBaseUrl);
   playbackProxyIsAdmin = Boolean(adminUrl);
   try {
     if (playbackProxyBaseUrl) localStorage.setItem(PROXY_ROUTE_CACHE_KEY, playbackProxyBaseUrl);
@@ -214,15 +208,6 @@ const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string
   return `${trimmedBase}?${params.toString()}`;
 };
 
-const buildPlaybackProxyUrl = (base: string, rawUrl: string) => {
-  const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
-  if (!trimmedBase) return "";
-  if (/\.workers\.dev(?:\/)?$/i.test(trimmedBase.replace(/\?.*$/, ""))) {
-    return `${trimmedBase}?url=${encodeURIComponent(rawUrl)}`;
-  }
-  return `${trimmedBase}?src=${encodeURIComponent(toOpaqueUrlToken(rawUrl))}`;
-};
-
 export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): string[] {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
@@ -261,23 +246,6 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
   ]);
 }
 
-export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
-  const trimmedUrl = String(rawUrl || "").trim();
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
-  // Playback proxy is only for insecure http:// media rescue. HTTPS media hosts
-  // must stay direct in the browser/video tag and must not be routed through
-  // video-proxy for probing/download fallback.
-  if (!/^http:\/\//i.test(trimmedUrl)) return [];
-  if (isManagedVideoProxyUrl(trimmedUrl)) return [trimmedUrl];
-  if (isManagedVideoDownloadUrl(trimmedUrl)) {
-    const inner = unwrapProxyTarget(trimmedUrl);
-    if (inner) return buildVideoProxyUrlCandidates(inner);
-    return [];
-  }
-  const bases = playbackProxyEnabled && playbackProxyBaseUrl && !isRouteKnownDead(playbackProxyBaseUrl) ? [playbackProxyBaseUrl] : [];
-  return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
-}
-
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string, fallbackUrls: string[] = []): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
@@ -303,12 +271,6 @@ export function unwrapManagedVideoUrl(value: string): string {
     return unwrapProxyTarget(trimmed) || "";
   }
   return trimmed;
-}
-
-export function buildDirectDownloadUrl(rawUrl: string): string | null {
-  const trimmedUrl = unwrapManagedVideoUrl(rawUrl);
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  return trimmedUrl;
 }
 
 function clickAnchorDownload(finalUrl: string, fileName: string) {
@@ -354,83 +316,4 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   openDownloadLink(finalUrl, fileName);
   return true;
 }
-
-// ---------------------------------------------------------------------------
-// Batch downloads
-// ---------------------------------------------------------------------------
-// Chromium keeps "user activation" only for the task the click started, and it
-// also throttles many <a download> clicks fired in the very same tick — that is
-// why 6 selected episodes produced 1 file. The reliable recipe is:
-//   1. fire the FIRST item as a real anchor click inside the user gesture, then
-//   2. hand every remaining item to a hidden <iframe>, spaced out in time.
-// Our download proxy always answers with `Content-Disposition: attachment`, so
-// an iframe navigation never leaves the page — the browser just downloads it.
-function iframeDownload(finalUrl: string) {
-  const frame = document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  frame.style.opacity = "0";
-  frame.setAttribute("aria-hidden", "true");
-  frame.src = finalUrl;
-  document.body.appendChild(frame);
-  window.setTimeout(() => { try { frame.remove(); } catch {} }, 120_000);
-}
-
-export function triggerBulkBackgroundDownloads(
-  items: Array<{ url: string; fileName: string; fallbackUrls?: string[] }>,
-): number {
-  if (!Array.isArray(items) || items.length === 0) return 0;
-
-
-
-
-  const seen = new Set<string>();
-  const valid = items
-    .map((it) => {
-      const u = String(it?.url || "").trim();
-      if (!u || !isHttpUrl(u)) return null;
-      const fn = buildSafeFileName(it?.fileName || "video");
-      const fallbacks = Array.isArray(it?.fallbackUrls) ? it.fallbackUrls : [];
-      const proxied = buildVideoDownloadUrlCandidates(u, fn, fallbacks)[0] || buildVideoDownloadUrl(u, fn, fallbacks);
-      if (!proxied || seen.has(proxied)) return null;
-      seen.add(proxied);
-      return { final: proxied, fn };
-    })
-    .filter((x): x is { final: string; fn: string } => !!x);
-
-  if (valid.length === 0) {
-    toast.error("No downloadable links found");
-    return 0;
-  }
-
-  if (isInTelegramWebView()) {
-    // One at a time — Telegram's openLink bridge ignores rapid-fire calls.
-    valid.forEach((entry, i) => {
-      window.setTimeout(() => openExternalBrowser(entry.final), i * 1200);
-    });
-    return valid.length;
-  }
-
-  // Every item is clicked inside the SAME user gesture/task. This is the only
-  // pattern browsers accept for multi-file downloads: Chrome shows a single
-  // "Download multiple files?" prompt and then hands all of them to its native
-  // download manager. Anything fired from a timer has lost user activation and
-  // is silently dropped ("Aborting download - not user initiated") — that was
-  // the old "only the first file downloads" bug.
-  valid.forEach((entry) => {
-    try { clickAnchorDownload(entry.final, entry.fn); } catch {}
-  });
-
-
-
-
-
-  return valid.length;
-}
-
-
-
-
 

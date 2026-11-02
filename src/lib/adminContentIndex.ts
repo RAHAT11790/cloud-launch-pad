@@ -251,11 +251,3 @@ export const removeAdminContentIndex = async (kind: AdminContentKind, id: string
   if (!id) return;
   await remove(ref(db, `${indexPathFor(kind)}/${id}`));
 };
-
-export const primeAdminContentIndexFromList = async (kind: AdminContentKind, items: any[]) => {
-  const rows = (items || []).filter((item: any) => item?.id && !isLegacyAnEntry(item.id, item));
-  const chunkSize = 25;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    await Promise.all(rows.slice(i, i + chunkSize).map((item: any) => upsertAdminContentIndex(kind, item.id, item).catch(() => {})));
-  }
-};

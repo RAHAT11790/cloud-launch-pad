@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db, ref, onValue, set } from "@/lib/firebase";
 
 /** Firebase path for the global Live TV on/off switch (missing = on). */
-export const LIVE_TV_FLAG_PATH = "settings/liveTvEnabled";
+const LIVE_TV_FLAG_PATH = "settings/liveTvEnabled";
 const CACHE_KEY = "rs_live_tv_enabled_v1";
 
 const readCache = (): boolean => {

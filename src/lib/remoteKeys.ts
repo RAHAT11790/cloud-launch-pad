@@ -146,7 +146,7 @@ export function channelIndexFromDigits(digits: string, length: number): number |
   return n - 1;
 }
 
-export const REMOTE_VOLUME_STEP = 10;
+const REMOTE_VOLUME_STEP = 10;
 export const WHEEL_VOLUME_STEP = 5;
 
 export function stepVolume(current: number, dir: 1 | -1, step = REMOTE_VOLUME_STEP): number {

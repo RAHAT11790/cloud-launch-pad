@@ -68,7 +68,7 @@ const DEFAULT: AdsterraConfig = {
 
 const AD_FIRE_LOCK_KEY = "rs_adsterra_last_fire_v3";
 const AD_GAP_KEY = "rs_adsterra_gap_sec";
-export const AD_FIRE_MIN_GAP_MS = 60_000;
+const AD_FIRE_MIN_GAP_MS = 60_000;
 
 /** Admin-controlled cool-down (seconds) between two player ads. */
 export function getAdGapMs(): number {
@@ -523,7 +523,7 @@ export function exitAdsterraPlayerScope() {
  * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
  * so the ad script is never hammered into a permanent network cool-down.
  */
-export async function loadAdsterraSlots(): Promise<boolean> {
+async function loadAdsterraSlots(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (!window.__adsterraPlayerScopeActive) return false;
   if (window.__adsterraPremium) return false;
@@ -549,18 +549,6 @@ export async function loadAdsterraSlots(): Promise<boolean> {
   await mountAdCycle(cfg);
   return true;
 }
-
-/**
- * Rip the current ad window out of the DOM after an ad has been consumed, so
- * leftover scripts/iframes cannot keep firing on their own schedule.
- */
-export function clearAdsterraWindow() {
-  if (typeof window === "undefined") return;
-  dismissVisibleAds(false);
-  removeKnownAdResidue();
-  window.setTimeout(removeKnownAdResidue, 400);
-}
-
 
 /**
  * Fire a standalone Adsterra pop-under ad (no player scope needed).

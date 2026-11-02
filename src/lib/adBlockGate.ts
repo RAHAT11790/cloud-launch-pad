@@ -79,8 +79,6 @@ export const setGatePremiumExempt = (value: boolean) => {
     emit();
   }
 };
-export const isGatePremiumExempt = () => premiumExempt;
-
 export const isExemptPath = (p: string) => EXEMPT.some((e) => p === e || p.startsWith(e + "/"));
 
 

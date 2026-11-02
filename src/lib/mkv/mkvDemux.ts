@@ -74,7 +74,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   tur: "Turkish", tr: "Turkish", pol: "Polish", pl: "Polish", may: "Malay", msa: "Malay", ms: "Malay", fil: "Filipino", tgl: "Tagalog",
 };
 
-export const languageName = (code: string): string => {
+const languageName = (code: string): string => {
   const raw = String(code || "").toLowerCase();
   return LANGUAGE_NAMES[raw] || LANGUAGE_NAMES[raw.split(/[-_]/)[0]] || "";
 };
@@ -87,20 +87,6 @@ const CODEC_NAMES: Array<[RegExp, string]> = [
   [/^S_HDMV\/PGS/i, "PGS"], [/^S_VOBSUB/i, "VobSub"],
 ];
 const codecName = (id: string) => CODEC_NAMES.find(([re]) => re.test(id))?.[1] || id.replace(/^[AVS]_/, "");
-
-const CHANNEL_LABEL = (n?: number) => (!n ? "" : n === 1 ? "Mono" : n === 2 ? "Stereo" : n === 6 ? "5.1" : n === 8 ? "7.1" : `${n}ch`);
-
-/** Clean up release-group noise in track names ("BluRay~Toonworld4all.me"). */
-export const cleanTrackName = (name: string): string => {
-  const cleaned = String(name || "")
-    .replace(/[~|]?\s*(?:www\.)?[a-z0-9-]+\.(?:me|com|net|org|in|xyz|to|cc|io|site|online|co)\b/gi, "")
-    .replace(/@\w+/g, "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/^[\s~|\-–_.,]+|[\s~|\-–_.,]+$/g, "")
-    .trim();
-  return cleaned;
-};
-
 const NAME_HINTS: Array<[RegExp, string]> = [
   [/hindi|हिन्दी|हिंदी|\bhin\b/i, "Hindi"], [/english|\beng\b/i, "English"], [/japanese|日本語|\bjpn?\b/i, "Japanese"],
   [/bengali|bangla|বাংলা/i, "Bengali"], [/tamil/i, "Tamil"], [/telugu/i, "Telugu"], [/malayalam/i, "Malayalam"],
@@ -358,7 +344,7 @@ export interface MkvBlock {
 }
 
 /** Sliding window over a RangeSource with large sequential reads. */
-export class WindowReader {
+class WindowReader {
   private buf = new Uint8Array(0);
   private bufStart: number;
   pos: number;
@@ -549,10 +535,6 @@ export const subtitleBlockText = (track: MkvTrack, frame: Uint8Array): string =>
   }
   return raw.replace(/<[^>]+>/g, "").trim();
 };
-
-export const isMatroskaMagic = (bytes: Uint8Array) =>
-  bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
-
 export const isPgsTrack = (track: MkvTrack) => /^S_HDMV\/PGS$/i.test(track.codecId);
 
 /** Undo zlib (ContentCompAlgo 0) or header stripping for one frame. */

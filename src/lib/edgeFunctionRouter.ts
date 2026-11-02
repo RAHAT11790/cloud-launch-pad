@@ -50,7 +50,7 @@ let cachedConfig: EdgeRouterConfig | null = null;
 let cacheTime = 0;
 const CACHE_TTL = 120_000;
 
-export async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
+async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
   const now = Date.now();
   if (cachedConfig && now - cacheTime < CACHE_TTL) return cachedConfig;
 
@@ -71,17 +71,6 @@ export async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
   } catch {
     return cachedConfig || DEFAULT_CONFIG;
   }
-}
-
-/** Build URL for a function endpoint */
-export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): string {
-  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) return endpoint;
-
-  if (config.cloudflareBaseUrl) {
-    return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
-  }
-  console.warn(`[EdgeRouter] No base URL — "${endpoint}" disabled`);
-  return "";
 }
 
 const SELF_DEPLOYED_FUNCTIONS = new Set([
@@ -106,11 +95,8 @@ const KNOWN_FUNCTION_NAMES = new Set([
   ...SELF_DEPLOYED_FUNCTIONS,
   "generate-backdrop",
   "lovable-backdrop",
-  "rs-bot",
   "send-otp-email",
   "process-email-queue",
-  "episode",
-  "hls",
 ]);
 
 export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): string {
@@ -149,12 +135,6 @@ export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): st
   } catch {
     return trimmed;
   }
-}
-
-export function buildSelfHostedFunctionUrl(fnName: string, baseUrl?: string): string {
-  const base = String(baseUrl || "").trim().replace(/\/+$/, "");
-  if (!base || !/^https?:\/\//i.test(base)) return "";
-  return normalizeFunctionEndpointUrl(fnName, `${base}/${fnName}`);
 }
 
 function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
@@ -208,7 +188,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
 }
 
 /** Call a cloud function */
-export async function callEdgeFunction(
+async function callEdgeFunction(
   fnName: string,
   body: Record<string, any>,
   options?: { method?: string; headers?: Record<string, string>; queryParams?: Record<string, string> }
@@ -242,7 +222,7 @@ export async function callEdgeFunction(
 }
 
 // Alias for backward compat
-export const callCloudFunction = callEdgeFunction;
+const callCloudFunction = callEdgeFunction;
 
 /** Live status check */
 export async function checkFunctionStatus(

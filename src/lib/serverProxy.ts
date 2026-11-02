@@ -18,7 +18,7 @@ export interface ProxyServerEntry {
   locked?: boolean;
 }
 
-export const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
+const VIDEO_SERVERS_CACHE_KEY = "rs_video_servers_cache_v2";
 
 const hostOf = (value: string): string => {
   const raw = String(value || "").trim();
@@ -30,7 +30,7 @@ const hostOf = (value: string): string => {
   }
 };
 
-export const normalizeProxyServers = (val: unknown): ProxyServerEntry[] => {
+const normalizeProxyServers = (val: unknown): ProxyServerEntry[] => {
   let list: any[] = [];
   if (Array.isArray(val)) list = val;
   else if (val && typeof val === "object") list = Object.values(val as any);
@@ -67,25 +67,4 @@ export const resolveServerProxyForUrl = (
   const list = servers?.length ? servers : readCachedProxyServers();
   const match = list.find((server) => hostOf(server.domain) === host);
   return match?.proxy || "";
-};
-
-/** Build the playback URL for a given proxy base. */
-export const buildServerProxyUrl = (
-  proxyBase: string,
-  targetUrl: string,
-  encodeToken?: (value: string) => string,
-): string => {
-  const base = String(proxyBase || "").trim();
-  const target = String(targetUrl || "").trim();
-  if (!base || !target) return target;
-  const encoded = encodeURIComponent(target);
-  if (base.includes("{url}")) return base.split("{url}").join(encoded);
-  const clean = base.replace(/\/+$/, "");
-  if (/\?$/.test(base) || /[?&]url=$/.test(base)) return `${base}${encoded}`;
-  // Cloudflare Worker proxies (the recommended deployment) accept `?url=`.
-  if (/\.workers\.dev$/i.test(clean.replace(/^https?:\/\//i, "").split("/")[0] || "")) {
-    return `${clean}?url=${encoded}`;
-  }
-  if (encodeToken) return `${clean}?src=${encodeURIComponent(encodeToken(target))}`;
-  return `${clean}?url=${encoded}`;
 };

@@ -132,5 +132,3 @@ export function buildWebmCluster(blocks: WebmBlock[]): Uint8Array {
   }
   return el(0x1f43b675, ...parts);
 }
-
-export const webmInternals = { sizeBytes, idBytes };

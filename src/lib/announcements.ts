@@ -3,7 +3,7 @@ export type AnnouncementKind = "normal" | "popup";
 /** Image shapes the admin can pick after uploading; the popup/bell image box takes this shape. */
 export const ANNOUNCEMENT_IMAGE_RATIOS = ["3:1", "16:9", "1:1", "9:16"] as const;
 export type AnnouncementImageRatio = typeof ANNOUNCEMENT_IMAGE_RATIOS[number];
-export const normalizeImageRatio = (v: unknown): AnnouncementImageRatio =>
+const normalizeImageRatio = (v: unknown): AnnouncementImageRatio =>
   (ANNOUNCEMENT_IMAGE_RATIOS as readonly string[]).includes(String(v)) ? v as AnnouncementImageRatio : "3:1";
 /** Tailwind classes for an image box of that shape (tall shapes are width-capped so they fit on a phone). */
 export const imageRatioClass = (r: AnnouncementImageRatio | undefined, place: "popup" | "list" = "popup") => {
@@ -36,9 +36,9 @@ export interface BellItem {
   contentId?: string;
 }
 
-export const RELEASE_TTL_MS = 36 * 60 * 60 * 1000;
+const RELEASE_TTL_MS = 36 * 60 * 60 * 1000;
 export const ANNOUNCEMENT_EXPIRY_HOURS = [6, 12, 24, 72, 168, 720];
-export const POPUP_SEEN_KEY = "rs_popup_seen_v1";
+const POPUP_SEEN_KEY = "rs_popup_seen_v1";
 export const BELL_READ_KEY = "rs_bell_read_at_v1";
 
 export function activeAnnouncements(raw: Record<string, any> | null | undefined, now = Date.now()): Announcement[] {

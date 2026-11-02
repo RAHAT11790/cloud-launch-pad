@@ -13,7 +13,7 @@ let baseCache: string | null = null;
 let basePromise: Promise<string> | null = null;
 
 /** Known ad-network hosts we relay through the shield. */
-export const AD_HOSTS = [
+const AD_HOSTS = [
   "highperformanceformat.com",
   "profitabledisplaynetwork.com",
   "profitableratecpm.com",
@@ -30,7 +30,7 @@ export const AD_HOSTS = [
   "onclickalgo.com",
 ];
 
-export const isAdHost = (host: string): boolean =>
+const isAdHost = (host: string): boolean =>
   AD_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 
 const b64url = (s: string) => {
@@ -73,19 +73,6 @@ export function shieldUrl(raw: string): string {
     const u = new URL(raw, window.location.href);
     if (!isAdHost(u.hostname)) return raw;
     return `${base}/s?u=${b64url(u.toString())}`;
-  } catch {
-    return raw;
-  }
-}
-
-/** Trampoline a pop-under / direct link through the shield. */
-export function shieldNavUrl(raw: string): string {
-  const base = getShieldBaseSync();
-  if (!base || !raw) return raw;
-  try {
-    const u = new URL(raw, window.location.href);
-    if (!isAdHost(u.hostname)) return raw;
-    return `${base}/t?u=${b64url(u.toString())}`;
   } catch {
     return raw;
   }
@@ -140,9 +127,4 @@ export async function shieldExecute(scriptUrl: string): Promise<boolean> {
 /** Warm the base URL as early as possible. */
 export function initAdShield(): void {
   void getShieldBase();
-}
-
-export function resetAdShieldCache(): void {
-  baseCache = null;
-  basePromise = null;
 }

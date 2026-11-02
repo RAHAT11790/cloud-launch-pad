@@ -278,5 +278,3 @@ export function buildFragment(
   }
   return concat([moof, mdat]);
 }
-
-export const mp4Internals = { box, fullBox, concat, u32, descriptorLength };
