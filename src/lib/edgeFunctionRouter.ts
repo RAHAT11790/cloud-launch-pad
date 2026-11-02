@@ -6,7 +6,7 @@
 // ডাইনামিকভাবে নতুন ফাংশন যোগ করা যায়
 
 import { db, ref, get } from "@/lib/firebase";
-import { aliveOrEmpty } from "@/lib/routeHealth";
+import { aliveOrEmpty, isDeadStatus, markRouteDead } from "@/lib/routeHealth";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
@@ -222,12 +222,19 @@ export async function callEdgeFunction(
     url += `?${new URLSearchParams(options.queryParams).toString()}`;
   }
 
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: method !== "GET" ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: method !== "GET" ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    markRouteDead(url);
+    throw err;
+  }
 
+  if (isDeadStatus(res.status)) markRouteDead(url);
   if (!res.ok) throw new Error(`Cloud function ${fnName} failed: ${res.status}`);
 
   const ct = res.headers.get("Content-Type") || "";

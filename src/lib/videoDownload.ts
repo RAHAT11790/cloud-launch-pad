@@ -243,7 +243,7 @@ export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: str
     if (direct) return [direct];
   }
 
-  const bases = unique([overrideBaseUrl].filter(Boolean) as string[]);
+  const bases = unique([overrideBaseUrl].filter((b) => b && !isRouteKnownDead(b)) as string[]);
   const mirrorUrls = unique([servedUrl, trimmedUrl, ...fallbackUrls, ...readServerMirrorUrls(trimmedUrl)].filter((u) => u && u !== servedUrl));
   const proxied = bases.map((base) => buildDownloadProxyUrl(base, servedUrl, rawFileName, mirrorUrls));
 
@@ -271,7 +271,7 @@ export function buildVideoProxyUrlCandidates(rawUrl: string): string[] {
     if (inner) return buildVideoProxyUrlCandidates(inner);
     return [];
   }
-  const bases = playbackProxyEnabled && playbackProxyBaseUrl ? [playbackProxyBaseUrl] : [];
+  const bases = playbackProxyEnabled && playbackProxyBaseUrl && !isRouteKnownDead(playbackProxyBaseUrl) ? [playbackProxyBaseUrl] : [];
   return unique(bases.map((base) => buildPlaybackProxyUrl(base, trimmedUrl)));
 }
 
