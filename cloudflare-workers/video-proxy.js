@@ -1,5 +1,11 @@
-// 🆕 v9 (2026-08-01) — CLOUDFLARE-NATIVE FAST PATH. REDEPLOY REQUIRED.
+// 🆕 v11 (2026-11-02) — AUDIO-TRACK FAST PATH. REDEPLOY REQUIRED.
 // After deploy, paste this Worker URL back into Admin → EGD Router → video-proxy.
+// The site uses it ONLY to read audio/subtitle tracks from video servers that
+// refuse direct byte reads (no CORS). The video itself still plays direct.
+//   v11: small range reads (track headers, audio clusters) are kept in the
+//   Cloudflare edge cache (custom domains; workers.dev skips it silently), a
+//   GET with no ?url= answers {ok:true} for health checks, and every reply
+//   carries Server-Timing so slow mirrors are easy to spot.
 // ============================================================
 // Cloudflare Worker — video-proxy (v9, tuned ONLY for Cloudflare)
 // ============================================================
@@ -41,6 +47,44 @@ const PASS = ["content-type", "content-length", "content-range", "accept-ranges"
 const HTTP_WINDOW_BYTES = 8 * 1024 * 1024;
 const HEADER_TIMEOUT_MS = 7000;
 const MEDIA_EDGE_TTL = 60 * 60 * 24 * 7;
+// Bounded range reads up to this size are cached at the edge (Cache API).
+const RANGE_CACHE_MAX = 4 * 1024 * 1024;
+
+function boundedRange(range) {
+  const m = String(range || "").trim().match(/^bytes=(\d+)-(\d+)$/i);
+  if (!m) return null;
+  const start = Number(m[1]), end = Number(m[2]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start + 1 > RANGE_CACHE_MAX) return null;
+  return { start, end };
+}
+
+const rangeCacheKey = (target, r) =>
+  new Request(`https://rs-track-cache.internal/${encodeURIComponent(target)}?r=${r.start}-${r.end}`);
+
+async function cachedRange(key) {
+  try {
+    const hit = await caches.default.match(key);
+    if (!hit) return null;
+    const h = new Headers(hit.headers);
+    const cr = h.get("x-rs-content-range");
+    if (!cr) return null;
+    h.set("content-range", cr);
+    h.delete("x-rs-content-range");
+    h.set("x-rs-cache", "HIT");
+    return new Response(hit.body, { status: 206, headers: h });
+  } catch { return null; }
+}
+
+function storeRange(ctx, key, res, headers) {
+  // Cache API refuses 206, so the slice is stored as a 200 with its range noted.
+  try {
+    const h = new Headers(headers);
+    h.set("x-rs-content-range", h.get("content-range") || "");
+    h.delete("content-range");
+    h.set("cache-control", `public, max-age=${MEDIA_EDGE_TTL}`);
+    ctx?.waitUntil?.(caches.default.put(key, new Response(res, { status: 200, headers: h })).catch(() => {}));
+  } catch {}
+}
 
 const isM3u8 = (url, ct) => /mpegurl|m3u8/i.test(ct || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isMediaSegment = (u) => /\.(?:ts|m4s|mp4|m4v|mov|webm|mkv|aac)(?:$|[?#])/i.test(u.pathname + u.search);
@@ -176,14 +220,19 @@ async function fetchHead(url, init) {
 }
 
 export default {
-  async fetch(req) {
+  async fetch(req, _env, ctx) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    const t0 = Date.now();
     if (req.method !== "GET" && req.method !== "HEAD")
       return new Response("Method not allowed", { status: 405, headers: cors });
 
     const reqUrl = new URL(req.url);
     const target = reqUrl.searchParams.get("url") || fromOpaqueUrlToken(reqUrl.searchParams.get("src") || "");
-    if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
+    if (!target) {
+      return new Response(JSON.stringify({ ok: true, service: "video-proxy", edge: "cf-v11" }), {
+        status: 200, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
 
     let up;
     try { up = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
@@ -192,6 +241,17 @@ export default {
 
     const rawRange = req.headers.get("range");
     const alignedRange = alignMediaRange(rawRange, up);
+
+    // Track reads repeat for every viewer of an episode — serve them from the edge.
+    const slice = req.method === "GET" ? boundedRange(rawRange) : null;
+    const sliceKey = slice ? rangeCacheKey(up.toString(), slice) : null;
+    if (sliceKey) {
+      const hit = await cachedRange(sliceKey);
+      if (hit) {
+        hit.headers.set("Server-Timing", `edge;dur=${Date.now() - t0}`);
+        return hit;
+      }
+    }
     const headers = {
       "User-Agent": UA,
       Accept: req.headers.get("accept") || "*/*",
@@ -248,7 +308,8 @@ export default {
     out.set("content-disposition", "inline");
     out.set("Cross-Origin-Resource-Policy", "cross-origin");
     out.set("Timing-Allow-Origin", "*");
-    out.set("x-rs-edge", "cf-v10-ios");
+    out.set("x-rs-edge", "cf-v11");
+    out.set("Server-Timing", `upstream;dur=${Date.now() - t0}`);
 
 
     if (req.method !== "HEAD" && res.ok && isM3u8(up.toString(), res.headers.get("content-type"))) {
@@ -261,6 +322,11 @@ export default {
 
     if (isMediaSegment(up) && (res.status === 200 || res.status === 206)) {
       out.set("cache-control", "public, max-age=604800, immutable");
+    }
+    if (sliceKey && res.status === 206 && res.body) {
+      const [toClient, toCache] = res.body.tee();
+      storeRange(ctx, sliceKey, toCache, out);
+      return new Response(toClient, { status: 206, headers: out });
     }
     // Streaming pass-through — never buffer the upstream body on the edge.
     return new Response(req.method === "HEAD" ? null : res.body, { status: res.status, headers: out });

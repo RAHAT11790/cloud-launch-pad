@@ -9,7 +9,8 @@
 // Rule now:
 //   * server.proxy set   → that server plays ONLY through that proxy
 //   * server.proxy empty → the server plays direct (HTTPS servers)
-// There is no global fallback proxy anywhere in the app.
+// Video playback has no global fallback proxy. The EGD `video-proxy` row is
+// used only for audio/subtitle byte reads (src/lib/trackProxy.ts).
 
 export interface ProxyServerEntry {
   name?: string;
