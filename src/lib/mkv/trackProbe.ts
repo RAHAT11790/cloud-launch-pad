@@ -9,7 +9,6 @@
 import { db, ref, set } from "@/lib/firebase";
 import { firebaseRestUrl } from "@/lib/firebaseRest";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { SUPABASE_URL } from "@/lib/siteConfig";
 import { toOpaqueUrlToken, fromOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { resolveServerProxyForUrl } from "@/lib/serverProxy";
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
@@ -220,7 +219,6 @@ export async function corsCandidates(playUrl: string): Promise<string[]> {
   const out = directCorsCandidates(playUrl);
   const routed = await getEdgeFunctionUrl("video-proxy").catch(() => "");
   if (routed) out.push(buildProxyUrl(routed, raw));
-  if (SUPABASE_URL) out.push(buildProxyUrl(`${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-proxy`, raw));
   return Array.from(new Set(out));
 }
 

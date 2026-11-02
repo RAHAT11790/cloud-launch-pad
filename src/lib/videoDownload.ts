@@ -3,6 +3,7 @@ import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { db, ref, onValue } from "@/lib/firebase";
 import { normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { fromOpaqueUrlToken, toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
+import { checkRouteAlive, isRouteKnownDead } from "@/lib/routeHealth";
 import { applyActiveDownloadServer, buildDirectDownloadLink, getEffectiveDownloadMode } from "@/lib/downloadManagerSettings";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -83,6 +84,7 @@ const applyDownloadRoute = () => {
     if (overrideBaseUrl) localStorage.setItem(DL_ROUTE_CACHE_KEY, overrideBaseUrl);
     localStorage.setItem(DL_ROUTE_ADMIN_FLAG, overrideIsAdmin ? "1" : "0");
   } catch {}
+  if (overrideBaseUrl) void checkRouteAlive(overrideBaseUrl);
 };
 
 const applyProxyRoute = () => {
@@ -96,6 +98,7 @@ const applyProxyRoute = () => {
     if (playbackProxyBaseUrl) localStorage.setItem(PROXY_ROUTE_CACHE_KEY, playbackProxyBaseUrl);
     localStorage.setItem(PROXY_ROUTE_ADMIN_FLAG, playbackProxyIsAdmin ? "1" : "0");
   } catch {}
+  if (playbackProxyBaseUrl) void checkRouteAlive(playbackProxyBaseUrl);
 };
 try {
   if (typeof window !== "undefined") {

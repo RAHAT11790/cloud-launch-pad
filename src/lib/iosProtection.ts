@@ -10,6 +10,7 @@
 
 import { db, ref, onValue } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { checkRouteAlive, isRouteKnownDead } from "@/lib/routeHealth";
 
 const CACHE_KEY = "rs_ios_protection_route_v1";
 
@@ -57,6 +58,8 @@ export const ensureIosProtectionWatcher = () => {
       const row = snap.val() || {};
       const url = row?.enabled === false ? "" : clean(String(row?.customUrl || row?.url || ""));
       writeCache(url);
+      // A gateway on a dead server must not swallow iOS playback.
+      if (url) void checkRouteAlive(url).then((alive) => { if (!alive && cachedRoute === url) writeCache(""); });
     });
   } catch {}
   void refreshIosProtectionRoute();
@@ -75,7 +78,7 @@ export const wrapWithIosProtection = (mediaUrl: string): string => {
   const raw = String(mediaUrl || "").trim();
   if (!raw || !/^https?:\/\//i.test(raw)) return "";
   const route = getIosProtectionRoute();
-  if (!route) return "";
+  if (!route || isRouteKnownDead(route)) return "";
   if (isAlreadyWrapped(raw, route)) return raw;
   return `${route}?url=${encodeURIComponent(raw)}`;
 };
