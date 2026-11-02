@@ -19,6 +19,7 @@ import { MkvSubtitleReader } from "@/lib/mkv/subtitleReader";
 import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
 import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, refineSubtitleLabels, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 import { pickDefaultAudio } from "@/lib/mkv/audioDefault";
+import { warmTrackProxy } from "@/lib/trackProxy";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -269,8 +270,9 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       tracksRef.current = list;
       setTracks(list);
       if (activeAudioRef.current < 0) { activeAudioRef.current = list.nativeAudio; setActiveAudio(list.nativeAudio); }
-      // Pre-read the full header + cues in the background so a later language
-      // switch skips that round-trip and starts in about a second.
+      // Pre-read the full header + cues right away (through the track proxy
+      // when the server refuses direct reads) so a language switch later
+      // starts instantly instead of paying that round-trip.
       if (list.container !== "mp4" && (list.audio.length > 1 || list.subtitles.length > 0) && !warmTimer) {
         warmTimer = setTimeout(() => {
           if (cancelled) return;
@@ -281,10 +283,11 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
             tracksRef.current = next;
             setTracks(next);
           }).catch(() => undefined);
-        }, 4000);
+        }, 300);
       }
     };
     let warmTimer: ReturnType<typeof setTimeout> | null = null;
+    warmTrackProxy();
     apply(peekEmbeddedTracks(candidate));
     // Let the first frames load before we spend bandwidth on the probe.
     const timer = setTimeout(() => { probeEmbeddedTracks(candidate).then(apply).catch(() => undefined); }, 600);
