@@ -26,6 +26,7 @@ import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
 import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw";
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 import adShieldSource from "../../supabase/functions/ad-shield/index.ts?raw";
+import adsterraStatsSource from "../../supabase/functions/adsterra-stats/index.ts?raw";
 import abyssSource from "../../supabase/functions/abyss/index.ts?raw";
 import sharePreviewSource from "../../supabase/functions/share-preview/index.ts?raw";
 
@@ -90,6 +91,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
+  entry("adsterra-stats", "Adsterra Stats", "📊 Adsterra analytics API (Lovable copy) — feeds Ad Manager → Adsterra Analytics. The Cloudflare build (Cloudflare Manager → Adsterra Stats) keeps working when Lovable Cloud is down; paste either URL into EGD Router → adsterra-stats.", adsterraStatsSource, ["ADSTERRA_API_KEY"], { isNew: true, badgeText: "AD STATS · NEW", badgeTone: "amber" }),
   entry("file-rename", "File Rename", "HTTP/HTTPS filename attachment relay. Use Default for verification; switch this row to your Cloudflare deployment for production downloads.", fileRenameSource, [], { isNew: true, badgeText: "DOWNLOAD", badgeTone: "cyan" }),
   entry("abyss",          "Abyss Server",   "🎬 Abyss link resolver + MP4 stream relay. Turns an Abyss iframe link into direct 480p/720p/1080p files that play inside the RS player — no iframe, no Abyss ads. Paste the URL into EGD Router → abyss (or hit Default).", abyssSource, [], { isNew: true, badgeText: "ABYSS · NEW", badgeTone: "cyan" }),
   entry("share-preview",  "Share Preview",  "🖼️ Share link preview — Telegram/WhatsApp/Facebook show the anime LOGO on a 16:9 card, visitors are redirected to the episode. Paste the URL into EGD Router → share-preview (or hit Default).", sharePreviewSource, [], { isNew: true, badgeText: "SHARE · NEW", badgeTone: "cyan" }),
