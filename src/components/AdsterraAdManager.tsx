@@ -2,8 +2,11 @@ import { useEffect, useRef } from "react";
 import {
   enterAdsterraPlayerScope,
   exitAdsterraPlayerScope,
+  markTagCapped,
   releaseAd,
   setAdsterraPremium,
+  tagOpenedSince,
+  TAG_VERIFY_MS,
   subscribeAdsterraConfig,
 } from "@/lib/adsterraAds";
 import { stopAdGuard } from "@/lib/adGuard";
@@ -42,9 +45,19 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
       if (busy.current) return;
       if (!adSlotReady()) return;
       busy.current = true;
+      const askedAt = Date.now();
       try {
-        const fired = await releaseAd();
-        if (fired) noteAdShown();
+        const result = await releaseAd();
+        if (result === "direct") {
+          noteAdShown();
+        } else if (result === "tag") {
+          // Count it only when the tag really opened a sponsor tab. A silent
+          // tag (its own frequency cap) switches the next tap to the Direct
+          // Link instead of eating the slot — ads keep running all session.
+          await new Promise((r) => window.setTimeout(r, TAG_VERIFY_MS));
+          if (tagOpenedSince(askedAt - 1000)) noteAdShown();
+          else markTagCapped();
+        }
       } catch {
         /* ignore */
       } finally {

@@ -1,5 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { markRouteDead, isDeadStatus } from "@/lib/routeHealth";
+
+/** Calls the EGD-routed `adsterra-stats` function (Cloudflare or Lovable copy). */
+async function callStats(body: Record<string, unknown>): Promise<any> {
+  const url = await getEdgeFunctionUrl("adsterra-stats");
+  if (!url) throw new Error("Adsterra Stats is not set up. Deploy it in Cloudflare Manager and paste the URL into EGD Router → adsterra-stats.");
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    markRouteDead(url);
+    throw new Error("Adsterra Stats server is unreachable. Check the URL in EGD Router → adsterra-stats.");
+  }
+  if (isDeadStatus(res.status)) markRouteDead(url);
+  const data = await res.json().catch(() => null);
+  if (!res.ok || data?.error) throw new Error(data?.error || `Adsterra Stats failed (${res.status})`);
+  return data;
+}
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -53,15 +71,11 @@ const AdsterraAnalytics = () => {
     setLoading(true); setErr(null);
     try {
       const [cur, old] = await Promise.all([
-        supabase.functions.invoke("adsterra-stats", { body: { action: "overview", start, finish } }),
-        supabase.functions.invoke("adsterra-stats", {
-          body: { action: "stats", start: prevStart, finish: prevFinish, group_by: ["date"] },
-        }),
+        callStats({ action: "overview", start, finish }),
+        callStats({ action: "stats", start: prevStart, finish: prevFinish, group_by: ["date"] }).catch(() => ({ items: [] })),
       ]);
-      if (cur.error) throw new Error(cur.error.message);
-      if ((cur.data as any)?.error) throw new Error((cur.data as any).error);
-      setData(cur.data as Overview);
-      setPrev(((old.data as any)?.items ?? []) as Row[]);
+      setData(cur as Overview);
+      setPrev((old?.items ?? []) as Row[]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load Adsterra stats");
     }

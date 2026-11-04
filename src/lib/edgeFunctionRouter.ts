@@ -89,6 +89,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "verify-admin-pin",
   "abyss",
   "share-preview",
+  "adsterra-stats",
 ]);
 
 const KNOWN_FUNCTION_NAMES = new Set([

@@ -45,6 +45,9 @@ declare global {
     __adsterraScriptOk?: boolean;
     __adsterraPopFiredAt?: number;
     __adsterraCycleCount?: number;
+    __adsterraTagOpenAt?: number;
+    __adsterraTagAskedAt?: number;
+    __adsterraLeaveHooked?: boolean;
   }
 }
 
@@ -80,6 +83,55 @@ export function getAdGapMs(): number {
 }
 function rememberAdGap(sec: number) {
   try { if (Number.isFinite(sec) && sec >= 10) localStorage.setItem(AD_GAP_KEY, String(Math.min(sec, 3600))); } catch {}
+}
+
+// ---- Pop-under tag cap detection ------------------------------------------
+// Adsterra's pop-under tag has its own per-user frequency cap: after a few
+// pops it silently stops opening anything. We used to count those silent
+// clicks as "shown", so the player stopped showing ads after ~10 minutes
+// for the rest of a 2–3 hour session. Now every delegated click is checked:
+// if the tag did not really open a tab, it is marked capped and the Direct
+// Link (which has no cap) takes over until the tag is retried.
+const TAG_CAP_KEY = "rs_adsterra_tag_capped_until_v1";
+export const TAG_RETRY_MS = 20 * 60_000;
+/** How long after a delegated click we wait to see the tag open a tab. */
+export const TAG_VERIFY_MS = 1500;
+
+export function tagCappedUntil(): number {
+  try { return Number(localStorage.getItem(TAG_CAP_KEY)) || 0; } catch { return 0; }
+}
+export function markTagCapped(now = Date.now()) {
+  try { localStorage.setItem(TAG_CAP_KEY, String(now + TAG_RETRY_MS)); } catch {}
+}
+function clearTagCap() {
+  try { localStorage.removeItem(TAG_CAP_KEY); } catch {}
+}
+function noteRealOpen() {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  window.__adsterraTagOpenAt = now;
+  window.__adsterraPopFiredAt = now;
+}
+/** Did a real sponsor tab open since `askedAt`? */
+export function tagOpenedSince(askedAt: number): boolean {
+  if (typeof window === "undefined") return false;
+  return (window.__adsterraTagOpenAt || 0) >= askedAt;
+}
+// Some tags open the sponsor tab through their own iframe's window.open,
+// which our wrapper can't see. The page losing focus right after a
+// delegated click is the same proof that a tab opened.
+function hookPageLeave() {
+  if (typeof window === "undefined" || window.__adsterraLeaveHooked) return;
+  window.__adsterraLeaveHooked = true;
+  const onLeave = () => {
+    const asked = window.__adsterraTagAskedAt || 0;
+    if (asked && Date.now() - asked < TAG_VERIFY_MS) {
+      window.__adsterraTagOpenAt = Date.now();
+      clearTagCap();
+    }
+  };
+  window.addEventListener("blur", onLeave);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") onLeave(); });
 }
 
 function reserveAdFire(): boolean {
@@ -268,7 +320,8 @@ function installPopunderThrottle() {
         urlStr.startsWith(location.origin);
       if (!isAppUrl && window.__adsterraPlayerScopeActive) {
         if (!reserveAdFire()) return null;
-        window.__adsterraPopFiredAt = Date.now();
+        noteRealOpen();
+        clearTagCap();
       }
     } catch {}
     return origOpen(url as any, target as any, features as any);
@@ -494,6 +547,7 @@ export function enterAdsterraPlayerScope() {
   removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
+  hookPageLeave();
 }
 
 export function exitAdsterraPlayerScope() {
@@ -597,54 +651,60 @@ export async function firePopunderAd(): Promise<boolean> {
 }
 
 
+/** What one release did: opened the Direct Link, handed the click to the
+ *  pop-under tag (must be verified), only mounted the tag, or nothing. */
+export type AdRelease = "direct" | "tag" | "mounted" | "none";
+
 /**
  * Anti-adblock release cycle.
  *
- * 1. The Adsterra anti-adblock popunder tag is mounted exactly once per page
- *    session (re-injecting stacks click handlers → ad storms).
- * 2. Every eligible click after the admin cool-down releases ONE ad:
- *      • two of every three cycles → let the mounted popunder tag handle the click (higher CPM)
- *      • every third cycle, or whenever the tag is blocked / did not fire →
- *        open the Direct Link (smartlink) synchronously inside the gesture.
- *    That way the user keeps seeing ads for hours even when the script is
- *    blocked by an adblocker or throttled by the network's own frequency cap.
+ * 1. The Adsterra pop-under tag is mounted exactly once per page session
+ *    (re-injecting stacks click handlers → ad storms).
+ * 2. Every eligible click after the cool-down releases ONE ad:
+ *      • normally the mounted tag handles the click (higher CPM), every
+ *        third cycle the Direct Link opens instead;
+ *      • when the tag is blocked or has hit its own frequency cap (it did
+ *        not open a tab last time), the Direct Link opens synchronously
+ *        inside the gesture — so ads keep running for the whole session.
  */
-export async function releaseAd(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  if (window.__adsterraPremium) return false;
+export async function releaseAd(): Promise<AdRelease> {
+  if (typeof window === "undefined") return "none";
+  if (window.__adsterraPremium) return "none";
 
   const cfg = cached || (await getAdsterraConfig());
-  if (!cfg.enabled) return false;
+  if (!cfg.enabled) return "none";
 
   const direct = (cfg.directLink || "").trim();
   const script = (cfg.popunder || "").trim();
-  if (!direct && !script) return false;
+  if (!direct && !script) return "none";
 
   const now = Date.now();
   const lastPop = window.__adsterraPopFiredAt || 0;
-  if (now - lastPop < getAdGapMs()) return false;
+  if (now - lastPop < getAdGapMs()) return "none";
 
   const mounted = !!window.__adsterraPopunderMounted;
   const scriptBlocked = window.__adsterraScriptOk === false;
+  const tagCapped = now < tagCappedUntil();
   const cycle = (window.__adsterraCycleCount ?? 0) + 1;
 
   // Direct-link path — must run synchronously inside the user gesture.
-  const useDirect = !!direct && (scriptBlocked || !script || (mounted && cycle % 3 === 0));
+  const useDirect = !!direct && (scriptBlocked || !script || tagCapped || (mounted && cycle % 3 === 0));
   if (useDirect) {
-    if (!reserveAdFire()) return false;
+    if (!reserveAdFire()) return "none";
     window.__adsterraCycleCount = cycle;
-    window.__adsterraPopFiredAt = Date.now();
     const opener = window.__adsterraOpenOriginal || window.open;
-    try { opener?.(direct, "_blank", "noopener,noreferrer"); } catch { return false; }
-    return true;
+    try { opener?.(direct, "_blank", "noopener,noreferrer"); } catch { return "none"; }
+    noteRealOpen();
+    return "direct";
   }
 
-  if (!script) return false;
+  if (!script) return "none";
   window.__adsterraCycleCount = cycle;
   if (mounted) {
-    // Tag already handles this click itself.
-    window.__adsterraPopFiredAt = Date.now();
-    return true;
+    // The tag's own click listener runs right after this one; the caller
+    // verifies with tagOpenedSince() whether it really opened a tab.
+    window.__adsterraTagAskedAt = now;
+    return "tag";
   }
-  return loadAdsterraSlots();
+  return (await loadAdsterraSlots()) ? "mounted" : "none";
 }
