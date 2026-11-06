@@ -569,6 +569,7 @@ import {
 import LiveSupportChat from "@/components/LiveSupportChat";
 import LoadingDetailsOverlay from "@/components/LoadingDetailsOverlay";
 import LiveTvPage from "@/components/LiveTvPage";
+import CommunityChat from "@/components/CommunityChat";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
@@ -849,9 +850,9 @@ const isShortenerEnabled = async (): Promise<boolean> => {
   } catch { return true; }
 };
 
-type MainPage = "home" | "series" | "livetv" | "movies";
+type MainPage = "home" | "series" | "livetv" | "movies" | "chat";
 
-const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
+const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies", "chat"];
 const TAB_GRID_INITIAL_COUNT = 48;
 const TAB_GRID_BATCH_COUNT = 48;
 const HOME_CATEGORY_GRID_LIMIT = 60;
@@ -863,12 +864,14 @@ const MAIN_PAGE_PATH: Record<MainPage, string> = {
   series: "/series",
   livetv: "/live-tv",
   movies: "/movies",
+  chat: "/chat",
 };
 const pathToMainPage = (path: string): MainPage | null => {
   if (path === "/" || path === "") return "home";
   if (path === "/series" || path.startsWith("/series/")) return "series";
   if (path === "/live-tv" || path.startsWith("/live-tv/")) return "livetv";
   if (path === "/movies" || path.startsWith("/movies/")) return "movies";
+  if (path === "/chat") return "chat";
   return null;
 };
 
@@ -1273,7 +1276,7 @@ const Index = () => {
       return "home";
     }
   });
-  const pageScrollPositions = useRef<Record<MainPage, number>>({ home: 0, series: 0, livetv: 0, movies: 0 });
+  const pageScrollPositions = useRef<Record<MainPage, number>>({ home: 0, series: 0, livetv: 0, movies: 0, chat: 0 });
   const [tabGridVisibleCount, setTabGridVisibleCount] = useState<Record<"series" | "movies", number>>({
     series: TAB_GRID_INITIAL_COUNT,
     movies: TAB_GRID_INITIAL_COUNT,
@@ -3310,7 +3313,7 @@ const Index = () => {
   }, [pageFx.key, pageFx.from]);
 
   const continueRowRef = useRef<HTMLDivElement>(null);
-  const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
+  const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null, chat: null });
 
   const restorePageScroll = useCallback((_page: MainPage) => {
     // Each page has its own scroll container now — no need to restore window scroll
@@ -3819,6 +3822,7 @@ const Index = () => {
               {shouldRender && page === "series" && getPageContent_series()}
               {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => navigate("/")} />}
               {shouldRender && page === "movies" && getPageContent_movies()}
+              {shouldRender && page === "chat" && <CommunityChat isActive={isActive && !showProfile} allAnime={allAnime} onAnimeClick={onCardClick} onLogin={() => setShowLogin(true)} />}
             </div>
           );
         })}

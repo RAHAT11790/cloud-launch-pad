@@ -11,8 +11,8 @@ const readCache = (): boolean => {
 
 /** Main swipe pages in order; Live TV is removed completely when off. */
 export const mainPagesFor = (liveTvOn: boolean) =>
-  (liveTvOn ? ["home", "series", "livetv", "movies"] : ["home", "series", "movies"]) as
-    ("home" | "series" | "livetv" | "movies")[];
+  (liveTvOn ? ["home", "series", "livetv", "movies", "chat"] : ["home", "series", "movies", "chat"]) as
+    ("home" | "series" | "livetv" | "movies" | "chat")[];
 
 /** Live, cached (instant first paint) Live TV switch. */
 export const useLiveTvEnabled = (): boolean => {

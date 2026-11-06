@@ -1,5 +1,12 @@
 # Roadmap
 
+## Approved community chat, episode search and download checks (2026-11-06)
+- [x] Add Chat between Movies and Profile; phone menu navigation verified. Message/profile/attachment controls are implemented but disabled pending trusted access.
+- [ ] Activate public messages and participant-only conversations: blocked by unavailable Firebase rule-deployment credentials and app email accounts lacking Firebase Auth identity; CHAT_SECURITY_READY remains false.
+- [x] Search inside All episodes; real episode 12 found and played (readyState 4, time advancing); empty/clear flows verified on phone.
+- [x] Add custom download server URL and real HTTP/HTTPS download-function checks; real HTTP file returns bytes through video-download/video-proxy, file-rename returns 400. Custom server save is not exercised against production settings.
+- [x] Run 14 focused tests and live phone checks; screenshots captured. Chat send/read/profile flows remain blocked, not claimed complete.
+
 ## Bell, popups, live visitors (2026-10-25)
 - [x] Bottom bar is "Go back watch page"; per-episode Telegram buttons + one "All N episodes" button.
 - [x] Notification bell beside profile: live New Release notices (deleted/expired releases vanish) + admin messages.

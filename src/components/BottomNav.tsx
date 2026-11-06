@@ -1,5 +1,7 @@
 import { memo } from "react";
-import { useLiveTvEnabled } from "@/lib/liveTvToggle";
+import { useLiveTvEnabled, mainPagesFor } from "@/lib/liveTvToggle";
+import { Button } from "@/components/ui/button";
+import { MessageCircle } from "lucide-react";
 
 interface BottomNavProps {
   activePage: string;
@@ -57,19 +59,21 @@ const ALL_ITEMS = [
   { id: "series", label: "Series", Icon: SeriesIcon },
   { id: "livetv", label: "Live TV", Icon: LiveIcon },
   { id: "movies", label: "Movies", Icon: MoviesIcon },
+  { id: "chat", label: "Chat", Icon: () => <MessageCircle className="nv-svg" /> },
   { id: "profile", label: "Profile", Icon: ProfileIcon },
 ];
 
 const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
   const liveOn = useLiveTvEnabled();
-  const items = liveOn ? ALL_ITEMS : ALL_ITEMS.filter((i) => i.id !== "livetv");
+  const pages = [...mainPagesFor(liveOn), "profile"];
+  const items = ALL_ITEMS.filter((item) => pages.includes(item.id));
   return (
     <nav className="nv-bar fixed bottom-0 left-0 right-0 h-[65px] z-50 grid items-center px-2 bg-background"
       style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, boxShadow: "0 -4px 16px hsl(var(--foreground) / 0.06)" }}>
       {items.map(({ id, label, Icon }) => {
         const isActive = activePage === id;
         return (
-          <button
+          <Button variant="ghost"
             key={id}
             onClick={() => onNavigate(id)}
             aria-label={label}
@@ -78,7 +82,7 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
           >
             <span className="nv-ico"><Icon /></span>
             <span className="nv-lbl">{label}</span>
-          </button>
+          </Button>
         );
       })}
     </nav>

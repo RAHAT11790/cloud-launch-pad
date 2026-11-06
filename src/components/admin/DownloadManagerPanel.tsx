@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import DownloadFlowControls from "@/components/admin/DownloadFlowControls";
+import { Button } from "@/components/ui/button";
+import { checkDownloadFunctions, validDownloadUrl, type DownloadCheck } from "@/lib/downloadDiagnostics";
 import {
   Download,
   Send,
@@ -38,6 +40,19 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
   const [stats, setStats] = useState<DownloadDayStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [customDomain, setCustomDomain] = useState("");
+  const [testUrl, setTestUrl] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [checks, setChecks] = useState<DownloadCheck[]>([]);
+  const saveCustomServer = async () => {
+    const domain = validDownloadUrl(customDomain);
+    if (!domain) { toast.error("Enter an HTTP or HTTPS server URL"); return; }
+    const key = serverModeKey(domain);
+    setSaving(true);
+    try { await update(ref(db, "settings/downloadManager"), { activeServerDomain: domain.replace(/\/$/, ""), activeServerKey: key, [`serverModes/${key}`]: domain.startsWith("https:") ? "https" : "http" }); toast.success("Custom download server saved"); }
+    catch { toast.error("Could not save custom server"); }
+    finally { setSaving(false); }
+  };
 
   useEffect(() => {
     const unsubConfig = onValue(ref(db, "settings/downloadManager"), (snap) => {
@@ -214,9 +229,18 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           <div className="min-w-0 flex-1">
             <h3 className="text-[15px] font-bold text-white leading-tight">Download server</h3>
             <p className="mt-1 text-[11px] text-zinc-400">
-              Pick the one server every download is served from. The list comes from Video Servers.
+              Selected server
             </p>
           </div>
+        </div>
+
+        <div className="mb-4 space-y-3 rounded-lg bg-background p-3 text-foreground">
+          <label className="block text-xs font-semibold" htmlFor="custom-download-server">Custom server URL</label>
+          <div className="flex gap-2"><input id="custom-download-server" type="url" placeholder="http:// or https://" value={customDomain} onChange={event => setCustomDomain(event.target.value)} className="min-w-0 flex-1 rounded-md bg-background border border-input px-3 py-2 text-sm" /><Button size="sm" disabled={saving || !customDomain.trim()} onClick={() => void saveCustomServer()} aria-label="Save custom download server"><ServerIcon size={15} />Save</Button></div>
+          <label className="block text-xs font-semibold" htmlFor="download-test-url">File URL</label>
+          <input id="download-test-url" type="url" placeholder="HTTP / HTTPS file URL" value={testUrl} onChange={event => { setTestUrl(event.target.value); setChecks([]); }} className="w-full rounded-md bg-background border border-input px-3 py-2 text-sm" />
+          <Button variant="outline" disabled={checking || !testUrl.trim()} onClick={async () => { setChecking(true); setChecks([]); try { setChecks(await checkDownloadFunctions(testUrl)); } catch { toast.error("Enter a valid HTTP or HTTPS file URL"); } finally { setChecking(false); } }}>{checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}Check download functions</Button>
+          <div aria-live="polite" className="divide-y divide-border">{checks.map(check => <div key={check.name} className="py-2 flex items-start justify-between gap-3 text-xs"><div className="min-w-0"><p className="font-semibold">{check.name}</p><p className="text-muted-foreground mt-1 break-words">{check.reason}{check.status ? ` · HTTP ${check.status}` : ""}</p></div><span className={check.state === "working" ? "text-primary font-semibold" : "text-muted-foreground"}>{check.state}</span></div>)}</div>
         </div>
 
         <div className="mb-3 grid gap-2 sm:grid-cols-2 text-[10.5px] leading-relaxed text-zinc-400">

@@ -2,6 +2,7 @@ import { canCountView, hasWatchedEnough } from "@/lib/viewCountRule";
 import { openDownloadFlow, sourceDownloadFilename, freeDownloadQuality, downloadNeedsAdFlow, downloadSelectionLimit, downloadStepsFor } from "@/lib/downloadFlow";
 import { getFilenameRelayBase, filenameRelayUrl } from "@/lib/filenameRelay";
 import { Button } from "@/components/ui/button";
+import { matchesEpisode } from "@/lib/episodeSearch";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
@@ -817,6 +818,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [showAddToListSheet, setShowAddToListSheet] = useState(false);
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
   const [showAllEpisodesSheet, setShowAllEpisodesSheet] = useState(false);
+  const [episodeSearch, setEpisodeSearch] = useState("");
   const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download" | "share">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
@@ -6414,8 +6416,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
             <div className="h-px bg-white/10" />
             <div className="px-4 pt-4 pb-8">
+              <div className="sticky top-0 mb-4 flex items-center gap-2">
+                <input aria-label="Search episodes" placeholder="Episode number or title" value={episodeSearch} onChange={event => setEpisodeSearch(event.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background text-foreground px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+                {episodeSearch && <Button variant="ghost" size="icon" aria-label="Clear episode search" onClick={() => setEpisodeSearch("")}><X /></Button>}
+              </div>
+              {!episodeList.some(ep => matchesEpisode(ep, episodeSearch)) && <p role="status" className="py-6 text-center text-sm text-muted-foreground">No episodes found</p>}
               <div className="grid grid-cols-6 gap-2">
-                {episodeList.map((ep) => (
+                {episodeList.filter(ep => matchesEpisode(ep, episodeSearch)).map((ep) => (
                   <button
                     key={ep.number}
                     onClick={() => { ep.onClick(); closeInlineSheets(); }}
