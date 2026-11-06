@@ -4,9 +4,9 @@ import { mainPagesFor } from "@/lib/liveTvToggle";
 
 describe("Live TV switch", () => {
   it("Live TV off removes the Live TV page, keeps Home, Series, Movies", () => {
-    expect(mainPagesFor(false)).toEqual(["home", "series", "movies"]);
+    expect(mainPagesFor(false)).toEqual(["home", "series", "movies", "chat"]);
   });
   it("Live TV on brings the page back between Series and Movies", () => {
-    expect(mainPagesFor(true)).toEqual(["home", "series", "livetv", "movies"]);
+    expect(mainPagesFor(true)).toEqual(["home", "series", "livetv", "movies", "chat"]);
   });
 });

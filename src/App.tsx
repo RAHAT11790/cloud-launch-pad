@@ -112,6 +112,7 @@ const App = () => (
           <Route path="/profile" element={<Index />} />
           <Route path="/series" element={<Index />} />
           <Route path="/movies" element={<Index />} />
+          <Route path="/chat" element={<Index />} />
           <Route path="/live-tv" element={<Index />} />
           <Route path="*" element={<Index />} />
         </Routes>
