@@ -2221,6 +2221,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
   const [userEmail, setUserEmail] = useState<string>("");
 
   // Check if user already has a password
@@ -2303,38 +2304,13 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
     if (!userEmail) { toast.error("No email on this account"); return; }
     setOtpLoading(true);
     try {
-      const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
-      const customUrl = emailServiceSnap.val();
-
-      if (customUrl) {
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        await set(ref(db, `otpCodes/${emailKey}`), { code, expires: Date.now() + 5 * 60 * 1000 });
-        const res = await fetch(customUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: userEmail,
-            otp: code,
-            siteName: branding.siteName || SITE_NAME,
-            logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
-            siteUrl: "https://rsanime03.lovable.app",
-            telegramUrl: TELEGRAM_ADMIN_URL,
-          }),
-        });
-        if (!res.ok) throw new Error("Email sending failed");
-      } else {
-        const { supabase } = await import("@/integrations/supabase/client");
-        const { error } = await supabase.auth.signInWithOtp({
-          email: userEmail,
-          options: { shouldCreateUser: true },
-        });
-        if (error) throw error;
-      }
+      const { sendEmailCode } = await import("@/lib/emailService");
+      const { token } = await sendEmailCode(userEmail, "reset");
+      setOtpToken(token);
       setOtpSent(true);
       toast.success(`📧 Code sent to: ${userEmail}`);
     } catch (err: any) {
-      toast.error("Failed to send code: " + (err.message || "unknown"));
+      toast.error(err.message || "Failed to send code");
     }
     setOtpLoading(false);
   };
@@ -2347,34 +2323,9 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
     setOtpLoading(true);
     try {
       const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
-      const customUrl = emailServiceSnap.val();
-
-      if (customUrl) {
-        const otpSnap = await get(ref(db, `otpCodes/${emailKey}`));
-        const otpData = otpSnap.val();
-        if (!otpData || otpData.code !== otp.trim()) {
-          toast.error("❌ Incorrect code!");
-          setOtpLoading(false); return;
-        }
-        if (Date.now() > otpData.expires) {
-          toast.error("⏰ Code expired! Please request a new one.");
-          await remove(ref(db, `otpCodes/${emailKey}`));
-          setOtpLoading(false); return;
-        }
-        await remove(ref(db, `otpCodes/${emailKey}`));
-      } else {
-        const { supabase } = await import("@/integrations/supabase/client");
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          email: userEmail,
-          token: otp.trim(),
-          type: 'email',
-        });
-        if (verifyError) {
-          toast.error(verifyError.message.includes("expired") ? "⏰ Code expired! Please request a new one." : "❌ Incorrect code!");
-          setOtpLoading(false); return;
-        }
-      }
+      const { verifyEmailCode, normalizeEmail } = await import("@/lib/emailService");
+      const r = await verifyEmailCode(otpToken, otp);
+      if (r.email !== normalizeEmail(userEmail) || r.purpose !== "reset") { toast.error("❌ Incorrect code!"); setOtpLoading(false); return; }
 
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) {
