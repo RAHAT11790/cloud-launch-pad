@@ -23,3 +23,5 @@
 - Routed functions resolve via `getEdgeFunctionUrl`, which drops rows whose server is dead (`src/lib/routeHealth.ts`: one side-effect-free probe per origin, cached on device); sync route caches check `isRouteKnownDead` — a dead function server must act like an empty router row, and no code may hard-code a backend URL fallback.
 - Player pop-unders count as shown only when a sponsor tab really opened (`tagOpenedSince` in `src/lib/adsterraAds.ts`); a silent Adsterra tag (its own frequency cap) is marked capped for `TAG_RETRY_MS` and the Direct Link takes over — otherwise silent clicks eat every slot and ads stop minutes into long sessions.
 - Adsterra analytics reaches the Adsterra API only through the EGD-routed `adsterra-stats` row (Cloudflare build in `cloudflare-workers/adsterra-stats.js`, secret ADSTERRA_API_KEY) — the admin page must keep working when Lovable Cloud is down.
+- Community chat uses Firebase Auth UIDs, not local IDs; keep CHAT_SECURITY_READY false until deployed membership rules are verified to prevent private-message exposure.
+- Download diagnostics require file bytes, not health JSON/HTML, and cancel streams to avoid full downloads.

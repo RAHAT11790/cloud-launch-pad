@@ -234,7 +234,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           </div>
         </div>
 
-        <div className="mb-4 space-y-3 text-foreground">
+        <div className="mb-4 space-y-3 rounded-lg bg-background p-3 text-foreground">
           <label className="block text-xs font-semibold" htmlFor="custom-download-server">Custom server URL</label>
           <div className="flex gap-2"><input id="custom-download-server" type="url" placeholder="http:// or https://" value={customDomain} onChange={event => setCustomDomain(event.target.value)} className="min-w-0 flex-1 rounded-md bg-background border border-input px-3 py-2 text-sm" /><Button size="sm" disabled={saving || !customDomain.trim()} onClick={() => void saveCustomServer()} aria-label="Save custom download server"><ServerIcon size={15} />Save</Button></div>
           <label className="block text-xs font-semibold" htmlFor="download-test-url">File URL</label>
