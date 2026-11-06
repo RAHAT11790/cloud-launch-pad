@@ -1,1 +1,2 @@
 - Chat moderation rules (filters, links, ban times, commands, slow mode, CEO check) live only in `chatModeration.ts`; client-enforced since the RTDB is public.
+- Sign-up/reset codes go only through EGD row `email-service` (Resend worker) via `src/lib/emailService.ts` (also Gmail-only rule + login-first flag); accounts are written only after a verified code.
