@@ -390,21 +390,13 @@ import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 // ==================== EMAIL SERVICE SECTION ====================
 const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
  const [otpUrl, setOtpUrl] = useState("");
- const [otpUrlInput, setOtpUrlInput] = useState("");
  const [testing, setTesting] = useState(false);
- const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
+ const [testResult, setTestResult] = useState<{ alive: boolean; latency: number; ready?: boolean; missing?: string[] } | null>(null);
  const [resetLogs, setResetLogs] = useState<any[]>([]);
  const [loadingLogs, setLoadingLogs] = useState(true);
 
  useEffect(() => {
- const unsub = onValue(ref(db, "settings/emailService"), (snap) => {
- const val = snap.val();
- if (val) {
- setOtpUrl(val.otpFunctionUrl || "");
- setOtpUrlInput(val.otpFunctionUrl || "");
- }
- });
- return () => unsub();
+ import("@/lib/edgeFunctionRouter").then(m => m.getEdgeFunctionUrl("email-service")).then(u => setOtpUrl(u || "")).catch(() => {});
  }, []);
 
  useEffect(() => {
@@ -422,11 +414,6 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
  return () => unsub();
  }, []);
 
- const saveUrl = async () => {
- await set(ref(db, "settings/emailService/otpFunctionUrl"), otpUrlInput.trim());
- toast.success("✅ Email Service URL saved!");
- };
-
  const testUrl = async () => {
  if (!otpUrl) { toast.error("Set the URL first."); return; }
  setTesting(true);
@@ -437,7 +424,8 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
  const t = setTimeout(() => controller.abort(), 8000);
  const res = await fetch(otpUrl, { method: "GET", signal: controller.signal });
  clearTimeout(t);
- setTestResult({ alive: res.status < 500, latency: Date.now() - start });
+ const info = await res.json().catch(() => ({}));
+ setTestResult({ alive: res.ok, latency: Date.now() - start, ready: !!info?.ready, missing: info?.missing || [] });
  } catch {
  setTestResult({ alive: false, latency: Date.now() - start });
  }
@@ -454,31 +442,23 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
  <div className="space-y-4">
  <h2 className="text-lg font-bold text-white flex items-center gap-2"><Mail size={18} className="text-indigo-400" /> Email Service</h2>
 
- {/* OTP Function URL */}
+ {/* Email Service route (EGD Router → email-service) */}
  <div className={`${glassCard} p-4 space-y-3`}>
  <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
- <Link size={14} className="text-cyan-400" /> OTP Email Function URL
+ <Link size={14} className="text-cyan-400" /> Resend Email Service
  </h3>
- <p className="text-[10px] text-zinc-500">
- Enter the send-otp-email function URL here. If you later deploy on another platform, updating this URL will be enough.
+ <p className="text-[10px] text-zinc-500 leading-relaxed">
+ Sign-up verification and forgot-password codes use <b>EGD Router → email-service</b>. Deploy “Email Service” from Cloudflare Manager, add secrets <b>RESEND_API_KEY</b> and <b>EMAIL_SECRET</b>, then paste the Worker URL in EGD Router.
  </p>
- <div className="flex gap-2">
- <input value={otpUrlInput} onChange={e => setOtpUrlInput(e.target.value)}
- placeholder="https://your-project.supabase.co/functions/v1/send-otp-email"
- className={inputClass + " flex-1 text-[11px] font-mono"} />
- <button onClick={saveUrl} className={`${btnPrimary} px-3 py-2 text-xs`}><Save size={12} /></button>
- </div>
- <div className="flex items-center gap-3">
+ <div className="text-[10px] font-mono truncate text-zinc-400">{otpUrl || "⚠️ Not set in EGD Router yet — sign-up and password reset can't send codes."}</div>
+ <div className="flex items-center gap-3 flex-wrap">
  <button onClick={testUrl} disabled={testing || !otpUrl} className={`${btnSecondary} px-3 py-1.5 text-[10px] flex items-center gap-1.5 disabled:opacity-40`}>
- {testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} Ping
+ {testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} Check
  </button>
  {testResult && (
- <span className={`text-[10px] font-mono ${testResult.alive ? "text-emerald-400" : "text-red-400"}`}>
- {testResult.alive ? "✅" : "❌"} {testResult.latency}ms
+ <span className={`text-[10px] font-mono ${testResult.alive && testResult.ready ? "text-emerald-400" : "text-red-400"}`}>
+ {!testResult.alive ? "❌ Unreachable" : testResult.ready ? "✅ Ready" : `⚠️ Missing: ${(testResult.missing || []).join(", ")}`} · {testResult.latency}ms
  </span>
- )}
- {otpUrl && (
- <span className="text-[10px] text-emerald-400/60 font-mono truncate max-w-[200px]">{otpUrl}</span>
  )}
  </div>
  </div>
