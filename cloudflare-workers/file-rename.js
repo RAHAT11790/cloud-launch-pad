@@ -11,7 +11,7 @@ function allowedTarget(url, hosts) {
   const h = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password
     && !/^(localhost|.*\.localhost|.*\.local|.*\.internal|0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::|fc|fd|fe80)/i.test(h)
-    && !h.includes(":") && hosts.has(h);
+    && !h.includes(":") && (hosts.has(h) || /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h));
 }
 function filename(raw) {
   const name = String(raw || "video.mp4").replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 220) || "video.mp4";

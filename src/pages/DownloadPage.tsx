@@ -53,7 +53,7 @@ export default function DownloadPage() {
   const [waitAttempt, setWaitAttempt] = useState(0);
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
-  const [fileState, setFileState] = useState<Record<string, "ready" | "unavailable">>({});
+  const [fileState, setFileState] = useState<Record<string, "ready" | "direct" | "unavailable">>({});
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const [smartlink, setSmartlink] = useState("");
   const restoredVisit = !savedTimer?.ready && Number(savedTimer?.sponsorAt) > 0 ? Number(savedTimer!.sponsorAt) : null;
@@ -179,7 +179,8 @@ export default function DownloadPage() {
         const response = await fetch(filenameRelayUrl(base, choice.url, choice.fileName), { method: "HEAD", signal: controller.signal });
         const bytes = Number(response.headers.get("content-length"));
         if (response.ok && bytes > 0) setSizes(current => ({ ...current, [choice.url]: bytes }));
-        if (!controller.signal.aborted) setFileState(current => ({ ...current, [choice.url]: response.ok ? "ready" : "unavailable" }));
+        if (!controller.signal.aborted) // An older relay build may refuse a new file host (400/403): download straight from the file server instead.
+        if (!controller.signal.aborted) setFileState(current => ({ ...current, [choice.url]: response.ok ? "ready" : (response.status === 400 || response.status === 403) ? "direct" : "unavailable" }));
       } catch { if (!controller.signal.aborted) setFileState(current => ({ ...current, [choice.url]: "unavailable" })); }
     })).finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
@@ -223,7 +224,7 @@ export default function DownloadPage() {
     action();
   };
   const startWebsite = (choice: DownloadFlowRequest["episodes"][number]["choices"][number]) => {
-    const url = filenameRelayUrl(base, choice.url, choice.fileName); if (!url) return;
+    const url = fileState[choice.url] === "direct" ? choice.url : filenameRelayUrl(base, choice.url, choice.fileName); if (!url) return;
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = choice.fileName;
     document.body.appendChild(anchor); anchor.click(); anchor.remove(); recordDownloadEvent("website");
   };
