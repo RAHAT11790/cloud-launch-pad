@@ -8,10 +8,11 @@ describe("Filename relay", () => {
   it("keeps actual MKV extension for a movie or episode", () => {
     expect(sourceDownloadFilename("Naruto - Episode 1.mp4", source)).toBe("Naruto - Episode 1.mkv");
   });
-  it("blocks private and unapproved hosts before fetching", async () => {
+  it("blocks private hosts before fetching (any public file server is allowed)", async () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     expect((await worker.fetch(request("http://127.0.0.1/file"))).status).toBe(400);
-    expect((await worker.fetch(request("https://attacker.example/file"))).status).toBe(400);
+    expect((await worker.fetch(request("http://192.168.0.5/file"))).status).toBe(400);
+    expect((await worker.fetch(request("http://localhost/file"))).status).toBe(400);
     expect(fetch).not.toHaveBeenCalled();
   });
   it("passes resume range and custom filename while streaming", async () => {
