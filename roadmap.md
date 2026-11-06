@@ -1,5 +1,12 @@
 # Roadmap
 
+## Approved community chat, episode search and download checks (2026-11-06)
+- [ ] Add Chat between Movies and Profile, public messages, member profiles and shared images/titles; keep guest data local.
+- [ ] Add participant-only conversations using verified Firebase identity and fail closed until deployed chat rules are verified.
+- [ ] Add search inside the player's All episode sheet without changing playback selection.
+- [ ] Add custom download server URL and real HTTP/HTTPS download-function checks in Download Manager.
+- [ ] Run focused tests and live phone checks; report any identity/rules/deployment blockers.
+
 ## Bell, popups, live visitors (2026-10-25)
 - [x] Bottom bar is "Go back watch page"; per-episode Telegram buttons + one "All N episodes" button.
 - [x] Notification bell beside profile: live New Release notices (deleted/expired releases vanish) + admin messages.
