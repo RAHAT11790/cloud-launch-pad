@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
+import { currentChatProfile, subscribeMentions } from "@/lib/communityChat";
 import { useLiveTvEnabled, mainPagesFor } from "@/lib/liveTvToggle";
 import { House, FilmStrip, Television, FilmReel, ChatsCircle, UserCircle, type Icon } from "@phosphor-icons/react";
 
@@ -16,7 +17,21 @@ const ALL_ITEMS: { id: string; label: string; Icon: Icon }[] = [
   { id: "profile", label: "Profile", Icon: UserCircle },
 ];
 
+/** Red count of unread reply-tags for the signed-in member (cleared when the chat opens). */
+function useChatMentionCount() {
+  const [uid, setUid] = useState(() => currentChatProfile()?.id || "");
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const refresh = () => setUid(currentChatProfile()?.id || "");
+    window.addEventListener("rs_auth_changed", refresh); window.addEventListener("storage", refresh);
+    return () => { window.removeEventListener("rs_auth_changed", refresh); window.removeEventListener("storage", refresh); };
+  }, []);
+  useEffect(() => { if (!uid) { setCount(0); return; } return subscribeMentions(uid, rows => setCount(rows.length)); }, [uid]);
+  return count;
+}
+
 const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
+  const mentions = useChatMentionCount();
   const liveOn = useLiveTvEnabled();
   const pages = [...mainPagesFor(liveOn), "profile"];
   const items = ALL_ITEMS.filter((item) => pages.includes(item.id));
@@ -36,6 +51,7 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
           >
             <span className="nv-ico"><Icon className="nv-svg" weight={isActive ? "fill" : "duotone"} /></span>
             <span className="nv-lbl">{label}</span>
+            {id === "chat" && mentions > 0 && <span className="nv-badge" aria-label={`${mentions} replies to you`}>{mentions > 9 ? "9+" : mentions}</span>}
           </button>
         );
       })}
