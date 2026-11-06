@@ -24,6 +24,7 @@ import adShieldSrc from "../../cloudflare-workers/ad-shield.js?raw";
 import abyssSrc from "../../cloudflare-workers/abyss.js?raw";
 import sharePreviewSrc from "../../cloudflare-workers/share-preview.js?raw";
 import adsterraStatsSrc from "../../cloudflare-workers/adsterra-stats.js?raw";
+import emailServiceSrc from "../../cloudflare-workers/email-service.js?raw";
 
 
 export type CfLibraryEntry = {
@@ -63,6 +64,7 @@ const entry = (
 });
 
 export const CF_WORKER_LIBRARY: CfLibraryEntry[] = [
+  entry("email-service", "Email Service", "📧 Sign-up email verification + forgot-password codes via Resend (Cloudflare build, no Lovable Cloud). Only @gmail.com, built-in anti-spam. Set secrets RESEND_API_KEY and EMAIL_SECRET (optional EMAIL_FROM, SITE_URL), deploy, then paste the Worker URL into EGD Router → email-service.", emailServiceSrc, ["RESEND_API_KEY", "EMAIL_SECRET", "EMAIL_FROM", "SITE_URL"], { isNew: true, badgeText: "EMAIL · NEW", badgeTone: "cyan" }),
   entry("adsterra-stats", "Adsterra Stats", "📊 Adsterra analytics API (Cloudflare build) — impressions, clicks, CPM and revenue for Ad Manager → Adsterra Analytics, without Lovable Cloud. Set the ADSTERRA_API_KEY secret, deploy, then paste the Worker URL into EGD Router → adsterra-stats.", adsterraStatsSrc, ["ADSTERRA_API_KEY"], { isNew: true, badgeText: "AD STATS · NEW", badgeTone: "amber" }),
   entry("file-rename", "File Rename", "Single-stream HTTP/HTTPS download relay with custom anime/season/episode/quality filename and source Range support. Set EGD Router → file-rename after deployment.", fileRenameSrc, [], { isNew: true, badgeText: "DOWNLOAD", badgeTone: "cyan" }),
   entry("abyss",           "Abyss Server",    "🎬 Abyss link resolver + MP4 stream relay (Cloudflare build). Turns an Abyss iframe link into direct 480p/720p/1080p files that play inside the RS player — no iframe, no Abyss ads. Paste the Worker URL into EGD Router → abyss.", abyssSrc, [], { isNew: true, badgeText: "ABYSS · NEW", badgeTone: "cyan" }),

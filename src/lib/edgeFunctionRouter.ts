@@ -90,6 +90,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "abyss",
   "share-preview",
   "adsterra-stats",
+  "email-service",
 ]);
 
 const KNOWN_FUNCTION_NAMES = new Set([
