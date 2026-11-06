@@ -3062,6 +3062,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     background: transparent !important;
     box-shadow: none !important;
     z-index: 51 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
   }
   .nv-item {
     flex-direction: row;
