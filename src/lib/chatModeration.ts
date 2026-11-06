@@ -27,8 +27,8 @@ export type ChatMention = { id: string; from: string; preview: string; t: number
 /** Default abusive words (English + Bangla script + romanized Bangla). Admin can add more. */
 export const DEFAULT_BAD_WORDS = [
   "fuck", "fucker", "fucking", "motherfucker", "bitch", "bastard", "asshole", "dick", "pussy", "cunt", "slut", "whore", "nigger", "nigga", "retard", "shit", "bullshit", "porn", "xxx",
-  "মাদারচোদ", "চোদ", "চুদি", "চুদা", "চোদা", "খানকি", "মাগি", "মাগী", "বেশ্যা", "শালা", "হারামি", "হারামজাদা", "কুত্তার বাচ্চা", "শুয়োরের বাচ্চা", "বাল", "ধোন", "গুদ", "পোদ", "বোকাচোদা", "জারজ",
-  "madarchod", "madarchud", "chod", "chudi", "chuda", "choda", "khanki", "magi", "beshya", "harami", "haramjada", "kuttar baccha", "shuorer baccha", "bokachoda", "dhon", "gud", "bal", "jaroj", "bc", "mc",
+  "মাদারচোদ", "চোদ", "চুদি", "চুদা", "চোদা", "খানকি", "মাগি", "মাগী", "বেশ্যা", "হারামি", "হারামজাদা", "কুত্তার বাচ্চা", "শুয়োরের বাচ্চা", "বোকাচোদা", "জারজ",
+  "madarchod", "madarchud", "chod", "chudi", "chuda", "choda", "khanki", "beshya", "harami", "haramjada", "kuttar baccha", "shuorer baccha", "bokachoda", "jaroj", 
 ];
 
 const LEET: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s", "!": "i" };
