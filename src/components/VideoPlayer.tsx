@@ -3,6 +3,8 @@ import { openDownloadFlow, sourceDownloadFilename, freeDownloadQuality, download
 import { getFilenameRelayBase, filenameRelayUrl } from "@/lib/filenameRelay";
 import { Button } from "@/components/ui/button";
 import { matchesEpisode } from "@/lib/episodeSearch";
+import EpisodeSearchPopup from "@/components/EpisodeSearchPopup";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
@@ -819,6 +821,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
   const [showAllEpisodesSheet, setShowAllEpisodesSheet] = useState(false);
   const [episodeSearch, setEpisodeSearch] = useState("");
+  const [showEpisodeSearch, setShowEpisodeSearch] = useState(false);
   const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download" | "share">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
@@ -5943,9 +5946,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
             {episodeList && episodeList.length > 0 && (
               <div className="mt-5">
-                <div className="flex items-baseline gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3">
                   <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
+                  <button type="button" onClick={() => setShowEpisodeSearch(true)} aria-label="Search episodes" className="cc-3d ml-auto inline-flex items-center gap-1.5 h-9 pl-3 pr-3.5 rounded-full text-[12.5px] font-bold text-foreground">
+                    <MagnifyingGlass size={16} weight="bold" className="text-primary" />
+                    Search episode
+                  </button>
                 </div>
+                {showEpisodeSearch && <EpisodeSearchPopup episodes={episodeList} onClose={() => setShowEpisodeSearch(false)} />}
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
                     {embedded.engineActive && embeddedAudioList.length > 0 ? embeddedAudioLabel : currentLangLabel}
