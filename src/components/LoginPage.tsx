@@ -4,11 +4,14 @@ import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowL
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import {
+  isAllowedGmail, normalizeEmail, gmailCanonicalKey, sendEmailCode, verifyEmailCode,
+  savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
+} from "@/lib/emailService";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -87,6 +90,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
+  const [forgotToken, setForgotToken] = useState("");
+
+  // Sign-up email verification
+  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number } | null>(null);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [resendLeft, setResendLeft] = useState(0);
+  const linkHandledRef = useRef(false);
 
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
     const aliasKey = buildEmailAliasKey(email);
@@ -146,6 +157,12 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const gEmail = user.email || "";
+      if (!isAllowedGmail(gEmail)) {
+        try { await auth.signOut(); } catch {}
+        toast.error("Only @gmail.com accounts are allowed.");
+        setLoading(false);
+        return;
+      }
       const gName = user.displayName || gEmail.split("@")[0];
       const gPhoto = user.photoURL || "";
       const commaKey = gEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
@@ -265,61 +282,24 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   };
 
   const handleForgotPassword = async () => {
-    if (!forgotEmail.trim()) { toast.error("Please enter your email"); return; }
+    const fEmail = normalizeEmail(forgotEmail);
+    if (!fEmail) { toast.error("Please enter your email"); return; }
+    if (!isAllowedGmail(fEmail)) { toast.error("Only @gmail.com addresses are allowed."); return; }
     setForgotLoading(true);
     try {
-      // Find user by email in Firebase
-      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const emailKey = fEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) {
         toast.error("No account found with this email!");
         setForgotLoading(false);
         return;
       }
-
-      // Check if custom email service URL is configured
-      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
-      const customUrl = emailServiceSnap.val();
-
-      if (customUrl) {
-        // Use custom edge function for OTP
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        // Store OTP temporarily in Firebase
-        await set(ref(db, `otpCodes/${emailKey}`), { code: otp, expires: Date.now() + 5 * 60 * 1000 });
-
-        const res = await fetch(customUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            email: forgotEmail.trim(), 
-            otp, 
-            siteName: branding.siteName || SITE_NAME,
-            logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
-            siteUrl: "https://rsanime03.lovable.app",
-            telegramUrl: "https://t.me/rs_woner",
-          }),
-        });
-        if (!res.ok) throw new Error("Email sending failed");
-
-        setForgotOtpSent(true);
-        toast.success(`📧 Code sent to: ${forgotEmail}`);
-      } else {
-        // Fallback: Use Supabase Auth OTP
-        const { error } = await supabase.auth.signInWithOtp({
-          email: forgotEmail.trim(),
-          options: { shouldCreateUser: true },
-        });
-        if (error) {
-          console.error("OTP send error:", error);
-          toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
-          setForgotLoading(false);
-          return;
-        }
-        setForgotOtpSent(true);
-        toast.success(`📧 Code sent to: ${forgotEmail}`);
-      }
+      const { token } = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
+      setForgotToken(token);
+      setForgotOtpSent(true);
+      toast.success(`📧 Code sent to: ${fEmail}`);
     } catch (err: any) {
-      toast.error("Error: " + err.message);
+      toast.error(err.message || "Could not send the code");
     }
     setForgotLoading(false);
   };
@@ -331,78 +311,129 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
     setForgotLoading(true);
     try {
-      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-
-      // Check if custom email service was used
-      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
-      const customUrl = emailServiceSnap.val();
-
-      if (customUrl) {
-        // Verify OTP from Firebase
-        const otpSnap = await get(ref(db, `otpCodes/${emailKey}`));
-        const otpData = otpSnap.val();
-        if (!otpData || otpData.code !== forgotOtp.trim()) {
-          toast.error("❌ Incorrect code!");
-          setForgotLoading(false);
-          return;
-        }
-        if (Date.now() > otpData.expires) {
-          toast.error("⏰ Code expired! Please request a new one.");
-          await remove(ref(db, `otpCodes/${emailKey}`));
-          setForgotLoading(false);
-          return;
-        }
-        // Clean up OTP
-        await remove(ref(db, `otpCodes/${emailKey}`));
-      } else {
-        // Verify OTP via Supabase Auth
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          email: forgotEmail.trim(),
-          token: forgotOtp.trim(),
-          type: 'email',
-        });
-        if (verifyError) {
-          if (verifyError.message.includes("expired")) {
-            toast.error("⏰ Code expired! Please request a new one.");
-          } else {
-            toast.error("❌ Incorrect code!");
-          }
-          setForgotLoading(false);
-          return;
-        }
-      }
-
-      // OTP verified — update password in Firebase RTDB
+      const fEmail = normalizeEmail(forgotEmail);
+      const result = await verifyEmailCode(forgotToken, forgotOtp);
+      if (result.email !== fEmail || result.purpose !== "reset") { toast.error("❌ Incorrect code!"); setForgotLoading(false); return; }
+      const emailKey = fEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
-
-      // Log password reset to Firebase
-      const userName = snap.val()?.name || "";
-      const logKey = `${emailKey}_${Date.now()}`;
-      await set(ref(db, `passwordResets/${logKey}`), {
-        email: forgotEmail.trim(),
-        name: userName,
-        timestamp: Date.now(),
-        method: customUrl ? "custom-otp" : "supabase-otp",
+      await set(ref(db, `passwordResets/${emailKey}_${Date.now()}`), {
+        email: fEmail, name: snap.val()?.name || "", timestamp: Date.now(), method: "email-service",
       });
-
-      // Sign out of Supabase if it was used
-      if (!customUrl) await supabase.auth.signOut();
 
       toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);
       setForgotOtpSent(false);
       setForgotOtp("");
+      setForgotToken("");
       setForgotNewPw("");
       setForgotNewPwConfirm("");
       setForgotEmail("");
     } catch (err: any) {
-      toast.error("Error: " + err.message);
+      toast.error(err.message || "Error");
     }
     setForgotLoading(false);
   };
+
+  /** Creates the account — only ever called after the email code was verified. */
+  const createVerifiedAccount = async (formName: string, formEmailRaw: string, formPassword: string) => {
+    const formEmail = normalizeEmail(formEmailRaw);
+    const emailKey = formEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+    const canonical = gmailCanonicalKey(formEmail);
+    const [taken, canon] = await Promise.all([
+      get(ref(db, `appUsers/${emailKey}`)).catch(() => null),
+      get(ref(db, `gmailRegistry/${canonical}`)).catch(() => null),
+    ]);
+    if (taken?.exists() || canon?.exists()) { toast.error("This email already has an account. Please sign in."); return false; }
+    const userId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+    await registerDeviceAfterLogin(userId);
+    await set(ref(db, `appUsers/${emailKey}`), {
+      id: userId, name: formName, email: formEmail, password: formPassword, createdAt: Date.now(), emailVerified: true,
+    });
+    await set(ref(db, `gmailRegistry/${canonical}`), userId).catch(() => {});
+    await syncCanonicalUserNode(userId, {
+      id: userId, name: formName, email: formEmail, createdAt: Date.now(),
+      online: true, lastSeen: Date.now(), authProvider: "email", emailVerified: true,
+    }, formEmail);
+    try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== userId) { const r = await transferGuestCoinsToUser(prev.id, userId); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
+    localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: formName, email: formEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
+    localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
+    writeDisplayName(formName, userId);
+    clearPendingRegister();
+    toast.success("✅ Email verified — account created!");
+    onLogin(userId);
+    return true;
+  };
+
+  const submitVerifyCode = async (codeArg?: string, pendingArg?: typeof verifyPending) => {
+    const pending = pendingArg || verifyPending;
+    const code = String(codeArg ?? verifyCode).replace(/\D/g, "");
+    if (!pending) return;
+    if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    setVerifyLoading(true);
+    try {
+      const r = await verifyEmailCode(pending.token, code);
+      if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("Incorrect code.");
+      await createVerifiedAccount(pending.name, pending.email, pending.password);
+    } catch (err: any) {
+      toast.error(err.message || "Incorrect code.");
+    }
+    setVerifyLoading(false);
+  };
+
+  const resendVerifyCode = async () => {
+    if (!verifyPending || resendLeft > 0) return;
+    setVerifyLoading(true);
+    try {
+      const { token, expiresAt } = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
+      const next = { ...verifyPending, token, expiresAt };
+      setVerifyPending(next);
+      savePendingRegister(next);
+      setVerifyCode("");
+      toast.success("📧 New code sent");
+    } catch (err: any) { toast.error(err.message); }
+    setVerifyLoading(false);
+  };
+
+  // Resend countdown
+  useEffect(() => {
+    if (!verifyPending) return;
+    const tick = () => setResendLeft(Math.ceil(cooldownLeftMs(verifyPending.email) / 1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [verifyPending]);
+
+  // The "Verify my email" button in the email opens /?verify=TOKEN&code=123456
+  useEffect(() => {
+    if (linkHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("verify");
+    const code = params.get("code");
+    if (!token || !code) {
+      const saved = readPendingRegister();
+      if (saved) setVerifyPending(saved);
+      return;
+    }
+    linkHandledRef.current = true;
+    try {
+      params.delete("verify"); params.delete("code");
+      const q = params.toString();
+      window.history.replaceState(window.history.state, "", window.location.pathname + (q ? `?${q}` : "") + window.location.hash);
+    } catch {}
+    const saved = readPendingRegister();
+    if (!saved || saved.token !== token) {
+      toast.error("Open this link on the same phone/browser where you signed up, or type the code.");
+      if (saved) setVerifyPending(saved);
+      return;
+    }
+    setVerifyPending(saved);
+    setVerifyCode(code);
+    void submitVerifyCode(code, saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -414,6 +445,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     const loginInput = isRegister ? formEmail : formName;
     if (!loginInput || !formPassword.trim()) { toast.error("Please fill in all fields"); return; }
     if (isRegister && !formName) { toast.error("Please enter a username"); return; }
+    if (isRegister && !isAllowedGmail(formEmail)) { toast.error("Only real @gmail.com addresses can sign up."); return; }
     if (formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
 
     setLoading(true);
@@ -473,29 +505,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
       if (isRegister) {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
-        const emailKey = formEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-        const userId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
-        
-        await registerDeviceAfterLogin(userId);
-
-        await set(ref(db, `appUsers/${emailKey}`), {
-          id: userId, name: formName, email: formEmail, password: formPassword, createdAt: Date.now(),
-        });
-        await syncCanonicalUserNode(userId, {
-          id: userId,
-          name: formName,
-          email: formEmail,
-          createdAt: Date.now(),
-          online: true,
-          lastSeen: Date.now(),
-          authProvider: "email",
-        }, formEmail);
-        try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== userId) { const r = await transferGuestCoinsToUser(prev.id, userId); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: formName, email: formEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
-        localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        writeDisplayName(formName, userId);
-        toast.success("Account created successfully!");
-        onLogin(userId);
+        const canon = await get(ref(db, `gmailRegistry/${gmailCanonicalKey(formEmail)}`)).catch(() => null);
+        if (canon?.exists()) { toast.error("This email already has an account. Please sign in."); setLoading(false); return; }
+        const { token, expiresAt } = await sendEmailCode(formEmail, "register", formName);
+        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token, expiresAt };
+        savePendingRegister(pending);
+        setVerifyCode("");
+        setVerifyPending(pending);
+        toast.success(`📧 Verification code sent to ${pending.email}`);
       } else {
         if (!anyMatch) { toast.error("User not found!"); setLoading(false); return; }
         if (finalUserData.password && finalUserData.password !== formPassword) { toast.error("Wrong password!"); setLoading(false); return; }
@@ -536,7 +553,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         toast.success(`Welcome back, ${displayName}!`);
         onLogin(uid);
       }
-    } catch (err: any) { toast.error("Error: " + err.message); }
+    } catch (err: any) { toast.error(err?.message || "Something went wrong"); }
     setLoading(false);
   };
 
@@ -771,6 +788,68 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     );
   }
 
+  // ======= SIGN-UP EMAIL VERIFICATION SCREEN =======
+  if (verifyPending) {
+    const digits = verifyCode.replace(/\D/g, "").slice(0, 6);
+    return (
+      <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/15 blur-3xl" />
+        </div>
+        <motion.div className="relative w-full max-w-[360px]" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+          <div className="relative glass-card-strong rounded-3xl p-6 border border-primary/25">
+            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); }}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+              <ArrowLeft className="w-4 h-4" /> Change email
+            </button>
+            <div className="text-center">
+              <div className="relative w-16 h-16 mx-auto mb-3">
+                <div className="absolute inset-0 rounded-2xl gradient-primary rotate-6 opacity-40" />
+                <div className="relative w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center">
+                  <Mail className="w-8 h-8 text-primary-foreground" />
+                </div>
+              </div>
+              <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>Check your Gmail</h2>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                We sent a 6-digit code to<br /><span className="font-bold text-primary break-all">{verifyPending.email}</span>
+              </p>
+            </div>
+
+            <label className="relative block mt-5" aria-label="Verification code">
+              <input value={digits} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6}
+                onKeyDown={e => { if (e.key === "Enter") submitVerifyCode(); }}
+                className="absolute inset-0 w-full h-full opacity-0 z-10" aria-label="6-digit code" />
+              <div className="grid grid-cols-6 gap-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className={`h-12 rounded-xl flex items-center justify-center text-xl font-black border transition-colors ${
+                    digits[i] ? "border-primary bg-primary/10 text-foreground" : i === digits.length ? "border-primary/60 bg-secondary text-muted-foreground" : "border-border bg-secondary text-muted-foreground"}`}>
+                    {digits[i] || ""}
+                  </div>
+                ))}
+              </div>
+            </label>
+
+            <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
+              className="w-full mt-5 py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+              {verifyLoading ? <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" /> : <><Check className="w-4 h-4" /> Verify & create account</>}
+            </motion.button>
+
+            <div className="mt-4 rounded-xl bg-foreground/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
+              💡 Or just tap <b className="text-foreground">Verify my email</b> inside the email — on this same phone. Check Spam if you can't find it.
+            </div>
+
+            <button onClick={resendVerifyCode} disabled={verifyLoading || resendLeft > 0}
+              className="w-full mt-3 text-xs font-semibold text-primary disabled:text-muted-foreground">
+              {resendLeft > 0 ? `Resend code in ${resendLeft}s` : "Resend code"}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center"
@@ -911,9 +990,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                     <div>
                       <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <input name="email" type="email" placeholder="Email" defaultValue={email} maxLength={100}
+                          <input name="email" type="email" placeholder="you@gmail.com" defaultValue={email} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       </div>
+                      <p className="-mt-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">Only <b className="text-primary">@gmail.com</b> — we'll send a code to verify it.</p>
                     </div>
                   )}
 

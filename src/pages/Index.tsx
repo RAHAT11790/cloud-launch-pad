@@ -573,6 +573,8 @@ import CommunityChat from "@/components/CommunityChat";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
+import { entryChosen, markEntryChosen, clearEntryChosen } from "@/lib/emailService";
+import { currentGuestId } from "@/lib/guestPersistence";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { buildEpisodeLockIndex, mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
@@ -991,6 +993,18 @@ const Index = () => {
   useEffect(() => {
     initializeUiTheme();
   }, []);
+
+  // Login-first: every new visitor (home or a shared video link) sees the
+  // login page until they sign in or pick "Continue as Guest".
+  const [entryDone, setEntryDone] = useState(() => {
+    try { if (new URLSearchParams(window.location.search).has("verify")) return false; } catch {}
+    if (entryChosen()) return true;
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
+      if (u?.id && !currentGuestId()) { markEntryChosen(); return true; }
+    } catch {}
+    return false;
+  });
 
   // Check if user is logged in/guest (guest accounts also have a profile)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -3015,6 +3029,8 @@ const Index = () => {
   }, [heroSlides, allAnime, handleCardClick]);
 
   const handleLogin = (userId: string) => {
+    markEntryChosen();
+    setEntryDone(true);
     setIsLoggedIn(true);
   };
 
@@ -3066,6 +3082,8 @@ const Index = () => {
       }
     } catch {}
     localStorage.removeItem("rsanime_user");
+    clearEntryChosen();
+    setEntryDone(false);
     clearActiveDisplayName();
     clearActiveProfilePhoto();
     localStorage.removeItem("rs_session_started_at");
@@ -3083,6 +3101,8 @@ const Index = () => {
     } catch {}
 
     localStorage.removeItem("rsanime_user");
+    clearEntryChosen();
+    setEntryDone(false);
     clearActiveDisplayName();
     clearActiveProfilePhoto();
     localStorage.removeItem("rs_session_started_at");
@@ -3383,8 +3403,14 @@ const Index = () => {
 
 
 
-  // Login wall removed — guests browse freely with localStorage-only state.
-  // LoginPage now opens as an on-demand overlay (from Header / Profile).
+  if (!entryDone) {
+    return (
+      <LoginPage
+        onLogin={(uid) => handleLogin(uid)}
+        onGuest={() => { markEntryChosen(); setEntryDone(true); }}
+      />
+    );
+  }
 
   // Show maintenance page if server is under maintenance
   if (maintenance?.active) {
