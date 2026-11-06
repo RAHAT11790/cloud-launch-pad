@@ -301,6 +301,7 @@ const bars = (seed: string) => Array.from({ length: 28 }, (_, i) => {
   let h = 0; for (let k = 0; k < seed.length; k++) h = (h * 33 + seed.charCodeAt(k) + i * 7) >>> 0;
   return 25 + (h % 75);
 });
+let playingVoice: HTMLAudioElement | null = null;
 function VoiceNote({ id, dur, own }: { id: string; dur: number; own: boolean }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "playing" | "paused">("idle");
@@ -322,7 +323,8 @@ function VoiceNote({ id, dur, own }: { id: string; dur: number; own: boolean }) 
         audio.current = el;
       } catch { setState("idle"); toast.error("Voice message unavailable"); return; }
     }
-    document.querySelectorAll<HTMLAudioElement>("audio[data-cc]").forEach(a => a.pause());
+    if (playingVoice && playingVoice !== audio.current) playingVoice.pause();
+    playingVoice = audio.current;
     void audio.current.play().catch(() => setState("paused"));
   };
   return (
