@@ -2392,7 +2392,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // the same episode are still present. Some RS Server 2 files return a valid
     // HEAD/content-length but close the GET stream; when that happens, try the
     // next playable quality on the SAME configured server before showing expired.
-    if (shouldAllowAutoQualityShift() && availableQualities.length > 1) {
+    // A source that never produced playable data (startup failure) always scans
+    // every remaining quality on this server before trying the next server.
+    const startupFailure = !isSeekRecovery && !isCurrentPlaybackSourceValid();
+    if ((startupFailure || shouldAllowAutoQualityShift()) && availableQualities.length > 1) {
       const qualityRank = (label: string) => {
         const value = label.toLowerCase();
         if (value.includes("720")) return 1;
@@ -3510,14 +3513,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (!stillCurrent() || !v || v.readyState >= 2) { healthProbeSrcRef.current = ""; return; }
       const state = await probeMediaServer(srcAtStart);
       if (!stillCurrent() || (videoRef.current?.readyState ?? 0) >= 2) { healthProbeSrcRef.current = ""; return; }
-      if (state === "dead" || attempt >= 3) {
+      // Max ~30s per source (10s watchdog + 2 × 10s probes), then next quality/server.
+      if (state === "dead" || attempt >= 2) {
         console.log(`[RS] server ${state === "dead" ? "offline" : "no data after long wait"} → failover`, srcAtStart);
         healthProbeSrcRef.current = "";
         tryNextPlaybackRoute(time);
         return;
       }
       console.log(`[RS] server ${state}, still loading — waiting (round ${attempt + 1})`);
-      window.setTimeout(() => { void check(attempt + 1); }, 12000);
+      window.setTimeout(() => { void check(attempt + 1); }, 10000);
     };
     void check(0);
   }, [tryNextPlaybackRoute]);
@@ -3531,11 +3535,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // direct-MP4 watchdog mark it as expired before hls.js has recovered/retried.
     if (isAnimeSaltContent || isHlsSrc) return;
     const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
-    const delay = manualQualitySelectedRef.current || isInsecureHttpSource(raw)
-      ? 12000
-      : /^https:\/\//i.test(raw)
-        ? 10000
-        : 9000;
+    const delay = 10000;
     const timer = window.setTimeout(() => {
       const v = videoRef.current;
       if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
