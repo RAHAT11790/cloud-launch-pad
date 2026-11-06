@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import DownloadFlowControls from "@/components/admin/DownloadFlowControls";
 import { Button } from "@/components/ui/button";
-import { checkDownloadFunctions, validDownloadUrl, type DownloadCheck } from "@/lib/downloadDiagnostics";
+import { validDownloadUrl } from "@/lib/downloadDiagnostics";
 import {
   Download,
   Send,
@@ -13,6 +13,8 @@ import {
   Loader2,
   BarChart3,
   RefreshCw,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { db, ref, onValue, update } from "@/lib/firebase";
 import {
@@ -32,7 +34,7 @@ type Props = {
   glassCard?: string;
 };
 
-type VideoServer = { name?: string; domain?: string; proxy?: string };
+type VideoServer = { name?: string; domain?: string; proxy?: string; customId?: string };
 
 const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
   const [config, setConfig] = useState<DownloadManagerConfig>(DEFAULT_DOWNLOAD_MANAGER_CONFIG);
@@ -41,22 +43,47 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [customDomain, setCustomDomain] = useState("");
-  const [testUrl, setTestUrl] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [checks, setChecks] = useState<DownloadCheck[]>([]);
-  const saveCustomServer = async () => {
-    const domain = validDownloadUrl(customDomain);
+  const [customName, setCustomName] = useState("");
+  const [customServers, setCustomServers] = useState<VideoServer[]>([]);
+  /** Custom servers join the same list as Video Servers, with their own HTTP/HTTPS switch. */
+  const addCustomServer = async () => {
+    const domain = validDownloadUrl(customDomain)?.replace(/\/+$/, "");
     if (!domain) { toast.error("Enter an HTTP or HTTPS server URL"); return; }
     const key = serverModeKey(domain);
+    if ([...servers, ...customServers].some(server => serverModeKey(String(server.domain || "")) === key)) { toast.error("This server is already in the list"); return; }
     setSaving(true);
-    try { await update(ref(db, "settings/downloadManager"), { activeServerDomain: domain.replace(/\/$/, ""), activeServerKey: key, [`serverModes/${key}`]: domain.startsWith("https:") ? "https" : "http" }); toast.success("Custom download server saved"); }
-    catch { toast.error("Could not save custom server"); }
+    try {
+      await update(ref(db, "settings/downloadManager"), {
+        [`customServers/${key}`]: { name: customName.trim().slice(0, 40) || "Custom server", domain, addedAt: Date.now() },
+        [`serverModes/${key}`]: domain.startsWith("https:") ? "https" : "http",
+      });
+      setCustomDomain(""); setCustomName("");
+      toast.success("Custom server added to the list");
+    } catch { toast.error("Could not add custom server"); }
+    finally { setSaving(false); }
+  };
+  const removeCustomServer = async (server: VideoServer) => {
+    if (!server.customId) return;
+    const isActive = serverModeKey(String(server.domain || "")) === config.activeServerKey;
+    setSaving(true);
+    try {
+      await update(ref(db, "settings/downloadManager"), {
+        [`customServers/${server.customId}`]: null,
+        ...(isActive ? { activeServerKey: "", activeServerDomain: "" } : {}),
+      });
+      toast.success("Custom server removed");
+    } catch { toast.error("Could not remove custom server"); }
     finally { setSaving(false); }
   };
 
   useEffect(() => {
     const unsubConfig = onValue(ref(db, "settings/downloadManager"), (snap) => {
       const raw = snap.val() || {};
+      const customRaw = raw?.customServers && typeof raw.customServers === "object" ? raw.customServers : {};
+      setCustomServers(Object.entries(customRaw)
+        .filter(([, v]: [string, any]) => v && typeof v.domain === "string" && /^https?:\/\//i.test(v.domain))
+        .sort(([, a]: [string, any], [, b]: [string, any]) => (Number(a.addedAt) || 0) - (Number(b.addedAt) || 0))
+        .map(([id, v]: [string, any]) => ({ name: String(v.name || "Custom server"), domain: String(v.domain), customId: id })));
       const modesRaw = raw?.serverModes && typeof raw.serverModes === "object" ? raw.serverModes : {};
       const serverModes: Record<string, DownloadServerMode> = {};
       Object.keys(modesRaw).forEach((k) => {
@@ -234,13 +261,15 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           </div>
         </div>
 
-        <div className="mb-4 space-y-3 rounded-lg bg-background p-3 text-foreground">
-          <label className="block text-xs font-semibold" htmlFor="custom-download-server">Custom server URL</label>
-          <div className="flex gap-2"><input id="custom-download-server" type="url" placeholder="http:// or https://" value={customDomain} onChange={event => setCustomDomain(event.target.value)} className="min-w-0 flex-1 rounded-md bg-background border border-input px-3 py-2 text-sm" /><Button size="sm" disabled={saving || !customDomain.trim()} onClick={() => void saveCustomServer()} aria-label="Save custom download server"><ServerIcon size={15} />Save</Button></div>
-          <label className="block text-xs font-semibold" htmlFor="download-test-url">File URL</label>
-          <input id="download-test-url" type="url" placeholder="HTTP / HTTPS file URL" value={testUrl} onChange={event => { setTestUrl(event.target.value); setChecks([]); }} className="w-full rounded-md bg-background border border-input px-3 py-2 text-sm" />
-          <Button variant="outline" disabled={checking || !testUrl.trim()} onClick={async () => { setChecking(true); setChecks([]); try { setChecks(await checkDownloadFunctions(testUrl)); } catch { toast.error("Enter a valid HTTP or HTTPS file URL"); } finally { setChecking(false); } }}>{checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}Check download functions</Button>
-          <div aria-live="polite" className="divide-y divide-border">{checks.map(check => <div key={check.name} className="py-2 flex items-start justify-between gap-3 text-xs"><div className="min-w-0"><p className="font-semibold">{check.name}</p><p className="text-muted-foreground mt-1 break-words">{check.reason}{check.status ? ` · HTTP ${check.status}` : ""}</p></div><span className={check.state === "working" ? "text-primary font-semibold" : "text-muted-foreground"}>{check.state}</span></div>)}</div>
+        <div className="mb-4 rounded-xl border border-white/10 bg-black/25 p-3.5">
+          <p className={label}>Add custom server</p>
+          <div className="space-y-2">
+            <input aria-label="Custom server name" placeholder="Name (optional)" value={customName} maxLength={40} onChange={event => setCustomName(event.target.value)} className="w-full h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-[13px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500" />
+            <div className="flex gap-2">
+              <input id="custom-download-server" aria-label="Custom server URL" type="url" inputMode="url" placeholder="http:// or https:// server URL" value={customDomain} onChange={event => setCustomDomain(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void addCustomServer(); }} className="min-w-0 flex-1 h-10 rounded-lg border border-white/10 bg-black/30 px-3 font-mono text-[12.5px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500" />
+              <button type="button" disabled={saving || !customDomain.trim()} onClick={() => void addCustomServer()} aria-label="Add custom download server" className="h-10 shrink-0 rounded-lg bg-indigo-600 px-3.5 text-[12.5px] font-bold text-white inline-flex items-center gap-1.5 disabled:opacity-40 active:scale-95 transition-transform"><Plus size={15} />Add</button>
+            </div>
+          </div>
         </div>
 
         <div className="mb-3 grid gap-2 sm:grid-cols-2 text-[10.5px] leading-relaxed text-zinc-400">
@@ -277,13 +306,13 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           </button>
         </div>
 
-        {servers.length === 0 ? (
+        {servers.length + customServers.length === 0 ? (
           <p className="rounded-xl border border-white/10 bg-black/20 px-3.5 py-6 text-center text-[12px] text-zinc-500">
             No video servers found. Add them in Video Servers first.
           </p>
         ) : (
           <div className="space-y-2">
-            {servers.map((server, idx) => {
+            {[...servers, ...customServers].map((server, idx) => {
               const domain = String(server?.domain || "");
               const key = serverModeKey(domain);
               const mode: DownloadServerMode = config.serverModes[key] === "https" ? "https" : "http";
@@ -308,6 +337,9 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-bold text-white">{server?.name || domain}</p>
                         <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] font-bold text-zinc-400">#{idx + 1}</span>
+                        {server.customId && (
+                          <span className="shrink-0 rounded-md bg-violet-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-300">CUSTOM</span>
+                        )}
                         {isActive && (
                           <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300">ACTIVE</span>
                         )}
@@ -327,6 +359,11 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                         </button>
                       ))}
                     </div>
+                    {server.customId && (
+                      <button type="button" onClick={() => void removeCustomServer(server)} disabled={saving} aria-label={`Remove ${server.name || domain}`} className="h-9 w-9 shrink-0 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 hover:text-red-300 grid place-items-center disabled:opacity-40">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                   <p className="mt-2 inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-zinc-400">
                     {mode === "https" ? <Zap size={12} className="text-emerald-400" /> : <ShieldCheck size={12} className="text-sky-400" />}
