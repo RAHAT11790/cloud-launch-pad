@@ -1,0 +1,1 @@
+- Chat moderation rules (filters, links, ban times, commands, slow mode, CEO check) live only in `chatModeration.ts`; client-enforced since the RTDB is public.
