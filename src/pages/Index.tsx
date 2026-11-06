@@ -997,6 +997,7 @@ const Index = () => {
   // Login-first: every new visitor (home or a shared video link) sees the
   // login page until they sign in or pick "Continue as Guest".
   const [entryDone, setEntryDone] = useState(() => {
+    try { if (new URLSearchParams(window.location.search).has("verify")) return false; } catch {}
     if (entryChosen()) return true;
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
