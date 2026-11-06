@@ -358,13 +358,9 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                         </button>
                       ))}
                     </div>
-                    {server.customId && (
-                      <button type="button" onClick={() => void removeCustomServer(server)} disabled={saving} aria-label={`Remove ${server.name || domain}`} className="h-9 w-9 shrink-0 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-400 hover:text-red-300 grid place-items-center disabled:opacity-40">
-                        <Trash2 size={15} />
-                      </button>
-                    )}
                   </div>
-                  <p className="mt-2 inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-zinc-400">
+                  <div className="mt-2 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 inline-flex items-center gap-1.5 text-[10.5px] font-semibold text-zinc-400">
                     {mode === "https" ? <Zap size={12} className="text-emerald-400" /> : <ShieldCheck size={12} className="text-sky-400" />}
                     {mode === "https"
                       ? directOk
@@ -372,6 +368,12 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                         : "This domain is not https — direct mode will fall back to the proxy"
                       : "Proxy download with renamed files"}
                   </p>
+                  {server.customId && (
+                    <button type="button" onClick={() => void removeCustomServer(server)} disabled={saving} aria-label={`Remove ${server.name || domain}`} className="h-8 shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-semibold text-zinc-300 hover:text-red-300 inline-flex items-center gap-1.5 disabled:opacity-40">
+                      <Trash2 size={13} />Remove
+                    </button>
+                  )}
+                  </div>
                 </div>
               );
             })}
