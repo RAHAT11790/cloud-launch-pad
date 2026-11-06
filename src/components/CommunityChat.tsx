@@ -525,7 +525,21 @@ function StickerPanel({ uid, onPick }: { uid: string; onPick: (s: string) => voi
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const [maker, setMaker] = useState(false);
+  const [makerText, setMakerText] = useState("");
+  const [makerStyle, setMakerStyle] = useState(0);
   useEffect(() => subscribeMyStickers(uid, setMine), [uid]);
+  const makeTextSticker = async () => {
+    const value = makerText.trim().slice(0, 40);
+    if (!value) { toast.error("Write some text for your sticker"); return; }
+    setAdding(true);
+    try {
+      const blob = await renderTextSticker(value, makerStyle);
+      await addMySticker(uid, await uploadToImgbb(new File([blob], "sticker.png", { type: "image/png" })));
+      setMaker(false); setMakerText(""); setTab("mine"); toast.success("Sticker created");
+    } catch { toast.error("Could not create sticker"); }
+    finally { setAdding(false); }
+  };
   const add = async (f?: File) => {
     if (!f) return;
     if (!/^image\/(png|webp|gif|jpeg)$/i.test(f.type)) { toast.error("Stickers must be images"); return; }
@@ -550,10 +564,21 @@ function StickerPanel({ uid, onPick }: { uid: string; onPick: (s: string) => voi
           </div>
         ) : (
           <>
+            {maker && (
+              <div className="mb-2 rounded-2xl bg-card p-2.5 space-y-2">
+                <div className="grid place-items-center h-20 rounded-xl bg-secondary overflow-hidden"><span className="cc-sticker-text" data-style={makerStyle}>{makerText || "Your text"}</span></div>
+                <input value={makerText} onChange={e => setMakerText(e.target.value)} maxLength={40} placeholder="Sticker text (e.g. GG 🔥)" aria-label="Sticker text" className="h-10 w-full rounded-xl bg-secondary border border-border px-3 text-sm text-foreground focus:outline-none focus:border-primary" />
+                <div className="flex items-center gap-1.5">
+                  {STICKER_STYLES.map((st, i) => <button key={i} type="button" aria-label={`Style ${i + 1}`} aria-pressed={makerStyle === i} onClick={() => setMakerStyle(i)} className={`h-8 w-8 rounded-full border-2 ${makerStyle === i ? "border-primary scale-110" : "border-transparent"}`} style={{ background: `linear-gradient(135deg, ${st.fill[0]}, ${st.fill[1]})` }} />)}
+                  <button type="button" disabled={adding} onClick={() => void makeTextSticker()} className="cc-3d-primary ml-auto h-9 rounded-xl px-4 text-[13px] font-extrabold">{adding ? "Creating…" : "Create"}</button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-4 gap-2">
               <button type="button" disabled={adding} onClick={() => file.current?.click()} aria-label="Add sticker from your photos" className="cc-3d aspect-square rounded-2xl grid place-items-center text-primary">
                 {adding ? <span className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" /> : <Plus size={28} weight="bold" />}
               </button>
+              <button type="button" disabled={adding} onClick={() => setMaker(v => !v)} aria-label="Make a text sticker" aria-pressed={maker} className="cc-3d aspect-square rounded-2xl grid place-items-center text-primary"><TextAa size={28} weight="bold" /></button>
               {mine.map(s => (
                 <span key={s.id} className="relative">
                   <button type="button" onClick={() => !editing && onPick(s.url)} aria-label="Send my sticker" className="aspect-square w-full rounded-2xl grid place-items-center active:scale-90 transition-transform">
@@ -564,11 +589,42 @@ function StickerPanel({ uid, onPick }: { uid: string; onPick: (s: string) => voi
               ))}
             </div>
             {mine.length > 0 && <button type="button" onClick={() => setEditing(v => !v)} className="mt-2 w-full text-center text-xs font-semibold text-muted-foreground py-1">{editing ? "Done" : "Edit my stickers"}</button>}
-            {mine.length === 0 && <p className="mt-3 text-center text-xs cc-meta">Tap + to turn any photo into your own sticker.</p>}
+            {mine.length === 0 && <p className="mt-3 text-center text-xs cc-meta">Tap + to turn a photo into a sticker, or Aa to write your own.</p>}
           </>
         )}
       </div>
       <input ref={file} type="file" accept="image/png,image/webp,image/gif,image/jpeg" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; void add(f); }} />
     </div>
   );
+}
+
+const STICKER_STYLES = [
+  { fill: ["#ff5f6d", "#ffc371"], stroke: "#3b0a0a" },
+  { fill: ["#00c6ff", "#0072ff"], stroke: "#021b3a" },
+  { fill: ["#a8ff78", "#22c55e"], stroke: "#06301a" },
+  { fill: ["#f9d423", "#ff4e50"], stroke: "#2b1100" },
+  { fill: ["#e0c3fc", "#8e2de2"], stroke: "#1f0838" },
+  { fill: ["#ffffff", "#d4d4d8"], stroke: "#111111" },
+];
+/** Draws bold outlined text on a transparent 512px canvas → PNG sticker. */
+function renderTextSticker(text: string, styleIndex: number): Promise<Blob> {
+  const st = STICKER_STYLES[styleIndex] || STICKER_STYLES[0];
+  const c = document.createElement("canvas"); c.width = 512; c.height = 512;
+  const g = c.getContext("2d")!;
+  const words = text.split(/\s+/); const lines: string[] = []; let line = "";
+  let size = 120;
+  g.font = `900 ${size}px system-ui, sans-serif`;
+  for (const w of words) { const t = line ? `${line} ${w}` : w; if (g.measureText(t).width > 440 && line) { lines.push(line); line = w; } else line = t; }
+  if (line) lines.push(line);
+  while (size > 40 && (lines.some(l => { g.font = `900 ${size}px system-ui, sans-serif`; return g.measureText(l).width > 460; }) || lines.length * size * 1.1 > 460)) size -= 6;
+  g.font = `900 ${size}px system-ui, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+  const grad = g.createLinearGradient(0, 60, 0, 452); grad.addColorStop(0, st.fill[0]); grad.addColorStop(1, st.fill[1]);
+  const top = 256 - ((lines.length - 1) * size * 1.1) / 2;
+  lines.forEach((l, i) => {
+    const y = top + i * size * 1.1;
+    g.lineWidth = size * 0.28; g.strokeStyle = "#ffffff"; g.strokeText(l, 256, y);
+    g.lineWidth = size * 0.12; g.strokeStyle = st.stroke; g.strokeText(l, 256, y);
+    g.fillStyle = grad; g.fillText(l, 256, y);
+  });
+  return new Promise((resolve, reject) => c.toBlob(b => (b ? resolve(b) : reject(new Error("canvas"))), "image/png"));
 }

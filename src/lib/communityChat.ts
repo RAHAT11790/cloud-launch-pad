@@ -44,7 +44,7 @@ export type ChatDraft =
   | { kind: "voice"; voice: string; dur: number }
   | { kind: "sticker"; sticker: string };
 
-export const BUILT_IN_STICKERS = ["😂", "🤣", "😍", "🥰", "😭", "😡", "🤯", "😱", "😎", "🤔", "🙏", "👍", "👏", "🔥", "💯", "❤️", "💔", "🎉", "😴", "🤡", "👀", "💀", "🫡", "🥳"];
+export const BUILT_IN_STICKERS = ["😂", "🤣", "😍", "🥰", "😭", "😡", "🤯", "😱", "😎", "🤔", "🙏", "👍", "👏", "🔥", "💯", "❤️", "💔", "🎉", "😴", "🤡", "👀", "💀", "🫡", "🥳", "😈", "🥺", "😤", "🤩", "😏", "🙄", "🤗", "🤫", "😵‍💫", "🫠", "🐱", "🐶", "🦊", "🐼", "🌸", "⚡", "🍿", "🎬", "👑", "✨"];
 
 export function cleanChatText(value: string) {
   const text = String(value || "").replace(/\r\n/g, "\n").trim();
