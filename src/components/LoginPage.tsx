@@ -788,6 +788,68 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     );
   }
 
+  // ======= SIGN-UP EMAIL VERIFICATION SCREEN =======
+  if (verifyPending) {
+    const digits = verifyCode.replace(/\D/g, "").slice(0, 6);
+    return (
+      <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/15 blur-3xl" />
+        </div>
+        <motion.div className="relative w-full max-w-[360px]" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+          <div className="relative glass-card-strong rounded-3xl p-6 border border-primary/25">
+            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); }}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
+              <ArrowLeft className="w-4 h-4" /> Change email
+            </button>
+            <div className="text-center">
+              <div className="relative w-16 h-16 mx-auto mb-3">
+                <div className="absolute inset-0 rounded-2xl gradient-primary rotate-6 opacity-40" />
+                <div className="relative w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center">
+                  <Mail className="w-8 h-8 text-primary-foreground" />
+                </div>
+              </div>
+              <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>Check your Gmail</h2>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                We sent a 6-digit code to<br /><span className="font-bold text-primary break-all">{verifyPending.email}</span>
+              </p>
+            </div>
+
+            <label className="relative block mt-5" aria-label="Verification code">
+              <input value={digits} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6}
+                onKeyDown={e => { if (e.key === "Enter") submitVerifyCode(); }}
+                className="absolute inset-0 w-full h-full opacity-0 z-10" aria-label="6-digit code" />
+              <div className="grid grid-cols-6 gap-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className={`h-12 rounded-xl flex items-center justify-center text-xl font-black border transition-colors ${
+                    digits[i] ? "border-primary bg-primary/10 text-foreground" : i === digits.length ? "border-primary/60 bg-secondary text-muted-foreground" : "border-border bg-secondary text-muted-foreground"}`}>
+                    {digits[i] || ""}
+                  </div>
+                ))}
+              </div>
+            </label>
+
+            <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
+              className="w-full mt-5 py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+              {verifyLoading ? <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" /> : <><Check className="w-4 h-4" /> Verify & create account</>}
+            </motion.button>
+
+            <div className="mt-4 rounded-xl bg-foreground/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
+              💡 Or just tap <b className="text-foreground">Verify my email</b> inside the email — on this same phone. Check Spam if you can't find it.
+            </div>
+
+            <button onClick={resendVerifyCode} disabled={verifyLoading || resendLeft > 0}
+              className="w-full mt-3 text-xs font-semibold text-primary disabled:text-muted-foreground">
+              {resendLeft > 0 ? `Resend code in ${resendLeft}s` : "Resend code"}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center"
@@ -931,6 +993,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                           <input name="email" type="email" placeholder="you@gmail.com" defaultValue={email} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       </div>
+                      <p className="-mt-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">Only <b className="text-primary">@gmail.com</b> — we'll send a code to verify it.</p>
                     </div>
                   )}
 
