@@ -6,8 +6,39 @@
 
 /* Telegram publishing workspace — locked Ocean Deep direction. */
 .download-step-screen { height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); display: flex; flex-direction: column; overflow: hidden; }
-.community-chat { height: calc(100dvh - 130px - env(safe-area-inset-bottom)); margin-top: 65px; display: flex; flex-direction: column; position: relative; max-width: 760px; margin-inline: auto; }
-@media (min-width: 960px) { .community-chat { margin-top: 0; height: calc(100dvh - 80px); } }
+/* Global chat — full-screen Telegram-style room above the header and bottom menu. */
+:root { --chat-bg: 40 30% 88%; --chat-pattern: 42 60% 45%; --chat-in: 0 0% 100%; --chat-in-fg: 222 20% 14%; --chat-out: 46 92% 84%; --chat-out-fg: 30 30% 14%; --chat-meta: 220 8% 46%; --chat-bar: 0 0% 100%;
+  --chat-n1: 4 72% 52%; --chat-n2: 28 85% 45%; --chat-n3: 145 55% 36%; --chat-n4: 200 75% 42%; --chat-n5: 262 55% 55%; --chat-n6: 330 65% 50%; --chat-n7: 180 60% 34%; --chat-rec: 0 78% 55%; }
+.dark { --chat-bg: 222 24% 7%; --chat-pattern: 42 70% 55%; --chat-in: 222 18% 15%; --chat-in-fg: 220 15% 92%; --chat-out: 38 48% 24%; --chat-out-fg: 42 40% 94%; --chat-meta: 220 10% 62%; --chat-bar: 222 20% 11%;
+  --chat-n1: 4 85% 66%; --chat-n2: 28 90% 62%; --chat-n3: 145 55% 58%; --chat-n4: 200 80% 64%; --chat-n5: 262 75% 74%; --chat-n6: 330 80% 70%; --chat-n7: 180 60% 55%; }
+.community-chat { position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; height: 100dvh; background-color: hsl(var(--chat-bg)); color: hsl(var(--foreground)); animation: cc-in .28s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes cc-in { from { transform: translateX(24px); opacity: 0; } }
+.cc-wall { background-image: radial-gradient(hsl(var(--chat-pattern) / .16) 1.2px, transparent 1.3px), radial-gradient(hsl(var(--chat-pattern) / .09) 1px, transparent 1.1px); background-size: 22px 22px, 22px 22px; background-position: 0 0, 11px 11px; }
+.cc-top { background: hsl(var(--chat-bar)); box-shadow: 0 2px 10px hsl(var(--foreground) / .08); padding-top: env(safe-area-inset-top); }
+.cc-bottom { background: hsl(var(--chat-bar)); box-shadow: 0 -2px 10px hsl(var(--foreground) / .06); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.cc-3d { background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--secondary))); box-shadow: inset 0 1px 0 hsl(var(--background) / .9), inset 0 -2px 0 hsl(var(--foreground) / .07), 0 2px 6px -2px hsl(var(--foreground) / .25); transition: transform .15s ease; }
+.cc-3d:active { transform: translateY(1px) scale(.94); }
+.cc-3d-primary { color: hsl(var(--primary-foreground)); background: linear-gradient(180deg, hsl(var(--primary) / .9), hsl(var(--primary)) 55%, hsl(var(--primary) / .8)); box-shadow: inset 0 1px 0 hsl(var(--primary-foreground) / .35), inset 0 -3px 0 hsl(var(--foreground) / .18), 0 6px 14px -5px hsl(var(--primary) / .8); transition: transform .15s ease; }
+.cc-3d-primary:active { transform: translateY(1px) scale(.94); }
+.cc-3d-primary:disabled { opacity: .55; }
+.cc-in { background: hsl(var(--chat-in)); color: hsl(var(--chat-in-fg)); box-shadow: 0 1px 1.5px hsl(var(--foreground) / .14); }
+.cc-out { background: hsl(var(--chat-out)); color: hsl(var(--chat-out-fg)); box-shadow: 0 1px 1.5px hsl(var(--foreground) / .14); }
+.cc-tail-in { border-bottom-left-radius: 4px; }
+.cc-tail-out { border-bottom-right-radius: 4px; }
+.cc-meta { color: hsl(var(--chat-meta)); }
+.cc-quote { border-left: 3px solid currentColor; background: hsl(var(--foreground) / .06); }
+.cc-pill { background: hsl(var(--foreground) / .32); color: hsl(var(--background)); backdrop-filter: blur(6px); }
+.cc-flash { animation: cc-flash 1.4s ease; }
+@keyframes cc-flash { 0%, 60% { box-shadow: 0 0 0 3px hsl(var(--primary) / .7); } }
+.cc-rec-dot { background: hsl(var(--chat-rec)); animation: cc-pulse 1s ease-in-out infinite; }
+.cc-rec { color: hsl(var(--chat-rec)); }
+@keyframes cc-pulse { 50% { opacity: .3; transform: scale(.8); } }
+.cc-sticker-pop { animation: cc-pop .4s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes cc-pop { from { transform: scale(.5); opacity: 0; } }
+.cc-sheet { animation: cc-sheet .25s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes cc-sheet { from { transform: translateY(100%); } }
+@media (min-width: 960px) { .community-chat > * { width: 100%; max-width: 820px; margin-inline: auto; } }
+@media (prefers-reduced-motion: reduce) { .community-chat, .cc-sticker-pop, .cc-sheet, .cc-rec-dot { animation: none !important; } }
 .download-page { --background: 0 0% 0%; --foreground: 0 0% 96%; --secondary: 0 0% 9%; --secondary-foreground: 0 0% 96%; --border: 0 0% 16%; --muted-foreground: 0 0% 60%; --primary: 174 78% 46%; --primary-foreground: 0 0% 0%; --ring: 174 78% 46%; }
 .download-ad-slot { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .download-step-footer { flex-shrink: 0; margin-top: auto; padding: 12px 0 max(10px, env(safe-area-inset-bottom)); }
