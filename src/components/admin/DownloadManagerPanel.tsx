@@ -335,10 +335,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-bold text-white">{server?.name || domain}</p>
-                        <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[9.5px] font-bold text-zinc-400">#{idx + 1}</span>
-                        {server.customId && (
-                          <span className="shrink-0 rounded-md bg-violet-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-300">CUSTOM</span>
-                        )}
+                        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold ${server.customId ? "bg-violet-500/20 text-violet-300" : "bg-white/[0.06] text-zinc-400"}`}>{server.customId ? "CUSTOM" : `#${idx + 1}`}</span>
                         {isActive && (
                           <span className="shrink-0 rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300">ACTIVE</span>
                         )}
