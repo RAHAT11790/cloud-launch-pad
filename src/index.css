@@ -27,7 +27,7 @@
 .cc-tail-out { border-bottom-right-radius: 4px; }
 .cc-meta { color: hsl(var(--chat-meta)); }
 .cc-quote { border-left: 3px solid currentColor; background: hsl(var(--foreground) / .06); }
-.cc-pill { background: hsl(var(--foreground) / .32); color: hsl(var(--background)); backdrop-filter: blur(6px); }
+.cc-pill { background: hsl(var(--card) / .9); color: hsl(var(--foreground)); box-shadow: 0 1px 2px hsl(var(--foreground) / .12); backdrop-filter: blur(6px); }
 .cc-flash { animation: cc-flash 1.4s ease; }
 @keyframes cc-flash { 0%, 60% { box-shadow: 0 0 0 3px hsl(var(--primary) / .7); } }
 .cc-rec-dot { background: hsl(var(--chat-rec)); animation: cc-pulse 1s ease-in-out infinite; }
