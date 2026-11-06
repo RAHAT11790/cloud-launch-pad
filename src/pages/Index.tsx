@@ -3822,13 +3822,17 @@ const Index = () => {
               {shouldRender && page === "series" && getPageContent_series()}
               {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => navigate("/")} />}
               {shouldRender && page === "movies" && getPageContent_movies()}
-              {shouldRender && page === "chat" && <CommunityChat isActive={isActive && !showProfile} allAnime={allAnime} onAnimeClick={onCardClick} onLogin={() => setShowLogin(true)} />}
             </div>
           );
         })}
       </main>
 
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
+
+      {/* Chat is its own full-screen room: it covers the header and bottom menu, with only a back arrow. */}
+      {activePage === "chat" && !showProfile && (
+        <CommunityChat onBack={() => { if (canGoBackInApp()) navigate(-1); else handleNavigate("home"); }} onLogin={() => setShowLogin(true)} />
+      )}
 
       <AnimatePresence>
         {isSearchRoute && (
