@@ -20,7 +20,7 @@ export default function EpisodeSearchPopup({ episodes, onClose }: { episodes: Ep
     <div className="fixed inset-0 z-[600] flex items-start justify-center bg-foreground/40 px-4 pt-[max(72px,env(safe-area-inset-top))]" onClick={onClose} data-player-panel="true">
       <div role="dialog" aria-label="Search episodes" className="cc-sheet w-full max-w-sm overflow-hidden rounded-3xl bg-card text-foreground shadow-2xl border border-border" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 p-3 border-b border-border">
-          <div className="flex-1 flex items-center gap-2 rounded-2xl bg-secondary border border-border px-3 h-11">
+          <div className="flex-1 min-w-0 flex items-center gap-2 rounded-2xl bg-secondary border border-border px-3 h-11">
             <MagnifyingGlass size={19} weight="bold" className="text-primary shrink-0" />
             <input ref={input} aria-label="Episode number or title" placeholder="Episode number or title" inputMode="search" value={term} onChange={e => setTerm(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && results[0]) { results[0].onClick(); onClose(); } }}
@@ -39,7 +39,7 @@ export default function EpisodeSearchPopup({ episodes, onClose }: { episodes: Ep
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-bold truncate">{ep.combo ? `Episodes ${ep.label}` : `Episode ${ep.number}`}</span>
-                {ep.title && <span className="block text-[12px] text-muted-foreground truncate">{ep.title}</span>}
+                {ep.title && ep.title.trim().toLowerCase() !== (ep.combo ? `episodes ${ep.label}` : `episode ${ep.number}`).toLowerCase() && <span className="block text-[12px] text-muted-foreground truncate">{ep.title}</span>}
               </span>
               {ep.locked ? <Lock size={18} weight="fill" className="text-primary shrink-0" /> : ep.active ? <span className="text-[11px] font-bold text-primary shrink-0">Playing</span> : <PlayCircle size={22} weight="duotone" className="text-primary shrink-0" />}
             </button>
