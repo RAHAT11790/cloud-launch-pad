@@ -814,7 +814,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <Mail className="w-8 h-8 text-primary-foreground" />
                 </div>
               </div>
-              <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>Check your Gmail</h2>
+              <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>Check your email</h2>
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                 We sent a 6-digit code to<br /><span className="font-bold text-primary break-all">{verifyPending.email}</span>
               </p>
