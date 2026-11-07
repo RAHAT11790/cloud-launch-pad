@@ -250,7 +250,7 @@ const AdsterraAnalytics = () => {
       });
     }
     return out;
-  }, [data, placements, countries, daily]);
+  }, [data, placements, countries, daily, placementName]);
 
   /* ---------------- UI ---------------- */
   const delta = (cur: number, old: number) => (old > 0 ? ((cur - old) / old) * 100 : cur > 0 ? 100 : 0);
