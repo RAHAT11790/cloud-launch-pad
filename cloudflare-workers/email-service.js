@@ -12,6 +12,7 @@
 //                                default onboarding@resend.dev only
 //                                reaches your own Resend email)
 //   SITE_URL        (optional)  default https://rsanime03.lovable.app
+//   FIREBASE_DB_URL (optional)  Firebase RTDB URL (reads allowed domains)
 //
 // Deploy, then paste the Worker URL into Admin → EGD Router →
 // `email-service` and Save.
@@ -21,12 +22,13 @@
 //   POST { action: "verify", token, code } → { ok, email, purpose }
 //   GET  → health JSON
 //
-// Anti-spam: only real-looking @gmail.com addresses, 60 s cooldown
+// Anti-spam: only admin-allowed domains (Firebase settings/loginAccess,
+// default @gmail.com with a strict real-inbox check), 60 s cooldown
 // per email, 8 sends / hour per IP, 5 wrong codes per code, codes
 // expire after 10 minutes. No state is written to your database.
 // ============================================================
 
-const VERSION = "email-service-cf-v1";
+const VERSION = "email-service-cf-v2";
 const CODE_TTL_MS = 10 * 60 * 1000;
 const EMAIL_COOLDOWN_S = 60;
 const IP_LIMIT_PER_HOUR = 8;
@@ -46,6 +48,29 @@ const json = (body, status = 200) =>
 
 const GMAIL_RE = /^(?=.{6,30}@)[a-z0-9](?:[a-z0-9]|\.(?!\.))*[a-z0-9]@gmail\.com$/;
 const normEmail = (v) => String(v || "").trim().toLowerCase();
+const LOCAL_RE = /^(?=.{3,40}$)[a-z0-9](?:[a-z0-9_-]|\.(?!\.))*[a-z0-9]$/;
+const DOMAIN_RE = /^(?=.{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
+let domainsMemo = { list: ["gmail.com"], exp: 0 };
+async function allowedDomains(env) {
+  if (domainsMemo.exp > Date.now()) return domainsMemo.list;
+  try {
+    const base = String(env.FIREBASE_DB_URL || DEFAULT_DB).replace(/\/+$/, "");
+    const r = await fetch(`${base}/settings/loginAccess/allowedDomains.json`, { cf: { cacheTtl: 30 } });
+    const raw = r.ok ? await r.json() : null;
+    const vals = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+    const list = [...new Set(vals.map((d) => String(d || "").trim().toLowerCase().replace(/^@+/, "")).filter((d) => DOMAIN_RE.test(d)))];
+    domainsMemo = { list: list.length ? list : ["gmail.com"], exp: Date.now() + 60_000 };
+  } catch { domainsMemo = { list: domainsMemo.list, exp: Date.now() + 15_000 }; }
+  return domainsMemo.list;
+}
+function emailAllowed(email, domains) {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return false;
+  const domain = email.slice(at + 1);
+  if (!domains.includes(domain)) return false;
+  return domain === "gmail.com" ? GMAIL_RE.test(email) : LOCAL_RE.test(email.slice(0, at));
+}
 
 const enc = new TextEncoder();
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -113,7 +138,8 @@ If you didn't ask for this, ignore this email — nothing will happen.<br/>${esc
 async function send(body, env, ip) {
   const email = normEmail(body.email);
   const purpose = body.purpose === "reset" ? "reset" : "register";
-  if (!GMAIL_RE.test(email)) return json({ ok: false, error: "only_gmail", message: "Only real @gmail.com addresses are allowed." }, 400);
+  const domains = await allowedDomains(env);
+  if (!emailAllowed(email, domains)) return json({ ok: false, error: "domain_not_allowed", message: `Only ${domains.map((d) => "@" + d).join(", ")} addresses are allowed.` }, 400);
 
   const cool = await counter(`cool:${email}`, EMAIL_COOLDOWN_S, 0);
   if (cool > 0) return json({ ok: false, error: "cooldown", message: "Please wait a minute before asking for another code.", cooldown: EMAIL_COOLDOWN_S }, 429);
