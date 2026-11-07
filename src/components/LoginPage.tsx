@@ -9,7 +9,8 @@ import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import {
-  isAllowedGmail, normalizeEmail, gmailCanonicalKey, sendEmailCode, verifyEmailCode,
+  isAllowedEmail, normalizeEmail, emailCanonicalKey, sendEmailCode, verifyEmailCode,
+  subscribeLoginAccess, loginAccessNow, allowedDomainsLabel, type LoginAccess,
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
 } from "@/lib/emailService";
 
@@ -62,6 +63,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const branding = useBranding();
   const logoSrc = branding.logoUrl || logoImg;
   const [isRegister, setIsRegister] = useState(false);
+  const [access, setAccess] = useState<LoginAccess>(loginAccessNow);
+  useEffect(() => subscribeLoginAccess(setAccess), []);
+  const domainsText = allowedDomainsLabel(access.allowedDomains);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -157,9 +161,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const gEmail = user.email || "";
-      if (!isAllowedGmail(gEmail)) {
+      if (!isAllowedEmail(gEmail, access.allowedDomains)) {
         try { await auth.signOut(); } catch {}
-        toast.error("Only @gmail.com accounts are allowed.");
+        toast.error(`Only ${domainsText} accounts are allowed.`);
         setLoading(false);
         return;
       }
@@ -284,7 +288,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const handleForgotPassword = async () => {
     const fEmail = normalizeEmail(forgotEmail);
     if (!fEmail) { toast.error("Please enter your email"); return; }
-    if (!isAllowedGmail(fEmail)) { toast.error("Only @gmail.com addresses are allowed."); return; }
+    if (!isAllowedEmail(fEmail, access.allowedDomains)) { toast.error(`Only ${domainsText} addresses are allowed.`); return; }
     setForgotLoading(true);
     try {
       const emailKey = fEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
@@ -341,7 +345,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const createVerifiedAccount = async (formName: string, formEmailRaw: string, formPassword: string) => {
     const formEmail = normalizeEmail(formEmailRaw);
     const emailKey = formEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-    const canonical = gmailCanonicalKey(formEmail);
+    const canonical = emailCanonicalKey(formEmail);
     const [taken, canon] = await Promise.all([
       get(ref(db, `appUsers/${emailKey}`)).catch(() => null),
       get(ref(db, `gmailRegistry/${canonical}`)).catch(() => null),
@@ -445,7 +449,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     const loginInput = isRegister ? formEmail : formName;
     if (!loginInput || !formPassword.trim()) { toast.error("Please fill in all fields"); return; }
     if (isRegister && !formName) { toast.error("Please enter a username"); return; }
-    if (isRegister && !isAllowedGmail(formEmail)) { toast.error("Only real @gmail.com addresses can sign up."); return; }
+    if (isRegister && !isAllowedEmail(formEmail, access.allowedDomains)) { toast.error(`Only real ${domainsText} addresses can sign up.`); return; }
     if (formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
 
     setLoading(true);
@@ -505,7 +509,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
       if (isRegister) {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
-        const canon = await get(ref(db, `gmailRegistry/${gmailCanonicalKey(formEmail)}`)).catch(() => null);
+        const canon = await get(ref(db, `gmailRegistry/${emailCanonicalKey(formEmail)}`)).catch(() => null);
         if (canon?.exists()) { toast.error("This email already has an account. Please sign in."); setLoading(false); return; }
         const { token, expiresAt } = await sendEmailCode(formEmail, "register", formName);
         const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token, expiresAt };
@@ -990,10 +994,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                     <div>
                       <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <input name="email" type="email" placeholder="you@gmail.com" defaultValue={email} maxLength={100}
+                          <input name="email" type="email" placeholder={`you@${access.allowedDomains[0]}`} defaultValue={email} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       </div>
-                      <p className="-mt-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">Only <b className="text-primary">@gmail.com</b> — we'll send a code to verify it.</p>
+                      <p className="-mt-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">Only <b className="text-primary">{domainsText}</b> — we'll send a code to verify it.</p>
                     </div>
                   )}
 
@@ -1044,7 +1048,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 </motion.button>
 
                 {/* Continue as Guest */}
-                {(
+                {access.guestEnabled && (
                 <motion.button
                   type="button"
                   onClick={() => { ensureGuestUser(); onGuest?.(); }}
