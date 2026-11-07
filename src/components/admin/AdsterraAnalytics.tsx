@@ -169,8 +169,9 @@ const AdsterraAnalytics = () => {
       out.push({
         level: "warn",
         title: `${silent.length} placement(s) getting zero impressions`,
-        metric: silent.map((s) => s.title).join(", "),
-        detail: "These placements exist in your Adsterra account but the site never requested them during this period — the ad code is either missing from the app, blocked before it loads, or gated behind a screen users rarely reach.",
+        // Site name too — Adsterra can hold two placements with the same title (e.g. Smartlink_1 on two sites).
+        metric: silent.map((s) => placementName(s.id)).join(", "),
+        detail: "These placements exist in your Adsterra account but got no traffic in this period — the ad code is missing from the app, blocked before it loads, or only used on a screen users rarely open (Daily Task coin ads load only when a user taps \"Watch ad\").",
         fix: "Paste each placement's script into Adsterra Ads → settings, and make sure the slot renders for non-premium users (premium users bypass ads by design).",
       });
     }
@@ -249,7 +250,7 @@ const AdsterraAnalytics = () => {
       });
     }
     return out;
-  }, [data, placements, countries, daily]);
+  }, [data, placements, countries, daily, placementName]);
 
   /* ---------------- UI ---------------- */
   const delta = (cur: number, old: number) => (old > 0 ? ((cur - old) / old) * 100 : cur > 0 ? 100 : 0);

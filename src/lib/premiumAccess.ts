@@ -25,6 +25,8 @@ export interface PremiumGlobalSettings {
   dailyAdCap: number;
   adWatchSeconds: number;
   premiumDeviceLimit: number;
+  /** Admin switch (Daily Task Manager): coins can buy Premium. Missing = open. */
+  coinStoreEnabled: boolean;
 }
 
 export const DEFAULT_PREMIUM_SETTINGS: PremiumGlobalSettings = {
@@ -35,7 +37,11 @@ export const DEFAULT_PREMIUM_SETTINGS: PremiumGlobalSettings = {
   dailyAdCap: 5,
   adWatchSeconds: 15,
   premiumDeviceLimit: 1,
+  coinStoreEnabled: true,
 };
+
+/** Only an explicit `false` closes the coin store. */
+export const coinStoreOpen = (raw: unknown) => raw !== false;
 
 const todayKey = () => {
   const d = new Date();
@@ -61,6 +67,7 @@ export const subscribePremiumSettings = (
         ...(raw.globalQualityLocks || {}),
       },
       extraPlans: Array.isArray(raw.extraPlans) ? raw.extraPlans : [],
+      coinStoreEnabled: coinStoreOpen(raw.coinStoreEnabled),
     });
   });
   return () => u();
@@ -101,11 +108,14 @@ const readLocalDeviceCoinDay = () => {
   }
 };
 /** Buy premium with coins — deducts coins, activates premium */
-export type SpendResult = { ok: true; expiresAt: number } | { ok: false; reason: "no_user" | "insufficient" | "unknown" };
+export type SpendResult = { ok: true; expiresAt: number } | { ok: false; reason: "no_user" | "insufficient" | "store_closed" | "unknown" };
 
 export const buyPremiumWithCoins = async (plan: CoinPlan): Promise<SpendResult> => {
   const uid = getLocalUserId() || ensureGuestUser();
   if (!uid) return { ok: false, reason: "no_user" };
+  // Re-check the admin switch at purchase time so a stale open page can't buy.
+  const storeSnap = await get(ref(db, "settings/premium/coinStoreEnabled")).catch(() => null);
+  if (!coinStoreOpen(storeSnap?.val())) return { ok: false, reason: "store_closed" };
   let out: SpendResult = { ok: false, reason: "unknown" };
   await runTransaction(ref(db, `users/${uid}/coinWallet`), (cur: any) => {
     const wallet = cur || { coins: 0 };

@@ -1,4 +1,5 @@
-import { db, ref, query, limitToLast, onValue, push, set, remove, get, update, orderByChild, equalTo } from "@/lib/firebase";
+import { db, ref, query, limitToLast, onValue, push, set, remove, get, update } from "@/lib/firebase";
+import { firebaseRestUrl } from "@/lib/firebaseRest";
 import {
   activeWords, banActive, containsLink, findBadWord, isCeoEmail, parseSettings, slowModeWaitMs, formatCountdown, banRemainingMs,
   DEFAULT_CHAT_SETTINGS, type ChatBan, type ChatMember, type ChatMention, type ChatSettings, type ChatWarning,
@@ -202,19 +203,33 @@ export async function deleteMessage(message: ChatMessage) {
 /** @deprecated kept name for callers; CEO may delete anyone's message. */
 export const deleteOwnMessage = deleteMessage;
 
-/** Deletes every message (text, photo, voice, sticker) a member ever sent. */
-export async function purgeMemberMessages(uid: string) {
-  const snap = await get(query(ref(db, CHAT_ROOM_PATH), orderByChild("uid"), equalTo(uid)));
+/** Multi-path delete patch for every message (and voice note) one member sent. Pure — tested. */
+export function memberMessagePatch(room: Record<string, any> | null | undefined, uid: string) {
   const patch: Record<string, null> = {};
-  snap.forEach(c => { patch[`${CHAT_ROOM_PATH}/${c.key}`] = null; const v = c.val(); if (v?.voice) patch[`communityChat/voice/${v.voice}`] = null; });
-  if (Object.keys(patch).length) await update(ref(db), patch);
-  return Object.keys(patch).filter(k => k.startsWith(CHAT_ROOM_PATH)).length;
+  for (const [key, row] of Object.entries(room || {})) {
+    if (!row || typeof row !== "object" || String(row.uid) !== uid) continue;
+    patch[`${CHAT_ROOM_PATH}/${key}`] = null;
+    if (typeof row.voice === "string" && /^[A-Za-z0-9_-]{6,40}$/.test(row.voice)) patch[`communityChat/voice/${row.voice}`] = null;
+  }
+  return patch;
+}
+
+/** Deletes every message (text, photo, voice, sticker) a member ever sent.
+ *  The whole room is read over REST (no `uid` index exists in the database rules, so an
+ *  orderByChild query is rejected with "Index not defined") and filtered on the device. */
+export async function purgeMemberMessages(uid: string) {
+  const res = await fetch(firebaseRestUrl(CHAT_ROOM_PATH), { cache: "no-store" });
+  if (!res.ok) throw new Error("Could not read chat messages");
+  const patch = memberMessagePatch(await res.json(), uid);
+  const count = Object.keys(patch).filter(k => k.startsWith(`${CHAT_ROOM_PATH}/`)).length;
+  if (count) await update(ref(db), patch);
+  return count;
 }
 
 export async function banMember(uid: string, durationMs: number | "permanent", reason: string, by: string, name?: string) {
   const permanent = durationMs === "permanent";
   await set(ref(db, `communityChat/bans/${uid}`), { until: permanent ? 0 : Date.now() + durationMs, reason: reason || "", by, t: Date.now(), ...(name ? { name } : {}) });
-  if (permanent) await purgeMemberMessages(uid);
+  return permanent ? purgeMemberMessages(uid) : 0;
 }
 export async function unbanMember(uid: string) { await remove(ref(db, `communityChat/bans/${uid}`)); }
 

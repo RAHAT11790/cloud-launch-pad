@@ -1,2 +1,3 @@
 - Chat moderation rules (filters, links, ban times, commands, slow mode, CEO check) live only in `chatModeration.ts`; client-enforced since the RTDB is public.
-- Sign-up/reset codes go only through EGD row `email-service` (Resend worker) via `src/lib/emailService.ts` (also Gmail-only rule + login-first flag); accounts are written only after a verified code.
+- Sign-up/reset codes go only through EGD row `email-service` (Resend worker) via `src/lib/emailService.ts` (also the admin email-domain/guest rule from `settings/loginAccess`, mirrored in the Worker, + login-first flag); accounts are written only after a verified code.
+- Premium-on reload is decided only by `premiumReload.ts` (inactive→active seen this visit); a page reload is the one reliable way to drop ad tags already injected.

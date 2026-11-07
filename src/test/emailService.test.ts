@@ -21,3 +21,33 @@ describe("gmail-only sign-up", () => {
     expect(gmailCanonicalKey("r.a.h.a.t99@gmail.com")).toBe(gmailCanonicalKey("rahat99@gmail.com"));
   });
 });
+
+import { isAllowedEmail, parseLoginAccess, normalizeDomain, emailCanonicalKey } from "@/lib/emailService";
+
+describe("admin-allowed sign-up domains", () => {
+  it("defaults to gmail.com only and guest on when nothing is saved", () => {
+    expect(parseLoginAccess(null)).toEqual({ guestEnabled: true, allowedDomains: ["gmail.com"] });
+  });
+  it("guest switch off is read as off", () => {
+    expect(parseLoginAccess({ guestEnabled: false }).guestEnabled).toBe(false);
+  });
+  it("only allows domains on the admin list", () => {
+    expect(isAllowedEmail("someone@outlook.com", ["gmail.com"])).toBe(false);
+    expect(isAllowedEmail("someone@outlook.com", ["gmail.com", "outlook.com"])).toBe(true);
+    expect(isAllowedEmail("abc123@tempmail.com", ["gmail.com", "outlook.com"])).toBe(false);
+  });
+  it("keeps the strict gmail check when gmail.com is allowed", () => {
+    expect(isAllowedEmail("abc@gmail.com", ["gmail.com"])).toBe(false);
+    expect(isAllowedEmail("abcdef+x@gmail.com", ["gmail.com"])).toBe(false);
+    expect(isAllowedEmail("rahat.sarker224@gmail.com", ["gmail.com"])).toBe(true);
+  });
+  it("cleans admin-typed domains", () => {
+    expect(normalizeDomain(" @Outlook.COM ")).toBe("outlook.com");
+    expect(normalizeDomain("not a domain")).toBe("");
+    expect(parseLoginAccess({ allowedDomains: ["@Yahoo.com", "bad domain"] }).allowedDomains).toEqual(["yahoo.com"]);
+  });
+  it("non-gmail accounts keep dots in their unique key", () => {
+    expect(emailCanonicalKey("a.b.c@gmail.com")).toBe("abc");
+    expect(emailCanonicalKey("a.b@outlook.com")).not.toBe(emailCanonicalKey("ab@outlook.com"));
+  });
+});

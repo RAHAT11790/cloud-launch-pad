@@ -1,4 +1,5 @@
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { db, ref, onValue } from "@/lib/firebase";
 
 /** Only real-looking @gmail.com addresses (6–30 char local part, no "+", no double dots). */
 const GMAIL_RE = /^(?=.{6,30}@)[a-z0-9](?:[a-z0-9]|\.(?!\.))*[a-z0-9]@gmail\.com$/;
@@ -7,6 +8,53 @@ export const normalizeEmail = (v: string) => String(v || "").trim().toLowerCase(
 export const isAllowedGmail = (v: string) => GMAIL_RE.test(normalizeEmail(v));
 /** Gmail ignores dots, so a.b.c@gmail.com and abc@gmail.com are one inbox. */
 export const gmailCanonicalKey = (v: string) => normalizeEmail(v).split("@")[0].replace(/\./g, "");
+
+// ---- Admin login access (Firebase settings/loginAccess, cached on device) ----
+export const DEFAULT_EMAIL_DOMAINS = ["gmail.com"];
+export type LoginAccess = { guestEnabled: boolean; allowedDomains: string[] };
+const DOMAIN_RE = /^(?=.{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const LOCAL_RE = /^(?=.{3,40}$)[a-z0-9](?:[a-z0-9_-]|\.(?!\.))*[a-z0-9]$/;
+
+/** "@Mail.Com " → "mail.com"; invalid → "". */
+export const normalizeDomain = (v: string) => {
+  const d = String(v || "").trim().toLowerCase().replace(/^@+/, "");
+  return DOMAIN_RE.test(d) ? d : "";
+};
+export function parseLoginAccess(raw: any): LoginAccess {
+  const list = Array.isArray(raw?.allowedDomains) ? raw.allowedDomains : raw?.allowedDomains && typeof raw.allowedDomains === "object" ? Object.values(raw.allowedDomains) : [];
+  const domains = [...new Set(list.map((d: any) => normalizeDomain(String(d))).filter(Boolean))] as string[];
+  return { guestEnabled: raw?.guestEnabled !== false, allowedDomains: domains.length ? domains : [...DEFAULT_EMAIL_DOMAINS] };
+}
+/** Registration rule: domain must be on the admin list; gmail.com keeps its stricter real-inbox check. */
+export function isAllowedEmail(v: string, domains: string[] = loginAccessNow().allowedDomains): boolean {
+  const e = normalizeEmail(v);
+  const at = e.lastIndexOf("@");
+  if (at < 1) return false;
+  const domain = e.slice(at + 1);
+  if (!domains.includes(domain)) return false;
+  if (domain === "gmail.com") return GMAIL_RE.test(e);
+  return LOCAL_RE.test(e.slice(0, at));
+}
+/** One account per inbox: Gmail ignores dots; other providers use the full address. */
+export const emailCanonicalKey = (v: string) => {
+  const e = normalizeEmail(v);
+  return e.endsWith("@gmail.com") ? gmailCanonicalKey(e) : e.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+};
+export const allowedDomainsLabel = (domains: string[]) => domains.map(d => `@${d}`).join(", ");
+
+const ACCESS_CACHE = "rs_login_access_v1";
+let accessNow: LoginAccess = (() => {
+  try { return parseLoginAccess(JSON.parse(localStorage.getItem(ACCESS_CACHE) || "null")); } catch { return parseLoginAccess(null); }
+})();
+export const loginAccessNow = () => accessNow;
+export function subscribeLoginAccess(cb: (a: LoginAccess) => void): () => void {
+  cb(accessNow);
+  return onValue(ref(db, "settings/loginAccess"), snap => {
+    accessNow = parseLoginAccess(snap.val());
+    try { localStorage.setItem(ACCESS_CACHE, JSON.stringify(accessNow)); } catch {}
+    cb(accessNow);
+  }, () => {});
+}
 
 export type EmailPurpose = "register" | "reset";
 export class EmailServiceError extends Error {
@@ -52,7 +100,7 @@ async function call(body: Record<string, unknown>) {
 
 export async function sendEmailCode(email: string, purpose: EmailPurpose, name?: string): Promise<{ token: string; expiresAt: number }> {
   const e = normalizeEmail(email);
-  if (!isAllowedGmail(e)) throw new EmailServiceError("only_gmail", "Only @gmail.com addresses are allowed.");
+  if (!isAllowedEmail(e)) throw new EmailServiceError("domain_not_allowed", `Only ${allowedDomainsLabel(loginAccessNow().allowedDomains)} addresses are allowed.`);
   const wait = cooldownLeftMs(e);
   if (wait > 0) throw new EmailServiceError("cooldown", `Please wait ${Math.ceil(wait / 1000)}s before asking for another code.`);
   const data = await call({ action: "send", email: e, purpose, name });

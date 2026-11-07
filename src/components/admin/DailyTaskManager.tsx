@@ -1179,8 +1179,38 @@ function PricingTab({
     setDirty(false);
   };
 
+  const storeOpen = settings.coinStoreEnabled !== false;
+  const [storeBusy, setStoreBusy] = useState(false);
+  const toggleStore = async () => {
+    setStoreBusy(true);
+    try {
+      await savePremiumSettings({ coinStoreEnabled: !storeOpen });
+      toast.success(storeOpen ? "Coin store closed — users can't buy Premium with coins" : "Coin store open — users can buy Premium with coins");
+    } catch (e: any) {
+      toast.error("Save failed: " + (e?.message || "unknown"));
+    } finally { setStoreBusy(false); }
+  };
+
   return (
     <div className="space-y-4">
+      <div className={glassCard + " p-4 flex items-center gap-3"} data-coin-store-switch>
+        <div className={"w-10 h-10 rounded-xl flex items-center justify-center shrink-0 " + (storeOpen ? "bg-emerald-500/15" : "bg-white/5")}>
+          <Coins className={"w-5 h-5 " + (storeOpen ? "text-emerald-300" : "text-white/40")} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white">Coin → Premium store</p>
+          <p className="text-[11.5px] text-white/55 leading-snug">
+            {storeOpen ? "Open — users can spend coins to buy Premium." : "Closed — nobody can buy Premium with coins. bKash and redeem codes still work."}
+          </p>
+        </div>
+        <button
+          role="switch" aria-checked={storeOpen} aria-label="Coin store" disabled={storeBusy} onClick={toggleStore}
+          className={"relative w-12 h-7 rounded-full transition-colors shrink-0 disabled:opacity-50 " + (storeOpen ? "bg-emerald-500" : "bg-white/15")}
+        >
+          <span className={"absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all " + (storeOpen ? "left-6" : "left-1")} />
+        </button>
+      </div>
+
       <div className={glassCard + " p-5"}>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>

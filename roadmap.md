@@ -1,5 +1,20 @@
 # Roadmap
 
+## Global chat fixes (2026-11-07)
+- [x] CEO "Ban permanent + delete all" deletes the member's messages (no index query); phone test removed 2 test messages.
+- [x] Message menu opens only on long-press; single tap verified to do nothing.
+- [x] Polished chat header (logo ring, live dot, members, slow-mode chip).
+
+## Store, ads, login settings (approved 2026-11-06)
+- [x] Daily Task Manager → Pricing: coin store switch; closed store hides coin plans and purchase re-checks the switch.
+- [x] Site refreshes when Premium turns on mid-visit (verified with a temporary user), toast "ads are now off".
+- [x] Global Chat blocks sponsor tabs (outside link opened 1 tab on Home, 0 in Chat).
+- [x] Admin → Settings → Login settings: guest switch + allowed email domains (gmail.com default); login page and email Worker follow it.
+- [x] Telegram popup repeat timer (seconds/minutes/hours/days) at end of Settings; 4-day-old close re-opens with 3-day repeat, 1-day doesn't.
+- [x] Adsterra section reviewed: stats load; zero-impression warning now names each slot's site.
+- [x] Admin tested with PIN on phone size; test settings, test users and today's test admin-login logs removed.
+- [ ] Real email to an @outlook-style domain not tested — needs the Email Service Worker redeployed with Resend secrets.
+
 ## Approved community chat, episode search and download checks (2026-11-06)
 - [x] Add Chat between Movies and Profile; phone menu navigation verified. Message/profile/attachment controls are implemented but disabled pending trusted access.
 - [ ] Activate public messages and participant-only conversations: blocked by unavailable Firebase rule-deployment credentials and app email accounts lacking Firebase Auth identity; CHAT_SECURITY_READY remains false.

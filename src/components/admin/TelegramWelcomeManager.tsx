@@ -25,6 +25,21 @@ type CacheShape = {
   heading: string;
   description: string;
   buttons: (TgWelcomeButton & { _key?: string })[];
+  repeatSeconds?: number;
+};
+
+const UNITS = [
+  { id: "s", label: "Seconds", mul: 1 },
+  { id: "m", label: "Minutes", mul: 60 },
+  { id: "h", label: "Hours", mul: 3600 },
+  { id: "d", label: "Days", mul: 86400 },
+] as const;
+type UnitId = typeof UNITS[number]["id"];
+/** 172800 → { value: 2, unit: "d" } — biggest unit that divides evenly. */
+const splitSeconds = (sec: number): { value: string; unit: UnitId } => {
+  if (!sec || sec <= 0) return { value: "", unit: "d" };
+  for (const u of [...UNITS].reverse()) if (sec % u.mul === 0) return { value: String(sec / u.mul), unit: u.id };
+  return { value: String(sec), unit: "s" };
 };
 let tgWelcomeCache: CacheShape | null = (() => {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
@@ -42,6 +57,9 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
     tgWelcomeCache?.buttons ?? [],
   );
   const [loaded, setLoaded] = useState<boolean>(!!tgWelcomeCache);
+  const [repeatSec, setRepeatSec] = useState<number>(tgWelcomeCache?.repeatSeconds ?? 0);
+  const [repeatValue, setRepeatValue] = useState<string>(() => splitSeconds(tgWelcomeCache?.repeatSeconds ?? 0).value);
+  const [repeatUnit, setRepeatUnit] = useState<UnitId>(() => splitSeconds(tgWelcomeCache?.repeatSeconds ?? 0).unit);
 
   // Pause snapshot re-apply while admin is actively typing/editing —
   // otherwise Firebase pushes yank inputs out from under them.
@@ -65,7 +83,9 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
       list.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       const snapshot: CacheShape = {
         enabled: nextEnabled, heading: nextHeading, description: nextDescription, buttons: list,
+        repeatSeconds: Number(val.repeatSeconds) || 0,
       };
+      setRepeatSec(snapshot.repeatSeconds || 0);
       writeCache(snapshot);
       if (isTypingRef.current) {
         pendingRef.current = snapshot;
@@ -105,6 +125,27 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
       toast.success(next ? "Popup enabled" : "Popup disabled");
     } catch { toast.error("Failed to update"); }
   };
+
+  const saveRepeat = async (seconds: number) => {
+    try {
+      await update(ref(db, "settings/telegramWelcome"), { repeatSeconds: seconds });
+      const sp = splitSeconds(seconds);
+      setRepeatValue(sp.value); setRepeatUnit(sp.unit);
+      toast.success(seconds > 0 ? "Repeat timer saved" : "Popup will show only once per user");
+    } catch { toast.error("Save failed"); }
+  };
+  const saveRepeatFromInputs = () => {
+    const n = Math.floor(Number(repeatValue));
+    if (!Number.isFinite(n) || n <= 0) { toast.error("Enter a number above 0"); return; }
+    const mul = UNITS.find(u => u.id === repeatUnit)?.mul || 1;
+    saveRepeat(Math.min(n * mul, 365 * 86400));
+  };
+  const repeatLabel = (() => {
+    if (!repeatSec) return "Only once per user";
+    const sp = splitSeconds(repeatSec);
+    const u = UNITS.find(x => x.id === sp.unit)!;
+    return `Again every ${sp.value} ${u.label.toLowerCase()}`;
+  })();
 
   const saveMeta = async () => {
     try {
@@ -183,6 +224,7 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
   const resetSeenFlag = () => {
     try {
       localStorage.removeItem("rs_tg_welcome_seen_v1");
+      localStorage.removeItem("rs_tg_welcome_seen_at_v1");
       toast.success("Local 'seen' flag cleared — reload site to preview popup");
     } catch { toast.error("Failed"); }
   };
@@ -205,8 +247,28 @@ const TelegramWelcomeManager = ({ glassCard, inputClass, btnPrimary, btnSecondar
         </button>
       </div>
       <p className="text-[11px] text-white/60 mb-4">
-        First-time visitors see this popup once (stored in their browser). Edit heading, description and any number of Telegram buttons below.
+        Visitors see this popup on their first visit, then again after the repeat time below (if set). Edit heading, description and any number of Telegram buttons below.
       </p>
+
+      {/* Repeat timer */}
+      <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] p-3 mb-4 space-y-2" data-tg-repeat>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[12px] font-semibold text-white">Show again after</p>
+          <span className="text-[10.5px] font-semibold text-sky-300">{repeatLabel}</span>
+        </div>
+        <p className="text-[10.5px] text-white/55">Counted from when each user last closed the popup.</p>
+        <div className="flex gap-2">
+          <input type="number" min={1} inputMode="numeric" value={repeatValue} onChange={(e) => setRepeatValue(e.target.value)}
+                 placeholder="e.g. 3" aria-label="Repeat amount" className={`${inputClass} w-24`} />
+          <select value={repeatUnit} onChange={(e) => setRepeatUnit(e.target.value as UnitId)} aria-label="Repeat unit" className={`${inputClass} flex-1`}>
+            {UNITS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+          </select>
+          <button onClick={saveRepeatFromInputs} className={`${btnPrimary} !px-3`}><Save size={13} className="inline mr-1" />Save</button>
+        </div>
+        {repeatSec > 0 && (
+          <button onClick={() => saveRepeat(0)} className="text-[10.5px] text-white/60 underline">Turn off repeat (show only once)</button>
+        )}
+      </div>
 
       {/* Meta */}
       <div className="space-y-2 mb-4">

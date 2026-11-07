@@ -23,6 +23,7 @@ import AdBlockerDetected from "./pages/AdBlockerDetected";
 import AdBlockerRemoved from "./pages/AdBlockerRemoved";
 import { initAdShield } from "@/lib/adShield";
 import ChromeBrowserGate from "./components/ChromeBrowserGate";
+import { PremiumActivationReload } from "@/lib/premiumReload";
 import { startPresence } from "@/lib/presence";
 
 const RouteAttrSync = () => {
@@ -90,6 +91,7 @@ const App = () => (
         <AdBlockGateWatcher />
         <BanGate />
         <ManifestManager />
+        <PremiumActivationReload />
         
         <Toaster />
         <Sonner />

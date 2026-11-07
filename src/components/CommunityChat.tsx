@@ -1,17 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowBendUpLeft, ArrowLeft, CaretDown, ChatsCircle, Copy, ImageSquare, Microphone, PaperPlaneRight,
-  Pause, Play, Plus, SignIn, Smiley, Sticker, Trash, X, PencilSimple, Prohibit, Warning, ShieldStar, Timer, CrownSimple, TextAa,
+  Pause, Play, Plus, SignIn, Smiley, Sticker, Trash, X, PencilSimple, Prohibit, Warning, ShieldStar, Timer, CrownSimple, TextAa, UsersThree,
 } from "@phosphor-icons/react";
 import {
   BUILT_IN_STICKERS, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS, addMySticker, currentChatProfile, deleteMessage, editOwnMessage,
-  subscribeChatSettings, subscribeBan, subscribeWarnings, markWarningsSeen, clearMentions, banMember, unbanMember, warnMember, lastSentAt, ChatBlockedError,
+  subscribeChatSettings, subscribeBan, subscribeMembers, subscribeWarnings, markWarningsSeen, clearMentions, banMember, unbanMember, warnMember, lastSentAt, ChatBlockedError,
   formatDuration, loadVoice, messagePreview, nameColorSlot, removeMySticker, sendChatMessage, subscribeChat,
   subscribeMyStickers, uploadVoice, type ChatMessage, type ChatProfile, type ChatReply,
 } from "@/lib/communityChat";
 import { uploadToImgbb } from "@/lib/imgbbUpload";
 import { banActive, banRemainingMs, formatCountdown, parseChatCommand, slowModeWaitMs, DEFAULT_CHAT_SETTINGS, type ChatBan, type ChatSettings, type ChatWarning } from "@/lib/chatModeration";
 import { useBranding } from "@/hooks/useBranding";
+import { enterNoAdZone } from "@/lib/adsterraAds";
 import { toast } from "sonner";
 
 type Props = { onBack: () => void; onLogin: () => void };
@@ -49,9 +50,16 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
   const [ban, setBan] = useState<ChatBan | null>(null);
   const [warnings, setWarnings] = useState<ChatWarning[]>([]);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [confirmBan, setConfirmBan] = useState<ChatMessage | null>(null);
+  const [banBusy, setBanBusy] = useState(false);
+  const menuOpenedAt = useRef(0);
+  const openMenu = useCallback((m: ChatMessage) => { menuOpenedAt.current = Date.now(); setMenu(m); }, []);
+  const [memberCount, setMemberCount] = useState(0);
+  useEffect(() => subscribeMembers(rows => setMemberCount(rows.length)), []);
   const [lastSent, setLastSent] = useState(lastSentAt);
   const [tick, setTick] = useState(Date.now());
   useEffect(() => subscribeChatSettings(setSettings), []);
+  useEffect(() => enterNoAdZone(), []);
   useEffect(() => { if (!me) { setBan(null); setWarnings([]); return; } const a = subscribeBan(me.id, setBan); const b = subscribeWarnings(me.id, setWarnings); void clearMentions(me.id).catch(() => {}); return () => { a(); b(); }; }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const banned = !me?.ceo && banActive(ban, tick);
   const slowWait = me?.ceo ? 0 : slowModeWaitMs(lastSent, settings.slowModeSeconds, tick);
@@ -102,8 +110,8 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
     if (cmd.target === me.id) { toast.error("You cannot use this on yourself"); return true; }
     const name = (messages || []).find(m => m.uid === cmd.target)?.name || reply?.name || cmd.target;
     if (cmd.cmd === "ban") {
-      await banMember(cmd.target, cmd.duration, cmd.reason, me.name, name);
-      toast.success(cmd.duration === "permanent" ? `${name} is permanently banned — all their messages were deleted` : `${name} is muted for ${formatCountdown(cmd.duration)}`);
+      const removed = await banMember(cmd.target, cmd.duration, cmd.reason, me.name, name);
+      toast.success(cmd.duration === "permanent" ? `${name} is permanently banned — ${removed} message${removed === 1 ? "" : "s"} deleted` : `${name} is muted for ${formatCountdown(cmd.duration)}`);
     } else if (cmd.cmd === "unban") { await unbanMember(cmd.target); toast.success(`${name} is unbanned`); }
     else { await warnMember(cmd.target, cmd.text, me.name); toast.success(`Warning sent to ${name}`); }
     resetInput();
@@ -149,18 +157,32 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
   let lastDay = "";
   return (
     <section className="community-chat" aria-label="Global chat">
-      <header className="cc-top relative z-10 flex items-center gap-2 px-2 h-auto">
-        <div className="flex items-center gap-2 h-[58px] w-full">
-          <button type="button" onClick={onBack} aria-label="Back" className="cc-3d h-10 w-10 shrink-0 rounded-full grid place-items-center text-foreground">
+      <header className="cc-top relative z-10 px-2">
+        <div className="flex items-center gap-2.5 h-[62px] w-full">
+          <button type="button" onClick={onBack} aria-label="Back" className="cc-top-btn h-10 w-10 shrink-0 rounded-full grid place-items-center">
             <ArrowLeft size={20} weight="bold" />
           </button>
-          <span className="h-10 w-10 shrink-0 rounded-full overflow-hidden grid place-items-center cc-3d-primary">
-            {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-full w-full object-cover" /> : <ChatsCircle size={22} weight="fill" />}
+          <span className="cc-top-logo relative h-11 w-11 shrink-0 rounded-full p-[2px]">
+            <span className="h-full w-full rounded-full overflow-hidden grid place-items-center bg-card">
+              {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-full w-full object-cover" /> : <ChatsCircle size={22} weight="fill" className="text-primary" />}
+            </span>
+            <span className="cc-live-dot absolute bottom-0 right-0 h-3 w-3 rounded-full" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <h1 className="text-[15px] font-extrabold truncate flex items-center gap-1.5">RS ANIME03 {me?.ceo && <span className="cc-ceo-badge"><CrownSimple size={11} weight="fill" />CEO</span>}</h1>
-            <p className="text-[11.5px] cc-meta truncate">Global Chat{members ? ` · ${members} member${members === 1 ? "" : "s"}` : ""}</p>
+            <h1 className="text-[16px] font-black tracking-tight truncate flex items-center gap-1.5">
+              <span className="truncate">Global Chat</span>
+              {me?.ceo && <span className="cc-ceo-badge"><CrownSimple size={11} weight="fill" />CEO</span>}
+            </h1>
+            <p className="text-[11.5px] cc-meta truncate flex items-center gap-1.5">
+              <span className="font-semibold">{branding.siteName || "RS ANIME03"}</span>
+              <span className="cc-top-sep" aria-hidden="true" />
+              <span className="cc-live-text font-bold">Live</span>
+              {settings.slowModeSeconds > 0 && <><span className="cc-top-sep" aria-hidden="true" /><span className="inline-flex items-center gap-0.5"><Timer size={11} weight="bold" />{settings.slowModeSeconds}s</span></>}
+            </p>
           </div>
+          <span className="cc-top-chip shrink-0 h-9 rounded-full px-3 flex items-center gap-1.5 text-[12.5px] font-extrabold tabular-nums" aria-label={`${Math.max(memberCount, members)} members`}>
+            <UsersThree size={16} weight="fill" />{Math.max(memberCount, members)}
+          </span>
         </div>
       </header>
 
@@ -185,7 +207,7 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
             <div key={m.id}>
               {showDay && <div className="sticky top-1 z-[1] my-2 flex justify-center"><span className="rounded-full px-3 py-1 text-[11.5px] font-semibold cc-pill">{day}</span></div>}
               <MessageRow m={m} own={m.uid === me?.id} groupStart={groupStart} groupEnd={groupEnd} quoted={m.reply ? byId.get(m.reply.id) : undefined}
-                onMenu={setMenu} onReply={startReply} onProfile={setProfile} onJump={jumpTo} onImage={setViewer} />
+                onMenu={openMenu} onReply={startReply} onProfile={setProfile} onJump={jumpTo} onImage={setViewer} />
             </div>
           );
         })}
@@ -226,7 +248,7 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
       </footer>
 
       {menu && (
-        <div className="fixed inset-0 z-[70] flex items-end bg-foreground/30" onClick={() => setMenu(null)}>
+        <div className="fixed inset-0 z-[70] flex items-end bg-foreground/30" onClick={() => { if (Date.now() - menuOpenedAt.current > 350) setMenu(null); }}>
           <div className="cc-sheet w-full rounded-t-3xl bg-card p-3 pb-[max(14px,env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()} role="menu" aria-label="Message actions">
             <p className="px-3 pb-2 text-xs cc-meta truncate">{menu.name}: {messagePreview(menu)}</p>
             <SheetButton icon={<ArrowBendUpLeft size={20} weight="bold" />} label="Reply" onClick={() => startReply(menu)} />
@@ -238,8 +260,31 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
               <p className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-primary flex items-center gap-1"><ShieldStar size={14} weight="fill" />CEO tools</p>
               <SheetButton icon={<Warning size={20} weight="bold" />} label="Warn (type /warning …)" onClick={() => { const m = menu; startReply(m); setText("/warning "); }} />
               <SheetButton icon={<Timer size={20} weight="bold" />} label="Mute 30 minutes" onClick={() => { const m = menu; setMenu(null); void banMember(m.uid, 30 * 60_000, "Muted by CEO", me.name, m.name).then(() => toast.success(`${m.name} muted for 30 minutes`)).catch(() => toast.error("Could not mute")); }} />
-              <SheetButton danger icon={<Prohibit size={20} weight="bold" />} label="Ban permanently + delete all" onClick={() => { const m = menu; setMenu(null); if (!window.confirm(`Permanently ban ${m.name} and delete every message they sent?`)) return; void banMember(m.uid, "permanent", "Banned by CEO", me.name, m.name).then(() => toast.success(`${m.name} banned — all messages deleted`)).catch(() => toast.error("Could not ban")); }} />
+              <SheetButton danger icon={<Prohibit size={20} weight="bold" />} label="Ban permanently + delete all" onClick={() => { setConfirmBan(menu); setMenu(null); }} />
             </>}
+          </div>
+        </div>
+      )}
+
+      {confirmBan && me?.ceo && (
+        <div className="fixed inset-0 z-[86] grid place-items-center bg-foreground/50 px-5" role="alertdialog" aria-label="Confirm permanent ban" onClick={() => !banBusy && setConfirmBan(null)}>
+          <div className="cc-warn w-full max-w-sm rounded-3xl p-5 text-center" onClick={e => e.stopPropagation()}>
+            <span className="cc-ban-ico mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full"><Prohibit size={34} weight="fill" /></span>
+            <h2 className="text-lg font-black break-words">Ban {confirmBan.name} permanently?</h2>
+            <p className="mt-2 text-[13.5px] cc-meta">They can never send in Global Chat again, and every message, photo, voice note and sticker they sent will be deleted for everyone.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" disabled={banBusy} className="cc-3d h-12 rounded-2xl font-bold text-foreground" onClick={() => setConfirmBan(null)}>Cancel</button>
+              <button type="button" disabled={banBusy} className="cc-danger-btn h-12 rounded-2xl font-extrabold flex items-center justify-center gap-2"
+                onClick={() => {
+                  const m = confirmBan; setBanBusy(true);
+                  void banMember(m.uid, "permanent", "Banned by CEO", me.name, m.name)
+                    .then(count => toast.success(`${m.name} banned — ${count} message${count === 1 ? "" : "s"} deleted`))
+                    .catch(() => toast.error("Ban saved, but messages could not be deleted. Try again."))
+                    .finally(() => { setBanBusy(false); setConfirmBan(null); });
+                }}>
+                {banBusy ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Prohibit size={18} weight="bold" />}Ban + delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -306,9 +351,27 @@ type RowProps = {
   m: ChatMessage; own: boolean; groupStart: boolean; groupEnd: boolean; quoted?: ChatMessage;
   onMenu: (m: ChatMessage) => void; onReply: (m: ChatMessage) => void; onProfile: (p: ChatProfile) => void; onJump: (id: string) => void; onImage: (url: string) => void;
 };
+const LONG_PRESS_MS = 450;
 const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quoted, onMenu, onReply, onProfile, onJump, onImage }: RowProps) {
   const [dx, setDx] = useState(0);
+  const [pressing, setPressing] = useState(false);
   const touch = useRef<{ x: number; y: number; locked: boolean | null } | null>(null);
+  const hold = useRef<{ timer: number; fired: boolean; x: number; y: number } | null>(null);
+  const cancelHold = () => { if (hold.current) window.clearTimeout(hold.current.timer); hold.current = null; setPressing(false); };
+  // Hold (long-press) opens the actions sheet; a plain tap does nothing.
+  const startHold = (x: number, y: number) => {
+    cancelHold();
+    const state = { fired: false, x, y, timer: 0 };
+    state.timer = window.setTimeout(() => {
+      state.fired = true; setPressing(false);
+      try { navigator.vibrate?.(18); } catch {}
+      window.getSelection?.()?.removeAllRanges();
+      onMenu(m);
+    }, LONG_PRESS_MS);
+    hold.current = state; setPressing(true);
+  };
+  const moveHold = (x: number, y: number) => { const h = hold.current; if (h && !h.fired && (Math.abs(x - h.x) > 10 || Math.abs(y - h.y) > 10)) cancelHold(); };
+  useEffect(() => () => { if (hold.current) window.clearTimeout(hold.current.timer); }, []);
   const sticker = m.kind === "sticker";
   const profile = { id: m.uid, name: m.name, photo: m.photo };
   const time = <span className={`text-[10.5px] whitespace-nowrap ${sticker ? "cc-pill rounded-full px-1.5 py-0.5" : "cc-meta"}`}>{m.edited ? <i className="cc-edited">Edited · </i> : null}{timeLabel(m.t)}</span>;
@@ -325,6 +388,7 @@ const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quot
       onTouchStart={e => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY, locked: null }; }}
       onTouchMove={e => {
         const s = touch.current; if (!s) return; const t = e.touches[0];
+        moveHold(t.clientX, t.clientY);
         const mx = t.clientX - s.x; const my = t.clientY - s.y;
         if (s.locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.locked = Math.abs(mx) > Math.abs(my) && mx < 0;
         if (s.locked) setDx(Math.max(-72, Math.min(0, mx)));
@@ -333,8 +397,16 @@ const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quot
       {!own && (groupEnd
         ? <button type="button" aria-label={`View ${m.name} profile`} onClick={() => onProfile(profile)}><Avatar profile={profile} /></button>
         : <span className="w-[34px] shrink-0" />)}
-      <div onClick={e => { e.stopPropagation(); onMenu(m); }} role="button" tabIndex={0} aria-label={`Message from ${m.name}`}
-        className={`cc-bubble relative max-w-[78%] min-w-0 cursor-pointer select-text ${sticker ? "" : `px-2.5 pt-1.5 pb-1 ${own ? "cc-out" : "cc-in"} ${groupStart ? "cc-first" : ""} ${groupEnd ? (own ? "cc-tail-out" : "cc-tail-in") : "cc-mid"}`}`}>
+      <div role="button" tabIndex={0} aria-label={`Message from ${m.name}. Press and hold for options`} aria-haspopup="menu"
+        onTouchStart={e => { if (e.touches.length === 1) startHold(e.touches[0].clientX, e.touches[0].clientY); else cancelHold(); }}
+        onTouchEnd={e => { const fired = hold.current?.fired; cancelHold(); if (fired) e.preventDefault(); }}
+        onTouchCancel={cancelHold}
+        onMouseDown={e => { if (e.button === 0) startHold(e.clientX, e.clientY); }}
+        onMouseMove={e => moveHold(e.clientX, e.clientY)}
+        onMouseUp={cancelHold} onMouseLeave={cancelHold}
+        onContextMenu={e => { e.preventDefault(); cancelHold(); onMenu(m); }}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " " || e.key === "ContextMenu") { e.preventDefault(); onMenu(m); } }}
+        className={`cc-bubble cc-hold relative max-w-[78%] min-w-0 ${pressing ? "cc-pressing" : ""} ${sticker ? "" : `px-2.5 pt-1.5 pb-1 ${own ? "cc-out" : "cc-in"} ${groupStart ? "cc-first" : ""} ${groupEnd ? (own ? "cc-tail-out" : "cc-tail-in") : "cc-mid"}`}`}>
         {!own && groupStart && !sticker && (
           <button type="button" onClick={e => { e.stopPropagation(); onProfile(profile); }} className="flex items-center gap-1 text-[13px] font-bold truncate max-w-full text-left" style={nameColor(m.uid)}><span className="truncate">{m.name}</span>{m.ceo && <span className="cc-ceo-badge"><CrownSimple size={10} weight="fill" />CEO</span>}</button>
         )}
