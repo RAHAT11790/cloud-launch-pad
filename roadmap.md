@@ -1,5 +1,20 @@
 # Roadmap
 
+## Global chat fixes (2026-11-07)
+- [ ] CEO "Ban permanent + delete all" must delete the member's messages without error.
+- [ ] Message menu opens only on long-press (hold), not a single tap.
+- [ ] Polish the chat top header professionally.
+- [ ] Live phone test of the above.
+
+## Store, ads, login settings (approved 2026-11-06)
+- [ ] Daily Task Manager: on/off switch for buying Premium with coins (off = no purchase anywhere).
+- [ ] Auto-refresh the site right after Premium activates so ads stop.
+- [ ] No ads of any kind inside Global Chat.
+- [ ] Admin login settings: Continue-as-Guest on/off and admin-editable allowed email domains (gmail.com default).
+- [ ] Telegram welcome popup: on/off + repeat interval (seconds/minutes/hours/days).
+- [ ] Review Adsterra admin section and fix its issues/warnings.
+- [ ] Test with CEO account; reset device limit if blocked; log out and remove the test device afterwards.
+
 ## Approved community chat, episode search and download checks (2026-11-06)
 - [x] Add Chat between Movies and Profile; phone menu navigation verified. Message/profile/attachment controls are implemented but disabled pending trusted access.
 - [ ] Activate public messages and participant-only conversations: blocked by unavailable Firebase rule-deployment credentials and app email accounts lacking Firebase Auth identity; CHAT_SECURITY_READY remains false.
