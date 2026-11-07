@@ -49,6 +49,12 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
   const [ban, setBan] = useState<ChatBan | null>(null);
   const [warnings, setWarnings] = useState<ChatWarning[]>([]);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [confirmBan, setConfirmBan] = useState<ChatMessage | null>(null);
+  const [banBusy, setBanBusy] = useState(false);
+  const menuOpenedAt = useRef(0);
+  const openMenu = useCallback((m: ChatMessage) => { menuOpenedAt.current = Date.now(); setMenu(m); }, []);
+  const [memberCount, setMemberCount] = useState(0);
+  useEffect(() => subscribeMembers(rows => setMemberCount(rows.length)), []);
   const [lastSent, setLastSent] = useState(lastSentAt);
   const [tick, setTick] = useState(Date.now());
   useEffect(() => subscribeChatSettings(setSettings), []);
@@ -238,8 +244,31 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
               <p className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-primary flex items-center gap-1"><ShieldStar size={14} weight="fill" />CEO tools</p>
               <SheetButton icon={<Warning size={20} weight="bold" />} label="Warn (type /warning …)" onClick={() => { const m = menu; startReply(m); setText("/warning "); }} />
               <SheetButton icon={<Timer size={20} weight="bold" />} label="Mute 30 minutes" onClick={() => { const m = menu; setMenu(null); void banMember(m.uid, 30 * 60_000, "Muted by CEO", me.name, m.name).then(() => toast.success(`${m.name} muted for 30 minutes`)).catch(() => toast.error("Could not mute")); }} />
-              <SheetButton danger icon={<Prohibit size={20} weight="bold" />} label="Ban permanently + delete all" onClick={() => { const m = menu; setMenu(null); if (!window.confirm(`Permanently ban ${m.name} and delete every message they sent?`)) return; void banMember(m.uid, "permanent", "Banned by CEO", me.name, m.name).then(() => toast.success(`${m.name} banned — all messages deleted`)).catch(() => toast.error("Could not ban")); }} />
+              <SheetButton danger icon={<Prohibit size={20} weight="bold" />} label="Ban permanently + delete all" onClick={() => { setConfirmBan(menu); setMenu(null); }} />
             </>}
+          </div>
+        </div>
+      )}
+
+      {confirmBan && me?.ceo && (
+        <div className="fixed inset-0 z-[86] grid place-items-center bg-foreground/50 px-5" role="alertdialog" aria-label="Confirm permanent ban" onClick={() => !banBusy && setConfirmBan(null)}>
+          <div className="cc-warn w-full max-w-sm rounded-3xl p-5 text-center" onClick={e => e.stopPropagation()}>
+            <span className="cc-ban-ico mx-auto mb-3 grid h-16 w-16 place-items-center rounded-full"><Prohibit size={34} weight="fill" /></span>
+            <h2 className="text-lg font-black break-words">Ban {confirmBan.name} permanently?</h2>
+            <p className="mt-2 text-[13.5px] cc-meta">They can never send in Global Chat again, and every message, photo, voice note and sticker they sent will be deleted for everyone.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button type="button" disabled={banBusy} className="cc-3d h-12 rounded-2xl font-bold text-foreground" onClick={() => setConfirmBan(null)}>Cancel</button>
+              <button type="button" disabled={banBusy} className="cc-danger-btn h-12 rounded-2xl font-extrabold flex items-center justify-center gap-2"
+                onClick={() => {
+                  const m = confirmBan; setBanBusy(true);
+                  void banMember(m.uid, "permanent", "Banned by CEO", me.name, m.name)
+                    .then(count => toast.success(`${m.name} banned — ${count} message${count === 1 ? "" : "s"} deleted`))
+                    .catch(() => toast.error("Ban saved, but messages could not be deleted. Try again."))
+                    .finally(() => { setBanBusy(false); setConfirmBan(null); });
+                }}>
+                {banBusy ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <Prohibit size={18} weight="bold" />}Ban + delete
+              </button>
+            </div>
           </div>
         </div>
       )}
