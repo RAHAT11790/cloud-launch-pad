@@ -38,6 +38,8 @@ export type TgWelcomeButton = {
 
 export type TgWelcomeConfig = {
   enabled?: boolean;
+  /** Show again this many seconds after a user last closed it; 0/missing = only once. */
+  repeatSeconds?: number;
   heading?: string;
   description?: string;
   buttons?: Record<string, TgWelcomeButton> | TgWelcomeButton[];
@@ -50,6 +52,22 @@ export const DEFAULT_TG_WELCOME_BUTTONS: TgWelcomeButton[] = [
 ];
 
 const STORAGE_KEY = "rs_tg_welcome_seen_v1";
+const SEEN_AT_KEY = "rs_tg_welcome_seen_at_v1";
+
+/** Pure: should the popup open now? `lastSeenAt` null = never closed on this device. */
+export function tgWelcomeDue(lastSeenAt: number | null, repeatSeconds: number | undefined, now = Date.now()): boolean {
+  if (lastSeenAt == null) return true;
+  const rep = Number(repeatSeconds) || 0;
+  if (rep <= 0) return false;
+  return now - lastSeenAt >= rep * 1000;
+}
+const readSeenAt = (): number | null => {
+  try {
+    const at = Number(localStorage.getItem(SEEN_AT_KEY));
+    if (at > 0) return at;
+    return localStorage.getItem(STORAGE_KEY) === "1" ? 0 : null; // old "seen" flag = seen long ago
+  } catch { return 0; }
+};
 
 const iconFor = (name?: string) => {
   const cls = "w-4 h-4";
@@ -90,23 +108,29 @@ const TelegramWelcomeModal = () => {
   }, [open]);
 
   useEffect(() => {
-    try {
-      if (localStorage.getItem(STORAGE_KEY) === "1") return;
-    } catch { return; }
-
+    let timer = 0;
     const unsub = onValue(ref(db, "settings/telegramWelcome"), (snap) => {
       const val = (snap.val() || {}) as TgWelcomeConfig;
       setConfig(val);
-      if (val?.enabled !== false) {
-        setTimeout(() => setOpen(true), 500);
+      window.clearTimeout(timer);
+      if (val?.enabled === false) { setOpen(false); return; }
+      const seenAt = readSeenAt();
+      if (tgWelcomeDue(seenAt, val.repeatSeconds)) { timer = window.setTimeout(() => setOpen(true), 500); return; }
+      // Short repeat intervals can come due while the site stays open.
+      const rep = Number(val.repeatSeconds) || 0;
+      if (rep > 0 && seenAt != null) {
+        const wait = seenAt + rep * 1000 - Date.now();
+        if (wait < 86_400_000) timer = window.setTimeout(() => setOpen(true), Math.max(500, wait));
       }
     });
-    return () => unsub();
+    return () => { window.clearTimeout(timer); unsub(); };
   }, []);
 
   const close = () => {
     setOpen(false);
-    try { localStorage.setItem(STORAGE_KEY, "1"); } catch {}
+    try { localStorage.setItem(STORAGE_KEY, "1"); localStorage.setItem(SEEN_AT_KEY, String(Date.now())); } catch {}
+    const rep = Number(config?.repeatSeconds) || 0;
+    if (rep > 0 && rep < 86_400 && config?.enabled !== false) window.setTimeout(() => setOpen(true), rep * 1000);
   };
 
   const buttons: TgWelcomeButton[] = (() => {
