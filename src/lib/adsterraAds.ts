@@ -48,6 +48,7 @@ declare global {
     __adsterraTagOpenAt?: number;
     __adsterraTagAskedAt?: number;
     __adsterraLeaveHooked?: boolean;
+    __adsNoAdZone?: number;
   }
 }
 
@@ -318,6 +319,8 @@ function installPopunderThrottle() {
         urlStr.startsWith("mailto:") ||
         urlStr.startsWith("tel:") ||
         urlStr.startsWith(location.origin);
+      // Ad-free zones (Global Chat): no sponsor tab may open from any tag.
+      if (!isAppUrl && (window.__adsNoAdZone || 0) > 0) return null;
       if (!isAppUrl && window.__adsterraPlayerScopeActive) {
         if (!reserveAdFire()) return null;
         noteRealOpen();
@@ -550,6 +553,24 @@ export function enterAdsterraPlayerScope() {
   hookPageLeave();
 }
 
+/** Ad-free zone (Global Chat): blocks every sponsor tab and clears ad residue while
+ *  mounted. Returns the exit function. Counted so nested zones never re-enable ads early. */
+export function enterNoAdZone(): () => void {
+  if (typeof window === "undefined") return () => {};
+  installPopunderThrottle();
+  window.__adsNoAdZone = (window.__adsNoAdZone || 0) + 1;
+  dismissVisibleAds(false);
+  removeKnownAdResidue();
+  const sweep = window.setInterval(removeKnownAdResidue, 1500);
+  let done = false;
+  return () => {
+    if (done) return; done = true;
+    window.clearInterval(sweep);
+    window.__adsNoAdZone = Math.max(0, (window.__adsNoAdZone || 1) - 1);
+  };
+}
+export const inNoAdZone = () => typeof window !== "undefined" && (window.__adsNoAdZone || 0) > 0;
+
 export function exitAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
   window.__adsterraPlayerScopeActive = false;
@@ -613,7 +634,7 @@ async function loadAdsterraSlots(): Promise<boolean> {
  * Never calls window.open() with a non-URL string.
  */
 export async function firePopunderAd(): Promise<boolean> {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined" || inNoAdZone()) return false;
   try {
     const cfg = await getAdsterraConfig();
     if (!cfg.enabled) return false;
@@ -669,7 +690,7 @@ export type AdRelease = "direct" | "tag" | "mounted" | "none";
  */
 export async function releaseAd(): Promise<AdRelease> {
   if (typeof window === "undefined") return "none";
-  if (window.__adsterraPremium) return "none";
+  if (window.__adsterraPremium || inNoAdZone()) return "none";
 
   const cfg = cached || (await getAdsterraConfig());
   if (!cfg.enabled) return "none";
