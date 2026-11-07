@@ -144,7 +144,16 @@ export default function PremiumBuyPage() {
           </Button>
         </div>
 
-        {/* Buy with Coins */}
+        {/* Buy with Coins — admin can close this store from Daily Task Manager */}
+        {settings.coinStoreEnabled === false ? (
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-start gap-3" data-coin-store-closed>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0"><Coins className="w-5 h-5 text-amber-300/70" /></div>
+            <div>
+              <h2 className="text-sm font-semibold">Coin store is closed</h2>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">Buying Premium with coins is paused right now. Your {wallet.coins || 0} coins are safe — use bKash or a redeem code above.</p>
+            </div>
+          </div>
+        ) : (
         <div className="mt-8">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -175,7 +184,9 @@ export default function PremiumBuyPage() {
                     const res = await buyPremiumWithCoins(plan);
                     setBuying(null);
                     if (res.ok) {
-                      toast.success(`Premium active — ${plan.days} days added!`);
+                      toast.success(`Premium active — ${plan.days} days added! Refreshing to remove ads…`);
+                    } else if ((res as any).reason === "store_closed") {
+                      toast.error("The coin store is closed right now.");
                     } else if ((res as any).reason === "insufficient") {
                       toast.error("Not enough coins. Complete daily tasks to earn more.");
                     } else {
@@ -207,6 +218,7 @@ export default function PremiumBuyPage() {
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
