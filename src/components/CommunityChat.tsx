@@ -306,9 +306,27 @@ type RowProps = {
   m: ChatMessage; own: boolean; groupStart: boolean; groupEnd: boolean; quoted?: ChatMessage;
   onMenu: (m: ChatMessage) => void; onReply: (m: ChatMessage) => void; onProfile: (p: ChatProfile) => void; onJump: (id: string) => void; onImage: (url: string) => void;
 };
+const LONG_PRESS_MS = 450;
 const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quoted, onMenu, onReply, onProfile, onJump, onImage }: RowProps) {
   const [dx, setDx] = useState(0);
+  const [pressing, setPressing] = useState(false);
   const touch = useRef<{ x: number; y: number; locked: boolean | null } | null>(null);
+  const hold = useRef<{ timer: number; fired: boolean; x: number; y: number } | null>(null);
+  const cancelHold = () => { if (hold.current) window.clearTimeout(hold.current.timer); hold.current = null; setPressing(false); };
+  // Hold (long-press) opens the actions sheet; a plain tap does nothing.
+  const startHold = (x: number, y: number) => {
+    cancelHold();
+    const state = { fired: false, x, y, timer: 0 };
+    state.timer = window.setTimeout(() => {
+      state.fired = true; setPressing(false);
+      try { navigator.vibrate?.(18); } catch {}
+      window.getSelection?.()?.removeAllRanges();
+      onMenu(m);
+    }, LONG_PRESS_MS);
+    hold.current = state; setPressing(true);
+  };
+  const moveHold = (x: number, y: number) => { const h = hold.current; if (h && !h.fired && (Math.abs(x - h.x) > 10 || Math.abs(y - h.y) > 10)) cancelHold(); };
+  useEffect(() => () => { if (hold.current) window.clearTimeout(hold.current.timer); }, []);
   const sticker = m.kind === "sticker";
   const profile = { id: m.uid, name: m.name, photo: m.photo };
   const time = <span className={`text-[10.5px] whitespace-nowrap ${sticker ? "cc-pill rounded-full px-1.5 py-0.5" : "cc-meta"}`}>{m.edited ? <i className="cc-edited">Edited · </i> : null}{timeLabel(m.t)}</span>;
@@ -325,6 +343,7 @@ const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quot
       onTouchStart={e => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY, locked: null }; }}
       onTouchMove={e => {
         const s = touch.current; if (!s) return; const t = e.touches[0];
+        moveHold(t.clientX, t.clientY);
         const mx = t.clientX - s.x; const my = t.clientY - s.y;
         if (s.locked === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.locked = Math.abs(mx) > Math.abs(my) && mx < 0;
         if (s.locked) setDx(Math.max(-72, Math.min(0, mx)));
@@ -333,8 +352,16 @@ const MessageRow = memo(function MessageRow({ m, own, groupStart, groupEnd, quot
       {!own && (groupEnd
         ? <button type="button" aria-label={`View ${m.name} profile`} onClick={() => onProfile(profile)}><Avatar profile={profile} /></button>
         : <span className="w-[34px] shrink-0" />)}
-      <div onClick={e => { e.stopPropagation(); onMenu(m); }} role="button" tabIndex={0} aria-label={`Message from ${m.name}`}
-        className={`cc-bubble relative max-w-[78%] min-w-0 cursor-pointer select-text ${sticker ? "" : `px-2.5 pt-1.5 pb-1 ${own ? "cc-out" : "cc-in"} ${groupStart ? "cc-first" : ""} ${groupEnd ? (own ? "cc-tail-out" : "cc-tail-in") : "cc-mid"}`}`}>
+      <div role="button" tabIndex={0} aria-label={`Message from ${m.name}. Press and hold for options`} aria-haspopup="menu"
+        onTouchStart={e => { if (e.touches.length === 1) startHold(e.touches[0].clientX, e.touches[0].clientY); else cancelHold(); }}
+        onTouchEnd={e => { const fired = hold.current?.fired; cancelHold(); if (fired) e.preventDefault(); }}
+        onTouchCancel={cancelHold}
+        onMouseDown={e => { if (e.button === 0) startHold(e.clientX, e.clientY); }}
+        onMouseMove={e => moveHold(e.clientX, e.clientY)}
+        onMouseUp={cancelHold} onMouseLeave={cancelHold}
+        onContextMenu={e => { e.preventDefault(); cancelHold(); onMenu(m); }}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " " || e.key === "ContextMenu") { e.preventDefault(); onMenu(m); } }}
+        className={`cc-bubble cc-hold relative max-w-[78%] min-w-0 ${pressing ? "cc-pressing" : ""} ${sticker ? "" : `px-2.5 pt-1.5 pb-1 ${own ? "cc-out" : "cc-in"} ${groupStart ? "cc-first" : ""} ${groupEnd ? (own ? "cc-tail-out" : "cc-tail-in") : "cc-mid"}`}`}>
         {!own && groupStart && !sticker && (
           <button type="button" onClick={e => { e.stopPropagation(); onProfile(profile); }} className="flex items-center gap-1 text-[13px] font-bold truncate max-w-full text-left" style={nameColor(m.uid)}><span className="truncate">{m.name}</span>{m.ceo && <span className="cc-ceo-badge"><CrownSimple size={10} weight="fill" />CEO</span>}</button>
         )}
