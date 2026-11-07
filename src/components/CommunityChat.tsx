@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowBendUpLeft, ArrowLeft, CaretDown, ChatsCircle, Copy, ImageSquare, Microphone, PaperPlaneRight,
-  Pause, Play, Plus, SignIn, Smiley, Sticker, Trash, X, PencilSimple, Prohibit, Warning, ShieldStar, Timer, CrownSimple, TextAa,
+  Pause, Play, Plus, SignIn, Smiley, Sticker, Trash, X, PencilSimple, Prohibit, Warning, ShieldStar, Timer, CrownSimple, TextAa, UsersThree,
 } from "@phosphor-icons/react";
 import {
   BUILT_IN_STICKERS, MAX_IMAGE_BYTES, MAX_VOICE_SECONDS, addMySticker, currentChatProfile, deleteMessage, editOwnMessage,
-  subscribeChatSettings, subscribeBan, subscribeWarnings, markWarningsSeen, clearMentions, banMember, unbanMember, warnMember, lastSentAt, ChatBlockedError,
+  subscribeChatSettings, subscribeBan, subscribeMembers, subscribeWarnings, markWarningsSeen, clearMentions, banMember, unbanMember, warnMember, lastSentAt, ChatBlockedError,
   formatDuration, loadVoice, messagePreview, nameColorSlot, removeMySticker, sendChatMessage, subscribeChat,
   subscribeMyStickers, uploadVoice, type ChatMessage, type ChatProfile, type ChatReply,
 } from "@/lib/communityChat";
@@ -108,8 +108,8 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
     if (cmd.target === me.id) { toast.error("You cannot use this on yourself"); return true; }
     const name = (messages || []).find(m => m.uid === cmd.target)?.name || reply?.name || cmd.target;
     if (cmd.cmd === "ban") {
-      await banMember(cmd.target, cmd.duration, cmd.reason, me.name, name);
-      toast.success(cmd.duration === "permanent" ? `${name} is permanently banned — all their messages were deleted` : `${name} is muted for ${formatCountdown(cmd.duration)}`);
+      const removed = await banMember(cmd.target, cmd.duration, cmd.reason, me.name, name);
+      toast.success(cmd.duration === "permanent" ? `${name} is permanently banned — ${removed} message${removed === 1 ? "" : "s"} deleted` : `${name} is muted for ${formatCountdown(cmd.duration)}`);
     } else if (cmd.cmd === "unban") { await unbanMember(cmd.target); toast.success(`${name} is unbanned`); }
     else { await warnMember(cmd.target, cmd.text, me.name); toast.success(`Warning sent to ${name}`); }
     resetInput();
@@ -155,18 +155,32 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
   let lastDay = "";
   return (
     <section className="community-chat" aria-label="Global chat">
-      <header className="cc-top relative z-10 flex items-center gap-2 px-2 h-auto">
-        <div className="flex items-center gap-2 h-[58px] w-full">
-          <button type="button" onClick={onBack} aria-label="Back" className="cc-3d h-10 w-10 shrink-0 rounded-full grid place-items-center text-foreground">
+      <header className="cc-top relative z-10 px-2">
+        <div className="flex items-center gap-2.5 h-[62px] w-full">
+          <button type="button" onClick={onBack} aria-label="Back" className="cc-top-btn h-10 w-10 shrink-0 rounded-full grid place-items-center">
             <ArrowLeft size={20} weight="bold" />
           </button>
-          <span className="h-10 w-10 shrink-0 rounded-full overflow-hidden grid place-items-center cc-3d-primary">
-            {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-full w-full object-cover" /> : <ChatsCircle size={22} weight="fill" />}
+          <span className="cc-top-logo relative h-11 w-11 shrink-0 rounded-full p-[2px]">
+            <span className="h-full w-full rounded-full overflow-hidden grid place-items-center bg-card">
+              {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-full w-full object-cover" /> : <ChatsCircle size={22} weight="fill" className="text-primary" />}
+            </span>
+            <span className="cc-live-dot absolute bottom-0 right-0 h-3 w-3 rounded-full" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <h1 className="text-[15px] font-extrabold truncate flex items-center gap-1.5">RS ANIME03 {me?.ceo && <span className="cc-ceo-badge"><CrownSimple size={11} weight="fill" />CEO</span>}</h1>
-            <p className="text-[11.5px] cc-meta truncate">Global Chat{members ? ` · ${members} member${members === 1 ? "" : "s"}` : ""}</p>
+            <h1 className="text-[16px] font-black tracking-tight truncate flex items-center gap-1.5">
+              <span className="truncate">Global Chat</span>
+              {me?.ceo && <span className="cc-ceo-badge"><CrownSimple size={11} weight="fill" />CEO</span>}
+            </h1>
+            <p className="text-[11.5px] cc-meta truncate flex items-center gap-1.5">
+              <span className="font-semibold">{branding.siteName || "RS ANIME03"}</span>
+              <span className="cc-top-sep" aria-hidden="true" />
+              <span className="cc-live-text font-bold">Live</span>
+              {settings.slowModeSeconds > 0 && <><span className="cc-top-sep" aria-hidden="true" /><span className="inline-flex items-center gap-0.5"><Timer size={11} weight="bold" />{settings.slowModeSeconds}s</span></>}
+            </p>
           </div>
+          <span className="cc-top-chip shrink-0 h-9 rounded-full px-3 flex items-center gap-1.5 text-[12.5px] font-extrabold tabular-nums" aria-label={`${Math.max(memberCount, members)} members`}>
+            <UsersThree size={16} weight="fill" />{Math.max(memberCount, members)}
+          </span>
         </div>
       </header>
 
@@ -191,7 +205,7 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
             <div key={m.id}>
               {showDay && <div className="sticky top-1 z-[1] my-2 flex justify-center"><span className="rounded-full px-3 py-1 text-[11.5px] font-semibold cc-pill">{day}</span></div>}
               <MessageRow m={m} own={m.uid === me?.id} groupStart={groupStart} groupEnd={groupEnd} quoted={m.reply ? byId.get(m.reply.id) : undefined}
-                onMenu={setMenu} onReply={startReply} onProfile={setProfile} onJump={jumpTo} onImage={setViewer} />
+                onMenu={openMenu} onReply={startReply} onProfile={setProfile} onJump={jumpTo} onImage={setViewer} />
             </div>
           );
         })}
@@ -232,7 +246,7 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
       </footer>
 
       {menu && (
-        <div className="fixed inset-0 z-[70] flex items-end bg-foreground/30" onClick={() => setMenu(null)}>
+        <div className="fixed inset-0 z-[70] flex items-end bg-foreground/30" onClick={() => { if (Date.now() - menuOpenedAt.current > 350) setMenu(null); }}>
           <div className="cc-sheet w-full rounded-t-3xl bg-card p-3 pb-[max(14px,env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()} role="menu" aria-label="Message actions">
             <p className="px-3 pb-2 text-xs cc-meta truncate">{menu.name}: {messagePreview(menu)}</p>
             <SheetButton icon={<ArrowBendUpLeft size={20} weight="bold" />} label="Reply" onClick={() => startReply(menu)} />
