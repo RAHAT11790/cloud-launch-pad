@@ -39,7 +39,7 @@ export default function GlobalChatManager() {
     if (d === null) return;
     if (d === "permanent" && !window.confirm(`Permanently ban ${m.name} and delete every message, photo and voice they sent?`)) return;
     setBusy(m.uid);
-    try { await banMember(m.uid, d, "Banned from admin panel", "Admin", m.name); toast.success(d === "permanent" ? `${m.name} banned permanently — messages deleted` : `${m.name} muted for ${formatCountdown(d)}`); }
+    try { const removed = await banMember(m.uid, d, "Banned from admin panel", "Admin", m.name); toast.success(d === "permanent" ? `${m.name} banned permanently — ${removed} messages deleted` : `${m.name} muted for ${formatCountdown(d)}`); }
     catch { toast.error("Could not ban"); } finally { setBusy(""); }
   };
   const doWarn = async (m: ChatMember) => {
