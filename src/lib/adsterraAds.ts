@@ -562,10 +562,18 @@ export function enterNoAdZone(): () => void {
   dismissVisibleAds(false);
   removeKnownAdResidue();
   const sweep = window.setInterval(removeKnownAdResidue, 1500);
+  // Tags that open sponsor tabs through a detached <a target=_blank> instead of window.open.
+  const blockAnchor = (e: MouseEvent) => {
+    const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+    if (!a || document.getElementById("root")?.contains(a)) return;
+    if (a.href && !a.href.startsWith(location.origin)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  };
+  document.addEventListener("click", blockAnchor, true);
   let done = false;
   return () => {
     if (done) return; done = true;
     window.clearInterval(sweep);
+    document.removeEventListener("click", blockAnchor, true);
     window.__adsNoAdZone = Math.max(0, (window.__adsNoAdZone || 1) - 1);
   };
 }

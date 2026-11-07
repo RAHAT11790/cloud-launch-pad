@@ -12,6 +12,7 @@ import {
 import { uploadToImgbb } from "@/lib/imgbbUpload";
 import { banActive, banRemainingMs, formatCountdown, parseChatCommand, slowModeWaitMs, DEFAULT_CHAT_SETTINGS, type ChatBan, type ChatSettings, type ChatWarning } from "@/lib/chatModeration";
 import { useBranding } from "@/hooks/useBranding";
+import { enterNoAdZone } from "@/lib/adsterraAds";
 import { toast } from "sonner";
 
 type Props = { onBack: () => void; onLogin: () => void };
@@ -58,6 +59,7 @@ export default function CommunityChat({ onBack, onLogin }: Props) {
   const [lastSent, setLastSent] = useState(lastSentAt);
   const [tick, setTick] = useState(Date.now());
   useEffect(() => subscribeChatSettings(setSettings), []);
+  useEffect(() => enterNoAdZone(), []);
   useEffect(() => { if (!me) { setBan(null); setWarnings([]); return; } const a = subscribeBan(me.id, setBan); const b = subscribeWarnings(me.id, setWarnings); void clearMentions(me.id).catch(() => {}); return () => { a(); b(); }; }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const banned = !me?.ceo && banActive(ban, tick);
   const slowWait = me?.ceo ? 0 : slowModeWaitMs(lastSent, settings.slowModeSeconds, tick);
