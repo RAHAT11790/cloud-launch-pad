@@ -82,6 +82,7 @@ const ApkDownloadCenter = lazySection(() => import("@/components/admin/ApkDownlo
 const FirebaseAnalyzer = lazySection(() => import("@/components/admin/FirebaseAnalyzer"), "Firebase Analyzer");
 const AnimeNameExporter = lazySection(() => import("@/components/admin/AnimeNameExporter"), "Name Exporter");
 const TelegramWelcomeManager = lazySection(() => import("@/components/admin/TelegramWelcomeManager"), "Telegram Welcome");
+const LoginAccessManager = lazySection(() => import("@/components/admin/LoginAccessManager"), "Login Settings");
 const VideoServersManager = lazySection(() => import("@/components/admin/VideoServersManager"), "Video Servers");
 const LiveTvManager = lazySection(() => import("@/components/admin/LiveTvManager"), "Live TV");
 const TgUrlChangerManager = lazySection(() => import("@/components/admin/TgUrlChangerManager"), "TG URL Changer");
@@ -9386,6 +9387,9 @@ ${tgBulkFooter}
 
  {/* Anime Name Exporter (RS vs AN) */}
  <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
+  {/* Login settings: guest switch + allowed sign-up email domains */}
+  <LoginAccessManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
 
   {/* Telegram Welcome Popup (first-visit modal) */}
   <TelegramWelcomeManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
