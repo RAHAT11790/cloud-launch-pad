@@ -573,7 +573,7 @@ import CommunityChat from "@/components/CommunityChat";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
-import { entryChosen, markEntryChosen, clearEntryChosen } from "@/lib/emailService";
+import { entryChosen, markEntryChosen, clearEntryChosen, loginAccessNow, subscribeLoginAccess } from "@/lib/emailService";
 import { currentGuestId } from "@/lib/guestPersistence";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
@@ -1005,6 +1005,10 @@ const Index = () => {
     } catch {}
     return false;
   });
+
+  // Admin "Continue as Guest" switch (settings/loginAccess) — when off, guests must sign in.
+  const [loginAccess, setLoginAccess] = useState(loginAccessNow);
+  useEffect(() => subscribeLoginAccess(setLoginAccess), []);
 
   // Check if user is logged in/guest (guest accounts also have a profile)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -3403,7 +3407,8 @@ const Index = () => {
 
 
 
-  if (!entryDone) {
+  const guestLocked = !loginAccess.guestEnabled && (!isLoggedIn || !!currentGuestId());
+  if (!entryDone || guestLocked) {
     return (
       <LoginPage
         onLogin={(uid) => handleLogin(uid)}
