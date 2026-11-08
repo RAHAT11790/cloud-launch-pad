@@ -2,13 +2,13 @@
 export type EmailDayStats = {
   sent?: number; sent_register?: number; sent_reset?: number; failed?: number; resend?: number;
   verified_otp?: number; verified_link?: number; claimed?: number;
-  wrong?: number; locked?: number; expired?: number; limited?: number;
+  wrong?: number; locked?: number; expired?: number; limited?: number; tampered?: number;
   gmail_ms?: number; gmail_n?: number;
 };
 
 export type EmailSummary = {
   sent: number; failed: number; verified: number; viaOtp: number; viaLink: number;
-  register: number; reset: number; wrong: number; locked: number; expired: number; limited: number; resend: number;
+  register: number; reset: number; wrong: number; locked: number; expired: number; limited: number; resend: number; tampered: number;
   /** % of send attempts Gmail accepted. */
   deliveryRate: number | null;
   /** % of sent emails that were verified (code or button). */
@@ -31,7 +31,7 @@ export function summarizeEmailStats(days: EmailDayStats[]): EmailSummary {
   return {
     sent, failed, verified, viaOtp, viaLink,
     register: t.sent_register || 0, reset: t.sent_reset || 0,
-    wrong: t.wrong || 0, locked: t.locked || 0, expired: t.expired || 0, limited: t.limited || 0, resend: t.resend || 0,
+    wrong: t.wrong || 0, locked: t.locked || 0, expired: t.expired || 0, limited: t.limited || 0, resend: t.resend || 0, tampered: t.tampered || 0,
     deliveryRate: pct(sent, sent + failed),
     verifyRate: sent > 0 ? Math.min(100, pct(verified, sent) as number) : null,
     avgMs: t.gmail_n ? Math.round((t.gmail_ms || 0) / t.gmail_n) : null,
@@ -48,13 +48,14 @@ export function lastDayKeys(count: number, now = Date.now()): string[] {
 
 export type EmailServiceSettings = {
   otpMinutes: number; linkMinutes: number; cooldownSeconds: number; maxAttempts: number;
-  dailyLimit: number; hourlyPerEmail: number; hourlyPerIp: number;
+  perEmailDaily: number; perIpDaily: number; hourlyPerIp: number; perMinute: number; dailyLimit: number;
 };
-export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 10, linkMinutes: 30, cooldownSeconds: 60, maxAttempts: 5, dailyLimit: 450, hourlyPerEmail: 6, hourlyPerIp: 20 };
+/** Same defaults as the Worker (`DEFAULTS` in cloudflare-workers/email-service.js). */
+export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
 /** Same limits the Worker clamps to. */
 export const EMAIL_SETTING_BOUNDS: Record<keyof EmailServiceSettings, [number, number]> = {
-  otpMinutes: [3, 30], linkMinutes: [5, 180], cooldownSeconds: [20, 900], maxAttempts: [3, 10],
-  dailyLimit: [10, 2000], hourlyPerEmail: [2, 30], hourlyPerIp: [3, 200],
+  otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10],
+  perEmailDaily: [1, 20], perIpDaily: [2, 200], hourlyPerIp: [2, 100], perMinute: [2, 60], dailyLimit: [10, 2000],
 };
 export function clampEmailSettings(raw: Partial<Record<keyof EmailServiceSettings, unknown>> | null | undefined): EmailServiceSettings {
   const out = { ...EMAIL_SETTING_DEFAULTS };
