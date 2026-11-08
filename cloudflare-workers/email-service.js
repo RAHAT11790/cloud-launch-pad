@@ -116,6 +116,7 @@ function shadowPut(key, v, exp) {
   const cur = shadow.get(key);
   shadow.set(key, { v: Math.max(v, cur && cur.exp > Date.now() ? cur.v : 0), exp });
 }
+const shadowSet = (key, v, exp) => shadow.set(key, { v, exp });
 const siteUrl = (env) => String(env.SITE_URL || DEFAULT_SITE).replace(/\/+$/, "");
 const hasCtl = (s) => /[\r\n\u0000]/.test(String(s));
 
