@@ -1,5 +1,5 @@
 // ============================================================
-// RS ANIME — EMAIL SERVICE · Gmail API (Cloudflare build) · v3
+// RS ANIME — EMAIL SERVICE · Gmail API (Cloudflare build) · v4
 // ------------------------------------------------------------
 // Sign-up verification + password-reset emails sent through the
 // official Gmail API (users.messages.send). No Resend / SMTP.
@@ -844,7 +844,7 @@ async function linkPage(env, ctx, req, rid, token) {
   const site = siteUrl(env);
   const action = `/v/${rid}/${token}`;
   if (!RID_RE.test(rid) || !TOKEN_RE.test(token)) {
-    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME." }), 400);
+    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME03." }), 400);
   }
   if (req.method === "GET") {
     return html(pageHtml({ state: "confirm", action, redirect: site, title: "Verifying your email…", message: "Please wait a moment while we confirm your email address." }));
@@ -869,14 +869,14 @@ async function linkPage(env, ctx, req, rid, token) {
     return html(pageHtml({
       state: "success", purpose: out.p, redirect,
       title: out.p === "reset" ? "Email confirmed" : "Email verified",
-      message: out.p === "reset" ? "It's really you. Taking you back to RS ANIME to set your new password." : "Your email address is verified. Taking you to RS ANIME…",
+      message: out.p === "reset" ? "It's really you. Taking you back to RS ANIME03 to set your new password." : "Your email address is verified. Taking you to RS ANIME03…",
     }));
   }
   const msg = {
-    invalid: ["Invalid link", "This verification link is not valid. Please open the latest email from RS ANIME."],
-    done: ["Already verified", "This email was already verified. You can continue in the RS ANIME app."],
+    invalid: ["Invalid link", "This verification link is not valid. Please open the latest email from RS ANIME03."],
+    done: ["Already verified", "This email was already verified. You can continue in the RS ANIME03 app."],
     used: ["Already verified", "This email was already verified with the code. You can continue in the app."],
-    expired: ["Link expired", "This link has expired. Go back to RS ANIME and ask for a new email."],
+    expired: ["Link expired", "This link has expired. Go back to RS ANIME03 and ask for a new email."],
     replaced: ["Newer email sent", "A newer email was sent to you. Please use the button in the latest email."],
     locked: ["Request locked", "This request was locked after too many wrong codes. Ask for a new email."],
     failed: ["Link not valid", "This email could not be confirmed. Please ask for a new one."],
@@ -942,7 +942,7 @@ export default {
       }
       if (req.method !== "POST") return fail(cors, 405, "method", "Use POST.");
       const origin = req.headers.get("Origin") || "";
-      if (!originAllowed(origin, env)) return fail(cors, 403, "origin_not_allowed", "This website is not allowed to use the RS ANIME email service.");
+      if (!originAllowed(origin, env)) return fail(cors, 403, "origin_not_allowed", "This website is not allowed to use the RS ANIME03 email service.");
       const missing = MISSING(env);
       if (missing.length) return fail(cors, 503, "not_configured", "Email service is not set up yet. Please try again later.", { missing });
       if (Number(req.headers.get("content-length") || 0) > 4096) return fail(cors, 413, "too_large", "Request too large.");
