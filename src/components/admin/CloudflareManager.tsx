@@ -231,12 +231,10 @@ export default function CloudflareManager({ glassCard, inputClass, btnPrimary, b
     try {
       // Keep every secret already saved on this Worker (older managers would wipe them on redeploy).
       let keep: { type: "inherit"; name: string }[] = [];
-      if (selected === name) {
-        try {
-          const sl = await call("secrets-list", { name });
-          keep = (Array.isArray(sl?.secrets) ? sl.secrets : []).map((x: any) => ({ type: "inherit" as const, name: String(x.name) })).filter((b: { name: string }) => b.name);
-        } catch { /* new worker: nothing to keep */ }
-      }
+      try {
+        const sl = await call("secrets-list", { name });
+        keep = (sl?.ok && Array.isArray(sl.secrets) ? sl.secrets : []).map((x: any) => ({ type: "inherit" as const, name: String(x?.name || "") })).filter((b: { name: string }) => b.name);
+      } catch { /* new worker: nothing to keep */ }
       const r = await call("deploy", { name, code, bindings: keep });
       if (!r.ok) { toast.error("Deploy failed: " + JSON.stringify(r.error || r)); return; }
       toast.success(`Deployed: ${name}`);
