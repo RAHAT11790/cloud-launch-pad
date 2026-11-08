@@ -803,7 +803,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
             />
             <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-              <button onClick={() => { setShowForgotPw(false); setForgotOtpSent(false); setForgotEmail(""); setForgotOtp(""); setForgotNewPw(""); setForgotNewPwConfirm(""); }}
+              <button onClick={resetForgotState}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -818,18 +818,27 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   Reset Password
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {forgotOtpSent ? "Enter the code sent to your email and set a new password" : "A verification code will be sent to your email"}
+                  {forgotOtpSent
+                    ? (forgotLinkState ? "Email confirmed — choose your new password" : <>Enter the code sent to <b className="text-foreground break-all">{forgotEmail}</b>, or tap <b className="text-foreground">Reset Password</b> in the email</>)
+                    : "We'll email you a 6-digit code and a one-tap reset button"}
                 </p>
               </motion.div>
 
               {forgotOtpSent ? (
                 <div className="space-y-3">
-                  <div>
-                    <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
-                    <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
-                      placeholder="6-digit code" maxLength={6}
-                      className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
-                  </div>
+                  {forgotLinkState ? (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-xs text-foreground">
+                      <span className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-primary-foreground" /></span>
+                      <span>Email confirmed with the link — no code needed.</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
+                      <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="••••••" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
+                        className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
+                    </div>
+                  )}
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
@@ -844,15 +853,20 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   </div>
                   <motion.button
                     onClick={handleResetPasswordWithOtp}
-                    disabled={forgotLoading || !forgotOtp || !forgotNewPw}
+                    disabled={forgotLoading || (!forgotLinkState && forgotOtp.length !== 6) || !forgotNewPw}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
                     {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> Reset Password</>}
                   </motion.button>
-                  <button onClick={() => setForgotOtpSent(false)} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">
-                    ← Resend Code
-                  </button>
+                  {!forgotLinkState && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <button onClick={() => { setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); clearPendingReset(); }} className="text-muted-foreground hover:text-foreground">← Change email</button>
+                      <button onClick={resendForgotCode} disabled={forgotLoading || forgotResendLeft > 0} className="font-semibold text-primary disabled:text-muted-foreground">
+                        {forgotResendLeft > 0 ? `Resend in ${forgotResendLeft}s` : "Resend code"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
