@@ -101,6 +101,21 @@ const normEmail = (v) => String(v || "").trim().toLowerCase();
 const maskEmail = (e) => { const at = e.lastIndexOf("@"); if (at < 1) return "***"; return e.slice(0, Math.min(2, at)) + "***" + e.slice(at); };
 const dayKey = (t) => new Date(t + 6 * HOUR).toISOString().slice(0, 10); // Bangladesh day
 const hourBucket = (t) => String(Math.floor(t / HOUR));
+const minuteBucket = (t) => String(Math.floor(t / 60_000));
+/** ms until the next Bangladesh midnight (when daily limits reset). */
+const msToDayEnd = (t) => DAY - ((t + 6 * HOUR) % DAY);
+const shortRef = (rid) => String(rid || "").slice(-8).toUpperCase();
+
+// In-isolate shadow counters: a second, Firebase-independent layer. If someone
+// lowers or deletes a counter in the database, the higher value seen here
+// still wins for as long as this Worker instance lives.
+const shadow = new Map();
+function shadowGet(key, now) { const s = shadow.get(key); return s && s.exp > now ? s.v : 0; }
+function shadowPut(key, v, exp) {
+  if (shadow.size > 4000) { const now = Date.now(); for (const [k, s] of shadow) if (s.exp <= now || shadow.size > 3000) shadow.delete(k); }
+  const cur = shadow.get(key);
+  shadow.set(key, { v: Math.max(v, cur && cur.exp > Date.now() ? cur.v : 0), exp });
+}
 const siteUrl = (env) => String(env.SITE_URL || DEFAULT_SITE).replace(/\/+$/, "");
 const hasCtl = (s) => /[\r\n\u0000]/.test(String(s));
 
