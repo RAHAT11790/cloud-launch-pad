@@ -248,6 +248,7 @@ describe("Gmail API email worker", () => {
   });
 
   it("allows only 3 codes per email per day, then blocks until tomorrow", async () => {
+    now = Math.floor(now / 86_400_000) * 86_400_000 + 6 * 3_600_000; // midday in Bangladesh
     const first = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     expect(first.data).toMatchObject({ dailyLeft: 2, dailyMax: 3 });
     let t = first.data.ticket;
@@ -265,6 +266,7 @@ describe("Gmail API email worker", () => {
   });
 
   it("one network (IP) is limited to 10 emails per hour, even to different addresses", async () => {
+    now = Math.floor(now / 3_600_000) * 3_600_000 + 60_000; // stay inside one hour
     for (let i = 0; i < 10; i++) {
       expect((await api("send", { email: `fresh.user${i}x@gmail.com`, purpose: "register" })).status).toBe(200);
       now += 61_000;
