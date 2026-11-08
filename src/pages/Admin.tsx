@@ -83,6 +83,7 @@ const FirebaseAnalyzer = lazySection(() => import("@/components/admin/FirebaseAn
 const AnimeNameExporter = lazySection(() => import("@/components/admin/AnimeNameExporter"), "Name Exporter");
 const TelegramWelcomeManager = lazySection(() => import("@/components/admin/TelegramWelcomeManager"), "Telegram Welcome");
 const LoginAccessManager = lazySection(() => import("@/components/admin/LoginAccessManager"), "Login Settings");
+const EmailServiceManager = lazySection(() => import("@/components/admin/EmailServiceManager"), "Email Service");
 const VideoServersManager = lazySection(() => import("@/components/admin/VideoServersManager"), "Video Servers");
 const LiveTvManager = lazySection(() => import("@/components/admin/LiveTvManager"), "Live TV");
 const TgUrlChangerManager = lazySection(() => import("@/components/admin/TgUrlChangerManager"), "TG URL Changer");
@@ -390,11 +391,7 @@ import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
 // ==================== EMAIL SERVICE SECTION ====================
 // Gmail API email server (EGD Router → email-service): status, secrets, stats, rules, design.
-const EmailServiceSection = (props: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => (
- <Suspense fallback={<div className="py-10 grid place-items-center"><Loader2 size={18} className="animate-spin text-zinc-500" /></div>}>
- <EmailServiceManager {...props} />
- </Suspense>
-);
+const EmailServiceSection = (props: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => <EmailServiceManager {...props} />;
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 // ==================== FUNCTION URL OVERRIDES — admin paste OR Lovable-deployed default ====================
