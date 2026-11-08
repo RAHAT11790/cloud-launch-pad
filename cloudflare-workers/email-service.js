@@ -768,6 +768,14 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
   });
 }
 
+/** A finished (used) code frees the email right away for its next request. */
+async function releaseCooldown(env, eh, created, rid) {
+  if (!eh) return;
+  const t = Number(created) || Date.now();
+  shadowSet(`ml:${eh}`, 0, Date.now() + 2 * DAY);
+  await dbTxn(env, `${ROOT}/rl/mail/${dayKey(t)}/${eh}`, (cur) => (cur && cur.rid === rid ? { next: { ...cur, last: 0 }, result: 1 } : { result: 0 })).catch(() => 0);
+}
+
 async function accountCheck(env, email, purpose) {
   const [user, canon] = await Promise.all([
     dbGet(env, `appUsers/${appUserKey(email)}`, { shallow: "true" }),
@@ -793,16 +801,16 @@ async function actSend(env, ctx, cors, body, origin, ip) {
   return issueTicket(env, ctx, cors, { email, purpose, name: acc.name || typed, origin, ip });
 }
 
-async function loadOwned(env, cors, ticket) {
+async function loadOwned(env, ctx, cors, ticket) {
   const t = parseTicket(ticket);
   if (!t) return { res: fail(cors, 400, "bad_ticket", "This request is invalid. Please start again.") };
-  const cur = await dbGet(env, `${ROOT}/tickets/${t.rid}`);
+  const cur = await ticketGet(env, ctx, t.rid);
   if (!cur || !safeEq(cur.s, await hash(env, "sess", t.rid, t.session))) return { res: fail(cors, 404, "not_found", "This request was not found. Please start again.") };
   return { t, cur };
 }
 
 async function actResend(env, ctx, cors, body, origin, ip) {
-  const { res, t, cur } = await loadOwned(env, cors, body.ticket);
+  const { res, t, cur } = await loadOwned(env, ctx, cors, body.ticket);
   if (res) return res;
   if (cur.st === "consumed") return fail(cors, 409, "already_used", "This email was already verified.");
   const email = await unseal(env, cur.ec);
@@ -826,43 +834,47 @@ async function actVerify(env, ctx, cors, body, ip) {
   if (code.length !== 6) return fail(cors, 400, "bad_code", "Enter the 6-digit code.");
   const now = Date.now();
   const ih = await hash(env, "ip", ip);
-  const wrongPath = `${ROOT}/wrong/${hourBucket(now)}/${ih}`;
-  if ((Number(await dbGet(env, wrongPath).catch(() => 0)) || 0) >= IP_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong codes from this network. Try again later.", { retryAfter: 3600 });
+  const wb = hourBucket(now);
+  const wrongPath = `${ROOT}/wrong/${wb}/${ih}`;
+  const wrongKey = `w:${wb}:${ih}`;
+  if (Math.max(Number(await dbGet(env, wrongPath).catch(() => 0)) || 0, shadowGet(wrongKey, now)) >= IP_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong codes from this network. Try again later.", { retryAfter: 3600 });
   const sessHash = await hash(env, "sess", t.rid, t.session);
   const otpHash = await hash(env, "otp", t.rid, code);
-  const out = await dbTxn(env, `${ROOT}/tickets/${t.rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, t.rid, (cur) => {
     if (!cur || !safeEq(cur.s, sessHash)) return { result: { e: "not_found" } };
     if (cur.st !== "pending") return { result: { e: "state", st: cur.st, via: cur.via } };
-    if (now > cur.x) return { result: { e: "expired", p: cur.p, m: cur.m } };
+    if (now > cur.x) return { result: { e: "expired", p: cur.p, m: cur.m, ec: cur.ec } };
     const max = Number(cur.max) || DEFAULTS.maxAttempts;
     if ((Number(cur.a) || 0) >= max) return { next: { ...cur, st: "locked" }, result: { e: "state", st: "locked" } };
     if (!safeEq(cur.o, otpHash)) {
       const a = (Number(cur.a) || 0) + 1;
-      return { next: { ...cur, a, ...(a >= max ? { st: "locked" } : {}) }, result: { e: "wrong", left: Math.max(0, max - a), p: cur.p, m: cur.m } };
+      return { next: { ...cur, a, ...(a >= max ? { st: "locked" } : {}) }, result: { e: "wrong", left: Math.max(0, max - a), p: cur.p, m: cur.m, ec: cur.ec } };
     }
-    return { next: { ...cur, st: "consumed", via: "otp", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec } };
+    return { next: { ...cur, st: "consumed", via: "otp", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, e: null, eh: cur.e, c: cur.c } };
   });
   if (out.e === "not_found") return fail(cors, 404, "not_found", "This request was not found. Please start again.");
   if (out.e === "state") return stateError(cors, out.st, out.via);
   if (out.e === "expired") {
-    track(env, ctx, { expired: 1 }, { k: "expired", p: out.p, m: out.m });
+    track(env, ctx, { expired: 1 }, { k: "expired", p: out.p, m: out.m, ec: out.ec });
     return fail(cors, 410, "expired", "This code has expired. Please ask for a new one.");
   }
   if (out.e === "wrong") {
-    await dbTxn(env, wrongPath, (n) => ({ next: (Number(n) || 0) + 1, result: 1 })).catch(() => 0);
+    const wn = await dbTxn(env, wrongPath, (n) => ({ next: Math.max(Number(n) || 0, shadowGet(wrongKey, now)) + 1, result: Math.max(Number(n) || 0, shadowGet(wrongKey, now)) + 1 })).catch(() => 0);
+    shadowPut(wrongKey, Number(wn) || shadowGet(wrongKey, now) + 1, now + HOUR);
     const locked = out.left <= 0;
-    track(env, ctx, { wrong: 1, ...(locked ? { locked: 1 } : {}) }, { k: locked ? "locked" : "wrong", p: out.p, m: out.m });
+    track(env, ctx, { wrong: 1, ...(locked ? { locked: 1 } : {}) }, { k: locked ? "locked" : "wrong", p: out.p, m: out.m, ec: out.ec });
     return locked
       ? fail(cors, 423, "locked", "Too many wrong tries. Please ask for a new code.", { attemptsLeft: 0 })
       : fail(cors, 400, "wrong_code", `Incorrect code. ${out.left} ${out.left === 1 ? "try" : "tries"} left.`, { attemptsLeft: out.left });
   }
   const email = await unseal(env, out.ec);
-  track(env, ctx, { verified_otp: 1 }, { k: "verified_otp", p: out.p, m: out.m });
+  await releaseCooldown(env, out.eh, out.c, t.rid);
+  track(env, ctx, { verified_otp: 1 }, { k: "verified_otp", p: out.p, m: out.m, ec: out.ec });
   return json(cors, { ok: true, email, purpose: out.p, via: "otp" });
 }
 
-async function actStatus(env, cors, body) {
-  const { res, cur } = await loadOwned(env, cors, body.ticket);
+async function actStatus(env, ctx, cors, body) {
+  const { res, cur } = await loadOwned(env, ctx, cors, body.ticket);
   if (res) return res;
   const now = Date.now();
   let status = cur.st === "sending" ? "pending" : cur.st;
@@ -889,17 +901,19 @@ async function actClaim(env, ctx, cors, body) {
     check = (cur) => cur.p === "reset" && safeEq(gh, String(body.grant));
   } else return fail(cors, 400, "bad_ticket", "This request is invalid. Please start again.");
   const now = Date.now();
-  const out = await dbTxn(env, `${ROOT}/tickets/${rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, rid, (cur) => {
     if (!cur || !check(cur)) return { result: { e: "not_found" } };
     if (cur.st !== "verified") return { result: { e: "state", st: cur.st } };
-    return { next: { ...cur, st: "consumed", claimed: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec } };
+    if (now > Number(cur.lx) + 15 * 60_000) return { result: { e: "state", st: "expired" } };
+    return { next: { ...cur, st: "consumed", claimed: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, eh: cur.e, c: cur.c } };
   });
   if (out.e === "not_found") return fail(cors, 404, "not_found", "This verification was not found.");
   if (out.e === "state") {
     if (out.st === "pending" || out.st === "sending") return fail(cors, 409, "not_verified", "This email is not verified yet.");
     return stateError(cors, out.st);
   }
-  track(env, ctx, { claimed: 1 }, { k: "claimed", p: out.p, m: out.m });
+  await releaseCooldown(env, out.eh, out.c, rid);
+  track(env, ctx, { claimed: 1 }, { k: "claimed", p: out.p, m: out.m, ec: out.ec });
   return json(cors, { ok: true, email: await unseal(env, out.ec), purpose: out.p, via: "link" });
 }
 
@@ -916,7 +930,7 @@ async function linkPage(env, ctx, req, rid, token) {
   }
   const lh = await hash(env, "link", rid, token);
   const now = Date.now();
-  const out = await dbTxn(env, `${ROOT}/tickets/${rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, rid, (cur) => {
     if (!cur || !safeEq(cur.l, lh)) return { result: { e: "invalid" } };
     const back = cur.org || site;
     if (cur.st === "verified") return { result: { ok: true, again: true, p: cur.p, back } };
@@ -924,11 +938,11 @@ async function linkPage(env, ctx, req, rid, token) {
     if (cur.st === "consumed") return { result: { e: "used", p: cur.p, back } };
     if (cur.st !== "pending") return { result: { e: cur.st, p: cur.p, back } };
     if (now > cur.lx) return { result: { e: "expired", p: cur.p, back } };
-    return { next: { ...cur, st: "verified", via: "link", v: now }, result: { ok: true, p: cur.p, m: cur.m, back } };
+    return { next: { ...cur, st: "verified", via: "link", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, back } };
   });
   const back = out.back || site;
   if (out.ok) {
-    if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m });
+    if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m, ec: out.ec });
     const grant = await hash(env, "grant", rid);
     const redirect = `${back}/?ev=${rid}&eg=${encodeURIComponent(grant)}&ep=${out.p}`;
     return html(pageHtml({
@@ -1020,7 +1034,7 @@ export default {
         case "send": case "send-otp": case "send-link": return await actSend(env, ctx, cors, body, origin, ip);
         case "resend": return await actResend(env, ctx, cors, body, origin, ip);
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
-        case "status": return await actStatus(env, cors, body);
+        case "status": return await actStatus(env, ctx, cors, body);
         case "claim": return await actClaim(env, ctx, cors, body);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }
