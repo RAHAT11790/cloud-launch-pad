@@ -389,121 +389,12 @@ type SeasonsByLanguage = Record<string, Season[]>;
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
 // ==================== EMAIL SERVICE SECTION ====================
-const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [otpUrl, setOtpUrl] = useState("");
- const [testing, setTesting] = useState(false);
- const [testResult, setTestResult] = useState<{ alive: boolean; latency: number; ready?: boolean; missing?: string[] } | null>(null);
- const [resetLogs, setResetLogs] = useState<any[]>([]);
- const [loadingLogs, setLoadingLogs] = useState(true);
-
- useEffect(() => {
- import("@/lib/edgeFunctionRouter").then(m => m.getEdgeFunctionUrl("email-service")).then(u => setOtpUrl(u || "")).catch(() => {});
- }, []);
-
- useEffect(() => {
- const unsub = onValue(ref(db, "passwordResets"), (snap) => {
- const val = snap.val();
- if (val) {
- const arr = Object.entries(val).map(([k, v]: any) => ({ id: k, ...v }));
- arr.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
- setResetLogs(arr);
- } else {
- setResetLogs([]);
- }
- setLoadingLogs(false);
- });
- return () => unsub();
- }, []);
-
- const testUrl = async () => {
- if (!otpUrl) { toast.error("Set the URL first."); return; }
- setTesting(true);
- setTestResult(null);
- const start = Date.now();
- try {
- const controller = new AbortController();
- const t = setTimeout(() => controller.abort(), 8000);
- const res = await fetch(otpUrl, { method: "GET", signal: controller.signal });
- clearTimeout(t);
- const info = await res.json().catch(() => ({}));
- setTestResult({ alive: res.ok, latency: Date.now() - start, ready: !!info?.ready, missing: info?.missing || [] });
- } catch {
- setTestResult({ alive: false, latency: Date.now() - start });
- }
- setTesting(false);
- };
-
- const clearLogs = async () => {
- if (!confirm("Delete all password reset logs?")) return;
- await remove(ref(db, "passwordResets"));
- toast.success("Logs cleared.");
- };
-
- return (
- <div className="space-y-4">
- <h2 className="text-lg font-bold text-white flex items-center gap-2"><Mail size={18} className="text-indigo-400" /> Email Service</h2>
-
- {/* Email Service route (EGD Router → email-service) */}
- <div className={`${glassCard} p-4 space-y-3`}>
- <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
- <Link size={14} className="text-cyan-400" /> Resend Email Service
- </h3>
- <p className="text-[10px] text-zinc-500 leading-relaxed">
- Sign-up verification and forgot-password codes use <b>EGD Router → email-service</b>. Deploy “Email Service” from Cloudflare Manager, add secrets <b>RESEND_API_KEY</b> and <b>EMAIL_SECRET</b>, then paste the Worker URL in EGD Router.
- </p>
- <div className="text-[10px] font-mono truncate text-zinc-400">{otpUrl || "⚠️ Not set in EGD Router yet — sign-up and password reset can't send codes."}</div>
- <div className="flex items-center gap-3 flex-wrap">
- <button onClick={testUrl} disabled={testing || !otpUrl} className={`${btnSecondary} px-3 py-1.5 text-[10px] flex items-center gap-1.5 disabled:opacity-40`}>
- {testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} Check
- </button>
- {testResult && (
- <span className={`text-[10px] font-mono ${testResult.alive && testResult.ready ? "text-emerald-400" : "text-red-400"}`}>
- {!testResult.alive ? "❌ Unreachable" : testResult.ready ? "✅ Ready" : `⚠️ Missing: ${(testResult.missing || []).join(", ")}`} · {testResult.latency}ms
- </span>
- )}
- </div>
- </div>
-
- {/* Password Reset Logs */}
- <div className={`${glassCard} p-4 space-y-3`}>
- <div className="flex items-center justify-between">
- <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
- <KeyRound size={14} className="text-amber-400" /> Password Reset Logs
- </h3>
- <div className="flex items-center gap-2">
- <span className="text-[10px] text-zinc-500">{resetLogs.length} users</span>
- {resetLogs.length > 0 && (
- <button onClick={clearLogs} className={`${btnSecondary} px-2 py-1 text-[9px] flex items-center gap-1`}>
- <Trash2 size={9} /> Clear All
- </button>
- )}
- </div>
- </div>
-
- {loadingLogs ? (
- <div className="text-center py-4"><Loader2 size={16} className="animate-spin text-zinc-500 mx-auto" /></div>
- ) : resetLogs.length === 0 ? (
- <p className="text-[11px] text-zinc-600 text-center py-4">No password reset logs yet</p>
- ) : (
- <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
- {resetLogs.map((log: any) => (
- <div key={log.id} className="bg-white/3 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between">
- <div className="flex-1 min-w-0">
- <p className="text-[11px] text-white font-medium truncate">{log.email}</p>
- <p className="text-[9px] text-zinc-500">{log.name || "—"}</p>
- </div>
- <div className="text-right flex-shrink-0 ml-2">
- <p className="text-[9px] text-zinc-400">{log.timestamp ? new Date(log.timestamp).toLocaleString("bn-BD") : "—"}</p>
- <p className="text-[9px] text-emerald-400/60">{log.method || "supabase-otp"}</p>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- </div>
- );
-};
+// Gmail API email server (EGD Router → email-service): status, secrets, stats, rules, design.
+const EmailServiceSection = (props: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => (
+ <Suspense fallback={<div className="py-10 grid place-items-center"><Loader2 size={18} className="animate-spin text-zinc-500" /></div>}>
+ <EmailServiceManager {...props} />
+ </Suspense>
+);
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 // ==================== FUNCTION URL OVERRIDES — admin paste OR Lovable-deployed default ====================
