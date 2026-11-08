@@ -98,6 +98,15 @@ function markResendAt(email: string, at: number) {
   } catch {}
 }
 
+/** A used code frees the email right away (the server does the same). */
+function clearResendAt(email: string) {
+  try {
+    const map = JSON.parse(localStorage.getItem(COOLDOWN_KEY) || "{}");
+    delete map[normalizeEmail(email)];
+    localStorage.setItem(COOLDOWN_KEY, JSON.stringify(map));
+  } catch {}
+}
+
 async function call(action: string, body: Record<string, unknown>) {
   const url = await getEdgeFunctionUrl("email-service");
   if (!url) throw new EmailServiceError("not_configured", "Email service is not set up yet. Please try again later.");
@@ -157,6 +166,7 @@ export async function resendEmailCode(ticket: string, email: string): Promise<Em
 export async function verifyEmailCode(ticket: string, code: string): Promise<{ email: string; purpose: EmailPurpose; via: "otp" | "link" }> {
   try {
     const data = await call("verify", { ticket, code: String(code).replace(/\D/g, "") });
+    clearResendAt(String(data.email));
     return { email: String(data.email), purpose: data.purpose === "reset" ? "reset" : "register", via: "otp" };
   } catch (err) {
     // The user tapped the email button first — finish with that instead.
@@ -173,6 +183,7 @@ export async function checkEmailStatus(ticket: string): Promise<{ status: EmailS
 /** Finishes a link-verified request exactly once (ticket owner, or a reset grant from the link page). */
 export async function claimEmailLink(ticketOrRid: string, grant?: string): Promise<{ email: string; purpose: EmailPurpose; via: "link" }> {
   const d = await call("claim", grant ? { rid: ticketOrRid, grant } : { ticket: ticketOrRid });
+  clearResendAt(String(d.email));
   return { email: String(d.email), purpose: d.purpose === "reset" ? "reset" : "register", via: "link" };
 }
 

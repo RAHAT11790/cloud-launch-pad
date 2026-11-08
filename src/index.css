@@ -3097,6 +3097,7 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
 
 /* ============ Edit Profile (profile/EditProfilePanel) ============ */
 .pe-root {
+  --pf-bg: 17 18 20; --pf-surface: 30 31 34; --pf-surface-raised: 43 45 49; --pf-line: 78 80 88; --pf-text: 219 222 225;
   --pf-accent: 237 66 69; --pf-accent-2: 240 178 50;
   background:
     radial-gradient(120% 50% at 50% -10%, rgb(var(--pe-accent, var(--pf-accent)) / .16), transparent 60%),
