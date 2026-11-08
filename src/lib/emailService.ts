@@ -76,10 +76,9 @@ const COOLDOWN_MS = 60_000;
 export function cooldownLeftMs(email: string, now = Date.now()): number {
   try {
     const map = JSON.parse(localStorage.getItem(COOLDOWN_KEY) || "{}");
-    const until = Number(map[normalizeEmail(email)] || 0);
-    // Old entries stored the send time; new ones store the "can resend at" time.
-    const at = until > now + COOLDOWN_MS * 20 ? 0 : until < now - COOLDOWN_MS * 20 ? until + COOLDOWN_MS : until;
-    return Math.max(0, at - now);
+    // Stores the "can resend at" time, capped so a bad clock can't lock someone out.
+    const at = Number(map[normalizeEmail(email)] || 0);
+    return Math.min(COOLDOWN_MS * 15, Math.max(0, at - now));
   } catch { return 0; }
 }
 function markResendAt(email: string, at: number) {
