@@ -93,7 +93,7 @@ const safeEq = (a, b) => {
   for (let i = 0; i < n; i++) r |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   return r === 0;
 };
-const clamp = (v, [lo, hi], d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const clamp = (v, [lo, hi], d) => { if (v == null || v === "") return d; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const normEmail = (v) => String(v || "").trim().toLowerCase();
 const maskEmail = (e) => { const at = e.lastIndexOf("@"); if (at < 1) return "***"; return e.slice(0, Math.min(2, at)) + "***" + e.slice(at); };
