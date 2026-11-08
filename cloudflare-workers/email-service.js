@@ -169,6 +169,14 @@ async function unseal(env, sealed) {
   return dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64urlToBytes(iv) }, k.aes, b64urlToBytes(ct)));
 }
 
+// Every ticket carries an HMAC seal ("g") over all of its fields. Anyone who
+// edits a ticket directly in the database (status, attempts, hashes, expiry)
+// breaks the seal and the ticket is treated as not found.
+const TICKET_FIELDS = ["p", "e", "ec", "m", "o", "l", "s", "c", "x", "lx", "a", "max", "st", "org", "via", "v", "claimed"];
+const ticketSig = (env, rid, t) => hash(env, "tkt", rid, JSON.stringify(TICKET_FIELDS.map((k) => (t[k] == null ? "" : String(t[k])))));
+async function sealTicket(env, rid, t) { const { g, ...rest } = t; return { ...rest, g: await ticketSig(env, rid, rest) }; }
+async function ticketValid(env, rid, t) { return !!t && typeof t === "object" && typeof t.g === "string" && safeEq(t.g, await ticketSig(env, rid, t)); }
+
 // ---------------- Firebase Realtime Database (REST) ----------------
 const dbBase = (env) => String(env.FIREBASE_DB_URL || DEFAULT_DB).replace(/\/+$/, "");
 function dbUrl(env, path, q = {}) {
