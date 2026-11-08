@@ -287,10 +287,19 @@ async function cleanup(env, now) {
   const tickets = await dbGet(env, `${ROOT}/tickets`, { orderBy: '"$key"', endAt: `"${old}"`, limitToFirst: "60" }).catch(() => null);
   const patch = {};
   for (const k of Object.keys(tickets || {})) patch[`tickets/${k}`] = null;
-  for (const node of ["ip", "mail", "wrong"]) {
+  for (const node of ["wrong", "adminWrong"]) {
     const buckets = await dbGet(env, `${ROOT}/${node}`, { shallow: "true" }).catch(() => null);
     for (const b of Object.keys(buckets || {})) if (Number(b) < Number(hourBucket(now)) - 2) patch[`${node}/${b}`] = null;
   }
+  const keepDays = new Set([dayKey(now), dayKey(now - DAY)]);
+  for (const node of ["rl/mail", "rl/ip"]) {
+    const days = await dbGet(env, `${ROOT}/${node}`, { shallow: "true" }).catch(() => null);
+    for (const d of Object.keys(days || {})) if (!keepDays.has(d)) patch[`${node}/${d}`] = null;
+  }
+  const mins = await dbGet(env, `${ROOT}/rl/min`, { shallow: "true" }).catch(() => null);
+  for (const m of Object.keys(mins || {})) if (Number(m) < Number(minuteBucket(now)) - 5) patch[`rl/min/${m}`] = null;
+  // Old v3 counters
+  for (const node of ["ip", "mail"]) patch[node] = null;
   const events = await dbGet(env, `${ROOT}/events`, { shallow: "true" }).catch(() => null);
   const ek = Object.keys(events || {}).sort();
   for (const k of ek.slice(0, Math.max(0, ek.length - 300))) patch[`events/${k}`] = null;
