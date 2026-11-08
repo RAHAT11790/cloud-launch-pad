@@ -13,7 +13,9 @@
 - [x] Telegram popup repeat timer (seconds/minutes/hours/days) at end of Settings; 4-day-old close re-opens with 3-day repeat, 1-day doesn't.
 - [x] Adsterra section reviewed: stats load; zero-impression warning now names each slot's site.
 - [x] Admin tested with PIN on phone size; test settings, test users and today's test admin-login logs removed.
-- [ ] Real email to an @outlook-style domain not tested — needs the Email Service Worker redeployed with Resend secrets.
+- [x] Gmail API email Worker (6-digit code + Verify/Reset button) built, tested locally end-to-end and deployed to Cloudflare.
+- [ ] Real Gmail delivery: blocked until the owner adds GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_SENDER_EMAIL on the email-service Worker.
+- [ ] Firebase database rules are public (anyone can write) — email limits/tickets can be tampered with until rules are locked down.
 
 ## Approved community chat, episode search and download checks (2026-11-06)
 - [x] Add Chat between Movies and Profile; phone menu navigation verified. Message/profile/attachment controls are implemented but disabled pending trusted access.

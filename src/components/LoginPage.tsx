@@ -12,7 +12,10 @@ import {
   isAllowedEmail, normalizeEmail, emailCanonicalKey, sendEmailCode, verifyEmailCode,
   subscribeLoginAccess, loginAccessNow, allowedDomainsLabel, type LoginAccess,
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
+  resendEmailCode, claimEmailLink, takeVerifyRedirect, ticketRid, EmailServiceError,
+  savePendingReset, readPendingReset, clearPendingReset,
 } from "@/lib/emailService";
+import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -95,13 +98,20 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
   const [forgotToken, setForgotToken] = useState("");
+  /** "link" = the email button was tapped (claim on submit); "claimed" = already claimed on this device via the link page. */
+  const [forgotLinkState, setForgotLinkState] = useState<"" | "link" | "claimed">("");
+  const [forgotResendLeft, setForgotResendLeft] = useState(0);
 
   // Sign-up email verification
-  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number } | null>(null);
+  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number } | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
   const [resendLeft, setResendLeft] = useState(0);
+  const [linkNotice, setLinkNotice] = useState("");
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const linkHandledRef = useRef(false);
+  const finishingRef = useRef(false);
 
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
     const aliasKey = buildEmailAliasKey(email);
@@ -298,8 +308,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         setForgotLoading(false);
         return;
       }
-      const { token } = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
-      setForgotToken(token);
+      const t = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
+      setForgotToken(t.token);
+      setForgotLinkState("");
+      setForgotOtp("");
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
       setForgotOtpSent(true);
       toast.success(`📧 Code sent to: ${fEmail}`);
     } catch (err: any) {
@@ -308,15 +321,52 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     setForgotLoading(false);
   };
 
+  const resetForgotState = () => {
+    setShowForgotPw(false); setForgotOtpSent(false); setForgotOtp(""); setForgotToken("");
+    setForgotNewPw(""); setForgotNewPwConfirm(""); setForgotEmail(""); setForgotLinkState("");
+    clearPendingReset();
+  };
+
+  const resendForgotCode = async () => {
+    if (!forgotToken || forgotResendLeft > 0) return;
+    setForgotLoading(true);
+    try {
+      const fEmail = normalizeEmail(forgotEmail);
+      const t = await resendEmailCode(forgotToken, fEmail);
+      setForgotToken(t.token); setForgotOtp(""); setForgotLinkState("");
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
+      toast.success("📧 New code sent");
+    } catch (err: any) { toast.error(err.message || "Could not send the code"); }
+    setForgotLoading(false);
+  };
+
+  // The email's "Reset Password" button was tapped (any device) → no code needed here.
+  useEmailLinkWatch(showForgotPw && forgotOtpSent && !forgotLinkState ? forgotToken : null, () => {
+    setForgotLinkState("link");
+    toast.success("✅ Email confirmed — now set your new password");
+  });
+
+  useEffect(() => {
+    if (!showForgotPw || !forgotOtpSent) return;
+    const tick = () => setForgotResendLeft(Math.ceil(cooldownLeftMs(forgotEmail) / 1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [showForgotPw, forgotOtpSent, forgotEmail, forgotToken]);
+
   const handleResetPasswordWithOtp = async () => {
-    if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
+    if ((!forgotLinkState && forgotOtp.replace(/\D/g, "").length !== 6) || !forgotNewPw.trim()) { toast.error(forgotLinkState ? "Enter a new password" : "Enter the 6-digit code and a new password"); return; }
     if (forgotNewPw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
     if (forgotNewPw !== forgotNewPwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setForgotLoading(true);
     try {
       const fEmail = normalizeEmail(forgotEmail);
-      const result = await verifyEmailCode(forgotToken, forgotOtp);
+      const result = forgotLinkState === "claimed"
+        ? { email: fEmail, purpose: "reset" as const }
+        : forgotLinkState === "link"
+          ? await claimEmailLink(forgotToken)
+          : await verifyEmailCode(forgotToken, forgotOtp);
       if (result.email !== fEmail || result.purpose !== "reset") { toast.error("❌ Incorrect code!"); setForgotLoading(false); return; }
       const emailKey = fEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
@@ -328,15 +378,12 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       });
 
       toast.success("✅ New password set! You can now login.");
-      setShowForgotPw(false);
-      setForgotOtpSent(false);
-      setForgotOtp("");
-      setForgotToken("");
-      setForgotNewPw("");
-      setForgotNewPwConfirm("");
-      setForgotEmail("");
+      resetForgotState();
     } catch (err: any) {
       toast.error(err.message || "Error");
+      if (err instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(err.code)) {
+        setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); setForgotLinkState(""); clearPendingReset();
+      }
     }
     setForgotLoading(false);
   };
@@ -371,19 +418,53 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     return true;
   };
 
+  /** Ends the sign-up screen when the request can no longer be used. */
+  const dropDeadRequest = (err: unknown) => {
+    if (err instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found", "bad_ticket"].includes(err.code)) {
+      setVerifyError(err.code === "locked" || err.code === "expired" ? `${err.message} Tap “Resend code”.` : err.message);
+      return true;
+    }
+    return false;
+  };
+
   const submitVerifyCode = async (codeArg?: string, pendingArg?: typeof verifyPending) => {
     const pending = pendingArg || verifyPending;
     const code = String(codeArg ?? verifyCode).replace(/\D/g, "");
-    if (!pending) return;
+    if (!pending || finishingRef.current) return;
     if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    finishingRef.current = true;
     setVerifyLoading(true);
+    setVerifyError("");
     try {
       const r = await verifyEmailCode(pending.token, code);
       if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("Incorrect code.");
       await createVerifiedAccount(pending.name, pending.email, pending.password);
     } catch (err: any) {
-      toast.error(err.message || "Incorrect code.");
+      if (!dropDeadRequest(err)) setVerifyError(err.message || "Incorrect code.");
+      setVerifyCode("");
     }
+    finishingRef.current = false;
+    setVerifyLoading(false);
+  };
+
+  /** The email's "Verify Email" button was tapped → finish here, no code typing needed. */
+  const finishByLink = async (pending: NonNullable<typeof verifyPending>) => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setVerifyLoading(true);
+    setVerifyError("");
+    try {
+      const r = await claimEmailLink(pending.token);
+      if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("This link belongs to another email.");
+      await createVerifiedAccount(pending.name, pending.email, pending.password);
+    } catch (err: any) {
+      // Another tab of this browser may have just finished it.
+      let done = false;
+      try { done = normalizeEmail(JSON.parse(localStorage.getItem("rsanime_user") || "null")?.email || "") === normalizeEmail(pending.email); } catch {}
+      if (done) { clearPendingRegister(); window.location.reload(); return; }
+      if (!dropDeadRequest(err)) setVerifyError(err.message || "Could not finish sign-up.");
+    }
+    finishingRef.current = false;
     setVerifyLoading(false);
   };
 
@@ -391,51 +472,67 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     if (!verifyPending || resendLeft > 0) return;
     setVerifyLoading(true);
     try {
-      const { token, expiresAt } = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
-      const next = { ...verifyPending, token, expiresAt };
+      let t;
+      try { t = await resendEmailCode(verifyPending.token, verifyPending.email); }
+      catch (err) {
+        // The old request is gone (expired/used) → start a fresh one for the same email.
+        if (err instanceof EmailServiceError && ["not_found", "bad_ticket", "already_used"].includes(err.code)) t = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
+        else throw err;
+      }
+      const next = { ...verifyPending, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
       setVerifyPending(next);
       savePendingRegister(next);
       setVerifyCode("");
+      setVerifyError("");
       toast.success("📧 New code sent");
     } catch (err: any) { toast.error(err.message); }
     setVerifyLoading(false);
   };
 
-  // Resend countdown
+  useEmailLinkWatch(verifyPending && !verifyError ? verifyPending.token : null, () => {
+    if (verifyPending) void finishByLink(verifyPending);
+  });
+
+  // Resend + expiry countdown
   useEffect(() => {
     if (!verifyPending) return;
-    const tick = () => setResendLeft(Math.ceil(cooldownLeftMs(verifyPending.email) / 1000));
+    const tick = () => { setResendLeft(Math.ceil(cooldownLeftMs(verifyPending.email) / 1000)); setNowTick(Date.now()); };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [verifyPending]);
 
-  // The "Verify my email" button in the email opens /?verify=TOKEN&code=123456
+  // Coming back from the email's button: /?ev=<request>&eg=<grant>&ep=register|reset
   useEffect(() => {
     if (linkHandledRef.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("verify");
-    const code = params.get("code");
-    if (!token || !code) {
-      const saved = readPendingRegister();
-      if (saved) setVerifyPending(saved);
-      return;
-    }
     linkHandledRef.current = true;
-    try {
-      params.delete("verify"); params.delete("code");
-      const q = params.toString();
-      window.history.replaceState(window.history.state, "", window.location.pathname + (q ? `?${q}` : "") + window.location.hash);
-    } catch {}
-    const saved = readPendingRegister();
-    if (!saved || saved.token !== token) {
-      toast.error("Open this link on the same phone/browser where you signed up, or type the code.");
-      if (saved) setVerifyPending(saved);
+    const back = takeVerifyRedirect();
+    const savedReg = readPendingRegister();
+    if (!back) { if (savedReg) setVerifyPending(savedReg); return; }
+    if (back.purpose === "register") {
+      if (savedReg && ticketRid(savedReg.token) === back.rid) {
+        setVerifyPending(savedReg);
+        void finishByLink(savedReg);
+      } else {
+        if (savedReg) setVerifyPending(savedReg);
+        setLinkNotice("Your email is verified ✓. Go back to the app or browser where you started signing up — it finishes there automatically.");
+      }
       return;
     }
-    setVerifyPending(saved);
-    setVerifyCode(code);
-    void submitVerifyCode(code, saved);
+    // Password reset
+    const savedReset = readPendingReset();
+    setShowForgotPw(true);
+    if (savedReset && ticketRid(savedReset.token) === back.rid) {
+      setForgotEmail(savedReset.email); setForgotToken(savedReset.token);
+      setForgotOtpSent(true); setForgotLinkState("link");
+      toast.success("✅ Email confirmed — now set your new password");
+      return;
+    }
+    claimEmailLink(back.rid, back.grant).then((r) => {
+      setForgotEmail(r.email); setForgotToken("");
+      setForgotOtpSent(true); setForgotLinkState("claimed");
+      toast.success("✅ Email confirmed — now set your new password");
+    }).catch((err) => toast.error(err?.message || "This link can't be used any more. Ask for a new code."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -511,10 +608,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
         const canon = await get(ref(db, `gmailRegistry/${emailCanonicalKey(formEmail)}`)).catch(() => null);
         if (canon?.exists()) { toast.error("This email already has an account. Please sign in."); setLoading(false); return; }
-        const { token, expiresAt } = await sendEmailCode(formEmail, "register", formName);
-        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token, expiresAt };
+        const t = await sendEmailCode(formEmail, "register", formName);
+        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
         savePendingRegister(pending);
         setVerifyCode("");
+        setVerifyError("");
         setVerifyPending(pending);
         toast.success(`📧 Verification code sent to ${pending.email}`);
       } else {
@@ -705,7 +803,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
             />
             <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-              <button onClick={() => { setShowForgotPw(false); setForgotOtpSent(false); setForgotEmail(""); setForgotOtp(""); setForgotNewPw(""); setForgotNewPwConfirm(""); }}
+              <button onClick={resetForgotState}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -720,18 +818,27 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   Reset Password
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {forgotOtpSent ? "Enter the code sent to your email and set a new password" : "A verification code will be sent to your email"}
+                  {forgotOtpSent
+                    ? (forgotLinkState ? "Email confirmed — choose your new password" : <>Enter the code sent to <b className="text-foreground break-all">{forgotEmail}</b>, or tap <b className="text-foreground">Reset Password</b> in the email</>)
+                    : "We'll email you a 6-digit code and a one-tap reset button"}
                 </p>
               </motion.div>
 
               {forgotOtpSent ? (
                 <div className="space-y-3">
-                  <div>
-                    <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
-                    <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
-                      placeholder="6-digit code" maxLength={6}
-                      className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
-                  </div>
+                  {forgotLinkState ? (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-xs text-foreground">
+                      <span className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-primary-foreground" /></span>
+                      <span>Email confirmed with the link — no code needed.</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
+                      <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="••••••" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
+                        className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
+                    </div>
+                  )}
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
@@ -746,15 +853,20 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   </div>
                   <motion.button
                     onClick={handleResetPasswordWithOtp}
-                    disabled={forgotLoading || !forgotOtp || !forgotNewPw}
+                    disabled={forgotLoading || (!forgotLinkState && forgotOtp.length !== 6) || !forgotNewPw}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
                     {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> Reset Password</>}
                   </motion.button>
-                  <button onClick={() => setForgotOtpSent(false)} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">
-                    ← Resend Code
-                  </button>
+                  {!forgotLinkState && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <button onClick={() => { setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); clearPendingReset(); }} className="text-muted-foreground hover:text-foreground">← Change email</button>
+                      <button onClick={resendForgotCode} disabled={forgotLoading || forgotResendLeft > 0} className="font-semibold text-primary disabled:text-muted-foreground">
+                        {forgotResendLeft > 0 ? `Resend in ${forgotResendLeft}s` : "Resend code"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -795,6 +907,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   // ======= SIGN-UP EMAIL VERIFICATION SCREEN =======
   if (verifyPending) {
     const digits = verifyCode.replace(/\D/g, "").slice(0, 6);
+    const codeLeft = Math.max(0, Math.ceil((verifyPending.expiresAt - nowTick) / 1000));
+    const codeClock = `${Math.floor(codeLeft / 60)}:${String(codeLeft % 60).padStart(2, "0")}`;
     return (
       <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -803,7 +917,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         </div>
         <motion.div className="relative w-full max-w-[360px]" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div className="relative glass-card-strong rounded-3xl p-6 border border-primary/25">
-            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); }}
+            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
               <ArrowLeft className="w-4 h-4" /> Change email
             </button>
@@ -835,13 +949,30 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               </div>
             </label>
 
+            <div className="mt-2.5 flex items-center justify-between text-[11px]">
+              <span className={codeLeft > 0 ? "text-muted-foreground" : "text-destructive font-semibold"}>
+                {codeLeft > 0 ? <>Code expires in <b className="text-foreground tabular-nums">{codeClock}</b></> : "Code expired — tap Resend code"}
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" /><span className="relative w-2 h-2 rounded-full bg-primary" /></span>
+                Waiting for link
+              </span>
+            </div>
+
+            {verifyError && (
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[11px] leading-relaxed text-foreground">
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-px" />
+                <span>{verifyError}</span>
+              </div>
+            )}
+
             <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
               className="w-full mt-5 py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
               {verifyLoading ? <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" /> : <><Check className="w-4 h-4" /> Verify & create account</>}
             </motion.button>
 
             <div className="mt-4 rounded-xl bg-foreground/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
-              💡 Or just tap <b className="text-foreground">Verify my email</b> inside the email — on this same phone. Check Spam if you can't find it.
+              💡 Or tap <b className="text-foreground">Verify Email</b> inside the email — on any phone or browser. This screen finishes by itself. Can't find it? Check Spam or Promotions.
             </div>
 
             <button onClick={resendVerifyCode} disabled={verifyLoading || resendLeft > 0}
@@ -945,6 +1076,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   </h1>
                   <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">{branding.loginSubtitle}</p>
                 </div>
+
+                {linkNotice && (
+                  <div role="status" className="relative z-10 mb-4 flex items-start gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-[11px] leading-relaxed text-foreground">
+                    <span className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-primary-foreground" /></span>
+                    <span className="flex-1">{linkNotice}</span>
+                    <button onClick={() => setLinkNotice("")} aria-label="Dismiss" className="text-muted-foreground hover:text-foreground">✕</button>
+                  </div>
+                )}
 
                 <div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10">
                   <button
