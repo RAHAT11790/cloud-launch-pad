@@ -3089,6 +3089,12 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
   --pl-max: 1880px;
 }
 
+/* Email code boxes (auth/EmailCodeKit) */
+@keyframes otp-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(3px); } 30%, 50%, 70% { transform: translateX(-5px); } 40%, 60% { transform: translateX(5px); } }
+.otp-shake { animation: otp-shake .42s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes otp-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.otp-caret { animation: otp-caret 1s steps(1) infinite; }
+
 /* Rail page buttons exist only for mouse / TV-remote layouts */
 .rail-arrow { display: none; }
 
