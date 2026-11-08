@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-// @ts-expect-error plain JS worker module
 import worker from "../../cloudflare-workers/email-service.js";
 
 // ---------- in-memory Firebase RTDB (REST) ----------
