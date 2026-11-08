@@ -25,5 +25,4 @@
 - Adsterra analytics goes only through the EGD-routed `adsterra-stats` row (`cloudflare-workers/adsterra-stats.js`, secret ADSTERRA_API_KEY) so admin works when Cloud is down.
 - Global chat (`src/lib/communityChat.ts`) is one public RTDB room keyed by the app's own account IDs (guests read only); `buildMessage` is the single gate for allowed kinds (text/image/voice/sticker, never video), voice notes are stored separately and fetched over REST — no private rooms exist because the RTDB is publicly readable.
 - Custom download servers (`settings/downloadManager/customServers`) join the Video Servers list and share its HTTP/HTTPS switch — one URL rewrite path.
-- Profile "about me" data (bio, mood, genres, card glow) lives only in `src/lib/profileCard.ts` (`users/{uid}/profileCard`, allow-listed + length-capped, cached in localStorage); Edit Profile and Password & security are their own components under `src/components/profile/`, and every email-code screen uses `src/components/auth/EmailCodeKit.tsx` — one place for limits and one look for all code entry.
-- Cloudflare Manager redeploys pass the Worker's existing secrets as `inherit` bindings — the live manager may be older and would otherwise wipe saved secrets.
+- Cloudflare Manager redeploys pass existing Worker secrets as `inherit` bindings, or an older live manager wipes them.
