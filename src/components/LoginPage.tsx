@@ -907,6 +907,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   // ======= SIGN-UP EMAIL VERIFICATION SCREEN =======
   if (verifyPending) {
     const digits = verifyCode.replace(/\D/g, "").slice(0, 6);
+    const codeLeft = Math.max(0, Math.ceil((verifyPending.expiresAt - nowTick) / 1000));
+    const codeClock = `${Math.floor(codeLeft / 60)}:${String(codeLeft % 60).padStart(2, "0")}`;
     return (
       <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -915,7 +917,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         </div>
         <motion.div className="relative w-full max-w-[360px]" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div className="relative glass-card-strong rounded-3xl p-6 border border-primary/25">
-            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); }}
+            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); }}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
               <ArrowLeft className="w-4 h-4" /> Change email
             </button>
@@ -947,13 +949,30 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               </div>
             </label>
 
+            <div className="mt-2.5 flex items-center justify-between text-[11px]">
+              <span className={codeLeft > 0 ? "text-muted-foreground" : "text-destructive font-semibold"}>
+                {codeLeft > 0 ? <>Code expires in <b className="text-foreground tabular-nums">{codeClock}</b></> : "Code expired — tap Resend code"}
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" /><span className="relative w-2 h-2 rounded-full bg-primary" /></span>
+                Waiting for link
+              </span>
+            </div>
+
+            {verifyError && (
+              <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[11px] leading-relaxed text-foreground">
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-px" />
+                <span>{verifyError}</span>
+              </div>
+            )}
+
             <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
               className="w-full mt-5 py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
               {verifyLoading ? <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" /> : <><Check className="w-4 h-4" /> Verify & create account</>}
             </motion.button>
 
             <div className="mt-4 rounded-xl bg-foreground/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
-              💡 Or just tap <b className="text-foreground">Verify my email</b> inside the email — on this same phone. Check Spam if you can't find it.
+              💡 Or tap <b className="text-foreground">Verify Email</b> inside the email — on any phone or browser. This screen finishes by itself. Can't find it? Check Spam or Promotions.
             </div>
 
             <button onClick={resendVerifyCode} disabled={verifyLoading || resendLeft > 0}
