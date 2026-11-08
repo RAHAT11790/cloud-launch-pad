@@ -1043,7 +1043,7 @@ async function actAdminEvents(env, cors, body, ip) {
 
 export default {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { buildMime, emailTemplate, makeOtp, originAllowed, DEFAULTS, BOUNDS },
+  _internals: { buildMime, emailTemplate, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);

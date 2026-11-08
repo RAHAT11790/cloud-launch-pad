@@ -48,7 +48,9 @@ async function fakeFetch(input: any, init: any = {}): Promise<Response> {
       if (url.searchParams.get("shallow") === "true" && v && typeof v === "object") v = Object.fromEntries(Object.keys(v).map((k) => [k, true]));
       if (url.searchParams.get("orderBy") === '"$key"' && v && typeof v === "object") {
         const end = JSON.parse(url.searchParams.get("endAt") || "null");
-        v = Object.fromEntries(Object.entries(v).filter(([k]) => end == null || k <= end).slice(0, Number(url.searchParams.get("limitToFirst") || 1e9)));
+        const ents = Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).filter(([k]) => end == null || k <= end);
+        const last = Number(url.searchParams.get("limitToLast") || 0);
+        v = Object.fromEntries(last ? ents.slice(-last) : ents.slice(0, Number(url.searchParams.get("limitToFirst") || 1e9)));
       }
       return new Response(JSON.stringify(v ?? null), { status: 200, headers: headers.get("X-Firebase-ETag") ? { ETag: etagOf(getAt(p)) } : {} });
     }
@@ -104,6 +106,7 @@ beforeEach(() => {
   now = Date.UTC(2026, 10, 8, 14, 0, 0) + Math.floor(Math.random() * 1e6) * 1000;
   vi.spyOn(Date, "now").mockImplementation(() => now);
   vi.stubGlobal("fetch", fakeFetch);
+  (worker as any)._internals.resetMemory();
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -115,7 +118,7 @@ describe("Gmail API email worker", () => {
     expect(gmailRaw).toHaveLength(1);
     expect(gmailRaw[0]).not.toMatch(/[+/=]/); // base64url
     const m = decodeMail(gmailRaw[0]);
-    expect(m.mime).toContain("From: RS ANIME <rsanime.mail@gmail.com>");
+    expect(m.mime).toContain("From: RS ANIME03 <rsanime.mail@gmail.com>");
     expect(m.mime).toContain("To: <new.user55@gmail.com>");
     expect(m.mime).toContain("multipart/alternative");
     expect(m.html).toContain("https://i.ibb.co/6RcjXRjL/image.jpg");
@@ -174,22 +177,28 @@ describe("Gmail API email worker", () => {
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("locked");
   });
 
-  it("code expires after 10 minutes, link after 30 minutes", async () => {
+  it("code expires after 5 minutes, link after 10 minutes", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(data.expiresAt - now).toBe(5 * 60_000);
+    expect(data.linkExpiresAt - now).toBe(10 * 60_000);
     const m = decodeMail(gmailRaw[0]);
-    now += 10 * 60_000 + 1000;
+    expect(m.text).toContain("valid for 5 minutes");
+    now += 5 * 60_000 + 1000;
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("expired");
-    now += 20 * 60_000;
+    now += 5 * 60_000;
     expect((await link(m.link, "POST")).html).toContain("Link expired");
   });
 
-  it("enforces the 60 s resend wait, and a resend kills the old code", async () => {
+  it("enforces the 5 minute resend wait, and a resend kills the old code", async () => {
     const first = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     const oldCode = decodeMail(gmailRaw[0]).code;
     const tooSoon = await api("resend", { ticket: first.data.ticket });
     expect(tooSoon.status).toBe(429);
     expect(tooSoon.data.error).toBe("cooldown");
-    now += 61_000;
+    expect(tooSoon.data.retryAfter).toBe(300);
+    now += 299_000;
+    expect((await api("resend", { ticket: first.data.ticket })).data.error).toBe("cooldown");
+    now += 2_000;
     const again = await api("resend", { ticket: first.data.ticket });
     expect(again.status).toBe(200);
     expect(gmailRaw).toHaveLength(2);
@@ -236,6 +245,78 @@ describe("Gmail API email worker", () => {
     expect(JSON.stringify(r.data)).not.toContain("csecret");
     gmailFail = null;
     expect((await api("send", { email: "new.user55@gmail.com", purpose: "register" })).status).toBe(200);
+  });
+
+  it("allows only 3 codes per email per day, then blocks until tomorrow", async () => {
+    const first = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(first.data).toMatchObject({ dailyLeft: 2, dailyMax: 3 });
+    let t = first.data.ticket;
+    for (const left of [1, 0]) {
+      now += 301_000;
+      const r = await api("resend", { ticket: t });
+      expect(r.data.dailyLeft).toBe(left);
+      t = r.data.ticket;
+    }
+    now += 301_000;
+    const blocked = await api("resend", { ticket: t });
+    expect(blocked.status).toBe(429);
+    expect(blocked.data).toMatchObject({ error: "email_daily", dailyLeft: 0 });
+    expect(gmailRaw).toHaveLength(3);
+  });
+
+  it("a different email on the same network is limited to 5 per hour", async () => {
+    for (let i = 0; i < 5; i++) expect((await api("send", { email: `fresh.user${i}x@gmail.com`, purpose: "register" })).status).toBe(200);
+    const r = await api("send", { email: "fresh.user9x@gmail.com", purpose: "register" });
+    expect(r.status).toBe(429);
+    expect(r.data.error).toBe("too_many");
+  });
+
+  it("an edited ticket in the database is rejected (sealed), and a rolled-back one stays locked", async () => {
+    const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    const m = decodeMail(gmailRaw[0]);
+    const rid = data.ticket.split(".")[0];
+    const snapshot = JSON.parse(JSON.stringify(tree.emailAuth.tickets[rid]));
+    const wrong = m.code === "111111" ? "222222" : "111111";
+    for (let i = 0; i < 5; i++) await api("verify", { ticket: data.ticket, code: wrong });
+    // attacker un-locks the ticket by hand
+    tree.emailAuth.tickets[rid] = { ...tree.emailAuth.tickets[rid], st: "pending", a: 0 };
+    expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("not_found");
+    // attacker restores the original sealed copy (rollback)
+    tree.emailAuth.tickets[rid] = snapshot;
+    expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("locked");
+  });
+
+  it("deleting the rate-limit counters from the database does not reset the wait", async () => {
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    delete tree.emailAuth.rl;
+    const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(r.status).toBe(429);
+    expect(r.data.error).toBe("cooldown");
+  });
+
+  it("a used code frees the email for its next request right away", async () => {
+    const { data } = await api("send", { email: "old.user99@gmail.com", purpose: "reset" });
+    expect((await api("verify", { ticket: data.ticket, code: decodeMail(gmailRaw[0]).code })).data.ok).toBe(true);
+    expect((await api("send", { email: "old.user99@gmail.com", purpose: "reset" })).status).toBe(200);
+  });
+
+  it("admin activity with full emails needs the Worker's ADMIN_PIN", async () => {
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect((await api("admin-events", { pin: "1" })).data.error).toBe("admin_pin_not_set");
+    const env = { ...ENV, ADMIN_PIN: "778899" };
+    expect((await api("admin-events", { pin: "000000" }, { env })).status).toBe(401);
+    const ok = await api("admin-events", { pin: "778899" }, { env });
+    expect(ok.data.ok).toBe(true);
+    expect(ok.data.events[0]).toMatchObject({ k: "sent", email: "new.user55@gmail.com", p: "register" });
+    expect(JSON.stringify(tree.emailAuth.events)).not.toContain("new.user55@gmail.com");
+  });
+
+  it("health shows today's usage and the last Gmail result", async () => {
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    const h = await (await worker.fetch(new Request(`${W}/`), ENV, ctx)).json();
+    expect(h.today).toMatchObject({ sent: 1, limit: 300, left: 299 });
+    expect(h.last.ok).toBe(true);
+    expect(h.settings).toMatchObject({ otpMinutes: 5, cooldownSeconds: 300, perEmailDaily: 3 });
   });
 
   it("the Lovable Cloud copy is the same code as the Cloudflare worker", () => {
