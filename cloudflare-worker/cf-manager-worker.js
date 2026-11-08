@@ -168,6 +168,8 @@ async function actDeploy(env, body) {
     main_module: "worker.js",
     compatibility_date,
     bindings,
+    // Redeploying code must not wipe secrets saved on the Worker (same as wrangler).
+    keep_bindings: ["secret_text", "secret_key"],
   };
 
   const form = new FormData();
