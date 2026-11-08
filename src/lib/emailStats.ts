@@ -59,7 +59,8 @@ export const EMAIL_SETTING_BOUNDS: Record<keyof EmailServiceSettings, [number, n
 export function clampEmailSettings(raw: Partial<Record<keyof EmailServiceSettings, unknown>> | null | undefined): EmailServiceSettings {
   const out = { ...EMAIL_SETTING_DEFAULTS };
   for (const k of Object.keys(EMAIL_SETTING_DEFAULTS) as (keyof EmailServiceSettings)[]) {
-    const v = Math.round(Number(raw?.[k]));
+    if (raw?.[k] == null || raw?.[k] === "") continue;
+    const v = Math.round(Number(raw[k]));
     const [lo, hi] = EMAIL_SETTING_BOUNDS[k];
     if (Number.isFinite(v)) out[k] = Math.min(hi, Math.max(lo, v));
   }
