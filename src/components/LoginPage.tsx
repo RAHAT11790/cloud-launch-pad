@@ -12,7 +12,10 @@ import {
   isAllowedEmail, normalizeEmail, emailCanonicalKey, sendEmailCode, verifyEmailCode,
   subscribeLoginAccess, loginAccessNow, allowedDomainsLabel, type LoginAccess,
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
+  resendEmailCode, claimEmailLink, takeVerifyRedirect, ticketRid, EmailServiceError,
+  savePendingReset, readPendingReset, clearPendingReset,
 } from "@/lib/emailService";
+import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -95,13 +98,20 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
   const [forgotToken, setForgotToken] = useState("");
+  /** "link" = the email button was tapped (claim on submit); "claimed" = already claimed on this device via the link page. */
+  const [forgotLinkState, setForgotLinkState] = useState<"" | "link" | "claimed">("");
+  const [forgotResendLeft, setForgotResendLeft] = useState(0);
 
   // Sign-up email verification
-  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number } | null>(null);
+  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number } | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
   const [resendLeft, setResendLeft] = useState(0);
+  const [linkNotice, setLinkNotice] = useState("");
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const linkHandledRef = useRef(false);
+  const finishingRef = useRef(false);
 
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
     const aliasKey = buildEmailAliasKey(email);
@@ -298,8 +308,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         setForgotLoading(false);
         return;
       }
-      const { token } = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
-      setForgotToken(token);
+      const t = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
+      setForgotToken(t.token);
+      setForgotLinkState("");
+      setForgotOtp("");
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
       setForgotOtpSent(true);
       toast.success(`📧 Code sent to: ${fEmail}`);
     } catch (err: any) {
@@ -308,15 +321,52 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     setForgotLoading(false);
   };
 
+  const resetForgotState = () => {
+    setShowForgotPw(false); setForgotOtpSent(false); setForgotOtp(""); setForgotToken("");
+    setForgotNewPw(""); setForgotNewPwConfirm(""); setForgotEmail(""); setForgotLinkState("");
+    clearPendingReset();
+  };
+
+  const resendForgotCode = async () => {
+    if (!forgotToken || forgotResendLeft > 0) return;
+    setForgotLoading(true);
+    try {
+      const fEmail = normalizeEmail(forgotEmail);
+      const t = await resendEmailCode(forgotToken, fEmail);
+      setForgotToken(t.token); setForgotOtp(""); setForgotLinkState("");
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
+      toast.success("📧 New code sent");
+    } catch (err: any) { toast.error(err.message || "Could not send the code"); }
+    setForgotLoading(false);
+  };
+
+  // The email's "Reset Password" button was tapped (any device) → no code needed here.
+  useEmailLinkWatch(showForgotPw && forgotOtpSent && !forgotLinkState ? forgotToken : null, () => {
+    setForgotLinkState("link");
+    toast.success("✅ Email confirmed — now set your new password");
+  });
+
+  useEffect(() => {
+    if (!showForgotPw || !forgotOtpSent) return;
+    const tick = () => setForgotResendLeft(Math.ceil(cooldownLeftMs(forgotEmail) / 1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [showForgotPw, forgotOtpSent, forgotEmail, forgotToken]);
+
   const handleResetPasswordWithOtp = async () => {
-    if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
+    if ((!forgotLinkState && forgotOtp.replace(/\D/g, "").length !== 6) || !forgotNewPw.trim()) { toast.error(forgotLinkState ? "Enter a new password" : "Enter the 6-digit code and a new password"); return; }
     if (forgotNewPw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
     if (forgotNewPw !== forgotNewPwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setForgotLoading(true);
     try {
       const fEmail = normalizeEmail(forgotEmail);
-      const result = await verifyEmailCode(forgotToken, forgotOtp);
+      const result = forgotLinkState === "claimed"
+        ? { email: fEmail, purpose: "reset" as const }
+        : forgotLinkState === "link"
+          ? await claimEmailLink(forgotToken)
+          : await verifyEmailCode(forgotToken, forgotOtp);
       if (result.email !== fEmail || result.purpose !== "reset") { toast.error("❌ Incorrect code!"); setForgotLoading(false); return; }
       const emailKey = fEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
@@ -328,15 +378,12 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       });
 
       toast.success("✅ New password set! You can now login.");
-      setShowForgotPw(false);
-      setForgotOtpSent(false);
-      setForgotOtp("");
-      setForgotToken("");
-      setForgotNewPw("");
-      setForgotNewPwConfirm("");
-      setForgotEmail("");
+      resetForgotState();
     } catch (err: any) {
       toast.error(err.message || "Error");
+      if (err instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(err.code)) {
+        setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); setForgotLinkState(""); clearPendingReset();
+      }
     }
     setForgotLoading(false);
   };
