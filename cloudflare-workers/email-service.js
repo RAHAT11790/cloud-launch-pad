@@ -968,23 +968,42 @@ async function linkPage(env, ctx, req, rid, token) {
 let deepMemo = { at: 0, v: null };
 async function health(env, deep) {
   const missing = MISSING(env);
+  const now = Date.now();
+  const day = dayKey(now);
+  const [cfg, sentRaw, last] = await Promise.all([
+    settings(env),
+    dbGet(env, `${ROOT}/stats/${day}/sent`).catch(() => 0),
+    dbGet(env, `${ROOT}/health`).catch(() => null),
+  ]);
+  const sent = Math.max(Number(sentRaw) || 0, shadowGet(`g:${day}`, now));
   const out = {
     ok: true, service: VERSION, provider: "gmail-api", ready: missing.length === 0, missing,
-    optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET },
+    optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET, ADMIN_PIN: !!env.ADMIN_PIN },
     sender: env.GMAIL_SENDER_EMAIL ? maskEmail(normEmail(env.GMAIL_SENDER_EMAIL)) : null,
     senderValid: env.GMAIL_SENDER_EMAIL ? SENDER_RE.test(String(env.GMAIL_SENDER_EMAIL).trim()) : false,
-    settings: await settings(env),
+    settings: cfg,
+    today: { day, sent, limit: cfg.dailyLimit, left: Math.max(0, cfg.dailyLimit - sent), resetsInSec: Math.ceil(msToDayEnd(now) / 1000) },
+    last: last && typeof last === "object" ? {
+      ok: last.ok !== false, lastOkAt: Number(last.lastOkAt) || 0, lastErrAt: Number(last.lastErrAt) || 0,
+      lastErr: String(last.lastErr || "").slice(0, 40), lastErrMsg: String(last.lastErrMsg || "").slice(0, 300), lastMs: Number(last.lastMs) || 0,
+    } : null,
+    security: { sealedTickets: true, hashedCodes: true, encryptedEmails: true, shadowCounters: true },
+    now,
   };
   if (deep && out.ready) {
-    if (deepMemo.v && Date.now() - deepMemo.at < 60_000) out.gmail = deepMemo.v;
+    if (deepMemo.v && now - deepMemo.at < 60_000) out.gmail = deepMemo.v;
     else {
       const t0 = Date.now();
       try {
         const tk = await gmailAccessToken(env, true);
         const scoped = !tk.scope || /gmail\.send|mail\.google\.com|gmail\.modify|gmail\.compose/.test(tk.scope);
-        out.gmail = { ok: scoped, code: scoped ? "ok" : "gmail_scope_missing", ms: Date.now() - t0, message: scoped ? "Gmail authorised" : "Token works but is missing the gmail.send scope" };
+        out.gmail = {
+          ok: scoped, code: scoped ? "ok" : "gmail_scope_missing", ms: Date.now() - t0,
+          message: scoped ? "Gmail authorised — refresh token works" : "Token works but is missing the gmail.send scope",
+          scope: String(tk.scope || "").slice(0, 200), accessExpiresAt: tk.exp || 0, refreshExpiresAt: tk.refreshExpiresAt || 0, checkedAt: Date.now(),
+        };
       } catch (err) {
-        out.gmail = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200) };
+        out.gmail = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200), checkedAt: Date.now() };
       }
       deepMemo = { at: Date.now(), v: out.gmail };
     }
@@ -992,9 +1011,39 @@ async function health(env, deep) {
   return out;
 }
 
+// Admin-only activity with full email addresses. Protected by the Worker's own
+// ADMIN_PIN secret (never stored in the database) and a per-network wrong-PIN limit.
+async function actAdminEvents(env, cors, body, ip) {
+  if (!env.ADMIN_PIN) return fail(cors, 503, "admin_pin_not_set", "Add an ADMIN_PIN secret to this Worker to unlock full emails.");
+  const now = Date.now();
+  const ih = await hash(env, "ip", ip);
+  const hb = hourBucket(now);
+  const wp = `${ROOT}/adminWrong/${hb}/${ih}`;
+  const wk = `aw:${hb}:${ih}`;
+  const wrong = Math.max(Number(await dbGet(env, wp).catch(() => 0)) || 0, shadowGet(wk, now));
+  if (wrong >= ADMIN_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong PINs. Try again in an hour.", { retryAfter: 3600 });
+  if (!safeEq(String(body.pin || "").trim(), String(env.ADMIN_PIN).trim())) {
+    const n = await dbTxn(env, wp, (c) => { const v = Math.max(Number(c) || 0, wrong) + 1; return { next: v, result: v }; }).catch(() => wrong + 1);
+    shadowPut(wk, Number(n) || wrong + 1, now + HOUR);
+    return fail(cors, 401, "wrong_pin", "Wrong admin PIN.", { left: Math.max(0, ADMIN_WRONG_PER_HOUR - (Number(n) || 0)) });
+  }
+  const limit = Math.min(200, Math.max(10, Number(body.limit) || 80));
+  const raw = await dbGet(env, `${ROOT}/events`, { orderBy: '"$key"', limitToLast: String(limit) }).catch(() => null);
+  const rows = await Promise.all(Object.entries(raw || {}).map(async ([id, e]) => {
+    let email = "";
+    if (e && e.ec) { try { email = await unseal(env, e.ec); } catch { email = ""; } }
+    return {
+      id, t: Number(e?.t) || 0, k: String(e?.k || ""), p: String(e?.p || ""), m: String(e?.m || ""), email,
+      ms: Number(e?.ms) || 0, err: String(e?.err || ""), why: String(e?.why || "").slice(0, 200), r: String(e?.r || ""),
+    };
+  }));
+  rows.sort((a, b) => b.t - a.t);
+  return json(cors, { ok: true, events: rows });
+}
+
 export default {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { buildMime, emailTemplate, makeOtp, originAllowed },
+  _internals: { buildMime, emailTemplate, makeOtp, originAllowed, DEFAULTS, BOUNDS },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);
@@ -1036,6 +1085,7 @@ export default {
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
         case "status": return await actStatus(env, ctx, cors, body);
         case "claim": return await actClaim(env, ctx, cors, body);
+        case "admin-events": return await actAdminEvents(env, cors, body, ip);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }
     } catch (err) {
