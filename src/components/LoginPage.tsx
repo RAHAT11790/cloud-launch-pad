@@ -418,19 +418,53 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     return true;
   };
 
+  /** Ends the sign-up screen when the request can no longer be used. */
+  const dropDeadRequest = (err: unknown) => {
+    if (err instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found", "bad_ticket"].includes(err.code)) {
+      setVerifyError(err.code === "locked" || err.code === "expired" ? `${err.message} Tap “Resend code”.` : err.message);
+      return true;
+    }
+    return false;
+  };
+
   const submitVerifyCode = async (codeArg?: string, pendingArg?: typeof verifyPending) => {
     const pending = pendingArg || verifyPending;
     const code = String(codeArg ?? verifyCode).replace(/\D/g, "");
-    if (!pending) return;
+    if (!pending || finishingRef.current) return;
     if (code.length !== 6) { toast.error("Enter the 6-digit code"); return; }
+    finishingRef.current = true;
     setVerifyLoading(true);
+    setVerifyError("");
     try {
       const r = await verifyEmailCode(pending.token, code);
       if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("Incorrect code.");
       await createVerifiedAccount(pending.name, pending.email, pending.password);
     } catch (err: any) {
-      toast.error(err.message || "Incorrect code.");
+      if (!dropDeadRequest(err)) setVerifyError(err.message || "Incorrect code.");
+      setVerifyCode("");
     }
+    finishingRef.current = false;
+    setVerifyLoading(false);
+  };
+
+  /** The email's "Verify Email" button was tapped → finish here, no code typing needed. */
+  const finishByLink = async (pending: NonNullable<typeof verifyPending>) => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setVerifyLoading(true);
+    setVerifyError("");
+    try {
+      const r = await claimEmailLink(pending.token);
+      if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("This link belongs to another email.");
+      await createVerifiedAccount(pending.name, pending.email, pending.password);
+    } catch (err: any) {
+      // Another tab of this browser may have just finished it.
+      let done = false;
+      try { done = normalizeEmail(JSON.parse(localStorage.getItem("rsanime_user") || "null")?.email || "") === normalizeEmail(pending.email); } catch {}
+      if (done) { clearPendingRegister(); window.location.reload(); return; }
+      if (!dropDeadRequest(err)) setVerifyError(err.message || "Could not finish sign-up.");
+    }
+    finishingRef.current = false;
     setVerifyLoading(false);
   };
 
@@ -438,51 +472,67 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     if (!verifyPending || resendLeft > 0) return;
     setVerifyLoading(true);
     try {
-      const { token, expiresAt } = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
-      const next = { ...verifyPending, token, expiresAt };
+      let t;
+      try { t = await resendEmailCode(verifyPending.token, verifyPending.email); }
+      catch (err) {
+        // The old request is gone (expired/used) → start a fresh one for the same email.
+        if (err instanceof EmailServiceError && ["not_found", "bad_ticket", "already_used"].includes(err.code)) t = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
+        else throw err;
+      }
+      const next = { ...verifyPending, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
       setVerifyPending(next);
       savePendingRegister(next);
       setVerifyCode("");
+      setVerifyError("");
       toast.success("📧 New code sent");
     } catch (err: any) { toast.error(err.message); }
     setVerifyLoading(false);
   };
 
-  // Resend countdown
+  useEmailLinkWatch(verifyPending && !verifyError ? verifyPending.token : null, () => {
+    if (verifyPending) void finishByLink(verifyPending);
+  });
+
+  // Resend + expiry countdown
   useEffect(() => {
     if (!verifyPending) return;
-    const tick = () => setResendLeft(Math.ceil(cooldownLeftMs(verifyPending.email) / 1000));
+    const tick = () => { setResendLeft(Math.ceil(cooldownLeftMs(verifyPending.email) / 1000)); setNowTick(Date.now()); };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [verifyPending]);
 
-  // The "Verify my email" button in the email opens /?verify=TOKEN&code=123456
+  // Coming back from the email's button: /?ev=<request>&eg=<grant>&ep=register|reset
   useEffect(() => {
     if (linkHandledRef.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("verify");
-    const code = params.get("code");
-    if (!token || !code) {
-      const saved = readPendingRegister();
-      if (saved) setVerifyPending(saved);
-      return;
-    }
     linkHandledRef.current = true;
-    try {
-      params.delete("verify"); params.delete("code");
-      const q = params.toString();
-      window.history.replaceState(window.history.state, "", window.location.pathname + (q ? `?${q}` : "") + window.location.hash);
-    } catch {}
-    const saved = readPendingRegister();
-    if (!saved || saved.token !== token) {
-      toast.error("Open this link on the same phone/browser where you signed up, or type the code.");
-      if (saved) setVerifyPending(saved);
+    const back = takeVerifyRedirect();
+    const savedReg = readPendingRegister();
+    if (!back) { if (savedReg) setVerifyPending(savedReg); return; }
+    if (back.purpose === "register") {
+      if (savedReg && ticketRid(savedReg.token) === back.rid) {
+        setVerifyPending(savedReg);
+        void finishByLink(savedReg);
+      } else {
+        if (savedReg) setVerifyPending(savedReg);
+        setLinkNotice("Your email is verified ✓. Go back to the app or browser where you started signing up — it finishes there automatically.");
+      }
       return;
     }
-    setVerifyPending(saved);
-    setVerifyCode(code);
-    void submitVerifyCode(code, saved);
+    // Password reset
+    const savedReset = readPendingReset();
+    setShowForgotPw(true);
+    if (savedReset && ticketRid(savedReset.token) === back.rid) {
+      setForgotEmail(savedReset.email); setForgotToken(savedReset.token);
+      setForgotOtpSent(true); setForgotLinkState("link");
+      toast.success("✅ Email confirmed — now set your new password");
+      return;
+    }
+    claimEmailLink(back.rid, back.grant).then((r) => {
+      setForgotEmail(r.email); setForgotToken("");
+      setForgotOtpSent(true); setForgotLinkState("claimed");
+      toast.success("✅ Email confirmed — now set your new password");
+    }).catch((err) => toast.error(err?.message || "This link can't be used any more. Ask for a new code."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -558,10 +608,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
         const canon = await get(ref(db, `gmailRegistry/${emailCanonicalKey(formEmail)}`)).catch(() => null);
         if (canon?.exists()) { toast.error("This email already has an account. Please sign in."); setLoading(false); return; }
-        const { token, expiresAt } = await sendEmailCode(formEmail, "register", formName);
-        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token, expiresAt };
+        const t = await sendEmailCode(formEmail, "register", formName);
+        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
         savePendingRegister(pending);
         setVerifyCode("");
+        setVerifyError("");
         setVerifyPending(pending);
         toast.success(`📧 Verification code sent to ${pending.email}`);
       } else {
