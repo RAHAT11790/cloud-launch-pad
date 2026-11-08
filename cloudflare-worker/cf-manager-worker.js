@@ -164,12 +164,14 @@ async function actDeploy(env, body) {
   const compatibility_date = body.compatibility_date || "2025-01-01";
   const bindings = Array.isArray(body.bindings) ? body.bindings : [];
 
+  // Redeploying code must not wipe secrets saved on the Worker (same as wrangler).
+  // Callers may instead list them as { type: "inherit" } bindings.
+  const inherits = bindings.some((b) => b && b.type === "inherit");
   const metadata = {
     main_module: "worker.js",
     compatibility_date,
     bindings,
-    // Redeploying code must not wipe secrets saved on the Worker (same as wrangler).
-    keep_bindings: ["secret_text", "secret_key"],
+    ...(inherits ? {} : { keep_bindings: ["secret_text", "secret_key"] }),
   };
 
   const form = new FormData();
