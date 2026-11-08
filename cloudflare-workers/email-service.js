@@ -48,7 +48,7 @@ const ROOT = "emailAuth";
 // Anti-spam defaults (admin can tune inside BOUNDS): one live code at a time,
 // 3 codes per email per Bangladesh day, and hard caps that keep the Gmail
 // account far below Google's sending limits so it is never flagged.
-const DEFAULTS = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 10, hourlyPerIp: 5, perMinute: 10, dailyLimit: 300 };
+const DEFAULTS = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
 const BOUNDS = { otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10], perEmailDaily: [1, 20], perIpDaily: [2, 200], hourlyPerIp: [2, 100], perMinute: [2, 60], dailyLimit: [10, 2000] };
 const IP_WRONG_PER_HOUR = 40;
 const ADMIN_WRONG_PER_HOUR = 8;

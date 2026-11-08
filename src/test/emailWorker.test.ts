@@ -264,11 +264,15 @@ describe("Gmail API email worker", () => {
     expect(gmailRaw).toHaveLength(3);
   });
 
-  it("a different email on the same network is limited to 5 per hour", async () => {
-    for (let i = 0; i < 5; i++) expect((await api("send", { email: `fresh.user${i}x@gmail.com`, purpose: "register" })).status).toBe(200);
-    const r = await api("send", { email: "fresh.user9x@gmail.com", purpose: "register" });
+  it("one network (IP) is limited to 10 emails per hour, even to different addresses", async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await api("send", { email: `fresh.user${i}x@gmail.com`, purpose: "register" })).status).toBe(200);
+      now += 61_000;
+    }
+    const r = await api("send", { email: "fresh.user99x@gmail.com", purpose: "register" });
     expect(r.status).toBe(429);
     expect(r.data.error).toBe("too_many");
+    expect((await api("send", { email: "fresh.user99x@gmail.com", purpose: "register" }, { ip: "198.51.100.4" })).status).toBe(200);
   });
 
   it("an edited ticket in the database is rejected (sealed), and a rolled-back one stays locked", async () => {
