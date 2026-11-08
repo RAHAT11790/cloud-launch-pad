@@ -18,7 +18,10 @@ export function OtpBoxes({
   const [focused, setFocused] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
   const lastDone = useRef("");
-  useEffect(() => { if (error) setShakeKey((k) => k + 1); }, [error]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // A wrong code clears the boxes: shake, and keep the keyboard on the input so the next try can be typed at once.
+  useEffect(() => { if (error) { setShakeKey((k) => k + 1); inputRef.current?.focus(); } }, [error]);
+  useEffect(() => { if (!disabled && autoFocus) inputRef.current?.focus(); }, [disabled, autoFocus]);
   useEffect(() => {
     if (digits.length === 6 && digits !== lastDone.current && !disabled) { lastDone.current = digits; onComplete?.(digits); }
     if (digits.length < 6) lastDone.current = "";
@@ -26,10 +29,11 @@ export function OtpBoxes({
   return (
     <label className="relative block" aria-label="6-digit code">
       <input
+        ref={inputRef}
         value={digits}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-        inputMode="numeric" autoComplete="one-time-code" autoFocus={autoFocus} maxLength={6} disabled={disabled}
+        inputMode="numeric" autoComplete="one-time-code" autoFocus={autoFocus} maxLength={6} readOnly={disabled} aria-busy={disabled}
         className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0" aria-label="6-digit code"
       />
       <div key={shakeKey} className={`grid grid-cols-6 gap-2 ${error ? "otp-shake" : ""}`}>
@@ -64,7 +68,7 @@ export function CodeTimer({ expiresAt, totalMs, now }: { expiresAt: number; tota
     <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${expired ? "text-destructive" : low ? "text-amber-400" : "text-muted-foreground"}`}>
       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] -rotate-90" aria-hidden>
         <circle cx="12" cy="12" r={r} fill="none" stroke="currentColor" strokeOpacity=".2" strokeWidth="3" />
-        <circle cx="12" cy="12" r={r} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"
+        <circle cx="12" cy="12" r={r} fill="none" stroke={expired ? "currentColor" : low ? "currentColor" : "hsl(var(--primary))"} strokeWidth="3" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - frac)} style={{ transition: "stroke-dashoffset 1s linear" }} />
       </svg>
       {expired ? "Code expired" : <>Valid for <b className="tabular-nums text-foreground">{formatWait(Math.ceil(left / 1000))}</b></>}
