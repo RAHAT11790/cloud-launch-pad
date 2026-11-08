@@ -1,4 +1,5 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
+import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
@@ -2222,6 +2223,12 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpToken, setOtpToken] = useState("");
+  const [otpLinkVerified, setOtpLinkVerified] = useState(false);
+  // The email's "Reset Password" button was tapped → no code needed here.
+  useEmailLinkWatch(forgotMode && otpSent && !otpLinkVerified ? otpToken : null, () => {
+    setOtpLinkVerified(true);
+    toast.success("✅ Email confirmed — now set your new password");
+  });
   const [userEmail, setUserEmail] = useState<string>("");
 
   // Check if user already has a password
@@ -2307,6 +2314,8 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
       const { sendEmailCode } = await import("@/lib/emailService");
       const { token } = await sendEmailCode(userEmail, "reset");
       setOtpToken(token);
+      setOtpLinkVerified(false);
+      setOtp("");
       setOtpSent(true);
       toast.success(`📧 Code sent to: ${userEmail}`);
     } catch (err: any) {
@@ -2316,15 +2325,15 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   const handleResetWithOtp = async () => {
-    if (!otp.trim() || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
+    if ((!otpLinkVerified && !otp.trim()) || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
     if (newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
     if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
 
     setOtpLoading(true);
     try {
       const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-      const { verifyEmailCode, normalizeEmail } = await import("@/lib/emailService");
-      const r = await verifyEmailCode(otpToken, otp);
+      const { verifyEmailCode, claimEmailLink, normalizeEmail } = await import("@/lib/emailService");
+      const r = otpLinkVerified ? await claimEmailLink(otpToken) : await verifyEmailCode(otpToken, otp);
       if (r.email !== normalizeEmail(userEmail) || r.purpose !== "reset") { toast.error("❌ Incorrect code!"); setOtpLoading(false); return; }
 
       const snap = await get(ref(db, `appUsers/${emailKey}`));
@@ -2336,7 +2345,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
       }
 
       toast.success("✅ New password set successfully!");
-      setOtp(""); setNewPassword(""); setConfirmPassword(""); setOtpSent(false); setForgotMode(false);
+      setOtp(""); setNewPassword(""); setConfirmPassword(""); setOtpSent(false); setForgotMode(false); setOtpLinkVerified(false);
       onBack();
     } catch (err: any) {
       toast.error("Error: " + err.message);
@@ -2447,12 +2456,20 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
               </>
             ) : (
               <>
+                {otpLinkVerified ? (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-xs text-foreground">
+                    <Check className="w-4 h-4 text-primary shrink-0" />
+                    <span>Email confirmed with the link — no code needed.</span>
+                  </div>
+                ) : (
                 <div>
                   <label className="text-xs text-muted-foreground mb-2 block">Verification Code (6 digits)</label>
                   <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="000000" maxLength={6}
+                    placeholder="000000" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
                     className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-center text-lg tracking-[0.5em] font-mono focus:border-primary focus:outline-none transition-all" />
+                  <p className="text-[11px] text-muted-foreground mt-2">Or tap <b className="text-foreground">Reset Password</b> in the email — this screen continues by itself.</p>
                 </div>
+                )}
                 <div>
                   <label className="text-xs text-muted-foreground mb-2 block">New Password</label>
                   <div className="relative">
