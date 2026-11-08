@@ -17,8 +17,14 @@ describe("admin email statistics", () => {
     expect(summarizeEmailStats([{}]).deliveryRate).toBeNull();
   });
   it("keeps admin rules inside the worker's limits", () => {
-    expect(clampEmailSettings({ otpMinutes: 99, cooldownSeconds: 1, maxAttempts: null as any })).toMatchObject({ otpMinutes: 30, cooldownSeconds: 20, maxAttempts: 5 });
-    expect(clampEmailSettings(null).otpMinutes).toBe(10);
+    expect(clampEmailSettings({ otpMinutes: 99, cooldownSeconds: 1, maxAttempts: null as any })).toMatchObject({ otpMinutes: 30, cooldownSeconds: 30, maxAttempts: 5 });
+    expect(clampEmailSettings(null)).toMatchObject({ otpMinutes: 5, cooldownSeconds: 300, perEmailDaily: 3 });
+  });
+  it("matches the Worker's own defaults and limits exactly", async () => {
+    const { EMAIL_SETTING_DEFAULTS, EMAIL_SETTING_BOUNDS } = await import("@/lib/emailStats");
+    const worker: any = (await import("../../cloudflare-workers/email-service.js")).default;
+    expect(EMAIL_SETTING_DEFAULTS).toEqual(worker._internals.DEFAULTS);
+    expect(EMAIL_SETTING_BOUNDS).toEqual(worker._internals.BOUNDS);
   });
   it("lists the last 7 Bangladesh days ending today", () => {
     const keys = lastDayKeys(7, Date.UTC(2026, 10, 8, 20, 0)); // 02:00 on 9 Nov in Dhaka
