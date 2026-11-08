@@ -2,7 +2,7 @@
 // Lovable Cloud copy of cloudflare-workers/email-service.js (same code, Deno adapter
 // at the end). Keep both files identical above the adapter — a unit test checks it.
 // ============================================================
-// RS ANIME — EMAIL SERVICE · Gmail API (Cloudflare build) · v3
+// RS ANIME — EMAIL SERVICE · Gmail API (Cloudflare build) · v4
 // ------------------------------------------------------------
 // Sign-up verification + password-reset emails sent through the
 // official Gmail API (users.messages.send). No Resend / SMTP.
@@ -40,18 +40,23 @@
 // link works exactly once and using one kills the other.
 // ============================================================
 
-const VERSION = "email-service-gmail-v3";
-const BRAND = "RS ANIME";
+const VERSION = "email-service-gmail-v4";
+const BRAND = "RS ANIME03";
 const LOGO = "https://i.ibb.co/6RcjXRjL/image.jpg";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 const PROJECT_TAG = "d9496f6f-add2-411c-96f8-fb97b0c234a7";
 const ROOT = "emailAuth";
 
-const DEFAULTS = { otpMinutes: 10, linkMinutes: 30, cooldownSeconds: 60, maxAttempts: 5, dailyLimit: 450, hourlyPerEmail: 6, hourlyPerIp: 20 };
-const BOUNDS = { otpMinutes: [3, 30], linkMinutes: [5, 180], cooldownSeconds: [20, 900], maxAttempts: [3, 10], dailyLimit: [10, 2000], hourlyPerEmail: [2, 30], hourlyPerIp: [3, 200] };
+// Anti-spam defaults (admin can tune inside BOUNDS): one live code at a time,
+// 3 codes per email per Bangladesh day, and hard caps that keep the Gmail
+// account far below Google's sending limits so it is never flagged.
+const DEFAULTS = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
+const BOUNDS = { otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10], perEmailDaily: [1, 20], perIpDaily: [2, 200], hourlyPerIp: [2, 100], perMinute: [2, 60], dailyLimit: [10, 2000] };
 const IP_WRONG_PER_HOUR = 40;
+const ADMIN_WRONG_PER_HOUR = 8;
 const HOUR = 3600_000;
+const DAY = 86400_000;
 
 // ---------------- small utils ----------------
 const enc = new TextEncoder();
@@ -99,6 +104,22 @@ const normEmail = (v) => String(v || "").trim().toLowerCase();
 const maskEmail = (e) => { const at = e.lastIndexOf("@"); if (at < 1) return "***"; return e.slice(0, Math.min(2, at)) + "***" + e.slice(at); };
 const dayKey = (t) => new Date(t + 6 * HOUR).toISOString().slice(0, 10); // Bangladesh day
 const hourBucket = (t) => String(Math.floor(t / HOUR));
+const minuteBucket = (t) => String(Math.floor(t / 60_000));
+/** ms until the next Bangladesh midnight (when daily limits reset). */
+const msToDayEnd = (t) => DAY - ((t + 6 * HOUR) % DAY);
+const shortRef = (rid) => String(rid || "").slice(-8).toUpperCase();
+
+// In-isolate shadow counters: a second, Firebase-independent layer. If someone
+// lowers or deletes a counter in the database, the higher value seen here
+// still wins for as long as this Worker instance lives.
+const shadow = new Map();
+function shadowGet(key, now) { const s = shadow.get(key); return s && s.exp > now ? s.v : 0; }
+function shadowPut(key, v, exp) {
+  if (shadow.size > 4000) { const now = Date.now(); for (const [k, s] of shadow) if (s.exp <= now || shadow.size > 3000) shadow.delete(k); }
+  const cur = shadow.get(key);
+  shadow.set(key, { v: Math.max(v, cur && cur.exp > Date.now() ? cur.v : 0), exp });
+}
+const shadowSet = (key, v, exp) => shadow.set(key, { v, exp });
 const siteUrl = (env) => String(env.SITE_URL || DEFAULT_SITE).replace(/\/+$/, "");
 const hasCtl = (s) => /[\r\n\u0000]/.test(String(s));
 
@@ -151,6 +172,14 @@ async function unseal(env, sealed) {
   return dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64urlToBytes(iv) }, k.aes, b64urlToBytes(ct)));
 }
 
+// Every ticket carries an HMAC seal ("g") over all of its fields. Anyone who
+// edits a ticket directly in the database (status, attempts, hashes, expiry)
+// breaks the seal and the ticket is treated as not found.
+const TICKET_FIELDS = ["p", "e", "ec", "m", "o", "l", "s", "c", "x", "lx", "a", "max", "st", "org", "via", "v", "claimed"];
+const ticketSig = (env, rid, t) => hash(env, "tkt", rid, JSON.stringify(TICKET_FIELDS.map((k) => (t[k] == null ? "" : String(t[k])))));
+async function sealTicket(env, rid, t) { const { g, ...rest } = t; return { ...rest, g: await ticketSig(env, rid, rest) }; }
+async function ticketValid(env, rid, t) { return !!t && typeof t === "object" && typeof t.g === "string" && safeEq(t.g, await ticketSig(env, rid, t)); }
+
 // ---------------- Firebase Realtime Database (REST) ----------------
 const dbBase = (env) => String(env.FIREBASE_DB_URL || DEFAULT_DB).replace(/\/+$/, "");
 function dbUrl(env, path, q = {}) {
@@ -187,6 +216,40 @@ async function dbTxn(env, path, fn, tries = 5) {
   const err = new Error("database busy");
   err.code = "db_busy";
   throw err;
+}
+
+// Ticket states that can never go back to "pending" (kept in memory as well,
+// so replaying an old database snapshot cannot revive a finished code).
+const FINAL = new Set(["consumed", "replaced", "locked", "failed"]);
+/** Reads a ticket; a broken seal counts as "not found" (and is reported). */
+async function ticketGet(env, ctx, rid) {
+  const cur = await dbGet(env, `${ROOT}/tickets/${rid}`);
+  if (cur == null) return null;
+  if (!(await ticketValid(env, rid, cur))) { track(env, ctx, { tampered: 1 }, { k: "tampered" }); return null; }
+  return withShadow(rid, cur);
+}
+function withShadow(rid, cur) {
+  const a = Math.max(Number(cur.a) || 0, shadowGet(`a:${rid}`, Date.now()));
+  const fin = shadow.get(`st:${rid}`);
+  return { ...cur, a, ...(fin && FINAL.has(fin.v) && !FINAL.has(cur.st) ? { st: fin.v } : {}) };
+}
+/** Sealed optimistic transaction on one ticket. fn(cur|null) → { next, result }. */
+function ticketTxn(env, ctx, rid, fn) {
+  return dbTxn(env, `${ROOT}/tickets/${rid}`, async (raw) => {
+    let cur = null;
+    if (raw != null) {
+      if (await ticketValid(env, rid, raw)) cur = withShadow(rid, raw);
+      else track(env, ctx, { tampered: 1 }, { k: "tampered" });
+    }
+    const out = await fn(cur);
+    if (out.next !== undefined) {
+      const exp = Date.now() + DAY;
+      shadowPut(`a:${rid}`, Number(out.next.a) || 0, exp);
+      if (FINAL.has(out.next.st)) shadowSet(`st:${rid}`, out.next.st, exp);
+      out.next = await sealTicket(env, rid, out.next);
+    }
+    return out;
+  });
 }
 
 let settingsMemo = { v: null, exp: 0 };
@@ -227,10 +290,19 @@ async function cleanup(env, now) {
   const tickets = await dbGet(env, `${ROOT}/tickets`, { orderBy: '"$key"', endAt: `"${old}"`, limitToFirst: "60" }).catch(() => null);
   const patch = {};
   for (const k of Object.keys(tickets || {})) patch[`tickets/${k}`] = null;
-  for (const node of ["ip", "mail", "wrong"]) {
+  for (const node of ["wrong", "adminWrong"]) {
     const buckets = await dbGet(env, `${ROOT}/${node}`, { shallow: "true" }).catch(() => null);
     for (const b of Object.keys(buckets || {})) if (Number(b) < Number(hourBucket(now)) - 2) patch[`${node}/${b}`] = null;
   }
+  const keepDays = new Set([dayKey(now), dayKey(now - DAY)]);
+  for (const node of ["rl/mail", "rl/ip"]) {
+    const days = await dbGet(env, `${ROOT}/${node}`, { shallow: "true" }).catch(() => null);
+    for (const d of Object.keys(days || {})) if (!keepDays.has(d)) patch[`${node}/${d}`] = null;
+  }
+  const mins = await dbGet(env, `${ROOT}/rl/min`, { shallow: "true" }).catch(() => null);
+  for (const m of Object.keys(mins || {})) if (Number(m) < Number(minuteBucket(now)) - 5) patch[`rl/min/${m}`] = null;
+  // Old v3 counters
+  for (const node of ["ip", "mail"]) patch[node] = null;
   const events = await dbGet(env, `${ROOT}/events`, { shallow: "true" }).catch(() => null);
   const ek = Object.keys(events || {}).sort();
   for (const k of ek.slice(0, Math.max(0, ek.length - 300))) patch[`events/${k}`] = null;
@@ -258,7 +330,10 @@ async function gmailAccessToken(env, force = false) {
     if (d.error === "invalid_client" || d.error === "unauthorized_client") throw gmailError("gmail_client_invalid", `OAuth client rejected (${why})`);
     throw gmailError("gmail_token_failed", `Token exchange failed (${why})`);
   }
-  tokenMemo = { key, token: d.access_token, exp: Date.now() + (Number(d.expires_in) || 3600) * 1000, scope: String(d.scope || "") };
+  // Google adds refresh_token_expires_in when the refresh token has a limited
+  // life (OAuth app still in "Testing" → 7 days). Shown in the admin panel.
+  const rtx = Number(d.refresh_token_expires_in) || 0;
+  tokenMemo = { key, token: d.access_token, exp: Date.now() + (Number(d.expires_in) || 3600) * 1000, scope: String(d.scope || ""), refreshExpiresAt: rtx ? Date.now() + rtx * 1000 : 0 };
   return tokenMemo;
 }
 const encWord = (s) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${bytesToB64(enc.encode(s))}?=`);
@@ -306,135 +381,172 @@ async function sendGmail(env, msg) {
 
 // ---------------- templates ----------------
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
-const C = { bg: "#060B1F", card: "#0C1633", panel: "#081029", line: "#1E2E5C", line2: "#22356B", blue: "#2563EB", blue2: "#3B82F6", sky: "#60A5FA", text: "#E6ECFF", soft: "#A9B6DA", mute: "#7F90C2", dim: "#56669A" };
+const MONO = "'SF Mono',SFMono-Regular,Menlo,Consolas,'Roboto Mono','Courier New',monospace";
+const C = {
+  bg: "#04060E", card: "#0A1124", panel: "#0D1730", cell: "#101C3C", line: "#1A2850", line2: "#24386E",
+  blue: "#2563EB", blue2: "#3B82F6", sky: "#60A5FA", cyan: "#22D3EE", text: "#E8EEFF", soft: "#AEBBDF", mute: "#8191C0", dim: "#5A6A9C",
+  ok: "#34D399", warn: "#FBBF24",
+};
 function fmtTime(t) {
   try {
-    return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(t)) + " (Bangladesh time)";
+    return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(t)) + " · Bangladesh time";
   } catch { return new Date(t).toUTCString(); }
 }
+const mins = (n) => `${n} minute${n === 1 ? "" : "s"}`;
 function copyFor(purpose) {
   return purpose === "reset"
-    ? { eyebrow: "PASSWORD RESET", icon: "&#128272;", title: "Reset your password", subject: "Reset your RS ANIME password", button: "Reset Password",
-        intro: "We received a request to reset the password of your RS ANIME account. Enter the code below in the app, or tap the button to confirm it's you." }
-    : { eyebrow: "ACCOUNT VERIFICATION", icon: "&#9993;&#65039;", title: "Verify your email address", subject: "Verify your RS ANIME email", button: "Verify Email",
-        intro: "Welcome to RS ANIME! Enter the code below in the app, or tap the button, to confirm this email address belongs to you." };
+    ? { eyebrow: "PASSWORD RESET", glyph: "&#128273;", title: "Reset your password", subject: `Reset your ${BRAND} password`, button: "Reset Password",
+        intro: `Someone (hopefully you) asked to reset the password of your ${BRAND} account. Use the code below in the app, or tap the button to confirm it's you.` }
+    : { eyebrow: "VERIFY YOUR EMAIL", glyph: "&#10022;", title: "Confirm your email address", subject: `Verify your ${BRAND} email`, button: "Verify Email",
+        intro: `Welcome to ${BRAND}! Use the code below in the app, or tap the button, to confirm this inbox is yours and finish creating your account.` };
 }
-function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt }) {
+/** Brand word mark: "RS ANIME" + accent "03". */
+const wordmark = (size, ls) => `<span style="font-family:${FONT};font-size:${size}px;font-weight:900;letter-spacing:${ls}px;color:#FFFFFF;">RS&nbsp;ANIME</span><span style="font-family:${FONT};font-size:${size}px;font-weight:900;letter-spacing:${ls}px;color:${C.sky};">03</span>`;
+
+function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt, rid = "" }) {
   const c = copyFor(purpose);
   const year = new Date(requestedAt).getUTCFullYear();
   const host = site.replace(/^https?:\/\//, "");
-  const hi = name ? `Hi <b style="color:${C.text}">${esc(name)}</b>,` : "Hi there,";
-  const pre = `${code} is your RS ANIME code. It expires in ${otpMinutes} minutes.`;
+  const hi = name ? `Hi <b style="color:#FFFFFF;">${esc(name)}</b>,` : "Hi there,";
+  const pre = `${code} is your ${BRAND} code — valid for ${mins(otpMinutes)}.`;
   const td = `font-family:${FONT};`;
+  const digits = String(code).split("").map((d) =>
+    `<td class="rs-cell" align="center" valign="middle" width="46" height="58" style="width:46px;height:58px;background:${C.cell};border:1px solid ${C.line2};border-radius:12px;font-family:${MONO};font-size:30px;line-height:58px;font-weight:800;color:#FFFFFF;">${esc(d)}</td>`,
+  ).join(`<td class="rs-gap" width="8" style="width:8px;font-size:0;line-height:0;">&nbsp;</td>`);
+  const ref = shortRef(rid);
+  const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:5px 0;width:96px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:5px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light">
-<title>${esc(c.title)}</title>
+<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
+<title>${esc(c.title)} · ${BRAND}</title>
 <style>
 body{margin:0!important;padding:0!important;background:${C.bg};-webkit-text-size-adjust:100%}
-a{text-decoration:none}img{border:0;outline:none}
-@media (max-width:520px){.rs-pad{padding-left:22px!important;padding-right:22px!important}.rs-code{font-size:34px!important;letter-spacing:9px!important}.rs-h1{font-size:23px!important;line-height:30px!important}.rs-outer{padding:20px 10px!important}}
+a{text-decoration:none}img{border:0;outline:none;display:block}
+@media (max-width:520px){
+.rs-pad{padding-left:20px!important;padding-right:20px!important}
+.rs-outer{padding:18px 8px!important}
+.rs-h1{font-size:23px!important;line-height:30px!important}
+.rs-cell{width:38px!important;height:50px!important;font-size:25px!important;line-height:50px!important;border-radius:10px!important}
+.rs-gap{width:5px!important}
+.rs-btn a{padding:15px 26px!important}
+}
 </style></head>
 <body style="margin:0;padding:0;background:${C.bg};">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;color:${C.bg};">${esc(pre)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};">
-<tr><td align="center" class="rs-outer" style="padding:34px 14px;">
+<tr><td align="center" class="rs-outer" style="padding:32px 14px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
 
-<tr><td align="center" style="padding:0 0 22px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="padding-right:12px;"><img src="${LOGO}" width="46" height="46" alt="RS ANIME" style="display:block;width:46px;height:46px;border-radius:13px;border:1px solid #24376E;"></td>
-    <td style="${td}font-size:21px;font-weight:800;letter-spacing:3px;color:#FFFFFF;">RS <span style="color:${C.sky};">ANIME</span></td>
-  </tr></table>
-</td></tr>
-
-<tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:22px;overflow:hidden;">
+<tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:24px;overflow:hidden;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td height="4" style="height:4px;line-height:4px;font-size:0;background:${C.blue};background-image:linear-gradient(90deg,#1D4ED8,#3B82F6,#22D3EE);border-radius:22px 22px 0 0;">&nbsp;</td></tr>
-    <tr><td class="rs-pad" align="center" style="padding:36px 42px 6px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="66" height="66" align="center" valign="middle" style="width:66px;height:66px;border-radius:20px;background:#13224A;border:1px solid #2A4185;font-size:30px;line-height:66px;">${c.icon}</td></tr></table>
-      <div style="${td}margin-top:20px;font-size:11px;font-weight:800;letter-spacing:3px;color:${C.sky};">${c.eyebrow}</div>
-      <h1 class="rs-h1" style="${td}margin:10px 0 0;font-size:27px;line-height:35px;font-weight:800;color:#FFFFFF;">${esc(c.title)}</h1>
-      <p style="${td}margin:14px 0 0;font-size:15px;line-height:24px;color:${C.soft};">${hi}<br>${esc(c.intro)}</p>
+    <!-- header -->
+    <tr><td align="center" bgcolor="#0B1A45" style="background:#0B1A45;background-image:radial-gradient(120% 140% at 50% 0%,#1E3A8A 0%,#0B1A45 55%,#0A1124 100%);border-radius:24px 24px 0 0;padding:30px 20px 26px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:3px;border-radius:20px;background:#3B82F6;background-image:linear-gradient(135deg,#60A5FA,#2563EB 55%,#22D3EE);">
+        <img src="${LOGO}" width="62" height="62" alt="${BRAND}" style="width:62px;height:62px;border-radius:17px;">
+      </td></tr></table>
+      <div style="margin-top:14px;">${wordmark(20, 3)}</div>
+      <div style="${td}margin-top:6px;font-size:10px;font-weight:700;letter-spacing:3px;color:#93B4F5;">SECURE ACCOUNT EMAIL</div>
+    </td></tr>
+    <tr><td height="3" style="height:3px;line-height:3px;font-size:0;background:${C.blue};background-image:linear-gradient(90deg,#1D4ED8,#3B82F6,#22D3EE,#3B82F6,#1D4ED8);">&nbsp;</td></tr>
+
+    <!-- title -->
+    <tr><td class="rs-pad" align="center" style="padding:30px 40px 0;">
+      <span style="${td}display:inline-block;padding:6px 12px;border-radius:999px;background:#12224B;border:1px solid ${C.line2};font-size:10px;font-weight:800;letter-spacing:2.5px;color:${C.sky};">${c.glyph}&nbsp; ${c.eyebrow}</span>
+      <h1 class="rs-h1" style="${td}margin:16px 0 0;font-size:27px;line-height:35px;font-weight:800;color:#FFFFFF;">${esc(c.title)}</h1>
+      <p style="${td}margin:12px 0 0;font-size:15px;line-height:24px;color:${C.soft};">${hi}<br>${esc(c.intro)}</p>
     </td></tr>
 
-    <tr><td class="rs-pad" style="padding:26px 42px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.panel};border:1px solid ${C.line2};border-radius:18px;">
-        <tr><td align="center" style="${td}padding:22px 16px 4px;font-size:11px;font-weight:800;letter-spacing:3px;color:${C.mute};">YOUR 6-DIGIT CODE</td></tr>
-        <tr><td align="center" class="rs-code" style="padding:6px 10px 8px;font-family:'SF Mono',SFMono-Regular,Menlo,Consolas,'Courier New',monospace;font-size:42px;line-height:52px;letter-spacing:13px;font-weight:800;color:#FFFFFF;">${esc(code)}</td></tr>
-        <tr><td align="center" style="${td}padding:0 16px 22px;font-size:12px;line-height:18px;color:${C.mute};">Expires in <b style="color:#C7D5FF;">${otpMinutes} minutes</b> &nbsp;&#183;&nbsp; works only once</td></tr>
+    <!-- code -->
+    <tr><td class="rs-pad" style="padding:26px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.panel};border:1px solid ${C.line2};border-radius:20px;">
+        <tr><td align="center" style="${td}padding:20px 12px 12px;font-size:10px;font-weight:800;letter-spacing:3px;color:${C.mute};">YOUR VERIFICATION CODE</td></tr>
+        <tr><td align="center" style="padding:0 8px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${digits}</tr></table>
+        </td></tr>
+        <tr><td align="center" style="padding:16px 12px 20px;">
+          <span style="${td}display:inline-block;padding:6px 12px;border-radius:999px;background:#1A1608;border:1px solid #4A3A10;font-size:11px;font-weight:700;color:${C.warn};">&#9201;&nbsp; Valid for ${mins(otpMinutes)} &nbsp;&#183;&nbsp; single use</span>
+        </td></tr>
       </table>
     </td></tr>
 
-    <tr><td class="rs-pad" style="padding:26px 42px 0;">
+    <!-- divider -->
+    <tr><td class="rs-pad" style="padding:24px 40px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
         <td width="44%" style="font-size:0;line-height:0;"><div style="height:1px;background:${C.line};">&nbsp;</div></td>
-        <td align="center" style="${td}padding:0 10px;font-size:11px;font-weight:700;letter-spacing:2px;color:${C.dim};white-space:nowrap;">OR</td>
+        <td align="center" style="${td}padding:0 10px;font-size:10px;font-weight:800;letter-spacing:2px;color:${C.dim};white-space:nowrap;">OR ONE TAP</td>
         <td width="44%" style="font-size:0;line-height:0;"><div style="height:1px;background:${C.line};">&nbsp;</div></td>
       </tr></table>
     </td></tr>
 
-    <tr><td align="center" class="rs-pad" style="padding:22px 42px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td align="center" bgcolor="${C.blue}" style="border-radius:14px;background:${C.blue};background-image:linear-gradient(135deg,#1D4ED8,#3B82F6);box-shadow:0 10px 26px rgba(37,99,235,.35);">
-          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:16px 40px;font-size:16px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:14px;">${esc(c.button)} &rarr;</a>
+    <!-- button -->
+    <tr><td align="center" class="rs-pad" style="padding:20px 40px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="rs-btn"><tr>
+        <td align="center" bgcolor="${C.blue}" style="border-radius:14px;background:${C.blue};background-image:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);box-shadow:0 12px 28px rgba(37,99,235,.38);">
+          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:16px 42px;font-size:16px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:14px;">${esc(c.button)}&nbsp;&rarr;</a>
         </td>
       </tr></table>
-      <div style="${td}margin-top:12px;font-size:12px;line-height:18px;color:${C.mute};">One tap &#183; opens your browser &#183; expires in ${linkMinutes} minutes</div>
+      <div style="${td}margin-top:11px;font-size:12px;line-height:18px;color:${C.mute};">Opens your browser &#183; confirms instantly &#183; link valid ${mins(linkMinutes)}</div>
     </td></tr>
 
-    <tr><td class="rs-pad" style="padding:28px 42px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0F1C40;border-radius:14px;border-left:3px solid ${C.blue2};">
-        <tr><td style="${td}padding:15px 18px;font-size:13px;line-height:20px;color:${C.soft};">&#128274; <b style="color:${C.text};">Keep this code private.</b> RS ANIME will never ask for it by chat, call or message. Didn't request this? Just ignore this email &mdash; nothing will change on your account.</td></tr>
+    <!-- security -->
+    <tr><td class="rs-pad" style="padding:26px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E1A3A;border:1px solid ${C.line};border-radius:16px;">
+        <tr>
+          <td width="44" valign="top" style="padding:16px 0 16px 16px;font-size:20px;line-height:22px;">&#128737;&#65039;</td>
+          <td style="${td}padding:15px 16px 15px 10px;font-size:13px;line-height:20px;color:${C.soft};"><b style="color:${C.text};">Never share this code.</b> ${BRAND} staff will never ask for it by chat, call or message. Didn't ask for this email? Ignore it &mdash; your account stays safe and nothing changes.</td>
+        </tr>
       </table>
     </td></tr>
 
-    <tr><td class="rs-pad" style="padding:20px 42px 34px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="${td}font-size:12px;line-height:18px;">
-        <tr><td style="color:${C.dim};padding:3px 0;width:92px;" valign="top">Requested</td><td style="color:${C.soft};padding:3px 0;">${esc(fmtTime(requestedAt))}</td></tr>
-        <tr><td style="color:${C.dim};padding:3px 0;" valign="top">Account</td><td style="color:${C.soft};padding:3px 0;word-break:break-all;">${esc(email)}</td></tr>
+    <!-- details -->
+    <tr><td class="rs-pad" style="padding:18px 40px 30px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.line};">
+        <tr><td style="height:10px;line-height:10px;font-size:0;" colspan="2">&nbsp;</td></tr>
+        ${row("Requested", esc(fmtTime(requestedAt)))}
+        ${row("Account", esc(email))}
+        ${ref ? row("Reference", `<span style="font-family:${MONO};letter-spacing:1px;">#${esc(ref)}</span>`) : ""}
       </table>
     </td></tr>
   </table>
 </td></tr>
 
-<tr><td align="center" style="${td}padding:20px 16px 0;font-size:12px;line-height:18px;color:${C.dim};">
+<tr><td align="center" style="${td}padding:20px 18px 0;font-size:12px;line-height:18px;color:${C.dim};">
   Button not working? Copy this link into your browser:<br>
   <a href="${esc(link)}" style="color:${C.sky};word-break:break-all;">${esc(link)}</a>
 </td></tr>
 
-<tr><td align="center" style="padding:28px 16px 6px;">
-  <img src="${LOGO}" width="30" height="30" alt="" style="display:block;width:30px;height:30px;border-radius:9px;opacity:.9;">
-  <div style="${td}margin-top:9px;font-size:12px;font-weight:800;letter-spacing:3px;color:#8A9BC8;">RS ANIME</div>
-  <div style="${td}margin-top:7px;font-size:11px;line-height:17px;color:${C.dim};">This is an automated security email &mdash; replies are not monitored.<br>
-  <a href="${esc(site)}" style="color:#7FA8F8;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} RS ANIME. All rights reserved.</div>
+<tr><td align="center" style="padding:26px 16px 6px;">
+  <div>${wordmark(12, 3)}</div>
+  <div style="${td}margin-top:8px;font-size:11px;line-height:17px;color:${C.dim};">Automated security email &mdash; replies are not read.<br>
+  <a href="${esc(site)}" style="color:#7FA8F8;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} ${BRAND}</div>
 </td></tr>
 
 </table>
 </td></tr></table>
 </body></html>`;
   const text = [
-    `RS ANIME — ${c.title}`,
+    `${BRAND} — ${c.title}`,
     "",
     name ? `Hi ${name},` : "Hi there,",
     c.intro,
     "",
     `Your 6-digit code: ${code}`,
-    `(expires in ${otpMinutes} minutes, works only once)`,
+    `(valid for ${mins(otpMinutes)}, works only once)`,
     "",
-    `Or open this link (expires in ${linkMinutes} minutes):`,
+    `Or open this link (valid ${mins(linkMinutes)}):`,
     link,
     "",
-    "Keep this code private. RS ANIME will never ask for it.",
+    `Never share this code. ${BRAND} will never ask for it.`,
     "Didn't request this? Ignore this email — nothing will change.",
     "",
     `Requested: ${fmtTime(requestedAt)}`,
     `Account: ${email}`,
+    ...(ref ? [`Reference: #${ref}`] : []),
     "",
-    `© ${year} RS ANIME · ${host}`,
+    `© ${year} ${BRAND} · ${host}`,
   ].join("\n");
-  return { subject: `${code} — ${c.subject}`, html, text };
+  return { subject: `${code} is your ${BRAND} code`, html, text };
 }
 
 function pageHtml({ state, purpose, redirect, action, title, message }) {
@@ -443,32 +555,34 @@ function pageHtml({ state, purpose, redirect, action, title, message }) {
     : state === "confirm" ? `<div class="spin"></div>`
     : `<div class="bad">!</div>`;
   const btn = ok
-    ? `<a class="btn" href="${esc(redirect)}">Continue to RS ANIME &rarr;</a><p class="small">Redirecting in <b id="n">3</b>s…</p>`
+    ? `<a class="btn" href="${esc(redirect)}">Continue to ${BRAND} &rarr;</a><p class="small">Redirecting in <b id="n">3</b>s…</p>`
     : state === "confirm"
       ? `<form id="f" method="POST" action="${esc(action)}"><button class="btn" type="submit">${purpose === "reset" ? "Confirm password reset" : "Verify my email"}</button></form><p class="small">Confirming securely…</p>`
-      : `<a class="btn ghost" href="${esc(redirect)}">Open RS ANIME</a>`;
+      : `<a class="btn ghost" href="${esc(redirect)}">Open ${BRAND}</a>`;
   const script = ok
     ? `<script>(function(){var n=3,e=document.getElementById("n");var t=setInterval(function(){n--;if(e)e.textContent=n;if(n<=0){clearInterval(t);location.replace(${JSON.stringify(redirect)});}},1000);})();</script>`
     : state === "confirm" ? `<script>setTimeout(function(){document.getElementById("f").submit();},350);</script>` : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>${esc(title)} · RS ANIME</title>
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>${esc(title)} · ${BRAND}</title>
 ${ok ? `<meta http-equiv="refresh" content="4;url=${esc(redirect)}">` : ""}
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(120% 80% at 50% 0%,#12235A 0%,#060B1F 60%);font-family:${FONT};color:#E6ECFF}
-.card{width:100%;max-width:400px;background:rgba(12,22,51,.92);border:1px solid #1E2E5C;border-radius:24px;padding:30px 24px 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.45);position:relative;overflow:hidden}
-.card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,#1D4ED8,#3B82F6,#22D3EE)}
-.brand{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800;letter-spacing:3px;font-size:16px;margin-bottom:26px}.brand img{width:38px;height:38px;border-radius:11px;border:1px solid #24376E}.brand span{color:#60A5FA}
-.ck{width:84px;height:84px;margin:0 auto 6px;display:block}.ck circle{fill:none;stroke:#22C55E;stroke-width:3;stroke-dasharray:160;stroke-dashoffset:160;animation:d .7s ease forwards}.ck path{fill:none;stroke:#22C55E;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:d .4s .6s ease forwards}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#16306F 0%,#070C1E 58%,#04060E 100%);font-family:${FONT};color:#E8EEFF}
+.card{width:100%;max-width:400px;background:rgba(10,17,36,.94);border:1px solid #1A2850;border-radius:26px;padding:0 0 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
+.head{padding:26px 20px 20px;background:radial-gradient(120% 140% at 50% 0%,#1E3A8A 0%,#0B1A45 60%,#0A1124 100%);border-bottom:3px solid #3B82F6}
+.ring{display:inline-block;padding:3px;border-radius:18px;background:linear-gradient(135deg,#60A5FA,#2563EB 55%,#22D3EE)}.ring img{display:block;width:52px;height:52px;border-radius:15px}
+.brand{margin-top:10px;font-weight:900;letter-spacing:3px;font-size:16px}.brand span{color:#60A5FA}
+.body{padding:24px 24px 0}
+.ck{width:84px;height:84px;margin:0 auto 6px;display:block}.ck circle{fill:none;stroke:#34D399;stroke-width:3;stroke-dasharray:160;stroke-dashoffset:160;animation:d .7s ease forwards}.ck path{fill:none;stroke:#34D399;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:d .4s .6s ease forwards}
 @keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#60A5FA}
-.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #1E2E5C;border-top-color:#3B82F6;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #1A2850;border-top-color:#3B82F6;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .bad{width:72px;height:72px;margin:6px auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:#FCA5A5;background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.45)}
-h1{margin:10px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#A9B6DA}
-.btn{display:block;width:100%;margin-top:24px;padding:15px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#1D4ED8,#3B82F6);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 10px 26px rgba(37,99,235,.35)}
-.btn.ghost{background:#13224A;border:1px solid #2A4185;box-shadow:none}.small{font-size:12px;color:#7F90C2}.foot{margin-top:22px;font-size:11px;color:#56669A}
+h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#AEBBDF}
+.btn{display:block;width:100%;margin-top:22px;padding:15px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 12px 28px rgba(37,99,235,.38)}
+.btn.ghost{background:#12224B;border:1px solid #24386E;box-shadow:none}.small{font-size:12px;color:#8191C0}.foot{margin-top:20px;font-size:11px;color:#5A6A9C}
 </style></head><body><main class="card">
-<div class="brand"><img src="${LOGO}" alt=""><div>RS <span>ANIME</span></div></div>
-${icon}<h1>${esc(title)}</h1><p>${esc(message)}</p>${btn}
-<div class="foot">Secured by RS ANIME</div></main>${script}</body></html>`;
+<div class="head"><span class="ring"><img src="${LOGO}" alt=""></span><div class="brand">RS ANIME<span>03</span></div></div>
+<div class="body">${icon}<h1>${esc(title)}</h1><p>${esc(message)}</p>${btn}
+<div class="foot">&#128274; Secured by ${BRAND}</div></div></main>${script}</body></html>`;
 }
 
 // ---------------- HTTP helpers ----------------
@@ -512,84 +626,157 @@ const PUBLIC_ERRORS = {
 const publicGmailMessage = (code) => PUBLIC_ERRORS[code] || "Email could not be sent right now. Please try again in a few minutes.";
 
 // ---------------- core flows ----------------
+function noteHealth(env, ctx, patch) {
+  const p = dbPatch(env, `${ROOT}/health`, patch).catch(() => 0);
+  if (ctx?.waitUntil) ctx.waitUntil(p);
+}
+const bump = (cur, n) => Math.max(Number(cur) || 0, n);
+
+async function refundSend(env, { day, eh, ih, rid, prevLast, hb }) {
+  const now = Date.now();
+  await Promise.allSettled([
+    dbTxn(env, `${ROOT}/rl/mail/${day}/${eh}`, (cur) => (cur && cur.rid === rid
+      ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), last: Number(cur.prevLast) || 0 }, result: 1 }
+      : { result: 0 })),
+    dbTxn(env, `${ROOT}/rl/ip/${day}/${ih}`, (cur) => (cur
+      ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), hn: cur.hb === hb ? Math.max(0, (Number(cur.hn) || 1) - 1) : Number(cur.hn) || 0 }, result: 1 }
+      : { result: 0 })),
+  ]);
+  const dayExp = now + msToDayEnd(now);
+  shadowSet(`md:${day}:${eh}`, Math.max(0, shadowGet(`md:${day}:${eh}`, now) - 1), dayExp);
+  shadowSet(`ml:${eh}`, prevLast || 0, now + 2 * DAY);
+  shadowSet(`ipd:${day}:${ih}`, Math.max(0, shadowGet(`ipd:${day}:${ih}`, now) - 1), dayExp);
+  shadowSet(`iph:${hb}:${ih}`, Math.max(0, shadowGet(`iph:${hb}:${ih}`, now) - 1), now + HOUR);
+}
+
+/** Per-email gate (one live code + daily count), read-only. */
+function mailGate(cfg, now, cur, prev, eh, day) {
+  const n = Math.max(Number(cur?.n) || 0, shadowGet(`md:${day}:${eh}`, now));
+  const last = Math.max(Number(cur?.last) || 0, Number(prev?.last) || 0, shadowGet(`ml:${eh}`, now));
+  const wait = last + cfg.cooldownSeconds * 1000 - now;
+  if (wait > 0) return { err: "cooldown", wait, n, last };
+  if (n >= cfg.perEmailDaily) return { err: "email_daily", n, last };
+  return { n, last };
+}
+
 async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, replaces }) {
   const cfg = await settings(env);
   const now = Date.now();
-  const eh = await hash(env, "email", email);
-  const ih = await hash(env, "ip", ip);
+  const day = dayKey(now);
+  const dayExp = now + msToDayEnd(now);
+  const toMidnight = Math.ceil(msToDayEnd(now) / 1000);
   const hb = hourBucket(now);
+  const [eh, ih, ec] = await Promise.all([hash(env, "email", email), hash(env, "ip", ip), seal(env, email)]);
+  const m = maskEmail(email);
+  const ev = (k, extra = {}) => ({ k, p: purpose, m, ec, ...extra });
+  const limited = (error, why, message, extra = {}) => {
+    track(env, ctx, { limited: 1 }, ev("limited", { why }));
+    return fail(cors, 429, error, message, extra);
+  };
+  const mailPath = `${ROOT}/rl/mail/${day}/${eh}`;
+  const prevDay = await dbGet(env, `${ROOT}/rl/mail/${dayKey(now - DAY)}/${eh}`).catch(() => null);
 
-  const sentToday = Number(await dbGet(env, `${ROOT}/stats/${dayKey(now)}/sent`).catch(() => 0)) || 0;
-  if (sentToday >= cfg.dailyLimit) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: "daily_limit" });
-    return fail(cors, 429, "daily_limit", "Today's email limit is reached. Please try again tomorrow.");
+  // 1) One live code per email + daily limit. Checked first and read-only, so a
+  //    rejected request never uses up any other counter.
+  const pre = mailGate(cfg, now, await dbGet(env, mailPath), prevDay, eh, day);
+  if (pre.err === "cooldown") {
+    const s = Math.ceil(pre.wait / 1000);
+    return limited("cooldown", "cooldown", `A code was already sent. You can ask for a new one in ${s >= 60 ? `${Math.ceil(s / 60)} min` : `${s}s`}.`, { retryAfter: s, dailyLeft: Math.max(0, cfg.perEmailDaily - pre.n), dailyMax: cfg.perEmailDaily });
+  }
+  if (pre.err === "email_daily") {
+    return limited("email_daily", "email_daily", `You've used all ${cfg.perEmailDaily} codes for this email today. Please try again tomorrow.`, { retryAfter: toMidnight, dailyLeft: 0, dailyMax: cfg.perEmailDaily });
   }
 
-  const ipOk = await dbTxn(env, `${ROOT}/ip/${hb}/${ih}`, (cur) => {
-    const n = Number(cur) || 0;
-    return n >= cfg.hourlyPerIp ? { result: false } : { next: n + 1, result: true };
+  // 2) Whole-service daily cap (keeps the Gmail account far below Google's limits).
+  const sentToday = Math.max(Number(await dbGet(env, `${ROOT}/stats/${day}/sent`).catch(() => 0)) || 0, shadowGet(`g:${day}`, now));
+  if (sentToday >= cfg.dailyLimit) return limited("daily_limit", "daily", "Today's email limit is reached. Please try again tomorrow.", { retryAfter: toMidnight });
+
+  // 3) Burst cap for the whole service (per minute).
+  const mb = minuteBucket(now);
+  const minN = await dbTxn(env, `${ROOT}/rl/min/${mb}`, (cur) => {
+    const n = Math.max(Number(cur) || 0, shadowGet(`min:${mb}`, now));
+    return n >= cfg.perMinute ? { result: 0 } : { next: n + 1, result: n + 1 };
   });
-  if (!ipOk) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: "ip_hourly" });
-    return fail(cors, 429, "too_many", "Too many emails from this network. Please try again in an hour.", { retryAfter: 3600 });
-  }
+  if (!minN) return limited("busy", "minute", "Lots of people are requesting codes right now. Please try again in a minute.", { retryAfter: 60 });
+  shadowPut(`min:${mb}`, minN, now + 120_000);
 
-  const prevBucket = await dbGet(env, `${ROOT}/mail/${Number(hb) - 1}/${eh}`).catch(() => null);
+  // 4) Per network (IP): hourly + daily.
+  const ipOut = await dbTxn(env, `${ROOT}/rl/ip/${day}/${ih}`, (cur) => {
+    const n = Math.max(Number(cur?.n) || 0, shadowGet(`ipd:${day}:${ih}`, now));
+    const hn = Math.max(cur?.hb === hb ? Number(cur?.hn) || 0 : 0, shadowGet(`iph:${hb}:${ih}`, now));
+    if (n >= cfg.perIpDaily) return { result: { err: "ip_daily" } };
+    if (hn >= cfg.hourlyPerIp) return { result: { err: "ip_hourly" } };
+    return { next: { n: n + 1, hb, hn: hn + 1 }, result: { n: n + 1, hn: hn + 1 } };
+  });
+  if (ipOut.err === "ip_daily") return limited("too_many", "ip_daily", "Too many emails from this network today. Please try again tomorrow.", { retryAfter: toMidnight });
+  if (ipOut.err) return limited("too_many", "ip_hourly", "Too many emails from this network. Please try again in an hour.", { retryAfter: 3600 });
+  shadowPut(`ipd:${day}:${ih}`, ipOut.n, dayExp);
+  shadowPut(`iph:${hb}:${ih}`, ipOut.hn, now + HOUR);
+
+  // 5) Reserve the email slot (re-checked inside the transaction).
   const rid = `${now.toString(36)}${randBase36(12)}`;
-  const gate = await dbTxn(env, `${ROOT}/mail/${hb}/${eh}`, (cur) => {
-    const last = Math.max(Number(cur?.last) || 0, Number(prevBucket?.last) || 0);
-    const wait = last + cfg.cooldownSeconds * 1000 - now;
-    if (wait > 0) return { result: { err: "cooldown", wait } };
-    if ((Number(cur?.n) || 0) >= cfg.hourlyPerEmail) return { result: { err: "email_hourly" } };
-    return { next: { n: (Number(cur?.n) || 0) + 1, last: now, rid, prevLast: last }, result: { prevRid: cur?.rid || prevBucket?.rid || "", prevLast: last } };
+  const gate = await dbTxn(env, mailPath, (cur) => {
+    const g = mailGate(cfg, now, cur, prevDay, eh, day);
+    if (g.err) return { result: g };
+    return { next: { n: g.n + 1, last: now, rid, prevLast: g.last }, result: { n: g.n + 1, prevLast: g.last, prevRid: cur?.rid || prevDay?.rid || "" } };
   });
-  if (gate.err === "cooldown") {
-    const retryAfter = Math.ceil(gate.wait / 1000);
-    return fail(cors, 429, "cooldown", `Please wait ${retryAfter}s before asking for another email.`, { retryAfter });
-  }
-  if (gate.err) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: gate.err });
-    return fail(cors, 429, "too_many", "Too many emails to this address. Please try again in an hour.", { retryAfter: 3600 });
-  }
+  if (gate.err) return limited("cooldown", "race", "A code was just sent. Please check your inbox.", { retryAfter: cfg.cooldownSeconds });
+  shadowPut(`md:${day}:${eh}`, gate.n, dayExp);
+  shadowSet(`ml:${eh}`, now, now + 2 * DAY);
 
+  // 6) Create the sealed ticket, then send.
   const otp = makeOtp();
   const linkToken = randToken(32);
   const session = randToken(24);
   const x = now + cfg.otpMinutes * 60_000;
   const lx = now + cfg.linkMinutes * 60_000;
-  await dbPut(env, `${ROOT}/tickets/${rid}`, {
-    p: purpose, m: maskEmail(email), e: eh, ec: await seal(env, email),
-    o: await hash(env, "otp", rid, otp), l: await hash(env, "link", rid, linkToken), s: await hash(env, "sess", rid, session),
-    c: now, x, lx, a: 0, max: cfg.maxAttempts, st: "sending", org: origin || "",
-  });
+  const [oH, lH, sH] = await Promise.all([hash(env, "otp", rid, otp), hash(env, "link", rid, linkToken), hash(env, "sess", rid, session)]);
+  await ticketTxn(env, ctx, rid, () => ({
+    next: { p: purpose, m, e: eh, ec, o: oH, l: lH, s: sH, c: now, x, lx, a: 0, max: cfg.maxAttempts, st: "sending", org: origin || "" },
+    result: 1,
+  }));
 
   const site = siteUrl(env);
   const link = `${env.__WORKER_ORIGIN}/v/${rid}/${linkToken}`;
-  const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now });
+  const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now, rid });
   const t0 = Date.now();
   try {
     await sendGmail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
   } catch (err) {
     const ms = Date.now() - t0;
+    const codeErr = String(err?.code || "send_failed");
     await Promise.allSettled([
-      dbPatch(env, `${ROOT}/tickets/${rid}`, { st: "failed" }),
-      dbTxn(env, `${ROOT}/mail/${hb}/${eh}`, (cur) => cur?.rid === rid ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), last: Number(cur.prevLast) || 0 }, result: 1 } : { result: 0 }),
+      ticketTxn(env, ctx, rid, (cur) => (cur ? { next: { ...cur, st: "failed" }, result: 1 } : { result: 0 })),
+      refundSend(env, { day, eh, ih, rid, prevLast: gate.prevLast, hb }),
     ]);
-    track(env, ctx, { failed: 1 }, { k: "failed", p: purpose, m: maskEmail(email), ms, err: String(err?.code || "error"), why: String(err?.message || "").slice(0, 200) });
-    return fail(cors, 502, err?.code || "send_failed", publicGmailMessage(err?.code));
+    track(env, ctx, { failed: 1 }, ev("failed", { ms, err: codeErr, why: String(err?.message || "").slice(0, 200) }));
+    noteHealth(env, ctx, { ok: false, lastErrAt: Date.now(), lastErr: codeErr, lastErrMsg: String(err?.message || "").slice(0, 300) });
+    return fail(cors, codeErr === "gmail_quota" ? 429 : 502, codeErr, publicGmailMessage(codeErr));
   }
   const ms = Date.now() - t0;
-  await dbPatch(env, `${ROOT}/tickets/${rid}`, { st: "pending" });
+  await ticketTxn(env, ctx, rid, (cur) => (cur && cur.st === "sending" ? { next: { ...cur, st: "pending" }, result: 1 } : { result: 0 }));
   const old = replaces || gate.prevRid;
   if (old && old !== rid) {
-    await dbTxn(env, `${ROOT}/tickets/${old}`, (cur) => cur && (cur.st === "pending" || cur.st === "verified" || cur.st === "sending")
-      ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 }).catch(() => 0);
+    await ticketTxn(env, ctx, old, (cur) => (cur && (cur.st === "pending" || cur.st === "verified" || cur.st === "sending")
+      ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 })).catch(() => 0);
   }
-  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, gmail_ms: ms, gmail_n: 1, ...(replaces ? { resend: 1 } : {}) }, { k: "sent", p: purpose, m: maskEmail(email), ms });
+  shadowPut(`g:${day}`, sentToday + 1, dayExp);
+  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, gmail_ms: ms, gmail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
+  noteHealth(env, ctx, { ok: true, lastOkAt: Date.now(), lastMs: ms });
+  const dailyLeft = Math.max(0, cfg.perEmailDaily - gate.n);
   return json(cors, {
-    ok: true, ticket: `${rid}.${session}`, rid, purpose, email: maskEmail(email),
+    ok: true, ticket: `${rid}.${session}`, rid, purpose, email: m,
     expiresAt: x, linkExpiresAt: lx, cooldown: cfg.cooldownSeconds, resendAt: now + cfg.cooldownSeconds * 1000, maxAttempts: cfg.maxAttempts,
+    dailyLeft, dailyMax: cfg.perEmailDaily, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes,
   });
+}
+
+/** A finished (used) code frees the email right away for its next request. */
+async function releaseCooldown(env, eh, created, rid) {
+  if (!eh) return;
+  const t = Number(created) || Date.now();
+  shadowSet(`ml:${eh}`, 0, Date.now() + 2 * DAY);
+  await dbTxn(env, `${ROOT}/rl/mail/${dayKey(t)}/${eh}`, (cur) => (cur && cur.rid === rid ? { next: { ...cur, last: 0 }, result: 1 } : { result: 0 })).catch(() => 0);
 }
 
 async function accountCheck(env, email, purpose) {
@@ -617,16 +804,16 @@ async function actSend(env, ctx, cors, body, origin, ip) {
   return issueTicket(env, ctx, cors, { email, purpose, name: acc.name || typed, origin, ip });
 }
 
-async function loadOwned(env, cors, ticket) {
+async function loadOwned(env, ctx, cors, ticket) {
   const t = parseTicket(ticket);
   if (!t) return { res: fail(cors, 400, "bad_ticket", "This request is invalid. Please start again.") };
-  const cur = await dbGet(env, `${ROOT}/tickets/${t.rid}`);
+  const cur = await ticketGet(env, ctx, t.rid);
   if (!cur || !safeEq(cur.s, await hash(env, "sess", t.rid, t.session))) return { res: fail(cors, 404, "not_found", "This request was not found. Please start again.") };
   return { t, cur };
 }
 
 async function actResend(env, ctx, cors, body, origin, ip) {
-  const { res, t, cur } = await loadOwned(env, cors, body.ticket);
+  const { res, t, cur } = await loadOwned(env, ctx, cors, body.ticket);
   if (res) return res;
   if (cur.st === "consumed") return fail(cors, 409, "already_used", "This email was already verified.");
   const email = await unseal(env, cur.ec);
@@ -650,43 +837,47 @@ async function actVerify(env, ctx, cors, body, ip) {
   if (code.length !== 6) return fail(cors, 400, "bad_code", "Enter the 6-digit code.");
   const now = Date.now();
   const ih = await hash(env, "ip", ip);
-  const wrongPath = `${ROOT}/wrong/${hourBucket(now)}/${ih}`;
-  if ((Number(await dbGet(env, wrongPath).catch(() => 0)) || 0) >= IP_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong codes from this network. Try again later.", { retryAfter: 3600 });
+  const wb = hourBucket(now);
+  const wrongPath = `${ROOT}/wrong/${wb}/${ih}`;
+  const wrongKey = `w:${wb}:${ih}`;
+  if (Math.max(Number(await dbGet(env, wrongPath).catch(() => 0)) || 0, shadowGet(wrongKey, now)) >= IP_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong codes from this network. Try again later.", { retryAfter: 3600 });
   const sessHash = await hash(env, "sess", t.rid, t.session);
   const otpHash = await hash(env, "otp", t.rid, code);
-  const out = await dbTxn(env, `${ROOT}/tickets/${t.rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, t.rid, (cur) => {
     if (!cur || !safeEq(cur.s, sessHash)) return { result: { e: "not_found" } };
     if (cur.st !== "pending") return { result: { e: "state", st: cur.st, via: cur.via } };
-    if (now > cur.x) return { result: { e: "expired", p: cur.p, m: cur.m } };
+    if (now > cur.x) return { result: { e: "expired", p: cur.p, m: cur.m, ec: cur.ec } };
     const max = Number(cur.max) || DEFAULTS.maxAttempts;
     if ((Number(cur.a) || 0) >= max) return { next: { ...cur, st: "locked" }, result: { e: "state", st: "locked" } };
     if (!safeEq(cur.o, otpHash)) {
       const a = (Number(cur.a) || 0) + 1;
-      return { next: { ...cur, a, ...(a >= max ? { st: "locked" } : {}) }, result: { e: "wrong", left: Math.max(0, max - a), p: cur.p, m: cur.m } };
+      return { next: { ...cur, a, ...(a >= max ? { st: "locked" } : {}) }, result: { e: "wrong", left: Math.max(0, max - a), p: cur.p, m: cur.m, ec: cur.ec } };
     }
-    return { next: { ...cur, st: "consumed", via: "otp", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec } };
+    return { next: { ...cur, st: "consumed", via: "otp", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, e: null, eh: cur.e, c: cur.c } };
   });
   if (out.e === "not_found") return fail(cors, 404, "not_found", "This request was not found. Please start again.");
   if (out.e === "state") return stateError(cors, out.st, out.via);
   if (out.e === "expired") {
-    track(env, ctx, { expired: 1 }, { k: "expired", p: out.p, m: out.m });
+    track(env, ctx, { expired: 1 }, { k: "expired", p: out.p, m: out.m, ec: out.ec });
     return fail(cors, 410, "expired", "This code has expired. Please ask for a new one.");
   }
   if (out.e === "wrong") {
-    await dbTxn(env, wrongPath, (n) => ({ next: (Number(n) || 0) + 1, result: 1 })).catch(() => 0);
+    const wn = await dbTxn(env, wrongPath, (n) => ({ next: Math.max(Number(n) || 0, shadowGet(wrongKey, now)) + 1, result: Math.max(Number(n) || 0, shadowGet(wrongKey, now)) + 1 })).catch(() => 0);
+    shadowPut(wrongKey, Number(wn) || shadowGet(wrongKey, now) + 1, now + HOUR);
     const locked = out.left <= 0;
-    track(env, ctx, { wrong: 1, ...(locked ? { locked: 1 } : {}) }, { k: locked ? "locked" : "wrong", p: out.p, m: out.m });
+    track(env, ctx, { wrong: 1, ...(locked ? { locked: 1 } : {}) }, { k: locked ? "locked" : "wrong", p: out.p, m: out.m, ec: out.ec });
     return locked
       ? fail(cors, 423, "locked", "Too many wrong tries. Please ask for a new code.", { attemptsLeft: 0 })
       : fail(cors, 400, "wrong_code", `Incorrect code. ${out.left} ${out.left === 1 ? "try" : "tries"} left.`, { attemptsLeft: out.left });
   }
   const email = await unseal(env, out.ec);
-  track(env, ctx, { verified_otp: 1 }, { k: "verified_otp", p: out.p, m: out.m });
+  await releaseCooldown(env, out.eh, out.c, t.rid);
+  track(env, ctx, { verified_otp: 1 }, { k: "verified_otp", p: out.p, m: out.m, ec: out.ec });
   return json(cors, { ok: true, email, purpose: out.p, via: "otp" });
 }
 
-async function actStatus(env, cors, body) {
-  const { res, cur } = await loadOwned(env, cors, body.ticket);
+async function actStatus(env, ctx, cors, body) {
+  const { res, cur } = await loadOwned(env, ctx, cors, body.ticket);
   if (res) return res;
   const now = Date.now();
   let status = cur.st === "sending" ? "pending" : cur.st;
@@ -713,17 +904,19 @@ async function actClaim(env, ctx, cors, body) {
     check = (cur) => cur.p === "reset" && safeEq(gh, String(body.grant));
   } else return fail(cors, 400, "bad_ticket", "This request is invalid. Please start again.");
   const now = Date.now();
-  const out = await dbTxn(env, `${ROOT}/tickets/${rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, rid, (cur) => {
     if (!cur || !check(cur)) return { result: { e: "not_found" } };
     if (cur.st !== "verified") return { result: { e: "state", st: cur.st } };
-    return { next: { ...cur, st: "consumed", claimed: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec } };
+    if (now > Number(cur.lx) + 15 * 60_000) return { result: { e: "state", st: "expired" } };
+    return { next: { ...cur, st: "consumed", claimed: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, eh: cur.e, c: cur.c } };
   });
   if (out.e === "not_found") return fail(cors, 404, "not_found", "This verification was not found.");
   if (out.e === "state") {
     if (out.st === "pending" || out.st === "sending") return fail(cors, 409, "not_verified", "This email is not verified yet.");
     return stateError(cors, out.st);
   }
-  track(env, ctx, { claimed: 1 }, { k: "claimed", p: out.p, m: out.m });
+  await releaseCooldown(env, out.eh, out.c, rid);
+  track(env, ctx, { claimed: 1 }, { k: "claimed", p: out.p, m: out.m, ec: out.ec });
   return json(cors, { ok: true, email: await unseal(env, out.ec), purpose: out.p, via: "link" });
 }
 
@@ -733,14 +926,14 @@ async function linkPage(env, ctx, req, rid, token) {
   const site = siteUrl(env);
   const action = `/v/${rid}/${token}`;
   if (!RID_RE.test(rid) || !TOKEN_RE.test(token)) {
-    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME." }), 400);
+    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME03." }), 400);
   }
   if (req.method === "GET") {
     return html(pageHtml({ state: "confirm", action, redirect: site, title: "Verifying your email…", message: "Please wait a moment while we confirm your email address." }));
   }
   const lh = await hash(env, "link", rid, token);
   const now = Date.now();
-  const out = await dbTxn(env, `${ROOT}/tickets/${rid}`, (cur) => {
+  const out = await ticketTxn(env, ctx, rid, (cur) => {
     if (!cur || !safeEq(cur.l, lh)) return { result: { e: "invalid" } };
     const back = cur.org || site;
     if (cur.st === "verified") return { result: { ok: true, again: true, p: cur.p, back } };
@@ -748,24 +941,24 @@ async function linkPage(env, ctx, req, rid, token) {
     if (cur.st === "consumed") return { result: { e: "used", p: cur.p, back } };
     if (cur.st !== "pending") return { result: { e: cur.st, p: cur.p, back } };
     if (now > cur.lx) return { result: { e: "expired", p: cur.p, back } };
-    return { next: { ...cur, st: "verified", via: "link", v: now }, result: { ok: true, p: cur.p, m: cur.m, back } };
+    return { next: { ...cur, st: "verified", via: "link", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, back } };
   });
   const back = out.back || site;
   if (out.ok) {
-    if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m });
+    if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m, ec: out.ec });
     const grant = await hash(env, "grant", rid);
     const redirect = `${back}/?ev=${rid}&eg=${encodeURIComponent(grant)}&ep=${out.p}`;
     return html(pageHtml({
       state: "success", purpose: out.p, redirect,
       title: out.p === "reset" ? "Email confirmed" : "Email verified",
-      message: out.p === "reset" ? "It's really you. Taking you back to RS ANIME to set your new password." : "Your email address is verified. Taking you to RS ANIME…",
+      message: out.p === "reset" ? "It's really you. Taking you back to RS ANIME03 to set your new password." : "Your email address is verified. Taking you to RS ANIME03…",
     }));
   }
   const msg = {
-    invalid: ["Invalid link", "This verification link is not valid. Please open the latest email from RS ANIME."],
-    done: ["Already verified", "This email was already verified. You can continue in the RS ANIME app."],
+    invalid: ["Invalid link", "This verification link is not valid. Please open the latest email from RS ANIME03."],
+    done: ["Already verified", "This email was already verified. You can continue in the RS ANIME03 app."],
     used: ["Already verified", "This email was already verified with the code. You can continue in the app."],
-    expired: ["Link expired", "This link has expired. Go back to RS ANIME and ask for a new email."],
+    expired: ["Link expired", "This link has expired. Go back to RS ANIME03 and ask for a new email."],
     replaced: ["Newer email sent", "A newer email was sent to you. Please use the button in the latest email."],
     locked: ["Request locked", "This request was locked after too many wrong codes. Ask for a new email."],
     failed: ["Link not valid", "This email could not be confirmed. Please ask for a new one."],
@@ -778,23 +971,42 @@ async function linkPage(env, ctx, req, rid, token) {
 let deepMemo = { at: 0, v: null };
 async function health(env, deep) {
   const missing = MISSING(env);
+  const now = Date.now();
+  const day = dayKey(now);
+  const [cfg, sentRaw, last] = await Promise.all([
+    settings(env),
+    dbGet(env, `${ROOT}/stats/${day}/sent`).catch(() => 0),
+    dbGet(env, `${ROOT}/health`).catch(() => null),
+  ]);
+  const sent = Math.max(Number(sentRaw) || 0, shadowGet(`g:${day}`, now));
   const out = {
     ok: true, service: VERSION, provider: "gmail-api", ready: missing.length === 0, missing,
-    optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET },
+    optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET, ADMIN_PIN: !!env.ADMIN_PIN },
     sender: env.GMAIL_SENDER_EMAIL ? maskEmail(normEmail(env.GMAIL_SENDER_EMAIL)) : null,
     senderValid: env.GMAIL_SENDER_EMAIL ? SENDER_RE.test(String(env.GMAIL_SENDER_EMAIL).trim()) : false,
-    settings: await settings(env),
+    settings: cfg,
+    today: { day, sent, limit: cfg.dailyLimit, left: Math.max(0, cfg.dailyLimit - sent), resetsInSec: Math.ceil(msToDayEnd(now) / 1000) },
+    last: last && typeof last === "object" ? {
+      ok: last.ok !== false, lastOkAt: Number(last.lastOkAt) || 0, lastErrAt: Number(last.lastErrAt) || 0,
+      lastErr: String(last.lastErr || "").slice(0, 40), lastErrMsg: String(last.lastErrMsg || "").slice(0, 300), lastMs: Number(last.lastMs) || 0,
+    } : null,
+    security: { sealedTickets: true, hashedCodes: true, encryptedEmails: true, shadowCounters: true },
+    now,
   };
   if (deep && out.ready) {
-    if (deepMemo.v && Date.now() - deepMemo.at < 60_000) out.gmail = deepMemo.v;
+    if (deepMemo.v && now - deepMemo.at < 60_000) out.gmail = deepMemo.v;
     else {
       const t0 = Date.now();
       try {
         const tk = await gmailAccessToken(env, true);
         const scoped = !tk.scope || /gmail\.send|mail\.google\.com|gmail\.modify|gmail\.compose/.test(tk.scope);
-        out.gmail = { ok: scoped, code: scoped ? "ok" : "gmail_scope_missing", ms: Date.now() - t0, message: scoped ? "Gmail authorised" : "Token works but is missing the gmail.send scope" };
+        out.gmail = {
+          ok: scoped, code: scoped ? "ok" : "gmail_scope_missing", ms: Date.now() - t0,
+          message: scoped ? "Gmail authorised — refresh token works" : "Token works but is missing the gmail.send scope",
+          scope: String(tk.scope || "").slice(0, 200), accessExpiresAt: tk.exp || 0, refreshExpiresAt: tk.refreshExpiresAt || 0, checkedAt: Date.now(),
+        };
       } catch (err) {
-        out.gmail = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200) };
+        out.gmail = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200), checkedAt: Date.now() };
       }
       deepMemo = { at: Date.now(), v: out.gmail };
     }
@@ -802,9 +1014,39 @@ async function health(env, deep) {
   return out;
 }
 
+// Admin-only activity with full email addresses. Protected by the Worker's own
+// ADMIN_PIN secret (never stored in the database) and a per-network wrong-PIN limit.
+async function actAdminEvents(env, cors, body, ip) {
+  if (!env.ADMIN_PIN) return fail(cors, 503, "admin_pin_not_set", "Add an ADMIN_PIN secret to this Worker to unlock full emails.");
+  const now = Date.now();
+  const ih = await hash(env, "ip", ip);
+  const hb = hourBucket(now);
+  const wp = `${ROOT}/adminWrong/${hb}/${ih}`;
+  const wk = `aw:${hb}:${ih}`;
+  const wrong = Math.max(Number(await dbGet(env, wp).catch(() => 0)) || 0, shadowGet(wk, now));
+  if (wrong >= ADMIN_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong PINs. Try again in an hour.", { retryAfter: 3600 });
+  if (!safeEq(String(body.pin || "").trim(), String(env.ADMIN_PIN).trim())) {
+    const n = await dbTxn(env, wp, (c) => { const v = Math.max(Number(c) || 0, wrong) + 1; return { next: v, result: v }; }).catch(() => wrong + 1);
+    shadowPut(wk, Number(n) || wrong + 1, now + HOUR);
+    return fail(cors, 401, "wrong_pin", "Wrong admin PIN.", { left: Math.max(0, ADMIN_WRONG_PER_HOUR - (Number(n) || 0)) });
+  }
+  const limit = Math.min(200, Math.max(10, Number(body.limit) || 80));
+  const raw = await dbGet(env, `${ROOT}/events`, { orderBy: '"$key"', limitToLast: String(limit) }).catch(() => null);
+  const rows = await Promise.all(Object.entries(raw || {}).map(async ([id, e]) => {
+    let email = "";
+    if (e && e.ec) { try { email = await unseal(env, e.ec); } catch { email = ""; } }
+    return {
+      id, t: Number(e?.t) || 0, k: String(e?.k || ""), p: String(e?.p || ""), m: String(e?.m || ""), email,
+      ms: Number(e?.ms) || 0, err: String(e?.err || ""), why: String(e?.why || "").slice(0, 200), r: String(e?.r || ""),
+    };
+  }));
+  rows.sort((a, b) => b.t - a.t);
+  return json(cors, { ok: true, events: rows });
+}
+
 const worker = {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { buildMime, emailTemplate, makeOtp, originAllowed },
+  _internals: { buildMime, emailTemplate, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);
@@ -831,7 +1073,7 @@ const worker = {
       }
       if (req.method !== "POST") return fail(cors, 405, "method", "Use POST.");
       const origin = req.headers.get("Origin") || "";
-      if (!originAllowed(origin, env)) return fail(cors, 403, "origin_not_allowed", "This website is not allowed to use the RS ANIME email service.");
+      if (!originAllowed(origin, env)) return fail(cors, 403, "origin_not_allowed", "This website is not allowed to use the RS ANIME03 email service.");
       const missing = MISSING(env);
       if (missing.length) return fail(cors, 503, "not_configured", "Email service is not set up yet. Please try again later.", { missing });
       if (Number(req.headers.get("content-length") || 0) > 4096) return fail(cors, 413, "too_large", "Request too large.");
@@ -844,8 +1086,9 @@ const worker = {
         case "send": case "send-otp": case "send-link": return await actSend(env, ctx, cors, body, origin, ip);
         case "resend": return await actResend(env, ctx, cors, body, origin, ip);
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
-        case "status": return await actStatus(env, cors, body);
+        case "status": return await actStatus(env, ctx, cors, body);
         case "claim": return await actClaim(env, ctx, cors, body);
+        case "admin-events": return await actAdminEvents(env, cors, body, ip);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }
     } catch (err) {

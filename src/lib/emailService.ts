@@ -61,32 +61,48 @@ export class EmailServiceError extends Error {
   code: string;
   retryAfter?: number;
   attemptsLeft?: number;
-  constructor(code: string, message: string, extra: { retryAfter?: number; attemptsLeft?: number } = {}) {
-    super(message); this.code = code; this.retryAfter = extra.retryAfter; this.attemptsLeft = extra.attemptsLeft;
+  dailyLeft?: number;
+  constructor(code: string, message: string, extra: { retryAfter?: number; attemptsLeft?: number; dailyLeft?: number } = {}) {
+    super(message); this.code = code; this.retryAfter = extra.retryAfter; this.attemptsLeft = extra.attemptsLeft; this.dailyLeft = extra.dailyLeft;
   }
 }
 
 /** Opaque "rid.session" ticket returned by the Gmail email Worker. */
-export type EmailTicket = { token: string; expiresAt: number; linkExpiresAt: number; resendAt: number; maxAttempts: number };
+export type EmailTicket = {
+  token: string; expiresAt: number; linkExpiresAt: number; resendAt: number; maxAttempts: number;
+  /** Codes this email can still request today (Bangladesh day), and the daily maximum. */
+  dailyLeft: number | null; dailyMax: number | null;
+};
 export type EmailStatus = "pending" | "verified" | "consumed" | "replaced" | "expired" | "locked" | "failed";
 
 const COOLDOWN_KEY = "rs_email_cooldown";
-const COOLDOWN_MS = 60_000;
+const COOLDOWN_MS = 300_000;
+/** Longest wait the device will ever enforce on its own (server limits reset daily). */
+const MAX_LOCAL_WAIT = 24 * 3600_000;
 
 export function cooldownLeftMs(email: string, now = Date.now()): number {
   try {
     const map = JSON.parse(localStorage.getItem(COOLDOWN_KEY) || "{}");
     // Stores the "can resend at" time, capped so a bad clock can't lock someone out.
     const at = Number(map[normalizeEmail(email)] || 0);
-    return Math.min(COOLDOWN_MS * 15, Math.max(0, at - now));
+    return Math.min(MAX_LOCAL_WAIT, Math.max(0, at - now));
   } catch { return 0; }
 }
 function markResendAt(email: string, at: number) {
   try {
     const map = JSON.parse(localStorage.getItem(COOLDOWN_KEY) || "{}");
     const now = Date.now();
-    for (const k of Object.keys(map)) if (Number(map[k]) < now - COOLDOWN_MS * 30) delete map[k];
+    for (const k of Object.keys(map)) if (Number(map[k]) < now) delete map[k];
     map[normalizeEmail(email)] = at;
+    localStorage.setItem(COOLDOWN_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+/** A used code frees the email right away (the server does the same). */
+function clearResendAt(email: string) {
+  try {
+    const map = JSON.parse(localStorage.getItem(COOLDOWN_KEY) || "{}");
+    delete map[normalizeEmail(email)];
     localStorage.setItem(COOLDOWN_KEY, JSON.stringify(map));
   } catch {}
 }
@@ -102,16 +118,25 @@ async function call(action: string, body: Record<string, unknown>) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data?.ok) {
-    throw new EmailServiceError(data?.error || "server", data?.message || "Something went wrong. Try again.", { retryAfter: data?.retryAfter, attemptsLeft: data?.attemptsLeft });
+    throw new EmailServiceError(data?.error || "server", data?.message || "Something went wrong. Try again.", { retryAfter: data?.retryAfter, attemptsLeft: data?.attemptsLeft, dailyLeft: data?.dailyLeft });
   }
   return data;
 }
 const toTicket = (d: any): EmailTicket => ({
   token: String(d.ticket), expiresAt: Number(d.expiresAt), linkExpiresAt: Number(d.linkExpiresAt) || Number(d.expiresAt),
   resendAt: Number(d.resendAt) || Date.now() + COOLDOWN_MS, maxAttempts: Number(d.maxAttempts) || 5,
+  dailyLeft: d.dailyLeft == null ? null : Number(d.dailyLeft), dailyMax: d.dailyMax == null ? null : Number(d.dailyMax),
 });
 function rememberCooldown(email: string, err: unknown) {
-  if (err instanceof EmailServiceError && err.code === "cooldown" && err.retryAfter) markResendAt(email, Date.now() + err.retryAfter * 1000);
+  if (err instanceof EmailServiceError && (err.code === "cooldown" || err.code === "email_daily") && err.retryAfter) markResendAt(email, Date.now() + err.retryAfter * 1000);
+}
+
+/** 45 → "45s", 290 → "4:50", 7200 → "2h 0m". */
+export function formatWait(sec: number): string {
+  const s = Math.max(0, Math.ceil(sec));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
 /** Sends one email with a 6-digit code and a one-tap "Verify" link (Gmail API Worker). */
@@ -119,7 +144,7 @@ export async function sendEmailCode(email: string, purpose: EmailPurpose, name?:
   const e = normalizeEmail(email);
   if (!isAllowedEmail(e)) throw new EmailServiceError("domain_not_allowed", `Only ${allowedDomainsLabel(loginAccessNow().allowedDomains)} addresses are allowed.`);
   const wait = cooldownLeftMs(e);
-  if (wait > 0) throw new EmailServiceError("cooldown", `Please wait ${Math.ceil(wait / 1000)}s before asking for another code.`, { retryAfter: Math.ceil(wait / 1000) });
+  if (wait > 0) throw new EmailServiceError("cooldown", `A code was already sent. You can ask for a new one in ${formatWait(Math.ceil(wait / 1000))}.`, { retryAfter: Math.ceil(wait / 1000) });
   try {
     const t = toTicket(await call("send", { email: e, purpose, name }));
     markResendAt(e, t.resendAt);
@@ -141,6 +166,7 @@ export async function resendEmailCode(ticket: string, email: string): Promise<Em
 export async function verifyEmailCode(ticket: string, code: string): Promise<{ email: string; purpose: EmailPurpose; via: "otp" | "link" }> {
   try {
     const data = await call("verify", { ticket, code: String(code).replace(/\D/g, "") });
+    clearResendAt(String(data.email));
     return { email: String(data.email), purpose: data.purpose === "reset" ? "reset" : "register", via: "otp" };
   } catch (err) {
     // The user tapped the email button first — finish with that instead.
@@ -157,6 +183,7 @@ export async function checkEmailStatus(ticket: string): Promise<{ status: EmailS
 /** Finishes a link-verified request exactly once (ticket owner, or a reset grant from the link page). */
 export async function claimEmailLink(ticketOrRid: string, grant?: string): Promise<{ email: string; purpose: EmailPurpose; via: "link" }> {
   const d = await call("claim", grant ? { rid: ticketOrRid, grant } : { ticket: ticketOrRid });
+  clearResendAt(String(d.email));
   return { email: String(d.email), purpose: d.purpose === "reset" ? "reset" : "register", via: "link" };
 }
 

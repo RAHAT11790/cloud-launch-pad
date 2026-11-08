@@ -1,5 +1,4 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
-import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
@@ -35,6 +34,9 @@ import { GUEST_PROFILE_MESSAGE } from "@/lib/contentGating";
 import profileAnimeBanner from "@/assets/profile-anime-banner.jpg";
 import { FrameBackLayers, FrameFrontLayers, frameStyleVars } from "@/components/profile/AnimatedFrame";
 import BackdropMedia from "@/components/profile/BackdropMedia";
+import EditProfilePanel from "@/components/profile/EditProfilePanel";
+import PasswordSecurityPanel from "@/components/profile/PasswordSecurityPanel";
+import { moodOf, readCachedCard, subscribeProfileCard, type ProfileCard } from "@/lib/profileCard";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -594,6 +596,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   useEffect(() => subscribeProfileShop(setProfileShop), []);
 
+  const [profileCard, setProfileCard] = useState<ProfileCard>(() => readCachedCard(userId));
+  useEffect(() => (userId ? subscribeProfileCard(userId, setProfileCard) : undefined), [userId]);
+
   const visibleFrames = useMemo(() => profileShop.frames.filter((item) => item.enabled), [profileShop.frames]);
   const visibleBackgrounds = useMemo(() => profileShop.backgrounds.filter((item) => item.enabled), [profileShop.backgrounds]);
   const selectedShopFrame = visibleFrames.find((item) => item.id === customization.frameId);
@@ -960,13 +965,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     }
   };
 
-  const saveName = () => {
-    setDisplayName(tempName);
-    writeDisplayName(tempName, userId);
-    if (userId && tempName.trim()) {
-      update(ref(db, `users/${userId}`), { name: tempName.trim() }).catch(() => {});
-    }
-    setActivePanel("main");
+  const saveNameValue = (value: string) => {
+    const next = value.trim();
+    if (!next) return;
+    setDisplayName(next);
+    setTempName(next);
+    writeDisplayName(next, userId);
+    if (userId) update(ref(db, `users/${userId}`), { name: next }).catch(() => {});
   };
 
   const saveLanguage = (lang: string) => {
@@ -1698,7 +1703,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Change Password Panel
   if (activePanel === "change-password") {
-    return <ChangePasswordPanel onBack={() => setActivePanel("edit")} />;
+    return <PasswordSecurityPanel onBack={() => setActivePanel("edit")} />;
   }
 
   if (activePanel === "customize") {
@@ -1839,56 +1844,31 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Edit Profile Panel
   if (activePanel === "edit") {
-    const isGoogleUser = (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        // Check if user logged in via Google (no password in appUsers)
-        return !!u.email && !localStorage.getItem("rs_has_password");
-      } catch { return false; }
-    })();
-
-    // Check if user has password (email login user)
-    const hasPassword = (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        return !!u.email;
-      } catch { return false; }
-    })();
-
+    const accountEmail = (() => { try { return String(JSON.parse(localStorage.getItem("rsanime_user") || "{}").email || ""); } catch { return ""; } })();
     return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
-        transition={{ type: "tween", duration: 0.3 }}>
-        <button onClick={() => setActivePanel("main")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Edit Profile</span>
-        </button>
-        <div className={`profile-edit-identity text-center mb-8 ${selectedFont.className}`}>
-          <div className="relative inline-block">
-            {renderProfileAvatar()}
-            {profilePhoto && <button onClick={removePhoto} className="absolute -top-1 -left-1 z-20 w-7 h-7 rounded-full bg-destructive flex items-center justify-center"><X className="w-3.5 h-3.5 text-destructive-foreground" /></button>}
-            <button disabled={photoUploading} onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg disabled:opacity-70">
-              {photoUploading ? <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" /> : <Camera className="w-4 h-4 text-primary-foreground" />}
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-2">Max 10MB • JPG, PNG, WebP</p>
-        </div>
-        <div className="mb-6">
-          <label className="text-xs text-muted-foreground mb-2 block">Display Name</label>
-          <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} maxLength={30}
-            className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all" />
-        </div>
-        <button onClick={saveName} className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 mb-4">
-          <Save className="w-4 h-4" /> Save Changes
-        </button>
-
-        {/* Change/Set Password Button - show for all users */}
-        <button onClick={() => setActivePanel("change-password")}
-          className="w-full py-3 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground font-medium flex items-center justify-center gap-2 transition-all hover:border-primary text-sm">
-          <Lock className="w-4 h-4 text-primary" /> Password settings
-        </button>
-      </motion.div>
+      <>
+        <EditProfilePanel
+          userId={userId}
+          email={accountEmail}
+          displayName={displayName}
+          avatar={renderProfileAvatar()}
+          backdrop={<BackdropMedia item={selectedShopBackground} fallbackSrc={profileAnimeBanner} width={1536} height={512} />}
+          themeClass={selectedTheme.className}
+          fontClass={selectedFont.className}
+          isPremium={isPremium}
+          frameName={selectedShopFrame?.name}
+          backdropName={selectedShopBackground?.name}
+          hasPhoto={!!profilePhoto}
+          photoUploading={photoUploading}
+          onPickPhoto={() => fileRef.current?.click()}
+          onRemovePhoto={removePhoto}
+          onSaveName={saveNameValue}
+          onBack={() => setActivePanel("main")}
+          onOpenPassword={() => setActivePanel("change-password")}
+          onOpenStudio={() => setActivePanel("customize")}
+        />
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+      </>
     );
   }
 
@@ -1919,6 +1899,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   return email === "guest@rsanime.com" || u.guest ? "Guest Profile" : email;
                 } catch { return "Guest Profile"; }
               })()}</p>
+              {!isGuestUser && profileCard.mood && <span className="profile-mood-chip">{moodOf(profileCard.mood).emoji} {moodOf(profileCard.mood).label}</span>}
+              {!isGuestUser && profileCard.bio && <p className="profile-bio-line">{profileCard.bio}</p>}
+              {!isGuestUser && profileCard.genres.length > 0 && <div className="profile-genre-row">{profileCard.genres.map((g) => <span key={g}>{g}</span>)}</div>}
             </div>
             <div className="profile-identity-actions">
               {!isGuestUser && (
@@ -2205,337 +2188,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 };
 
 // Change Password sub-component (English UI + Email OTP forgot-password)
-const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
-  const branding = useBranding();
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showOld, setShowOld] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [hasExistingPassword, setHasExistingPassword] = useState<boolean | null>(null);
-  const [checkingPassword, setCheckingPassword] = useState(true);
-
-  // Forgot-password (email OTP) state
-  const [forgotMode, setForgotMode] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpToken, setOtpToken] = useState("");
-  const [otpLinkVerified, setOtpLinkVerified] = useState(false);
-  // The email's "Reset Password" button was tapped → no code needed here.
-  useEmailLinkWatch(forgotMode && otpSent && !otpLinkVerified ? otpToken : null, () => {
-    setOtpLinkVerified(true);
-    toast.success("✅ Email confirmed — now set your new password");
-  });
-  const [userEmail, setUserEmail] = useState<string>("");
-
-  // Check if user already has a password
-  useEffect(() => {
-    const checkPassword = async () => {
-      try {
-        const user = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        if (!user.email) { setHasExistingPassword(false); setCheckingPassword(false); return; }
-        setUserEmail(user.email);
-        const emailKey = user.email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-        const legacyKey = user.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-        for (const key of [emailKey, legacyKey]) {
-          const snap = await get(ref(db, `appUsers/${key}`));
-          if (snap.exists() && snap.val().password) {
-            setHasExistingPassword(true);
-            setCheckingPassword(false);
-            return;
-          }
-        }
-        setHasExistingPassword(false);
-      } catch { setHasExistingPassword(false); }
-      setCheckingPassword(false);
-    };
-    checkPassword();
-  }, []);
-
-  const handleSetOrChangePassword = async () => {
-    if (hasExistingPassword) {
-      if (!oldPassword.trim() || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
-      if (newPassword.length < 4) { toast.error("New password must be at least 4 characters"); return; }
-      if (oldPassword === newPassword) { toast.error("New password cannot be the same as the old one"); return; }
-      if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
-    } else {
-      if (!newPassword.trim()) { toast.error("Please enter a password"); return; }
-      if (newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
-      if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
-    }
-
-    setLoading(true);
-    try {
-      const user = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      if (!user.email) { toast.error("User not found"); setLoading(false); return; }
-
-      const emailKey = user.email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-      const legacyKey = user.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-
-      let foundKey = "";
-      let userData: any = null;
-      for (const key of [emailKey, legacyKey]) {
-        const snap = await get(ref(db, `appUsers/${key}`));
-        if (snap.exists()) {
-          foundKey = key;
-          userData = snap.val();
-          break;
-        }
-      }
-
-      if (!foundKey) {
-        foundKey = emailKey;
-        userData = { id: user.id, name: user.name, email: user.email, createdAt: Date.now() };
-      }
-
-      if (hasExistingPassword) {
-        if (userData.password !== oldPassword) {
-          toast.error("Old password is incorrect!");
-          setLoading(false); return;
-        }
-      }
-
-      await update(ref(db, `appUsers/${foundKey}`), { password: newPassword });
-      toast.success(hasExistingPassword ? "Password changed successfully! ✅" : "Password set successfully! ✅");
-      setOldPassword(""); setNewPassword(""); setConfirmPassword("");
-      onBack();
-    } catch (err: any) { toast.error("Error: " + err.message); }
-    setLoading(false);
-  };
-
-  // ----- Forgot password via email OTP -----
-  const handleSendOtp = async () => {
-    if (!userEmail) { toast.error("No email on this account"); return; }
-    setOtpLoading(true);
-    try {
-      const { sendEmailCode } = await import("@/lib/emailService");
-      const { token } = await sendEmailCode(userEmail, "reset");
-      setOtpToken(token);
-      setOtpLinkVerified(false);
-      setOtp("");
-      setOtpSent(true);
-      toast.success(`📧 Code sent to: ${userEmail}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send code");
-    }
-    setOtpLoading(false);
-  };
-
-  const handleResetWithOtp = async () => {
-    if ((!otpLinkVerified && !otp.trim()) || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
-    if (newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
-    if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
-
-    setOtpLoading(true);
-    try {
-      const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-      const { verifyEmailCode, claimEmailLink, normalizeEmail } = await import("@/lib/emailService");
-      const r = otpLinkVerified ? await claimEmailLink(otpToken) : await verifyEmailCode(otpToken, otp);
-      if (r.email !== normalizeEmail(userEmail) || r.purpose !== "reset") { toast.error("❌ Incorrect code!"); setOtpLoading(false); return; }
-
-      const snap = await get(ref(db, `appUsers/${emailKey}`));
-      if (!snap.exists()) {
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        await set(ref(db, `appUsers/${emailKey}`), { id: u.id, name: u.name, email: userEmail, createdAt: Date.now(), password: newPassword });
-      } else {
-        await set(ref(db, `appUsers/${emailKey}/password`), newPassword);
-      }
-
-      toast.success("✅ New password set successfully!");
-      setOtp(""); setNewPassword(""); setConfirmPassword(""); setOtpSent(false); setForgotMode(false); setOtpLinkVerified(false);
-      onBack();
-    } catch (err: any) {
-      toast.error("Error: " + err.message);
-    }
-    setOtpLoading(false);
-  };
-
-  if (checkingPassword) {
-    return (
-      <motion.div className="fixed inset-0 z-[200] bg-background flex items-center justify-center"
-        initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
-        transition={{ type: "tween", duration: 0.3 }}>
-        <div className="animate-spin w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full" />
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-0 px-4 pb-24"
-      initial={{ x: 34, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 34, opacity: 0 }}
-      transition={{ type: "tween", duration: 0.3 }}>
-      <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="w-5 h-5" />
-        <span className="font-medium">{forgotMode ? "Reset Password" : (hasExistingPassword ? "Change Password" : "Set Password")}</span>
-      </button>
-
-      <div className="glass-card p-5 rounded-2xl mb-5">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <KeyRound className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold">
-              {forgotMode ? "Reset via Email OTP" : (hasExistingPassword ? "Change Password" : "Set Password")}
-            </h3>
-            <p className="text-[10px] text-muted-foreground">
-              {forgotMode
-                ? `We'll send a 6-digit code to ${userEmail || "your email"}`
-                : (hasExistingPassword ? "Enter your old password and choose a new one" : "Your account doesn't have a password yet")}
-            </p>
-          </div>
-        </div>
-
-        {!forgotMode && (
-          <div className="space-y-4">
-            {hasExistingPassword && (
-              <div>
-                <label className="text-xs text-muted-foreground mb-2 block">Old Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input type={showOld ? "text" : "password"} value={oldPassword} onChange={e => setOldPassword(e.target.value)}
-                    placeholder="Enter old password"
-                    className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-                  <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {showOld ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs text-muted-foreground mb-2 block">{hasExistingPassword ? "New Password" : "Password"}</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input type={showNew ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                  placeholder="Enter password"
-                  className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-                <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-muted-foreground mb-2 block">Confirm Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter password"
-                  className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {showConfirm ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </div>
-            </div>
-
-            {newPassword && confirmPassword && newPassword === confirmPassword && (
-              <p className="text-xs text-green-500 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Passwords match</p>
-            )}
-            {newPassword && confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-destructive">Passwords don't match!</p>
-            )}
-          </div>
-        )}
-
-        {forgotMode && (
-          <div className="space-y-4">
-            {!otpSent ? (
-              <>
-                <div className="text-xs text-muted-foreground bg-foreground/5 rounded-lg p-3">
-                  A 6-digit verification code will be sent to:<br />
-                  <span className="font-semibold text-foreground">{userEmail || "—"}</span>
-                </div>
-                <button onClick={handleSendOtp} disabled={otpLoading || !userEmail}
-                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
-                  {otpLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <>📧 Send Verification Code</>}
-                </button>
-              </>
-            ) : (
-              <>
-                {otpLinkVerified ? (
-                  <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-xs text-foreground">
-                    <Check className="w-4 h-4 text-primary shrink-0" />
-                    <span>Email confirmed with the link — no code needed.</span>
-                  </div>
-                ) : (
-                <div>
-                  <label className="text-xs text-muted-foreground mb-2 block">Verification Code (6 digits)</label>
-                  <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="000000" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
-                    className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-center text-lg tracking-[0.5em] font-mono focus:border-primary focus:outline-none transition-all" />
-                  <p className="text-[11px] text-muted-foreground mt-2">Or tap <b className="text-foreground">Reset Password</b> in the email — this screen continues by itself.</p>
-                </div>
-                )}
-                <div>
-                  <label className="text-xs text-muted-foreground mb-2 block">New Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input type={showNew ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                      placeholder="Enter new password"
-                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground" />
-                    <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-2 block">Confirm New Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                      placeholder="Re-enter new password"
-                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground" />
-                    <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {showConfirm ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                    </button>
-                  </div>
-                </div>
-                <button onClick={handleSendOtp} disabled={otpLoading}
-                  className="w-full text-xs text-primary underline">
-                  Resend code
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!forgotMode ? (
-        <>
-          <button onClick={handleSetOrChangePassword} disabled={loading}
-            className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50 mb-3">
-            {loading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Save className="w-4 h-4" /> {hasExistingPassword ? "Change Password" : "Set Password"}</>}
-          </button>
-
-          {hasExistingPassword && (
-            <button onClick={() => { setForgotMode(true); setOldPassword(""); setNewPassword(""); setConfirmPassword(""); }}
-              className="w-full py-3 rounded-xl bg-foreground/10 hover:bg-foreground/20 text-foreground font-medium flex items-center justify-center gap-2 text-sm transition-all">
-              🔑 Forgot password? Reset via Email
-            </button>
-          )}
-        </>
-      ) : (
-        <>
-          {otpSent && (
-            <button onClick={handleResetWithOtp} disabled={otpLoading}
-              className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 mb-3 disabled:opacity-50">
-              {otpLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Check className="w-4 h-4" /> Verify & Reset Password</>}
-            </button>
-          )}
-          <button onClick={() => { setForgotMode(false); setOtp(""); setOtpSent(false); setNewPassword(""); setConfirmPassword(""); }}
-            className="w-full py-3 rounded-xl bg-foreground/10 hover:bg-foreground/20 text-foreground font-medium flex items-center justify-center gap-2 text-sm transition-all">
-            <ArrowLeft className="w-4 h-4" /> Back to Change Password
-          </button>
-        </>
-      )}
-    </motion.div>
-  );
-};
-
 const ProfilePage = forwardRef<HTMLDivElement, ProfilePageProps>((props, _ref) => {
   return <ProfilePageInner {...props} />;
 });
