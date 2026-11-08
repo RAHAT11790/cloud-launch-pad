@@ -1,5 +1,13 @@
 # Roadmap
 
+## Email security + profile redesign (2026-11-08)
+- [x] Email Worker v4 (5-min code, 10-min link, 5-min resend wait, 3/email/day, IP limits, signed single-use tickets) deployed; secrets kept.
+- [x] New sign-up/forgot-password code screens; phone test: wrong code rejected, correct code created account.
+- [x] Edit Profile (3D live card, bio, mood, genres, accent) saved and shown on profile; Password & security: wrong current password rejected, change worked, email-code reset worked.
+- [x] Used code clears the resend wait (test added); name letter shows in profile circle; temporary test account deleted.
+- [ ] Real Gmail sending: blocked until the 4 Gmail secrets are added on the Worker.
+- [ ] Passwords still readable in the public database: blocked until database rules can be locked (no rule-deploy access).
+
 ## Global chat fixes (2026-11-07)
 - [x] CEO "Ban permanent + delete all" deletes the member's messages (no index query); phone test removed 2 test messages.
 - [x] Message menu opens only on long-press; single tap verified to do nothing.
