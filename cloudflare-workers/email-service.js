@@ -260,7 +260,7 @@ async function gmailAccessToken(env, force = false) {
 }
 const encWord = (s) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${bytesToB64(enc.encode(s))}?=`);
 const wrap76 = (s) => s.match(/.{1,76}/g)?.join("\r\n") || "";
-export function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
+function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
   if ([from, to, subject, ref].some(hasCtl)) throw gmailError("bad_header", "Invalid header value");
   const b = `rs_${randBase36(18)}`;
   const head = [
@@ -316,7 +316,7 @@ function copyFor(purpose) {
     : { eyebrow: "ACCOUNT VERIFICATION", icon: "&#9993;&#65039;", title: "Verify your email address", subject: "Verify your RS ANIME email", button: "Verify Email",
         intro: "Welcome to RS ANIME! Enter the code below in the app, or tap the button, to confirm this email address belongs to you." };
 }
-export function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt }) {
+function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt }) {
   const c = copyFor(purpose);
   const year = new Date(requestedAt).getUTCFullYear();
   const host = site.replace(/^https?:\/\//, "");
@@ -436,7 +436,7 @@ a{text-decoration:none}img{border:0;outline:none}
 
 function pageHtml({ state, purpose, redirect, action, title, message }) {
   const ok = state === "success";
-  const icon = ok ? `<svg viewBox="0 0 52 52" class="ck"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>`
+  const icon = ok || state === "info" ? `<svg viewBox="0 0 52 52" class="ck${ok ? "" : " info"}"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>`
     : state === "confirm" ? `<div class="spin"></div>`
     : `<div class="bad">!</div>`;
   const btn = ok
@@ -456,7 +456,7 @@ ${ok ? `<meta http-equiv="refresh" content="4;url=${esc(redirect)}">` : ""}
 .card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,#1D4ED8,#3B82F6,#22D3EE)}
 .brand{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:800;letter-spacing:3px;font-size:16px;margin-bottom:26px}.brand img{width:38px;height:38px;border-radius:11px;border:1px solid #24376E}.brand span{color:#60A5FA}
 .ck{width:84px;height:84px;margin:0 auto 6px;display:block}.ck circle{fill:none;stroke:#22C55E;stroke-width:3;stroke-dasharray:160;stroke-dashoffset:160;animation:d .7s ease forwards}.ck path{fill:none;stroke:#22C55E;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:d .4s .6s ease forwards}
-@keyframes d{to{stroke-dashoffset:0}}
+@keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#60A5FA}
 .spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #1E2E5C;border-top-color:#3B82F6;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .bad{width:72px;height:72px;margin:6px auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:#FCA5A5;background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.45)}
 h1{margin:10px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#A9B6DA}
@@ -800,6 +800,8 @@ async function health(env, deep) {
 }
 
 export default {
+  // Exposed for the project's unit tests only (not routes).
+  _internals: { buildMime, emailTemplate, makeOtp, originAllowed },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);
@@ -829,7 +831,7 @@ export default {
       if (!originAllowed(origin, env)) return fail(cors, 403, "origin_not_allowed", "This website is not allowed to use the RS ANIME email service.");
       const missing = MISSING(env);
       if (missing.length) return fail(cors, 503, "not_configured", "Email service is not set up yet. Please try again later.", { missing });
-      if (String(req.headers.get("content-length") || "0") > "4096" && Number(req.headers.get("content-length")) > 4096) return fail(cors, 413, "too_large", "Request too large.");
+      if (Number(req.headers.get("content-length") || 0) > 4096) return fail(cors, 413, "too_large", "Request too large.");
       let body = {};
       try { body = await req.json(); } catch { return fail(cors, 400, "bad_json", "Request body must be JSON."); }
       if (!body || typeof body !== "object") return fail(cors, 400, "bad_json", "Request body must be JSON.");
