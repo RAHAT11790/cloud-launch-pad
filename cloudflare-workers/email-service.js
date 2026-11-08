@@ -215,6 +215,40 @@ async function dbTxn(env, path, fn, tries = 5) {
   throw err;
 }
 
+// Ticket states that can never go back to "pending" (kept in memory as well,
+// so replaying an old database snapshot cannot revive a finished code).
+const FINAL = new Set(["consumed", "replaced", "locked", "failed"]);
+/** Reads a ticket; a broken seal counts as "not found" (and is reported). */
+async function ticketGet(env, ctx, rid) {
+  const cur = await dbGet(env, `${ROOT}/tickets/${rid}`);
+  if (cur == null) return null;
+  if (!(await ticketValid(env, rid, cur))) { track(env, ctx, { tampered: 1 }, { k: "tampered" }); return null; }
+  return withShadow(rid, cur);
+}
+function withShadow(rid, cur) {
+  const a = Math.max(Number(cur.a) || 0, shadowGet(`a:${rid}`, Date.now()));
+  const fin = shadow.get(`st:${rid}`);
+  return { ...cur, a, ...(fin && FINAL.has(fin.v) && !FINAL.has(cur.st) ? { st: fin.v } : {}) };
+}
+/** Sealed optimistic transaction on one ticket. fn(cur|null) → { next, result }. */
+function ticketTxn(env, ctx, rid, fn) {
+  return dbTxn(env, `${ROOT}/tickets/${rid}`, async (raw) => {
+    let cur = null;
+    if (raw != null) {
+      if (await ticketValid(env, rid, raw)) cur = withShadow(rid, raw);
+      else track(env, ctx, { tampered: 1 }, { k: "tampered" });
+    }
+    const out = await fn(cur);
+    if (out.next !== undefined) {
+      const exp = Date.now() + DAY;
+      shadowPut(`a:${rid}`, Number(out.next.a) || 0, exp);
+      if (FINAL.has(out.next.st)) shadowSet(`st:${rid}`, out.next.st, exp);
+      out.next = await sealTicket(env, rid, out.next);
+    }
+    return out;
+  });
+}
+
 let settingsMemo = { v: null, exp: 0 };
 async function settings(env) {
   if (settingsMemo.v && settingsMemo.exp > Date.now()) return settingsMemo.v;
