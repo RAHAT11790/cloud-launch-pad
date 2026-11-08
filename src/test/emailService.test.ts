@@ -51,3 +51,19 @@ describe("admin-allowed sign-up domains", () => {
     expect(emailCanonicalKey("a.b@outlook.com")).not.toBe(emailCanonicalKey("ab@outlook.com"));
   });
 });
+
+import { vi } from "vitest";
+vi.mock("@/lib/edgeFunctionRouter", async (orig) => ({ ...(await orig<any>()), getEdgeFunctionUrl: async () => "https://email.test/" }));
+import { cooldownLeftMs, verifyEmailCode } from "@/lib/emailService";
+
+describe("resend wait after a used code", () => {
+  it("a correct code frees the email so a reset code can be sent right away", async () => {
+    const now = Date.now();
+    localStorage.setItem("rs_email_cooldown", JSON.stringify({ "user1234@gmail.com": now + 300_000 }));
+    expect(cooldownLeftMs("user1234@gmail.com", now)).toBeGreaterThan(0);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, email: "user1234@gmail.com", purpose: "register" })));
+    await verifyEmailCode("t", "123456");
+    expect(cooldownLeftMs("user1234@gmail.com", now)).toBe(0);
+    fetchMock.mockRestore();
+  });
+});
