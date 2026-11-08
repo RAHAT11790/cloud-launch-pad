@@ -1077,6 +1077,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">{branding.loginSubtitle}</p>
                 </div>
 
+                {linkNotice && (
+                  <div role="status" className="relative z-10 mb-4 flex items-start gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-[11px] leading-relaxed text-foreground">
+                    <span className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-primary-foreground" /></span>
+                    <span className="flex-1">{linkNotice}</span>
+                    <button onClick={() => setLinkNotice("")} aria-label="Dismiss" className="text-muted-foreground hover:text-foreground">✕</button>
+                  </div>
+                )}
+
                 <div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10">
                   <button
                     onClick={() => { setIsRegister(false); setDeviceLimitError(null); }}
