@@ -66,6 +66,14 @@ const StaticFloatingParticles = () => {
   );
 };
 
+const Spinner = () => <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" />;
+const InlineError = ({ text }: { text: string }) => (
+  <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[11.5px] leading-relaxed text-foreground">
+    <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-px" />
+    <span>{text}</span>
+  </div>
+);
+
 const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const SESSION_STARTED_AT_KEY = "rs_session_started_at";
   const branding = useBranding();
@@ -812,210 +820,183 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
   // ======= FORGOT PASSWORD SCREEN =======
   if (showForgotPw) {
+    const step = !forgotOtpSent ? 0 : forgotLinkState ? 2 : 1;
+    const pwOk = forgotNewPw.length >= 6 && forgotNewPw === forgotNewPwConfirm;
+    const fInput = "w-full py-3 pl-10 pr-10 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground";
     return (
-      <motion.div
-        className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      >
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div
-            className="absolute top-[-30%] left-[-20%] w-[80%] h-[80%] rounded-full"
-            style={{ background: "radial-gradient(circle, hsla(176,65%,48%,0.08) 0%, transparent 70%)" }}
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          />
+      <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/10 blur-3xl" />
         </div>
-        <StaticFloatingParticles />
-
-        <motion.div className="relative z-10 w-full max-w-[360px] px-5"
-          initial={{ y: 40, opacity: 0, scale: 0.9 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="relative">
-            <motion.div
-              className="absolute -inset-[2px] rounded-3xl opacity-60"
-              style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--primary)))" }}
-              animate={{ backgroundPosition: ["0% 50%", "200% 50%"] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            />
-            <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-              <button onClick={resetForgotState}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
-                <ArrowLeft className="w-4 h-4" /> Back
+        <motion.div className="relative w-full max-w-[370px] py-6" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+          <div className="relative glass-card-strong rounded-3xl p-5 border border-primary/20">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={step === 1 ? () => { setForgotOtpSent(false); setForgotOtp(""); setForgotError(""); } : resetForgotState}
+                className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="w-4 h-4" /> {step === 1 ? "Change email" : "Back to sign in"}
               </button>
+              <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP {step + 1}/3</span>
+            </div>
+            <StepDots steps={["Email", "Code", "New password"]} current={step} />
 
-              <motion.div className="text-center mb-5"
-                initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-              >
-                <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Mail className="w-7 h-7 text-primary" />
+            <div className="text-center mt-5">
+              <div className="relative w-14 h-14 mx-auto mb-3">
+                <div className="absolute inset-0 rounded-2xl gradient-primary rotate-6 opacity-40" />
+                <div className="relative w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center">
+                  {step === 2 ? <KeyRound className="w-7 h-7 text-primary-foreground" /> : <Mail className="w-7 h-7 text-primary-foreground" />}
                 </div>
-                <h2 className="text-xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif" }}>
-                  Reset Password
-                </h2>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  {forgotOtpSent
-                    ? (forgotLinkState ? "Email confirmed — choose your new password" : <>Enter the code sent to <b className="text-foreground break-all">{forgotEmail}</b>, or tap <b className="text-foreground">Reset Password</b> in the email</>)
-                    : "We'll email you a 6-digit code and a one-tap reset button"}
-                </p>
-              </motion.div>
+              </div>
+              <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>
+                {step === 0 ? "Forgot password?" : step === 1 ? "Enter your code" : "Set a new password"}
+              </h2>
+              <p className="text-[11.5px] text-muted-foreground mt-1.5 leading-relaxed">
+                {step === 0 ? "Enter your account email. We'll send a 6-digit code and a one-tap reset button."
+                  : step === 1 ? "Type the code from the email, or tap Reset Password inside it."
+                  : forgotLinkState === "link" ? "Email confirmed with the button — no code needed." : "Code accepted. Choose a strong new password."}
+              </p>
+            </div>
 
-              {forgotOtpSent ? (
-                <div className="space-y-3">
-                  {forgotLinkState ? (
-                    <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-xs text-foreground">
-                      <span className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-primary-foreground" /></span>
-                      <span>Email confirmed with the link — no code needed.</span>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="login-field-label text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
-                      <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="••••••" maxLength={6} inputMode="numeric" autoComplete="one-time-code"
-                        className="w-full py-3 px-4 rounded-xl login-input bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
-                    </div>
-                  )}
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
-                      placeholder="New password (min 4 chars)"
-                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input type="password" value={forgotNewPwConfirm} onChange={e => setForgotNewPwConfirm(e.target.value)}
-                      placeholder="Re-enter password"
-                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
-                  </div>
-                  <motion.button
-                    onClick={handleResetPasswordWithOtp}
-                    disabled={forgotLoading || (!forgotLinkState && forgotOtp.length !== 6) || !forgotNewPw}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
-                  >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> Reset Password</>}
-                  </motion.button>
-                  {!forgotLinkState && (
-                    <div className="flex items-center justify-between text-[11px]">
-                      <button onClick={() => { setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); clearPendingReset(); }} className="text-muted-foreground hover:text-foreground">← Change email</button>
-                      <button onClick={resendForgotCode} disabled={forgotLoading || forgotResendLeft > 0} className="font-semibold text-primary disabled:text-muted-foreground">
-                        {forgotResendLeft > 0 ? `Resend in ${forgotResendLeft}s` : "Resend code"}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
+            <div className="mt-5 space-y-3">
+              {step === 0 && (
+                <>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={forgotEmail}
-                      onChange={e => setForgotEmail(e.target.value)}
-                      className="w-full py-3 pl-10 pr-4 rounded-xl login-input bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
-                      style={{ boxShadow: "var(--neu-shadow-inset)" }}
-                    />
+                    <input type="email" inputMode="email" autoComplete="email" placeholder={`you@${access.allowedDomains[0]}`} value={forgotEmail} autoFocus
+                      onChange={e => { setForgotEmail(e.target.value); setForgotError(""); }}
+                      onKeyDown={e => { if (e.key === "Enter") handleForgotPassword(); }}
+                      className={fInput} style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                   </div>
-
-                  <motion.button
-                    onClick={handleForgotPassword}
-                    disabled={forgotLoading || !forgotEmail.trim()}
-                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
-                  >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> Send Code</>}
+                  {forgotError && <InlineError text={forgotError} />}
+                  <motion.button onClick={handleForgotPassword} disabled={forgotLoading || !forgotEmail.trim()} whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+                    {forgotLoading ? <Spinner /> : <><Mail className="w-4 h-4" /> Send code</>}
                   </motion.button>
-
-                  <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
-                    className="block text-center text-[11px] text-primary/60 hover:text-primary hover:underline mt-3">
-                    📩 Having trouble? Contact Owner
-                  </a>
-                </div>
+                  <SecureNote>You can ask for up to 3 codes a day. Each code works once and only for a few minutes.</SecureNote>
+                </>
               )}
+
+              {step === 1 && (
+                <>
+                  <SentToCard email={forgotEmail} note="Check Spam or Promotions if you can't see it." />
+                  <OtpBoxes value={forgotOtp} onChange={(v) => { setForgotOtp(v); if (forgotError) setForgotError(""); }}
+                    onComplete={(v) => void confirmForgotCode(v)} disabled={forgotLoading} error={!!forgotError} />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    {forgotMeta && <CodeTimer expiresAt={forgotMeta.expiresAt} totalMs={forgotMeta.totalMs} now={nowTick} />}
+                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" /><span className="relative w-2 h-2 rounded-full bg-primary" /></span>
+                      Watching for the button
+                    </span>
+                  </div>
+                  {forgotError && <InlineError text={forgotError} />}
+                  <motion.button onClick={() => confirmForgotCode()} disabled={forgotLoading || forgotOtp.length !== 6} whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+                    {forgotLoading ? <Spinner /> : <><Check className="w-4 h-4" /> Continue</>}
+                  </motion.button>
+                  <div className="flex items-center justify-between">
+                    <DailyPips left={forgotMeta?.dailyLeft ?? null} max={forgotMeta?.dailyMax ?? null} />
+                    <ResendButton waitSec={forgotResendLeft} busy={forgotLoading} onClick={resendForgotCode} dailyLeft={forgotMeta?.dailyLeft} />
+                  </div>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  <div className="flex items-center gap-2.5 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3.5 py-2.5 text-[11.5px] text-foreground">
+                    <span className="w-6 h-6 rounded-full bg-emerald-400/90 flex items-center justify-center shrink-0"><Check className="w-3.5 h-3.5 text-background" /></span>
+                    <span className="min-w-0">Verified <b className="block truncate">{forgotEmail}</b></span>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type={showForgotPwText ? "text" : "password"} value={forgotNewPw} autoFocus autoComplete="new-password"
+                      onChange={e => { setForgotNewPw(e.target.value); setForgotError(""); }} placeholder="New password (min 6)" className={fInput} />
+                    <button type="button" onClick={() => setShowForgotPwText(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2" aria-label="Show password">
+                      {showForgotPwText ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  </div>
+                  <PasswordStrength value={forgotNewPw} />
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type={showForgotPwText ? "text" : "password"} value={forgotNewPwConfirm} autoComplete="new-password"
+                      onChange={e => { setForgotNewPwConfirm(e.target.value); setForgotError(""); }}
+                      onKeyDown={e => { if (e.key === "Enter") handleResetPasswordWithOtp(); }}
+                      placeholder="Re-enter new password" className={fInput} />
+                    {forgotNewPwConfirm && <span className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                      {forgotNewPw === forgotNewPwConfirm ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4 text-destructive" />}
+                    </span>}
+                  </div>
+                  {forgotError && <InlineError text={forgotError} />}
+                  <motion.button onClick={handleResetPasswordWithOtp} disabled={forgotLoading || !pwOk} whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+                    {forgotLoading ? <Spinner /> : <><KeyRound className="w-4 h-4" /> Save new password</>}
+                  </motion.button>
+                </>
+              )}
+
+              <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
+                className="block text-center text-[11px] text-primary/70 hover:text-primary hover:underline pt-1">
+                Having trouble? Contact the owner
+              </a>
             </div>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     );
   }
 
   // ======= SIGN-UP EMAIL VERIFICATION SCREEN =======
   if (verifyPending) {
     const digits = verifyCode.replace(/\D/g, "").slice(0, 6);
-    const codeLeft = Math.max(0, Math.ceil((verifyPending.expiresAt - nowTick) / 1000));
-    const codeClock = `${Math.floor(codeLeft / 60)}:${String(codeLeft % 60).padStart(2, "0")}`;
+    const meta = verifyMeta || { expiresAt: verifyPending.expiresAt, totalMs: 5 * 60_000, dailyLeft: null, dailyMax: null };
     return (
       <div className="fixed inset-0 z-[9999] bg-background flex items-center justify-center px-5 overflow-y-auto">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl" />
-          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/15 blur-3xl" />
+          <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-accent/10 blur-3xl" />
         </div>
-        <motion.div className="relative w-full max-w-[360px]" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-          <div className="relative glass-card-strong rounded-3xl p-6 border border-primary/25">
-            <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); }}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
-              <ArrowLeft className="w-4 h-4" /> Change email
-            </button>
-            <div className="text-center">
-              <div className="relative w-16 h-16 mx-auto mb-3">
+        <motion.div className="relative w-full max-w-[370px] py-6" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+          <div className="relative glass-card-strong rounded-3xl p-5 border border-primary/20">
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); setVerifyMeta(null); }}
+                className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="w-4 h-4" /> Change email
+              </button>
+              <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP 2/2</span>
+            </div>
+            <StepDots steps={["Your details", "Verify email"]} current={1} />
+            <div className="text-center mt-5">
+              <div className="relative w-14 h-14 mx-auto mb-3">
                 <div className="absolute inset-0 rounded-2xl gradient-primary rotate-6 opacity-40" />
-                <div className="relative w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center">
-                  <Mail className="w-8 h-8 text-primary-foreground" />
+                <div className="relative w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center">
+                  <Mail className="w-7 h-7 text-primary-foreground" />
                 </div>
               </div>
               <h2 className="text-xl font-black text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>Check your email</h2>
-              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                We sent a 6-digit code to<br /><span className="font-bold text-primary break-all">{verifyPending.email}</span>
-              </p>
+              <p className="text-[11.5px] text-muted-foreground mt-1.5 leading-relaxed">Type the 6-digit code, or tap <b className="text-foreground">Verify Email</b> in the email — this screen finishes by itself.</p>
             </div>
 
-            <label className="relative block mt-5" aria-label="Verification code">
-              <input value={digits} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6}
-                onKeyDown={e => { if (e.key === "Enter") submitVerifyCode(); }}
-                className="absolute inset-0 w-full h-full opacity-0 z-10" aria-label="6-digit code" />
-              <div className="grid grid-cols-6 gap-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className={`h-12 rounded-xl flex items-center justify-center text-xl font-black border transition-colors ${
-                    digits[i] ? "border-primary bg-primary/10 text-foreground" : i === digits.length ? "border-primary/60 bg-secondary text-muted-foreground" : "border-border bg-secondary text-muted-foreground"}`}>
-                    {digits[i] || ""}
-                  </div>
-                ))}
+            <div className="mt-5 space-y-3">
+              <SentToCard email={verifyPending.email} note="Check Spam or Promotions if you can't see it." />
+              <OtpBoxes value={digits} onChange={(v) => { setVerifyCode(v); if (verifyError) setVerifyError(""); }}
+                onComplete={(v) => void submitVerifyCode(v)} disabled={verifyLoading} error={!!verifyError} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CodeTimer expiresAt={meta.expiresAt} totalMs={meta.totalMs} now={nowTick} />
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" /><span className="relative w-2 h-2 rounded-full bg-primary" /></span>
+                  Watching for the button
+                </span>
               </div>
-            </label>
-
-            <div className="mt-2.5 flex items-center justify-between text-[11px]">
-              <span className={codeLeft > 0 ? "text-muted-foreground" : "text-destructive font-semibold"}>
-                {codeLeft > 0 ? <>Code expires in <b className="text-foreground tabular-nums">{codeClock}</b></> : "Code expired — tap Resend code"}
-              </span>
-              <span className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-60" /><span className="relative w-2 h-2 rounded-full bg-primary" /></span>
-                Waiting for link
-              </span>
-            </div>
-
-            {verifyError && (
-              <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[11px] leading-relaxed text-foreground">
-                <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-px" />
-                <span>{verifyError}</span>
+              {verifyError && <InlineError text={verifyError} />}
+              <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
+                className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
+                {verifyLoading ? <Spinner /> : <><Check className="w-4 h-4" /> Verify &amp; create account</>}
+              </motion.button>
+              <div className="flex items-center justify-between">
+                <DailyPips left={meta.dailyLeft} max={meta.dailyMax} />
+                <ResendButton waitSec={resendLeft} busy={verifyLoading} onClick={resendVerifyCode} dailyLeft={meta.dailyLeft} />
               </div>
-            )}
-
-            <motion.button whileTap={{ scale: 0.98 }} onClick={() => submitVerifyCode()} disabled={verifyLoading || digits.length !== 6}
-              className="w-full mt-5 py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50">
-              {verifyLoading ? <span className="animate-spin w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full" /> : <><Check className="w-4 h-4" /> Verify & create account</>}
-            </motion.button>
-
-            <div className="mt-4 rounded-xl bg-foreground/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
-              💡 Or tap <b className="text-foreground">Verify Email</b> inside the email — on any phone or browser. This screen finishes by itself. Can't find it? Check Spam or Promotions.
+              <SecureNote>Never share this code. {branding.siteName} will never ask for it.</SecureNote>
             </div>
-
-            <button onClick={resendVerifyCode} disabled={verifyLoading || resendLeft > 0}
-              className="w-full mt-3 text-xs font-semibold text-primary disabled:text-muted-foreground">
-              {resendLeft > 0 ? `Resend code in ${resendLeft}s` : "Resend code"}
-            </button>
           </div>
         </motion.div>
       </div>
