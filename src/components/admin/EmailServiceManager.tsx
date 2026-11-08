@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Mail, Activity, Loader2, CheckCircle2, XCircle, ShieldCheck, Send, BarChart3, Clock, KeyRound, Trash2,
-  Settings2, Eye, RefreshCw, AlertTriangle, Link as LinkIcon, Gauge, ListChecks, ChevronDown,
+  Settings2, Eye, RefreshCw, AlertTriangle, Link as LinkIcon, Gauge, ListChecks, ChevronDown, Lock, Unlock, Fingerprint,
 } from "lucide-react";
 import { db, ref, onValue, set, remove, query, limitToLast } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
@@ -15,9 +15,13 @@ type Props = { glassCard: string; inputClass: string; btnPrimary: string; btnSec
 type Health = {
   ok: boolean; service?: string; provider?: string; ready?: boolean; missing?: string[]; sender?: string | null; senderValid?: boolean;
   optional?: Record<string, boolean>;
-  gmail?: { ok: boolean; code: string; ms: number; message: string };
+  gmail?: { ok: boolean; code: string; ms: number; message: string; scope?: string; accessExpiresAt?: number; refreshExpiresAt?: number; checkedAt?: number };
+  today?: { day: string; sent: number; limit: number; left: number; resetsInSec: number };
+  last?: { ok: boolean; lastOkAt: number; lastErrAt: number; lastErr: string; lastErrMsg: string; lastMs: number } | null;
+  security?: Record<string, boolean>;
+  settings?: Partial<EmailServiceSettings>;
 };
-type EventRow = { id: string; t: number; k: string; p?: string; m?: string; ms?: number; err?: string; why?: string };
+type EventRow = { id: string; t: number; k: string; p?: string; m?: string; email?: string; ms?: number; err?: string; why?: string; r?: string };
 
 const REQUIRED = ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "GMAIL_SENDER_EMAIL"];
 const EVENT_LOOK: Record<string, { label: string; tone: string }> = {
@@ -30,15 +34,37 @@ const EVENT_LOOK: Record<string, { label: string; tone: string }> = {
   locked: { label: "Locked (too many tries)", tone: "text-red-400" },
   expired: { label: "Expired", tone: "text-zinc-400" },
   limited: { label: "Rate limited", tone: "text-amber-300" },
+  tampered: { label: "Tampered record blocked", tone: "text-red-400" },
+};
+const WHY: Record<string, string> = {
+  cooldown: "asked again before the wait ended", email_daily: "used all codes for today", daily: "service daily cap reached",
+  minute: "too many requests this minute", ip_hourly: "network hourly limit", ip_daily: "network daily limit", race: "double tap",
 };
 const SETTING_LABELS: Record<keyof EmailServiceSettings, [string, string]> = {
   otpMinutes: ["Code valid", "min"],
   linkMinutes: ["Button link valid", "min"],
-  cooldownSeconds: ["Resend wait", "sec"],
+  cooldownSeconds: ["Resend wait (1 live code)", "sec"],
   maxAttempts: ["Wrong tries allowed", "tries"],
-  dailyLimit: ["Emails per day", "max"],
-  hourlyPerEmail: ["Per email / hour", "max"],
+  perEmailDaily: ["Codes per email / day", "max"],
+  perIpDaily: ["Per network / day", "max"],
   hourlyPerIp: ["Per network / hour", "max"],
+  perMinute: ["Whole service / minute", "max"],
+  dailyLimit: ["Whole service / day", "max"],
+};
+const ago = (t: number, now = Date.now()) => {
+  if (!t) return "never";
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+};
+const until = (t: number, now = Date.now()) => {
+  const s = Math.round((t - now) / 1000);
+  if (s <= 0) return "now";
+  if (s < 3600) return `${Math.ceil(s / 60)} min`;
+  if (s < 86400) return `${Math.round(s / 3600)} h`;
+  return `${Math.round(s / 86400)} days`;
 };
 
 const fmtTime = (t: number) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
@@ -57,6 +83,23 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
   const [preview, setPreview] = useState<{ type: "register" | "reset"; html: string; loading: boolean } | null>(null);
   const [resetLogs, setResetLogs] = useState<any[]>([]);
   const [showGuide, setShowGuide] = useState(false);
+  const [pin, setPin] = useState("");
+  const [fullEvents, setFullEvents] = useState<EventRow[] | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [pinError, setPinError] = useState("");
+
+  const unlockFull = async () => {
+    if (!url || !pin.trim()) return;
+    setUnlocking(true); setPinError("");
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "admin-events", pin: pin.trim(), limit: 80 }) });
+      const d = await r.json().catch(() => ({}));
+      if (!d?.ok) { setPinError(d?.message || "Could not unlock"); setUnlocking(false); return; }
+      setFullEvents(d.events || []);
+      setPin("");
+    } catch { setPinError("Can't reach the email server"); }
+    setUnlocking(false);
+  };
 
   useEffect(() => { getEdgeFunctionUrl("email-service").then((u) => setUrl(u || "")).catch(() => {}); }, []);
   useEffect(() => onValue(query(ref(db, "emailAuth/stats"), limitToLast(14)), (s) => setStats(s.val() || {}), () => {}), []);
@@ -109,7 +152,10 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
   const todaySum = summarizeEmailStats([today]);
   const weekSum = summarizeEmailStats(days.map((d) => stats[d] || {}));
   const maxBar = Math.max(1, ...days.map((d) => Number(stats[d]?.sent || 0) + Number(stats[d]?.failed || 0)));
-  const quotaPct = Math.min(100, Math.round((todaySum.sent / Math.max(1, settingsDraft.dailyLimit)) * 100));
+  const sentToday = Math.max(todaySum.sent, health?.today?.sent || 0);
+  const quotaPct = Math.min(100, Math.round((sentToday / Math.max(1, settingsDraft.dailyLimit)) * 100));
+  const shownEvents = fullEvents || events;
+  const rtx = health?.gmail?.refreshExpiresAt || 0;
 
   const missing = health?.missing || [];
   const ready = !!health?.ready;
@@ -166,6 +212,50 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         )}
       </div>
 
+      {/* API + token health */}
+      <div className={`${glassCard} p-4 space-y-2.5`}>
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><Fingerprint size={14} className="text-sky-400" /> API &amp; token health</h3>
+        {(() => {
+          const rows: [string, string, "ok" | "bad" | "warn" | "off"][] = [
+            ["Gmail API", !health?.gmail ? "Not checked yet" : gmailOk ? `Working · ${health.gmail.ms} ms` : `${health.gmail.code}`, !health?.gmail ? "off" : gmailOk ? "ok" : "bad"],
+            ["Refresh token", !health?.gmail ? "—" : !gmailOk ? (health.gmail.code === "gmail_token_revoked" ? "Expired or revoked" : "Not working") : rtx ? `Expires in ${until(rtx)} (Google app in Testing mode)` : "Valid · no expiry reported", !health?.gmail ? "off" : !gmailOk ? "bad" : rtx ? "warn" : "ok"],
+            ["Access token", health?.gmail?.accessExpiresAt ? `Fresh · renews in ${until(health.gmail.accessExpiresAt)}` : "—", health?.gmail?.accessExpiresAt ? "ok" : "off"],
+            ["Send permission", health?.gmail ? (health.gmail.scope ? (/gmail\.send|mail\.google\.com/.test(health.gmail.scope) ? "gmail.send granted" : "gmail.send missing") : gmailOk ? "granted" : "—") : "—", health?.gmail ? (gmailOk ? "ok" : "bad") : "off"],
+            ["Last email sent", health?.last?.lastOkAt ? `${ago(health.last.lastOkAt)}${health.last.lastMs ? ` · ${health.last.lastMs} ms` : ""}` : "No email yet", health?.last?.lastOkAt ? "ok" : "off"],
+            ["Last error", health?.last?.lastErrAt ? `${health.last.lastErr} · ${ago(health.last.lastErrAt)}` : "None", health?.last?.lastErrAt ? (health.last.ok ? "warn" : "bad") : "ok"],
+            ["Server version", health?.service || "—", health?.service ? (health.service.endsWith("v4") ? "ok" : "warn") : "off"],
+          ];
+          const dot = { ok: "bg-emerald-400", bad: "bg-red-500", warn: "bg-amber-400", off: "bg-zinc-600" };
+          return (
+            <div className="divide-y divide-white/5 rounded-xl border border-white/5 bg-white/[0.03]">
+              {rows.map(([k, v, t]) => (
+                <div key={k} className="flex items-center gap-2.5 px-3 py-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dot[t]}`} />
+                  <span className="text-[10.5px] text-zinc-400 w-[96px] shrink-0">{k}</span>
+                  <span className="text-[10.5px] text-zinc-100 min-w-0 flex-1 truncate text-right">{v}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+        {health?.last?.lastErrMsg && !health.last.ok && <p className="text-[9.5px] text-red-300/80 break-words">{health.last.lastErrMsg}</p>}
+        {health?.service && !health.service.endsWith("v4") && <p className="text-[9.5px] text-amber-300/90">The live Worker is older than this panel. Redeploy <b>email-service</b> from Cloudflare Manager to get the new limits and protection.</p>}
+        {health?.gmail?.checkedAt && <p className="text-[9px] text-zinc-600">Checked {ago(health.gmail.checkedAt)} (cached 1 min on the server)</p>}
+      </div>
+
+      {/* Limits in plain words */}
+      <div className={`${glassCard} p-4 space-y-2`}>
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><ShieldCheck size={14} className="text-emerald-400" /> Anti-spam protection</h3>
+        <ul className="text-[10.5px] text-zinc-300 leading-relaxed space-y-1">
+          <li>• One live code per email — a new one only after <b>{Math.round(settingsDraft.cooldownSeconds / 60 * 10) / 10} min</b></li>
+          <li>• <b>{settingsDraft.perEmailDaily}</b> codes per email per day (resets at midnight, Bangladesh time)</li>
+          <li>• <b>{settingsDraft.hourlyPerIp}</b>/hour and <b>{settingsDraft.perIpDaily}</b>/day from one network (IP)</li>
+          <li>• Whole service: <b>{settingsDraft.perMinute}</b>/minute, <b>{settingsDraft.dailyLimit}</b>/day</li>
+          <li>• Code valid <b>{settingsDraft.otpMinutes} min</b>, button <b>{settingsDraft.linkMinutes} min</b>, <b>{settingsDraft.maxAttempts}</b> wrong tries then locked</li>
+          <li>• Codes, links and emails are hashed/encrypted; every request record is signed, so edited or rolled-back records are refused{weekSum.tampered ? <> — <b className="text-red-300">{weekSum.tampered} blocked this week</b></> : null}</li>
+        </ul>
+      </div>
+
       {/* Secrets */}
       <div className={`${glassCard} p-4 space-y-2.5`}>
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><ShieldCheck size={14} className="text-emerald-400" /> Cloudflare secrets</h3>
@@ -184,7 +274,7 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         </div>
         {health?.optional && (
           <p className="text-[9px] text-zinc-500 leading-relaxed">
-            Optional: EMAIL_SECRET {health.optional.EMAIL_SECRET ? "✓" : "—"} · SITE_URL {health.optional.SITE_URL ? "✓" : "—"} · FIREBASE_DB_URL {health.optional.FIREBASE_DB_URL ? "✓" : "—"} · FIREBASE_DB_SECRET {health.optional.FIREBASE_DB_SECRET ? "✓" : "—"}
+            Optional: EMAIL_SECRET {health.optional.EMAIL_SECRET ? "✓" : "—"} · SITE_URL {health.optional.SITE_URL ? "✓" : "—"} · FIREBASE_DB_URL {health.optional.FIREBASE_DB_URL ? "✓" : "—"} · FIREBASE_DB_SECRET {health.optional.FIREBASE_DB_SECRET ? "✓" : "—"} · ADMIN_PIN {health.optional.ADMIN_PIN ? "✓" : "— (needed to see full emails)"}
           </p>
         )}
         <button onClick={() => setShowGuide((v) => !v)} className="w-full flex items-center justify-between text-[11px] text-sky-300 pt-1">
@@ -211,12 +301,12 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         </div>
         <div>
           <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
-            <span>Daily limit</span><span className="tabular-nums text-zinc-300">{todaySum.sent} / {settingsDraft.dailyLimit}</span>
+            <span>Daily limit</span><span className="tabular-nums text-zinc-300">{sentToday} / {settingsDraft.dailyLimit}{health?.today ? ` · resets in ${until(Date.now() + health.today.resetsInSec * 1000)}` : ""}</span>
           </div>
           <div className="h-2 rounded-full bg-white/5 overflow-hidden">
             <div className={`h-full rounded-full ${quotaPct > 85 ? "bg-red-500" : quotaPct > 60 ? "bg-amber-400" : "bg-gradient-to-r from-blue-600 to-cyan-400"}`} style={{ width: `${quotaPct}%` }} />
           </div>
-          <p className="text-[9px] text-zinc-600 mt-1">A personal Gmail account can send about 500 emails a day.</p>
+          <p className="text-[9px] text-zinc-600 mt-1">A personal Gmail account can send about 500 emails a day — keep this cap below it so Google never flags the account.</p>
         </div>
       </div>
 
@@ -264,13 +354,31 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><Activity size={14} className="text-sky-400" /> Live activity</h3>
           {events.length > 0 && (
-            <button onClick={async () => { if (!confirm("Clear the activity list?")) return; await remove(ref(db, "emailAuth/events")); toast.success("Cleared"); }}
+            <button onClick={async () => { if (!confirm("Clear the activity list?")) return; await remove(ref(db, "emailAuth/events")); setFullEvents(null); toast.success("Cleared"); }}
               className={`${btnSecondary} px-2 py-1 text-[9px] flex items-center gap-1`}><Trash2 size={9} /> Clear</button>
           )}
         </div>
-        {events.length === 0 ? <p className="text-[11px] text-zinc-600 text-center py-3">No email activity yet</p> : (
-          <div className="space-y-1 max-h-[320px] overflow-y-auto">
-            {events.map((e) => {
+        {fullEvents ? (
+          <div className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10.5px] text-emerald-200">
+            <span className="flex items-center gap-1.5"><Unlock size={11} /> Full emails shown (this screen only)</span>
+            <button onClick={() => setFullEvents(null)} className="font-semibold text-emerald-100">Hide</button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex gap-2">
+              <input type="password" inputMode="numeric" value={pin} onChange={(e) => { setPin(e.target.value); setPinError(""); }} placeholder="Worker ADMIN_PIN"
+                onKeyDown={(e) => { if (e.key === "Enter") void unlockFull(); }} className={`${inputClass} flex-1 px-3 py-2 text-xs`} />
+              <button onClick={unlockFull} disabled={unlocking || !pin.trim() || !url} className={`${btnSecondary} px-3 text-[10.5px] flex items-center gap-1.5 disabled:opacity-40`}>
+                {unlocking ? <Loader2 size={11} className="animate-spin" /> : <Lock size={11} />} Show full emails
+              </button>
+            </div>
+            {pinError && <p className="text-[10px] text-red-300">{pinError}</p>}
+            <p className="text-[9px] text-zinc-600">Emails are stored encrypted. Only the email server can open them, after it checks its own ADMIN_PIN secret.</p>
+          </div>
+        )}
+        {shownEvents.length === 0 ? <p className="text-[11px] text-zinc-600 text-center py-3">No email activity yet</p> : (
+          <div className="space-y-1 max-h-[360px] overflow-y-auto">
+            {shownEvents.map((e) => {
               const look = EVENT_LOOK[e.k] || { label: e.k, tone: "text-zinc-300" };
               return (
                 <div key={e.id} className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2">
@@ -279,10 +387,11 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
                     <span className="text-[9px] text-zinc-500 shrink-0">{e.t ? fmtTime(e.t) : ""}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <span className="text-[10px] text-zinc-400 font-mono truncate">{e.m || "—"}{e.p ? ` · ${e.p === "reset" ? "reset" : "sign-up"}` : ""}</span>
+                    <span className={`text-[10px] font-mono truncate ${e.email ? "text-zinc-100" : "text-zinc-400"}`}>{e.email || e.m || "—"}{e.p ? ` · ${e.p === "reset" ? "reset" : "sign-up"}` : ""}{e.r ? ` · #${e.r}` : ""}</span>
                     {e.ms != null && <span className="text-[9px] text-zinc-500 shrink-0">{e.ms} ms</span>}
                   </div>
-                  {(e.err || e.why) && <p className="text-[9px] text-red-300/80 mt-1 break-words">{e.err}{e.why ? ` — ${e.why}` : ""}</p>}
+                  {e.k === "limited" && e.why && <p className="text-[9px] text-amber-300/80 mt-1">{WHY[e.why] || e.why}</p>}
+                  {e.k !== "limited" && (e.err || e.why) && <p className="text-[9px] text-red-300/80 mt-1 break-words">{e.err}{e.why ? ` — ${e.why}` : ""}</p>}
                 </div>
               );
             })}
