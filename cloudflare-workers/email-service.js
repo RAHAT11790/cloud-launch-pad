@@ -623,83 +623,148 @@ const PUBLIC_ERRORS = {
 const publicGmailMessage = (code) => PUBLIC_ERRORS[code] || "Email could not be sent right now. Please try again in a few minutes.";
 
 // ---------------- core flows ----------------
+function noteHealth(env, ctx, patch) {
+  const p = dbPatch(env, `${ROOT}/health`, patch).catch(() => 0);
+  if (ctx?.waitUntil) ctx.waitUntil(p);
+}
+const bump = (cur, n) => Math.max(Number(cur) || 0, n);
+
+async function refundSend(env, { day, eh, ih, rid, prevLast, hb }) {
+  const now = Date.now();
+  await Promise.allSettled([
+    dbTxn(env, `${ROOT}/rl/mail/${day}/${eh}`, (cur) => (cur && cur.rid === rid
+      ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), last: Number(cur.prevLast) || 0 }, result: 1 }
+      : { result: 0 })),
+    dbTxn(env, `${ROOT}/rl/ip/${day}/${ih}`, (cur) => (cur
+      ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), hn: cur.hb === hb ? Math.max(0, (Number(cur.hn) || 1) - 1) : Number(cur.hn) || 0 }, result: 1 }
+      : { result: 0 })),
+  ]);
+  const dayExp = now + msToDayEnd(now);
+  shadowSet(`md:${day}:${eh}`, Math.max(0, shadowGet(`md:${day}:${eh}`, now) - 1), dayExp);
+  shadowSet(`ml:${eh}`, prevLast || 0, now + 2 * DAY);
+  shadowSet(`ipd:${day}:${ih}`, Math.max(0, shadowGet(`ipd:${day}:${ih}`, now) - 1), dayExp);
+  shadowSet(`iph:${hb}:${ih}`, Math.max(0, shadowGet(`iph:${hb}:${ih}`, now) - 1), now + HOUR);
+}
+
+/** Per-email gate (one live code + daily count), read-only. */
+function mailGate(cfg, now, cur, prev, eh, day) {
+  const n = Math.max(Number(cur?.n) || 0, shadowGet(`md:${day}:${eh}`, now));
+  const last = Math.max(Number(cur?.last) || 0, Number(prev?.last) || 0, shadowGet(`ml:${eh}`, now));
+  const wait = last + cfg.cooldownSeconds * 1000 - now;
+  if (wait > 0) return { err: "cooldown", wait, n, last };
+  if (n >= cfg.perEmailDaily) return { err: "email_daily", n, last };
+  return { n, last };
+}
+
 async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, replaces }) {
   const cfg = await settings(env);
   const now = Date.now();
-  const eh = await hash(env, "email", email);
-  const ih = await hash(env, "ip", ip);
+  const day = dayKey(now);
+  const dayExp = now + msToDayEnd(now);
+  const toMidnight = Math.ceil(msToDayEnd(now) / 1000);
   const hb = hourBucket(now);
+  const [eh, ih, ec] = await Promise.all([hash(env, "email", email), hash(env, "ip", ip), seal(env, email)]);
+  const m = maskEmail(email);
+  const ev = (k, extra = {}) => ({ k, p: purpose, m, ec, ...extra });
+  const limited = (error, why, message, extra = {}) => {
+    track(env, ctx, { limited: 1 }, ev("limited", { why }));
+    return fail(cors, 429, error, message, extra);
+  };
+  const mailPath = `${ROOT}/rl/mail/${day}/${eh}`;
+  const prevDay = await dbGet(env, `${ROOT}/rl/mail/${dayKey(now - DAY)}/${eh}`).catch(() => null);
 
-  const sentToday = Number(await dbGet(env, `${ROOT}/stats/${dayKey(now)}/sent`).catch(() => 0)) || 0;
-  if (sentToday >= cfg.dailyLimit) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: "daily_limit" });
-    return fail(cors, 429, "daily_limit", "Today's email limit is reached. Please try again tomorrow.");
+  // 1) One live code per email + daily limit. Checked first and read-only, so a
+  //    rejected request never uses up any other counter.
+  const pre = mailGate(cfg, now, await dbGet(env, mailPath), prevDay, eh, day);
+  if (pre.err === "cooldown") {
+    const s = Math.ceil(pre.wait / 1000);
+    return limited("cooldown", "cooldown", `A code was already sent. You can ask for a new one in ${s >= 60 ? `${Math.ceil(s / 60)} min` : `${s}s`}.`, { retryAfter: s, dailyLeft: Math.max(0, cfg.perEmailDaily - pre.n), dailyMax: cfg.perEmailDaily });
+  }
+  if (pre.err === "email_daily") {
+    return limited("email_daily", "email_daily", `You've used all ${cfg.perEmailDaily} codes for this email today. Please try again tomorrow.`, { retryAfter: toMidnight, dailyLeft: 0, dailyMax: cfg.perEmailDaily });
   }
 
-  const ipOk = await dbTxn(env, `${ROOT}/ip/${hb}/${ih}`, (cur) => {
-    const n = Number(cur) || 0;
-    return n >= cfg.hourlyPerIp ? { result: false } : { next: n + 1, result: true };
+  // 2) Whole-service daily cap (keeps the Gmail account far below Google's limits).
+  const sentToday = Math.max(Number(await dbGet(env, `${ROOT}/stats/${day}/sent`).catch(() => 0)) || 0, shadowGet(`g:${day}`, now));
+  if (sentToday >= cfg.dailyLimit) return limited("daily_limit", "daily", "Today's email limit is reached. Please try again tomorrow.", { retryAfter: toMidnight });
+
+  // 3) Burst cap for the whole service (per minute).
+  const mb = minuteBucket(now);
+  const minN = await dbTxn(env, `${ROOT}/rl/min/${mb}`, (cur) => {
+    const n = Math.max(Number(cur) || 0, shadowGet(`min:${mb}`, now));
+    return n >= cfg.perMinute ? { result: 0 } : { next: n + 1, result: n + 1 };
   });
-  if (!ipOk) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: "ip_hourly" });
-    return fail(cors, 429, "too_many", "Too many emails from this network. Please try again in an hour.", { retryAfter: 3600 });
-  }
+  if (!minN) return limited("busy", "minute", "Lots of people are requesting codes right now. Please try again in a minute.", { retryAfter: 60 });
+  shadowPut(`min:${mb}`, minN, now + 120_000);
 
-  const prevBucket = await dbGet(env, `${ROOT}/mail/${Number(hb) - 1}/${eh}`).catch(() => null);
+  // 4) Per network (IP): hourly + daily.
+  const ipOut = await dbTxn(env, `${ROOT}/rl/ip/${day}/${ih}`, (cur) => {
+    const n = Math.max(Number(cur?.n) || 0, shadowGet(`ipd:${day}:${ih}`, now));
+    const hn = Math.max(cur?.hb === hb ? Number(cur?.hn) || 0 : 0, shadowGet(`iph:${hb}:${ih}`, now));
+    if (n >= cfg.perIpDaily) return { result: { err: "ip_daily" } };
+    if (hn >= cfg.hourlyPerIp) return { result: { err: "ip_hourly" } };
+    return { next: { n: n + 1, hb, hn: hn + 1 }, result: { n: n + 1, hn: hn + 1 } };
+  });
+  if (ipOut.err === "ip_daily") return limited("too_many", "ip_daily", "Too many emails from this network today. Please try again tomorrow.", { retryAfter: toMidnight });
+  if (ipOut.err) return limited("too_many", "ip_hourly", "Too many emails from this network. Please try again in an hour.", { retryAfter: 3600 });
+  shadowPut(`ipd:${day}:${ih}`, ipOut.n, dayExp);
+  shadowPut(`iph:${hb}:${ih}`, ipOut.hn, now + HOUR);
+
+  // 5) Reserve the email slot (re-checked inside the transaction).
   const rid = `${now.toString(36)}${randBase36(12)}`;
-  const gate = await dbTxn(env, `${ROOT}/mail/${hb}/${eh}`, (cur) => {
-    const last = Math.max(Number(cur?.last) || 0, Number(prevBucket?.last) || 0);
-    const wait = last + cfg.cooldownSeconds * 1000 - now;
-    if (wait > 0) return { result: { err: "cooldown", wait } };
-    if ((Number(cur?.n) || 0) >= cfg.hourlyPerEmail) return { result: { err: "email_hourly" } };
-    return { next: { n: (Number(cur?.n) || 0) + 1, last: now, rid, prevLast: last }, result: { prevRid: cur?.rid || prevBucket?.rid || "", prevLast: last } };
+  const gate = await dbTxn(env, mailPath, (cur) => {
+    const g = mailGate(cfg, now, cur, prevDay, eh, day);
+    if (g.err) return { result: g };
+    return { next: { n: g.n + 1, last: now, rid, prevLast: g.last }, result: { n: g.n + 1, prevLast: g.last, prevRid: cur?.rid || prevDay?.rid || "" } };
   });
-  if (gate.err === "cooldown") {
-    const retryAfter = Math.ceil(gate.wait / 1000);
-    return fail(cors, 429, "cooldown", `Please wait ${retryAfter}s before asking for another email.`, { retryAfter });
-  }
-  if (gate.err) {
-    track(env, ctx, { limited: 1 }, { k: "limited", p: purpose, m: maskEmail(email), err: gate.err });
-    return fail(cors, 429, "too_many", "Too many emails to this address. Please try again in an hour.", { retryAfter: 3600 });
-  }
+  if (gate.err) return limited("cooldown", "race", "A code was just sent. Please check your inbox.", { retryAfter: cfg.cooldownSeconds });
+  shadowPut(`md:${day}:${eh}`, gate.n, dayExp);
+  shadowSet(`ml:${eh}`, now, now + 2 * DAY);
 
+  // 6) Create the sealed ticket, then send.
   const otp = makeOtp();
   const linkToken = randToken(32);
   const session = randToken(24);
   const x = now + cfg.otpMinutes * 60_000;
   const lx = now + cfg.linkMinutes * 60_000;
-  await dbPut(env, `${ROOT}/tickets/${rid}`, {
-    p: purpose, m: maskEmail(email), e: eh, ec: await seal(env, email),
-    o: await hash(env, "otp", rid, otp), l: await hash(env, "link", rid, linkToken), s: await hash(env, "sess", rid, session),
-    c: now, x, lx, a: 0, max: cfg.maxAttempts, st: "sending", org: origin || "",
-  });
+  const [oH, lH, sH] = await Promise.all([hash(env, "otp", rid, otp), hash(env, "link", rid, linkToken), hash(env, "sess", rid, session)]);
+  await ticketTxn(env, ctx, rid, () => ({
+    next: { p: purpose, m, e: eh, ec, o: oH, l: lH, s: sH, c: now, x, lx, a: 0, max: cfg.maxAttempts, st: "sending", org: origin || "" },
+    result: 1,
+  }));
 
   const site = siteUrl(env);
   const link = `${env.__WORKER_ORIGIN}/v/${rid}/${linkToken}`;
-  const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now });
+  const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now, rid });
   const t0 = Date.now();
   try {
     await sendGmail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
   } catch (err) {
     const ms = Date.now() - t0;
+    const codeErr = String(err?.code || "send_failed");
     await Promise.allSettled([
-      dbPatch(env, `${ROOT}/tickets/${rid}`, { st: "failed" }),
-      dbTxn(env, `${ROOT}/mail/${hb}/${eh}`, (cur) => cur?.rid === rid ? { next: { ...cur, n: Math.max(0, (Number(cur.n) || 1) - 1), last: Number(cur.prevLast) || 0 }, result: 1 } : { result: 0 }),
+      ticketTxn(env, ctx, rid, (cur) => (cur ? { next: { ...cur, st: "failed" }, result: 1 } : { result: 0 })),
+      refundSend(env, { day, eh, ih, rid, prevLast: gate.prevLast, hb }),
     ]);
-    track(env, ctx, { failed: 1 }, { k: "failed", p: purpose, m: maskEmail(email), ms, err: String(err?.code || "error"), why: String(err?.message || "").slice(0, 200) });
-    return fail(cors, 502, err?.code || "send_failed", publicGmailMessage(err?.code));
+    track(env, ctx, { failed: 1 }, ev("failed", { ms, err: codeErr, why: String(err?.message || "").slice(0, 200) }));
+    noteHealth(env, ctx, { ok: false, lastErrAt: Date.now(), lastErr: codeErr, lastErrMsg: String(err?.message || "").slice(0, 300) });
+    return fail(cors, codeErr === "gmail_quota" ? 429 : 502, codeErr, publicGmailMessage(codeErr));
   }
   const ms = Date.now() - t0;
-  await dbPatch(env, `${ROOT}/tickets/${rid}`, { st: "pending" });
+  await ticketTxn(env, ctx, rid, (cur) => (cur && cur.st === "sending" ? { next: { ...cur, st: "pending" }, result: 1 } : { result: 0 }));
   const old = replaces || gate.prevRid;
   if (old && old !== rid) {
-    await dbTxn(env, `${ROOT}/tickets/${old}`, (cur) => cur && (cur.st === "pending" || cur.st === "verified" || cur.st === "sending")
-      ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 }).catch(() => 0);
+    await ticketTxn(env, ctx, old, (cur) => (cur && (cur.st === "pending" || cur.st === "verified" || cur.st === "sending")
+      ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 })).catch(() => 0);
   }
-  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, gmail_ms: ms, gmail_n: 1, ...(replaces ? { resend: 1 } : {}) }, { k: "sent", p: purpose, m: maskEmail(email), ms });
+  shadowPut(`g:${day}`, sentToday + 1, dayExp);
+  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, gmail_ms: ms, gmail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
+  noteHealth(env, ctx, { ok: true, lastOkAt: Date.now(), lastMs: ms });
+  const dailyLeft = Math.max(0, cfg.perEmailDaily - gate.n);
   return json(cors, {
-    ok: true, ticket: `${rid}.${session}`, rid, purpose, email: maskEmail(email),
+    ok: true, ticket: `${rid}.${session}`, rid, purpose, email: m,
     expiresAt: x, linkExpiresAt: lx, cooldown: cfg.cooldownSeconds, resendAt: now + cfg.cooldownSeconds * 1000, maxAttempts: cfg.maxAttempts,
+    dailyLeft, dailyMax: cfg.perEmailDaily, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes,
   });
 }
 
