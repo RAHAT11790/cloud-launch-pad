@@ -16,6 +16,11 @@ import {
   savePendingReset, readPendingReset, clearPendingReset,
 } from "@/lib/emailService";
 import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
+import { OtpBoxes, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote } from "@/components/auth/EmailCodeKit";
+
+type CodeMeta = { expiresAt: number; totalMs: number; dailyLeft: number | null; dailyMax: number | null };
+const metaOf = (t: { expiresAt: number; dailyLeft: number | null; dailyMax: number | null }): CodeMeta =>
+  ({ expiresAt: t.expiresAt, totalMs: Math.max(60_000, t.expiresAt - Date.now()), dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -101,6 +106,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   /** "link" = the email button was tapped (claim on submit); "claimed" = already claimed on this device via the link page. */
   const [forgotLinkState, setForgotLinkState] = useState<"" | "link" | "claimed">("");
   const [forgotResendLeft, setForgotResendLeft] = useState(0);
+  const [forgotMeta, setForgotMeta] = useState<CodeMeta | null>(null);
+  const [forgotError, setForgotError] = useState("");
+  const [showForgotPwText, setShowForgotPwText] = useState(false);
+  const [verifyMeta, setVerifyMeta] = useState<CodeMeta | null>(null);
 
   // Sign-up email verification
   const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number } | null>(null);
@@ -310,13 +319,15 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       }
       const t = await sendEmailCode(fEmail, "reset", snap.val()?.name || "");
       setForgotToken(t.token);
+      setForgotMeta(metaOf(t));
+      setForgotError("");
       setForgotLinkState("");
       setForgotOtp("");
       savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
       setForgotOtpSent(true);
       toast.success(`📧 Code sent to: ${fEmail}`);
     } catch (err: any) {
-      toast.error(err.message || "Could not send the code");
+      setForgotError(err.message || "Could not send the code");
     }
     setForgotLoading(false);
   };
@@ -324,7 +335,25 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const resetForgotState = () => {
     setShowForgotPw(false); setForgotOtpSent(false); setForgotOtp(""); setForgotToken("");
     setForgotNewPw(""); setForgotNewPwConfirm(""); setForgotEmail(""); setForgotLinkState("");
+    setForgotMeta(null); setForgotError("");
     clearPendingReset();
+  };
+
+  /** Step 2 → checks the code right away (single use), then asks for the new password. */
+  const confirmForgotCode = async (codeArg?: string) => {
+    const code = String(codeArg ?? forgotOtp).replace(/\D/g, "");
+    if (code.length !== 6 || forgotLoading) return;
+    setForgotLoading(true); setForgotError("");
+    try {
+      const r = await verifyEmailCode(forgotToken, code);
+      if (r.email !== normalizeEmail(forgotEmail) || r.purpose !== "reset") throw new Error("This code belongs to another email.");
+      setForgotLinkState("claimed");
+      clearPendingReset();
+    } catch (err: any) {
+      setForgotError(err?.message || "Incorrect code.");
+      setForgotOtp("");
+    }
+    setForgotLoading(false);
   };
 
   const resendForgotCode = async () => {
@@ -332,11 +361,16 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     setForgotLoading(true);
     try {
       const fEmail = normalizeEmail(forgotEmail);
-      const t = await resendEmailCode(forgotToken, fEmail);
-      setForgotToken(t.token); setForgotOtp(""); setForgotLinkState("");
+      let t;
+      try { t = await resendEmailCode(forgotToken, fEmail); }
+      catch (err) {
+        if (err instanceof EmailServiceError && ["not_found", "bad_ticket", "already_used"].includes(err.code)) t = await sendEmailCode(fEmail, "reset");
+        else throw err;
+      }
+      setForgotToken(t.token); setForgotOtp(""); setForgotLinkState(""); setForgotMeta(metaOf(t)); setForgotError("");
       savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
       toast.success("📧 New code sent");
-    } catch (err: any) { toast.error(err.message || "Could not send the code"); }
+    } catch (err: any) { setForgotError(err.message || "Could not send the code"); }
     setForgotLoading(false);
   };
 
@@ -348,7 +382,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
   useEffect(() => {
     if (!showForgotPw || !forgotOtpSent) return;
-    const tick = () => setForgotResendLeft(Math.ceil(cooldownLeftMs(forgotEmail) / 1000));
+    const tick = () => { setForgotResendLeft(Math.ceil(cooldownLeftMs(forgotEmail) / 1000)); setNowTick(Date.now()); };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
@@ -356,8 +390,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
   const handleResetPasswordWithOtp = async () => {
     if ((!forgotLinkState && forgotOtp.replace(/\D/g, "").length !== 6) || !forgotNewPw.trim()) { toast.error(forgotLinkState ? "Enter a new password" : "Enter the 6-digit code and a new password"); return; }
-    if (forgotNewPw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
-    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("Passwords don't match!"); return; }
+    if (forgotNewPw.length < 6) { setForgotError("Password must be at least 6 characters"); return; }
+    if (forgotNewPw !== forgotNewPwConfirm) { setForgotError("Passwords don't match"); return; }
 
     setForgotLoading(true);
     try {
@@ -380,7 +414,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       toast.success("✅ New password set! You can now login.");
       resetForgotState();
     } catch (err: any) {
-      toast.error(err.message || "Error");
+      setForgotError(err.message || "Error");
       if (err instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(err.code)) {
         setForgotOtpSent(false); setForgotOtp(""); setForgotToken(""); setForgotLinkState(""); clearPendingReset();
       }
@@ -480,12 +514,13 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         else throw err;
       }
       const next = { ...verifyPending, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
+      setVerifyMeta(metaOf(t));
       setVerifyPending(next);
       savePendingRegister(next);
       setVerifyCode("");
       setVerifyError("");
       toast.success("📧 New code sent");
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) { setVerifyError(err.message); }
     setVerifyLoading(false);
   };
 
@@ -547,7 +582,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     if (!loginInput || !formPassword.trim()) { toast.error("Please fill in all fields"); return; }
     if (isRegister && !formName) { toast.error("Please enter a username"); return; }
     if (isRegister && !isAllowedEmail(formEmail, access.allowedDomains)) { toast.error(`Only real ${domainsText} addresses can sign up.`); return; }
-    if (formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (isRegister && formPassword.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (!isRegister && formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
 
     setLoading(true);
     try {
@@ -613,6 +649,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         savePendingRegister(pending);
         setVerifyCode("");
         setVerifyError("");
+        setVerifyMeta(metaOf(t));
         setVerifyPending(pending);
         toast.success(`📧 Verification code sent to ${pending.email}`);
       } else {

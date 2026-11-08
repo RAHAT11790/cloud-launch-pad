@@ -104,7 +104,7 @@ export function SentToCard({ email, note }: { email: string; note?: string }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.07] px-3.5 py-3">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-primary">
-        <Check className="h-4.5 w-4.5 text-primary-foreground" />
+        <Check className="h-[18px] w-[18px] text-primary-foreground" />
       </span>
       <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground">
         Code sent to
