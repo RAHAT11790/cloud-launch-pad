@@ -327,7 +327,10 @@ async function gmailAccessToken(env, force = false) {
     if (d.error === "invalid_client" || d.error === "unauthorized_client") throw gmailError("gmail_client_invalid", `OAuth client rejected (${why})`);
     throw gmailError("gmail_token_failed", `Token exchange failed (${why})`);
   }
-  tokenMemo = { key, token: d.access_token, exp: Date.now() + (Number(d.expires_in) || 3600) * 1000, scope: String(d.scope || "") };
+  // Google adds refresh_token_expires_in when the refresh token has a limited
+  // life (OAuth app still in "Testing" → 7 days). Shown in the admin panel.
+  const rtx = Number(d.refresh_token_expires_in) || 0;
+  tokenMemo = { key, token: d.access_token, exp: Date.now() + (Number(d.expires_in) || 3600) * 1000, scope: String(d.scope || ""), refreshExpiresAt: rtx ? Date.now() + rtx * 1000 : 0 };
   return tokenMemo;
 }
 const encWord = (s) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${bytesToB64(enc.encode(s))}?=`);
