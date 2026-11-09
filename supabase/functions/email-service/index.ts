@@ -414,6 +414,9 @@ function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinut
     `<td class="rs-cell" align="center" valign="middle" width="46" height="58" style="width:46px;height:58px;background:${C.cell};border:1px solid ${C.line2};border-radius:12px;font-family:${MONO};font-size:30px;line-height:58px;font-weight:800;color:#FFFFFF;">${esc(d)}</td>`,
   ).join(`<td class="rs-gap" width="8" style="width:8px;font-size:0;line-height:0;">&nbsp;</td>`);
   const ref = shortRef(rid);
+  // Code rides in the URL fragment, which browsers never send to the server.
+  let copyUrl = "";
+  try { copyUrl = `${new URL(link).origin}/c#${code}`; } catch { copyUrl = `${site}#${code}`; }
   const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:5px 0;width:96px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:5px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml"><head>
@@ -464,7 +467,11 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
         <tr><td align="center" style="padding:0 8px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${digits}</tr></table>
         </td></tr>
-        <tr><td align="center" style="padding:16px 12px 20px;">
+        <tr><td align="center" style="padding:14px 12px 0;">
+          <a href="${esc(copyUrl)}" target="_blank" style="${td}display:inline-block;padding:9px 18px;border-radius:999px;background:#12224B;border:1px solid ${C.line2};font-size:13px;font-weight:800;color:#FFFFFF;text-decoration:none;">&#10697;&nbsp; Copy code</a>
+        </td></tr>
+        <tr><td align="center" style="${td}padding:8px 12px 0;font-size:11px;color:${C.dim};">or long-press <span style="font-family:${MONO};color:#FFFFFF;font-weight:800;letter-spacing:2px;user-select:all;-webkit-user-select:all;">${esc(code)}</span> to copy</td></tr>
+        <tr><td align="center" style="padding:14px 12px 20px;">
           <span style="${td}display:inline-block;padding:6px 12px;border-radius:999px;background:#1A1608;border:1px solid #4A3A10;font-size:11px;font-weight:700;color:${C.warn};">&#9201;&nbsp; Valid for ${mins(otpMinutes)} &nbsp;&#183;&nbsp; single use</span>
         </td></tr>
       </table>
@@ -533,6 +540,7 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
     "",
     `Your 6-digit code: ${code}`,
     `(valid for ${mins(otpMinutes)}, works only once)`,
+    `Copy it here: ${copyUrl}`,
     "",
     `Or open this link (valid ${mins(linkMinutes)}):`,
     link,
@@ -583,6 +591,26 @@ h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14
 <div class="head"><span class="ring"><img src="${LOGO}" alt=""></span><div class="brand">RS ANIME<span>03</span></div></div>
 <div class="body">${icon}<h1>${esc(title)}</h1><p>${esc(message)}</p>${btn}
 <div class="foot">&#128274; Secured by ${BRAND}</div></div></main>${script}</body></html>`;
+}
+
+/** "Copy code" page opened from the email; the code is read from the URL fragment only. */
+function copyPage(site) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Copy code · ${BRAND}</title>
+<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#16306F 0%,#070C1E 58%,#04060E 100%);font-family:${FONT};color:#E8EEFF}
+.card{width:100%;max-width:380px;background:rgba(10,17,36,.94);border:1px solid #1A2850;border-radius:26px;padding:26px 22px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.brand{font-weight:900;letter-spacing:3px;font-size:15px}.brand span{color:#60A5FA}.lbl{margin-top:18px;font-size:10px;font-weight:800;letter-spacing:3px;color:#8191C0}
+.code{margin-top:10px;font:800 40px ${MONO};letter-spacing:10px;padding-left:10px;user-select:all;-webkit-user-select:all}
+.btn{display:block;width:100%;margin-top:20px;padding:15px;border:0;border-radius:14px;background:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none}
+.btn.ok{background:#059669}.ghost{background:#12224B;border:1px solid #24386E}p{font-size:13px;line-height:20px;color:#AEBBDF;margin:14px 0 0}</style></head>
+<body><main class="card"><div class="brand">RS ANIME<span>03</span></div><div class="lbl">YOUR VERIFICATION CODE</div>
+<div class="code" id="c">------</div><button class="btn" id="b" type="button">Copy code</button>
+<p id="m">Copy it, go back to the app and tap “Paste code”.</p><a class="btn ghost" href="${esc(site)}">Open ${BRAND}</a></main>
+<script>(function(){var c=(location.hash.match(/\d{6}/)||[""])[0],e=document.getElementById("c"),b=document.getElementById("b"),m=document.getElementById("m");
+if(!c){e.textContent="------";b.disabled=true;m.textContent="This link has no code. Use the code shown in your email.";return;}
+e.textContent=c;function done(){b.textContent="Copied \u2713";b.className="btn ok";}
+function fb(){var r=document.createRange();r.selectNodeContents(e);var s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand("copy");done();}catch(x){m.textContent="Long-press the code to copy it.";}}
+b.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(c).then(done,fb);else fb();};})();</script></body></html>`;
 }
 
 // ---------------- HTTP helpers ----------------
@@ -1061,6 +1089,7 @@ const worker = {
         return await linkPage(env, ctx, req, link[1], link[2]);
       }
       if (req.method === "GET") {
+        if (path === "/c") return html(copyPage(siteUrl(env)));
         if (path === "/preview") {
           const type = url.searchParams.get("type") === "reset" ? "reset" : "register";
           const cfg = await settings(env);

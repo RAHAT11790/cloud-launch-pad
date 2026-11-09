@@ -16,7 +16,7 @@ import {
   savePendingReset, readPendingReset, clearPendingReset,
 } from "@/lib/emailService";
 import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
-import { OtpBoxes, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote } from "@/components/auth/EmailCodeKit";
+import { OtpBoxes, PasteCodeButton, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote } from "@/components/auth/EmailCodeKit";
 
 type CodeMeta = { expiresAt: number; totalMs: number; dailyLeft: number | null; dailyMax: number | null };
 const metaOf = (t: { expiresAt: number; dailyLeft: number | null; dailyMax: number | null }): CodeMeta =>
@@ -881,6 +881,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <SentToCard email={forgotEmail} note="Check Spam or Promotions if you can't see it." />
                   <OtpBoxes value={forgotOtp} onChange={(v) => { setForgotOtp(v); if (forgotError) setForgotError(""); }}
                     onComplete={(v) => void confirmForgotCode(v)} disabled={forgotLoading} error={!!forgotError} />
+                  <PasteCodeButton disabled={forgotLoading} onCode={(c) => { setForgotOtp(c); if (forgotError) setForgotError(""); }} />
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     {forgotMeta && <CodeTimer expiresAt={forgotMeta.expiresAt} totalMs={forgotMeta.totalMs} now={nowTick} />}
                     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -979,6 +980,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               <SentToCard email={verifyPending.email} note="Check Spam or Promotions if you can't see it." />
               <OtpBoxes value={digits} onChange={(v) => { setVerifyCode(v); if (verifyError) setVerifyError(""); }}
                 onComplete={(v) => void submitVerifyCode(v)} disabled={verifyLoading} error={!!verifyError} />
+              <PasteCodeButton disabled={verifyLoading} onCode={(c) => { setVerifyCode(c); if (verifyError) setVerifyError(""); }} />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CodeTimer expiresAt={meta.expiresAt} totalMs={meta.totalMs} now={nowTick} />
                 <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">

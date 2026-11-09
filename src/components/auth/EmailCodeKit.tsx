@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, ClipboardPaste, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
 import { formatWait } from "@/lib/emailService";
 
 /**
@@ -103,18 +103,46 @@ export function ResendButton({ waitSec, busy, onClick, dailyLeft }: { waitSec: n
   );
 }
 
-/** Where the email went + what to look for. */
-export function SentToCard({ email, note }: { email: string; note?: string }) {
+/** Where the email went + a clear red "check Spam" warning (many codes land there). */
+export function SentToCard({ email }: { email: string; note?: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.07] px-3.5 py-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-primary">
-        <Check className="h-[18px] w-[18px] text-primary-foreground" />
-      </span>
-      <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground">
-        Code sent to
-        <b className="block truncate text-[13px] text-foreground">{email}</b>
-        {note && <span className="block text-[10.5px]">{note}</span>}
-      </span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.07] px-3.5 py-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-primary">
+          <Check className="h-[18px] w-[18px] text-primary-foreground" />
+        </span>
+        <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground">
+          Code sent to
+          <b className="block truncate text-[13px] text-foreground">{email}</b>
+        </span>
+      </div>
+      <div role="note" className="flex items-start gap-2.5 rounded-2xl border border-destructive/50 bg-destructive/10 px3 px-3 py-2.5">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <p className="text-[11.5px] leading-snug text-foreground">
+          <b className="text-destructive">Not in your Inbox?</b> Open your <b>Spam</b> (or Promotions) folder — the code is often there. Tap <b>"Not spam"</b> so the next one arrives in your Inbox.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Reads a 6-digit code from the clipboard (after "Copy code" in the email). */
+export function PasteCodeButton({ onCode, disabled }: { onCode: (code: string) => void; disabled?: boolean }) {
+  const [msg, setMsg] = useState("");
+  if (typeof navigator === "undefined" || !navigator.clipboard?.readText) return null;
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <button type="button" disabled={disabled}
+        onClick={async () => {
+          try {
+            const code = (await navigator.clipboard.readText()).match(/\d{6}/)?.[0];
+            if (code) { setMsg(""); onCode(code); } else setMsg("No 6-digit code copied");
+          } catch { setMsg("Allow clipboard, or type the code"); }
+        }}
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3.5 py-1.5 text-[12px] font-bold text-foreground disabled:opacity-50">
+        <ClipboardPaste className="h-3.5 w-3.5" /> Paste code
+      </button>
+      {msg && <span className="text-[11px] text-muted-foreground">{msg}</span>}
     </div>
   );
 }

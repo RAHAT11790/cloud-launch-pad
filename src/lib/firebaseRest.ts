@@ -1,4 +1,5 @@
 import { auth, db } from "@/lib/firebase";
+import { appCheckHeaders } from "@/lib/appCheck";
 
 const getDatabaseUrl = () => String(db.app.options.databaseURL || "").replace(/\/+$/, "");
 
@@ -65,6 +66,7 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
     const res = await fetch(firebaseRestUrl(path, requestParams), {
       method: "GET",
       cache: "no-store",
+      headers: await appCheckHeaders(),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Firebase REST ${res.status}`);
@@ -91,6 +93,7 @@ export const firebaseRestDelete = async (path: string): Promise<void> => {
     const res = await fetch(firebaseRestUrl(normalized, requestParams), {
       method: "DELETE",
       cache: "no-store",
+      headers: await appCheckHeaders(),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Firebase REST DELETE ${res.status}`);
