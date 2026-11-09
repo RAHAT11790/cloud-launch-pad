@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue as remoteOnValue, push as remotePush, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, type DataSnapshot } from "firebase/database";
 import { currentGuestId, localGuestPath, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { startAppCheck } from "@/lib/appCheck";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyASjrQM27mfAbHXA9ZqYv3YbubZPUxOR50",
@@ -22,6 +23,8 @@ const firebaseConfig = {
 const globalKey = "__rs_firebase_app__";
 const g = globalThis as any;
 const app = g[globalKey] || (g[globalKey] = initializeApp(firebaseConfig));
+// App Check must start before the first database call so the socket carries its token.
+startAppCheck(app);
 
 export const db = g.__rs_firebase_db__ || (g.__rs_firebase_db__ = getDatabase(app));
 export const auth = g.__rs_firebase_auth__ || (g.__rs_firebase_auth__ = getAuth(app));
