@@ -7,7 +7,7 @@ import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 import {
   claimEmailLink, cooldownLeftMs, EmailServiceError, normalizeEmail, resendEmailCode, sendEmailCode, verifyEmailCode,
 } from "@/lib/emailService";
-import { CodeTimer, DailyPips, OtpBoxes, PasswordStrength, ResendButton, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
+import { CodeTimer, DailyPips, OtpBoxes, PasteCodeButton, PasswordStrength, ResendButton, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
 
 const keyOf = (email: string) => email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
 const legacyKeyOf = (email: string) => email.toLowerCase().replace(/[^a-z0-9]/g, "_");
@@ -240,6 +240,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
               <>
                 <SentToCard email={email} note="Check Spam or Promotions if you can't see it." />
                 <OtpBoxes value={code} onChange={(v) => { setCode(v); if (error) setError(""); }} onComplete={(v) => void checkCode(v)} disabled={busy} error={!!error} />
+                <PasteCodeButton disabled={busy} onCode={(c) => { setCode(c); if (error) setError(""); }} />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   {meta && <CodeTimer expiresAt={meta.expiresAt} totalMs={meta.totalMs} now={now} />}
                   <span className="text-[11px] text-muted-foreground">or tap the email button</span>
