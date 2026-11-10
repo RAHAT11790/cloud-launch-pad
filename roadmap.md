@@ -1,5 +1,11 @@
 # Roadmap
 
+## Google login broken (2026-11-10)
+- [x] Reproduced on phone size: Google shows "Error 401: deleted_client" — the Google sign-in key of Firebase project animeverse-d7b79 was deleted in Google Cloud. Site code is fine.
+- [x] Email/password login re-tested with CEO account (works); test device removed afterwards.
+- [ ] Restore or recreate the Google sign-in key in Google Cloud / Firebase Console: needs the owner (no API access; stored service key belongs to a different project "rs-anime").
+- [ ] Full sign-up test: code is sent, but finishing needs a real inbox to read the 6-digit code.
+
 ## Email security + profile redesign (2026-11-08)
 - [x] Email Worker v4 (5-min code, 10-min link, 5-min resend wait, 3/email/day, IP limits, signed single-use tickets) deployed; secrets kept.
 - [x] New sign-up/forgot-password code screens; phone test: wrong code rejected, correct code created account.
