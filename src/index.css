@@ -88,6 +88,17 @@
 .download-go:hover:not(:disabled) { background: hsl(var(--download-go) / .88); }
 .download-ring-track { fill: none; stroke: hsl(var(--border)); stroke-width: 4; }
 .download-ring-fill { fill: none; stroke: hsl(var(--primary)); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+/* Sponsor-loading hold (player ad back-lock) */
+.ad-lock-root { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; background: hsl(var(--background) / .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); touch-action: none; animation: ad-lock-in .18s ease-out; }
+.ad-lock-card { display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: 1.25rem 1.5rem; border-radius: 1.25rem; border: 1px solid hsl(var(--primary) / .35); background: hsl(var(--card)); color: hsl(var(--foreground)); box-shadow: 0 18px 48px hsl(var(--background) / .6); max-width: 18rem; text-align: center; }
+.ad-lock-ring { position: relative; display: flex; width: 4rem; height: 4rem; align-items: center; justify-content: center; }
+.ad-lock-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ad-lock-ring b { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.ad-lock-track { fill: none; stroke: hsl(var(--border)); stroke-width: 4; }
+.ad-lock-fill { fill: none; stroke: hsl(var(--primary)); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .1s linear; }
+.ad-lock-title { font-weight: 700; font-size: .95rem; }
+.ad-lock-sub { font-size: .75rem; line-height: 1.35; color: hsl(var(--muted-foreground)); }
+@keyframes ad-lock-in { from { opacity: 0; } to { opacity: 1; } }
 :root {
   --telegram-canvas: 209 69% 15%;
   --telegram-surface: 204 62% 27%;

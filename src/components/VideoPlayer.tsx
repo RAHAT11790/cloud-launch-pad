@@ -8,6 +8,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { isAdBackLocked } from "@/lib/adBackLock";
 import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -3783,6 +3784,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const toggleFullscreenRef = useRef<(() => void | Promise<void>) | null>(null);
   const resetHideTimerRef = useRef<(() => void) | null>(null);
   const handleBackPress = useCallback(() => {
+    if (isAdBackLocked()) return; // sponsor still loading: Back unlocks after 5 s
     const inFullscreen =
       Boolean(document.fullscreenElement) ||
       Boolean((document as any).webkitFullscreenElement) ||
@@ -5095,6 +5097,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       case "back": {
         consume();
+        if (isAdBackLocked()) return; // sponsor still loading: Back unlocks after 5 s
         if (panelOpen) {
           setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
           return;

@@ -10,6 +10,8 @@ import {
   subscribeAdsterraConfig,
 } from "@/lib/adsterraAds";
 import { stopAdGuard } from "@/lib/adGuard";
+import { endAdBackLock, startAdBackLock } from "@/lib/adBackLock";
+import AdLoadingLock from "@/components/AdLoadingLock";
 import { adSlotReady, noteAdShown, startAdSession, stopAdSession } from "@/lib/adPacing";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
@@ -27,7 +29,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   useEffect(() => {
     enterAdsterraPlayerScope();
     startAdSession();
-    return () => { exitAdsterraPlayerScope(); stopAdGuard(); };
+    return () => { exitAdsterraPlayerScope(); stopAdGuard(); endAdBackLock(); };
   }, []);
 
   useEffect(() => () => { stopAdSession(); }, []);
@@ -48,6 +50,8 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
       const askedAt = Date.now();
       try {
         const result = await releaseAd();
+        // An ad was called: hold Back for 5 s so the sponsor fully loads.
+        if (result === "direct" || result === "tag" || result === "mounted") startAdBackLock(askedAt);
         if (result === "direct") {
           noteAdShown();
         } else if (result === "tag") {
@@ -56,7 +60,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
           // Link instead of eating the slot — ads keep running all session.
           await new Promise((r) => window.setTimeout(r, TAG_VERIFY_MS));
           if (tagOpenedSince(askedAt - 1000)) noteAdShown();
-          else markTagCapped();
+          else { markTagCapped(); endAdBackLock(); } // nothing opened: never hold the viewer
         }
       } catch {
         /* ignore */
@@ -72,7 +76,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     };
   }, [isPremium, videoEl]);
 
-  return null;
+  return isPremium ? null : <AdLoadingLock />;
 };
 
 export default AdsterraAdManager;
