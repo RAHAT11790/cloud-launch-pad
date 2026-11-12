@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, ref, onValue, runTransaction } from "@/lib/firebase";
 import { normalizeDownloadFlowSettings } from "@/lib/downloadFlow";
+import { checkRouteAlive, isRouteKnownDead } from "@/lib/routeHealth";
 
 /**
  * Download Manager settings (admin controlled, Firebase backed).
@@ -85,6 +86,7 @@ try {
       config = parseDownloadManagerConfig(snap.val() || {});
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(config)); } catch {}
       listeners.forEach((fn) => { try { fn(config); } catch {} });
+      void checkActiveDownloadServer();
       markConfigReady();
     }, markConfigReady);
   }
@@ -137,12 +139,28 @@ const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServerMode 
 // ---------------------------------------------------------------------------
 
 /** The server the admin selected to serve every download ("" = keep source). */
+const activeServerUrl = (domain: string, mode: DownloadServerMode) => {
+  const base = domain.replace(/\/+$/, "");
+  return /^https?:\/\//i.test(base) ? base : `${mode === "https" ? "https" : "http"}://${base}`;
+};
 const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
   const domain = String(config.activeServerDomain || "").trim();
   if (!domain) return null;
   const key = config.activeServerKey || serverModeKey(domain);
-  return { key, domain, mode: config.serverModes[key] === "https" ? "https" : "http" };
+  const mode: DownloadServerMode = config.serverModes[key] === "https" ? "https" : "http";
+  // A server that was just proven offline acts like "no server selected":
+  // downloads come from the file's own server instead of a dead host.
+  if (isRouteKnownDead(activeServerUrl(domain, mode))) return null;
+  return { key, domain, mode };
 };
+
+/** Checks (once, cached on the device) whether the selected download server is online. */
+export function checkActiveDownloadServer(): Promise<boolean> {
+  const domain = String(config.activeServerDomain || "").trim();
+  if (!domain || typeof window === "undefined") return Promise.resolve(true);
+  const key = config.activeServerKey || serverModeKey(domain);
+  return checkRouteAlive(activeServerUrl(domain, config.serverModes[key] === "https" ? "https" : "http"));
+}
 
 /**
  * Rewrites a media URL so it is served by the selected download server while

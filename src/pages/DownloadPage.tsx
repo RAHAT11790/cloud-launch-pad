@@ -3,9 +3,10 @@ import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loade
 import { Button } from "@/components/ui/button";
 import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, sponsorVisitOutcome, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
 import BackToWatchLoader from "@/components/BackToWatchLoader";
-import { useDownloadManagerConfig, useDownloadConfigReady, recordDownloadEvent } from "@/lib/downloadManagerSettings";
+import { useDownloadManagerConfig, useDownloadConfigReady, recordDownloadEvent, checkActiveDownloadServer } from "@/lib/downloadManagerSettings";
+import { markRouteDead, isDeadStatus } from "@/lib/routeHealth";
 import { checkDownloadBlocker, type DownloadBlockState } from "@/lib/downloadBlockCheck";
-import { filenameRelayUrl, getFilenameRelayBase } from "@/lib/filenameRelay";
+import { filenameRelayCandidates, getFilenameRelayBase, relayFailureReason } from "@/lib/filenameRelay";
 import { getAdsterraConfig } from "@/lib/adsterraAds";
 import { toast } from "sonner";
 
@@ -55,6 +56,9 @@ export default function DownloadPage() {
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
   const [fileState, setFileState] = useState<Record<string, "ready" | "direct" | "unavailable">>({});
   const [sizes, setSizes] = useState<Record<string, number>>({});
+  // The link that answered for each file (active server, or the file's own server as fallback).
+  const [hrefs, setHrefs] = useState<Record<string, string>>({});
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const [smartlink, setSmartlink] = useState("");
   const restoredVisit = !savedTimer?.ready && Number(savedTimer?.sponsorAt) > 0 ? Number(savedTimer!.sponsorAt) : null;
   // Wall-clock time Continue opened the sponsor page (null = no visit running).
@@ -91,7 +95,7 @@ export default function DownloadPage() {
     setRelayState("checking");
     try {
       const endpoint = await getFilenameRelayBase();
-      setBase(endpoint); setFileState({});
+      setBase(endpoint); setFileState({}); setHrefs({}); setReasons({});
       setRelayState(endpoint ? "ready" : "unavailable");
     } catch { setRelayState("unavailable"); }
   };
@@ -174,15 +178,36 @@ export default function DownloadPage() {
     if (!final || !base || !request) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 20000);
-    Promise.all(request.episodes.flatMap(ep => ep.choices).map(async choice => {
-      try {
-        const response = await fetch(filenameRelayUrl(base, choice.url, choice.fileName), { method: "HEAD", signal: controller.signal });
-        const bytes = Number(response.headers.get("content-length"));
-        if (response.ok && bytes > 0) setSizes(current => ({ ...current, [choice.url]: bytes }));
-        if (!controller.signal.aborted) // An older relay build may refuse a new file host (400/403): download straight from the file server instead.
-        if (!controller.signal.aborted) setFileState(current => ({ ...current, [choice.url]: response.ok ? "ready" : (response.status === 400 || response.status === 403) ? "direct" : "unavailable" }));
-      } catch { if (!controller.signal.aborted) setFileState(current => ({ ...current, [choice.url]: "unavailable" })); }
-    })).finally(() => clearTimeout(timer));
+    const probe = async (choice: DownloadFlowRequest["episodes"][number]["choices"][number]) => {
+      let lastStatus: number | null = null;
+      for (const candidate of filenameRelayCandidates(base, choice.url, choice.fileName)) {
+        let response: Response;
+        try { response = await fetch(candidate.href, { method: "HEAD", signal: controller.signal }); }
+        catch { if (controller.signal.aborted) return; lastStatus = null; if (candidate.viaActiveServer) markRouteDead(candidate.target); continue; }
+        lastStatus = response.status;
+        if (response.ok) {
+          const bytes = Number(response.headers.get("content-length"));
+          if (bytes > 0) setSizes(current => ({ ...current, [choice.url]: bytes }));
+          setHrefs(current => ({ ...current, [choice.url]: candidate.href }));
+          setFileState(current => ({ ...current, [choice.url]: "ready" }));
+          return;
+        }
+        // The selected download server is offline: skip it for every other file too.
+        if (candidate.viaActiveServer && isDeadStatus(response.status)) markRouteDead(candidate.target);
+        // An older relay build may refuse a file host (400/403): an HTTPS file can still download straight from its server.
+        if (!candidate.viaActiveServer && (response.status === 400 || response.status === 403) && /^https:\/\//i.test(candidate.target)) {
+          setHrefs(current => ({ ...current, [choice.url]: candidate.target }));
+          setFileState(current => ({ ...current, [choice.url]: "direct" }));
+          return;
+        }
+      }
+      if (controller.signal.aborted) return;
+      setReasons(current => ({ ...current, [choice.url]: relayFailureReason(lastStatus) }));
+      setFileState(current => ({ ...current, [choice.url]: "unavailable" }));
+    };
+    // Know whether the selected download server is online before building links.
+    checkActiveDownloadServer().catch(() => true).then(() => Promise.all(request.episodes.flatMap(ep => ep.choices).map(probe)))
+      .finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
   }, [final, base, request]);
   const visitSecs = visitSeconds.current || sponsorSeconds;
@@ -224,7 +249,7 @@ export default function DownloadPage() {
     action();
   };
   const startWebsite = (choice: DownloadFlowRequest["episodes"][number]["choices"][number]) => {
-    const url = fileState[choice.url] === "direct" ? choice.url : filenameRelayUrl(base, choice.url, choice.fileName); if (!url) return;
+    const url = hrefs[choice.url] || filenameRelayCandidates(base, choice.url, choice.fileName)[0]?.href; if (!url) return;
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = choice.fileName;
     document.body.appendChild(anchor); anchor.click(); anchor.remove(); recordDownloadEvent("website");
   };
@@ -267,7 +292,7 @@ export default function DownloadPage() {
           {(relayState === "unavailable" || (request.episodes.flatMap(ep => ep.choices).length > 0 && request.episodes.flatMap(ep => ep.choices).every(choice => fileState[choice.url] === "unavailable"))) && <div role="alert" className="mb-4 text-sm text-destructive"><p>Website downloads are currently unavailable. {showTelegram ? "Please use the Telegram episode links, or try again later." : "Please try again later."}</p><Button variant="outline" className="mt-2" onClick={() => void resolveRelay()}><RefreshCw size={14} />Retry</Button></div>}
           <div className="space-y-4">{request.episodes.map(ep => <section key={ep.number} className="download-card rounded-xl border border-border p-3">
             <div className="mb-2.5 flex items-center gap-2.5">{request.poster && <img src={request.poster} alt="" className="h-9 w-7 rounded object-cover" />}<span className="text-sm font-bold">Episode {String(ep.number).padStart(2, "0")}</span><span className="ml-auto text-[11px] text-muted-foreground">{ep.choices.length} {ep.choices.length === 1 ? "quality" : "qualities"}</span></div>
-            <div className="space-y-2">{ep.choices.map(choice => { const key = `w:${ep.number}:${choice.quality}`; const ext = (choice.fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "file").toUpperCase(); return <Button key={choice.quality} type="button" className="download-go flex min-h-14 h-auto w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left disabled:opacity-50" disabled={!base || !config.websiteEnabled || fileState[choice.url] === "unavailable"} onClick={() => tapWithAd(key, () => startWebsite(choice))}><Download size={20} className="shrink-0" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{qualityLabel(choice.quality)}</span><span className="block text-xs opacity-90">{fileState[choice.url] === "unavailable" ? "File unavailable" : sizes[choice.url] ? `${(sizes[choice.url] / 1048576).toFixed(1)} MB` : "Size unavailable"} • {ext}</span></span><span className="shrink-0 text-[11px] font-semibold">{adSeen.has(key) ? "Download now" : "Download"}</span></Button>; })}{!ep.choices.length && <p className="text-xs text-muted-foreground">No website files available.</p>}</div>
+            <div className="space-y-2">{ep.choices.map(choice => { const key = `w:${ep.number}:${choice.quality}`; const ext = (choice.fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "file").toUpperCase(); return <Button key={choice.quality} type="button" className="download-go flex min-h-14 h-auto w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left disabled:opacity-50" disabled={!base || !config.websiteEnabled || fileState[choice.url] === "unavailable"} onClick={() => tapWithAd(key, () => startWebsite(choice))}><Download size={20} className="shrink-0" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{qualityLabel(choice.quality)}</span><span className="block text-xs opacity-90">{fileState[choice.url] === "unavailable" ? (reasons[choice.url] || "File unavailable") : !fileState[choice.url] ? "Checking file…" : sizes[choice.url] ? `${(sizes[choice.url] / 1048576).toFixed(1)} MB` : "Size unavailable"} • {ext}</span></span><span className="shrink-0 text-[11px] font-semibold">{adSeen.has(key) ? "Download now" : "Download"}</span></Button>; })}{!ep.choices.length && <p className="text-xs text-muted-foreground">No website files available.</p>}</div>
             {config.telegramEnabled && ep.telegramUrl && <Button className="download-telegram mt-3 h-11 w-full" onClick={() => tapWithAd(`telegram:${ep.number}`, () => startTelegram(ep.telegramUrl, 1))}><TelegramLogo />Telegram · Episode {ep.number}</Button>}
           </section>)}</div>
           {showTelegram && (request.telegramEpisodeCount || request.episodes.length) > 1 && <Button className="download-telegram mt-4 h-12 w-full" onClick={() => tapWithAd("telegram", () => startTelegram())}><TelegramLogo />Telegram · All {request.telegramEpisodeCount || request.episodes.length} episodes</Button>}

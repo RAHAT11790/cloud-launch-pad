@@ -14,6 +14,7 @@ import { hasDirectReadVerdict, hostRefusesDirectRead, orderReadCandidates, remem
 import { buildTrackLabel, isPgsTrack, type MkvCue, type MkvHeader } from "./mkvDemux";
 import { HttpRangeSource, openMkv, mseAvailable } from "./mkvEngine";
 import { audioMime, videoMime } from "./mkvRemux";
+import { canDecodeTrack, nativeAudioIsSilent } from "./audioDecode";
 import { isMp4Magic, readMp4Tracks } from "./mp4Probe";
 import { isSparseTrack, languageCodeFor, scanSubtitleTracks, type SubtitleScan } from "./subtitleScan";
 
@@ -47,6 +48,11 @@ export interface EmbeddedTrackList {
   container?: "mkv" | "mp4" | "none";
   /** Subtitle languages/signs were learned from the real lines (one-time scan). */
   scanned?: boolean;
+  /**
+   * The file's own (first) audio is Dolby/DTS, which this browser plays
+   * silently: it is played through the software decoder instead.
+   */
+  decodeNative?: boolean;
 }
 
 const LS_KEY = "rs_mkv_tracks_v3";
@@ -157,14 +163,18 @@ const applySupport = (list: EmbeddedTrackList): EmbeddedTrackList => {
   // Browsers decode the FIRST audio track of an .mkv natively — the file's
   // "default" flag is ignored — so that one is what the viewer hears on open.
   const nativeAudio = audio[0]?.number ?? -1;
+  const native = audio[0];
   return {
     ...list,
     nativeAudio,
+    decodeNative: !!native && canDecodeTrack(native.codec) && nativeAudioIsSilent(native.codec),
     // Any other language only needs its own audio decodable: when the video
     // can't go through Media Source it keeps playing natively (audio sidecar).
+    // Dolby/DTS tracks are decoded in software (audioDecode.ts).
     audio: audio.map((a) => {
       let ok = false;
       try { ok = !!(MS && a.mime && MS.isTypeSupported(a.mime)); } catch { ok = false; }
+      if (!ok && !a.mime) ok = canDecodeTrack(a.codec);
       return { ...a, isDefault: a.number === nativeAudio, playable: ok || a.number === nativeAudio };
     }),
     subtitles: relabel(list.subtitles || []),

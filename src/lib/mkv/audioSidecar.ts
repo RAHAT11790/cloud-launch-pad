@@ -8,10 +8,13 @@
 // picture exactly like a direct open, the video is muted, and only the chosen
 // audio track is streamed into a hidden <audio> element that follows the
 // video clock (play / pause / seek / speed / volume).
+// Tracks the browser can't decode (AC3 / E-AC3 / DTS / TrueHD) go through the
+// WASM decoder (audioDecode.ts) and arrive here as FLAC — same element, same clock.
 
 import { MkvBlockStream, type MkvCue, type MkvHeader, type MkvTrack } from "./mkvDemux";
 import { HttpRangeSource, mseAvailable } from "./mkvEngine";
 import { AudioFragmenter, audioInit, audioMime } from "./mkvRemux";
+import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
 
 /** Can this browser stream `track` on its own (no video re-mux needed)? */
 const canPlayAudioOnly = (track?: Pick<MkvTrack, "route"> | null, mime?: string): boolean => {
@@ -39,7 +42,13 @@ export class AudioSidecar {
   private destroyed = false;
   private eof = false;
   private reader: MkvBlockStream | null = null;
-  private frag: AudioFragmenter | null = null;
+  private frag: AudioFragmenter | DecodedAudioFragmenter | null = null;
+  /** Software-decoded track (browser can't play its codec). */
+  private readonly decoded: boolean;
+  private decoder: AudioDecoderClient | null = null;
+  /** Seconds buffered ahead / kept behind (decoded PCM is larger, so less). */
+  private readonly aheadSec: number;
+  private readonly behindSec: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private chain: Promise<void> = Promise.resolve();
   /** What the player itself asked for (the video is force-muted while we run). */
@@ -49,6 +58,9 @@ export class AudioSidecar {
   constructor(url: string, private readonly header: MkvHeader, private readonly cues: MkvCue[], audioNumber: number, private readonly onFatal?: (e: Error) => void) {
     this.source = new HttpRangeSource(url);
     this.track = header.audio.find((a) => a.number === audioNumber) || header.audio[0];
+    this.decoded = !this.track.route && canDecodeTrack(this.track.codec, { zlib: this.track.zlib, bitDepth: this.track.bitDepth });
+    this.aheadSec = this.decoded ? 25 : 45;
+    this.behindSec = this.decoded ? 20 : 60;
   }
 
   get audioNumber() { return this.track.number; }
@@ -96,8 +108,13 @@ export class AudioSidecar {
 
   /** Start the chosen language at the video's current time. Resolves once audio is buffered. */
   async attach(video: HTMLVideoElement): Promise<void> {
-    const mime = audioMime(this.track);
-    if (!canPlayAudioOnly(this.track, mime)) throw new Error("audio codec not supported by this browser");
+    const mime = this.decoded ? DECODED_AUDIO_MIME : audioMime(this.track);
+    if (!this.decoded && !canPlayAudioOnly(this.track, mime)) throw new Error("audio codec not supported by this browser");
+    if (this.decoded) {
+      this.decoder = new AudioDecoderClient();
+      await this.decoder.open(this.track);
+      if (this.destroyed) throw new Error("aborted");
+    }
     this.video = video;
     const el = document.createElement("audio");
     el.preload = "auto";
@@ -116,7 +133,7 @@ export class AudioSidecar {
     if (this.destroyed) throw new Error("aborted");
     if (this.header.durationMs > 0) ms.duration = this.header.durationMs / 1000;
     this.sb = ms.addSourceBuffer(mime);
-    await this.append(audioInit(this.header, this.track));
+    await this.append(this.decoded ? decodedAudioInit() : audioInit(this.header, this.track));
     const t = video.currentTime || 0;
     this.startReader(t);
     await this.waitFor(t);
@@ -203,9 +220,9 @@ export class AudioSidecar {
     if (!v.muted) { this.wantMuted = false; this.muteVideo(); this.syncVolume(); }
     const t = v.currentTime;
     // Trim old audio so long episodes stay inside the buffer quota.
-    if (t > 120 && this.sb && !this.sb.updating) {
+    if (t > this.behindSec * 2 && this.sb && !this.sb.updating) {
       const b = this.sb.buffered;
-      if (b.length && b.start(0) < t - 90) void this.run(() => { try { this.sb?.remove(0, t - 60); } catch { /* ignore */ } }).catch(() => undefined);
+      if (b.length && b.start(0) < t - this.behindSec * 1.5) void this.run(() => { try { this.sb?.remove(0, t - this.behindSec); } catch { /* ignore */ } }).catch(() => undefined);
     }
     const playing = !v.paused && !v.seeking && v.readyState >= 3;
     const ahead = rangeEnd(this.sb?.buffered, t) - t;
@@ -215,7 +232,7 @@ export class AudioSidecar {
         if (a.paused) a.play().catch(() => undefined);
       } else if (!a.paused) a.pause();
     } else if (!a.paused) a.pause();
-    if (!this.running && !this.eof && ahead < 40) void this.pump(this.gen);
+    if (!this.running && !this.eof && ahead < this.aheadSec - 5) void this.pump(this.gen);
   };
 
   private startReader(seconds: number) {
@@ -223,7 +240,7 @@ export class AudioSidecar {
     this.source.cancelPending();
     this.eof = false;
     this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), new Set([this.track.number]), 1024 * 1024);
-    this.frag = new AudioFragmenter(this.header, this.track);
+    this.frag = this.decoded && this.decoder ? new DecodedAudioFragmenter(this.header, this.track, this.decoder) : new AudioFragmenter(this.header, this.track);
     this.running = false;
     void this.pump(this.gen);
   }
@@ -236,16 +253,19 @@ export class AudioSidecar {
     try {
       while (gen === this.gen && !this.destroyed) {
         const t = this.video?.currentTime || 0;
-        if (rangeEnd(this.sb?.buffered, t) - t > 45) break;
+        if (rangeEnd(this.sb?.buffered, t) - t > this.aheadSec) break;
         const block = await reader.next();
         if (gen !== this.gen || this.destroyed) return;
         if (!block) {
-          const last = frag.flush(true); if (last) await this.append(last);
+          const last = await frag.flush(true);
+          if (gen !== this.gen || this.destroyed) return;
+          if (last) await this.append(last);
           this.eof = true;
           break;
         }
         if (block.track !== this.track.number) continue;
-        const out = frag.push(block);
+        const out = await frag.push(block);
+        if (gen !== this.gen || this.destroyed) return;
         if (out) await this.append(out);
       }
     } catch (e: any) {
@@ -261,6 +281,8 @@ export class AudioSidecar {
     this.destroyed = true;
     this.gen += 1;
     this.source.abort();
+    this.decoder?.destroy();
+    this.decoder = null;
     if (this.timer) clearInterval(this.timer);
     const v = this.video;
     if (v) {

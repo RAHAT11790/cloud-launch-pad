@@ -20,6 +20,7 @@ import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
 import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, refineSubtitleLabels, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 import { pickDefaultAudio } from "@/lib/mkv/audioDefault";
 import { warmTrackProxy } from "@/lib/trackProxy";
+import { canDecodeTrack } from "@/lib/mkv/audioDecode";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -403,6 +404,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const list = tracksRef.current;
     const track = list?.audio.find((a) => a.number === number);
     if (!list || !track || busyRef.current) return;
+    // The file's own audio plays natively — unless it is Dolby/DTS the browser can't hear.
+    const nativeOk = number === list.nativeAudio && !list.decodeNative;
     if (!track.playable && number !== list.nativeAudio) {
       noticeRef.current?.(`${track.label} (${track.codec}) can't play in this browser.`);
       return;
@@ -424,7 +427,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     activeAudioRef.current = number;
     setActiveAudio(number);
     if (sidecarRef.current) {
-      if (number === list.nativeAudio) { backToNative(videoRef.current?.currentTime || 0, !videoRef.current?.paused); return; }
+      if (nativeOk) { backToNative(videoRef.current?.currentTime || 0, !videoRef.current?.paused); return; }
       void handOver(number);
       return;
     }
@@ -437,7 +440,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         .finally(() => { if (op === opRef.current) setBusyBoth(false); });
       return;
     }
-    if (number === list.nativeAudio) return; // native already plays it
+    if (nativeOk) return; // native already plays it
     void handOver(number);
   }, [backToNative, handOver, videoRef]);
 
@@ -461,7 +464,9 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const media = readMediaPref(key);
     const prefSub = media.s || readPref(PREF_SUB);
     // Hindi opens by default; only a choice made on this very file overrides it.
-    const audioNumber = pickDefaultAudio(tracks, media.a, readPref(PREF_AUDIO));
+    let audioNumber = pickDefaultAudio(tracks, media.a, readPref(PREF_AUDIO));
+    // Staying on the file's own Dolby/DTS audio still needs the software decoder.
+    if (audioNumber == null && tracks.decodeNative) audioNumber = tracks.nativeAudio;
     const audioMatch = audioNumber != null ? tracks.audio.find((a) => a.number === audioNumber) : undefined;
     const subMatch = prefSub && prefSub !== "off"
       ? tracks.subtitles.find((s) => langOf(s) === prefSub && !s.forced && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
@@ -488,6 +493,31 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     else v.addEventListener("playing", start, { once: true });
     return () => { clearTimeout(settleTimer); v.removeEventListener("playing", start); v.removeEventListener("seeked", run); };
   }, [candidate, handOver, key, startSubReader, tracks, videoRef]);
+
+  // ---- silent original audio (Dolby/DTS the browser claimed it could play) ----
+  // Chrome counts decoded audio bytes; none after a few seconds of playback
+  // means the viewer hears nothing, so the software decoder takes over.
+  useEffect(() => {
+    const v = videoRef.current as (HTMLVideoElement & { webkitAudioDecodedByteCount?: number }) | null;
+    if (!v || !tracks || !candidate || tracks.decodeNative || tracks.container === "mp4") return;
+    const native = tracks.audio.find((a) => a.number === tracks.nativeAudio);
+    if (!native || !/^(AC3|E-AC3|DTS|TrueHD)$/i.test(native.codec) || !canDecodeTrack(native.codec)) return;
+    if (typeof v.webkitAudioDecodedByteCount !== "number") return;
+    let t0 = -1;
+    const check = () => {
+      if (v.paused || v.seeking || engineRef.current || sidecarRef.current || busyRef.current) { t0 = -1; return; }
+      if (t0 < 0) { t0 = v.currentTime; return; }
+      if (v.currentTime - t0 < 3) return;
+      clearInterval(timer);
+      if ((v.webkitAudioDecodedByteCount || 0) > 0) return;
+      const next = { ...tracks, decodeNative: true };
+      tracksRef.current = next;
+      setTracks(next);
+      if (activeAudioRef.current === tracks.nativeAudio || activeAudioRef.current < 0) void handOver(tracks.nativeAudio);
+    };
+    const timer = window.setInterval(check, 700);
+    return () => clearInterval(timer);
+  }, [candidate, handOver, tracks, videoRef]);
 
   // ---- subtitle clock ----
   useEffect(() => {
