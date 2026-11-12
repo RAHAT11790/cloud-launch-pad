@@ -216,3 +216,10 @@
 - [x] Phone "Desktop site" view (980px) now gets the PC layout: 5-column grids instead of 3 huge cards, header tabs on top.
 - [x] Player on short landscape / portrait wide screens: video no longer fills the screen; title shows below and page scrolls to episodes and picks.
 - [x] Player video keeps true 16:9 on laptop, PC and TV (was cropped / squashed on TV).
+
+## Ad back-lock, offline download server, Dolby audio (2026-11-12)
+- [x] Player ad call → 5 s "Sponsor loading" hold: taps and Back blocked, Back works after 5 s (phone test: Back stayed on episode during lock, worked after).
+- [x] Offline selected download server skipped automatically; each file falls back to its own server with real size and clear reasons (phone test with offline server: 720p 543 MB / 1080p 2071 MB ready).
+- [x] E-AC3/AC3/DTS/TrueHD audio decoded in-app (WASM) and played beside native video; real Chinese E-AC3 track measured audible, ~50–80 ms sync, follows seeks.
+- [ ] Full player test on a real phone: every Dolby file on the site is HEVC video, which the test browser cannot show — needs the owner's Android phone.
+- [ ] Data: The Remarried Empress Ep 4 "Default" link points to a Love Me Love My Voice file (owner must fix the link in admin).

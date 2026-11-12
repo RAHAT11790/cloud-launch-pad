@@ -264,6 +264,10 @@ export class AudioSidecar {
           break;
         }
         if (block.track !== this.track.number) continue;
+        // Files without a cue index are read from the start: audio long before
+        // the playhead is skipped instead of decoded and buffered.
+        const blockSec = (block.ptsTicks * this.header.timecodeScale) / 1e9;
+        if (blockSec < (this.video?.currentTime || 0) - 2) continue;
         const out = await frag.push(block);
         if (gen !== this.gen || this.destroyed) return;
         if (out) await this.append(out);

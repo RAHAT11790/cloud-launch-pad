@@ -26,3 +26,5 @@
 - Global chat (`src/lib/communityChat.ts`) is one public RTDB room keyed by the app's own account IDs (guests read only); `buildMessage` is the single gate for allowed kinds (text/image/voice/sticker, never video), voice notes are stored separately and fetched over REST — no private rooms exist because the RTDB is publicly readable.
 - Custom download servers (`settings/downloadManager/customServers`) join the Video Servers list and share its HTTP/HTTPS switch — one URL rewrite path.
 - Cloudflare Manager redeploys pass existing Worker secrets as `inherit` bindings, or an older live manager wipes them.
+- Player ad back-lock lives only in `src/lib/adBackLock.ts` (window-capture popstate swallow + `history.forward()`, no synthetic history entries) with the `AdLoadingLock` overlay; Chrome skips auto-redirect history entries, so a sponsor tab itself can never be back-locked.
+- The selected download server is probed via `routeHealth` and skipped while dead (`applyActiveDownloadServer`); the download page tries active-server then the file's own server per file — an offline tunnel must never block healthy files.
