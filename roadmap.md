@@ -1,5 +1,11 @@
 # Roadmap
 
+## Real H.265 links + automatic ads (approved 2026-11-13)
+- [x] Test the owner's two real links (Frontier Lord .mp4, FlyTon S08E12 .mkv — both H.265 10-bit) in the real player: picture, seek.
+- [x] Remove the 5-second ad back-lock completely.
+- [x] Ad closed in under 5 s → warning x/6; 6th → all videos locked 5 min, saved per guest/account ID.
+- [x] Automatic ads site-wide at random 2–10 min gaps (never over 10), keep coming for hours; no manual ad call.
+
 ## H265 picture, synced audio start, download server URL, subtitles (approved 2026-11-13)
 - [x] H265 (HEVC) episodes: picture must show (no black screen) — hardware decoder first, built-in software decoder when the phone has none.
 - [x] Audio and picture start together: hold the picture while the chosen language loads, then start both at once; shorten the wait.

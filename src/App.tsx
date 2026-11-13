@@ -25,6 +25,7 @@ import { initAdShield } from "@/lib/adShield";
 import ChromeBrowserGate from "./components/ChromeBrowserGate";
 import { PremiumActivationReload } from "@/lib/premiumReload";
 import { startPresence } from "@/lib/presence";
+import AdAutoCaller from "@/components/AdAutoCaller";
 
 const RouteAttrSync = () => {
   const loc = useLocation();
@@ -92,6 +93,7 @@ const App = () => (
         <BanGate />
         <ManifestManager />
         <PremiumActivationReload />
+        <AdAutoCaller />
         
         <Toaster />
         <Sonner />
