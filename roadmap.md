@@ -1,5 +1,25 @@
 # Roadmap
 
+## Ads gone, video stalls, Naruto ep, download N/A (approved 2026-11-13)
+- [ ] Ads stopped appearing after one lock — make automatic ads show again for every user.
+- [ ] Video stalls every few seconds — videos that play natively must play directly; built-in decoder only for real black-picture files.
+- [ ] Naruto Shippuden (RS FR 03, ep 383) shows 0:00/0:00 and never plays — fix.
+- [ ] Download sheet shows N/A for every episode/quality — fix.
+- [ ] Test all on phone-size browser with real content.
+
+## Real H.265 links + automatic ads (approved 2026-11-13)
+- [x] Test the owner's two real links (Frontier Lord .mp4, FlyTon S08E12 .mkv — both H.265 10-bit) in the real player: picture, seek.
+- [x] Remove the 5-second ad back-lock completely.
+- [x] Ad closed in under 5 s → warning x/6; 6th → all videos locked 5 min, saved per guest/account ID.
+- [x] Automatic ads site-wide at random 2–10 min gaps (never over 10), keep coming for hours; no manual ad call.
+
+## H265 picture, synced audio start, download server URL, subtitles (approved 2026-11-13)
+- [x] H265 (HEVC) episodes: picture must show (no black screen) — hardware decoder first, built-in software decoder when the phone has none.
+- [x] Audio and picture start together: hold the picture while the chosen language loads, then start both at once; shorten the wait.
+- [x] Download manager follows the selected video server's CURRENT address (server URL changes must reach downloads automatically).
+- [x] Subtitles: SRT, ASS/SSA, WebVTT and other in-file formats shown cleanly (styling tags removed, line breaks kept).
+- [x] Check every audio format path (AAC, Opus, Vorbis, MP3, FLAC, AC3, E-AC3, DTS, TrueHD, PCM) with real test files.
+
 ## Google login broken (2026-11-10)
 - [x] Reproduced on phone size: Google shows "Error 401: deleted_client" — the Google sign-in key of Firebase project animeverse-d7b79 was deleted in Google Cloud. Site code is fine.
 - [x] Email/password login re-tested with CEO account (works); test device removed afterwards.
@@ -216,3 +236,10 @@
 - [x] Phone "Desktop site" view (980px) now gets the PC layout: 5-column grids instead of 3 huge cards, header tabs on top.
 - [x] Player on short landscape / portrait wide screens: video no longer fills the screen; title shows below and page scrolls to episodes and picks.
 - [x] Player video keeps true 16:9 on laptop, PC and TV (was cropped / squashed on TV).
+
+## Ad back-lock, offline download server, Dolby audio (2026-11-12)
+- [x] Player ad call → 5 s "Sponsor loading" hold: taps and Back blocked, Back works after 5 s (phone test: Back stayed on episode during lock, worked after).
+- [x] Offline selected download server skipped automatically; each file falls back to its own server with real size and clear reasons (phone test with offline server: 720p 543 MB / 1080p 2071 MB ready).
+- [x] E-AC3/AC3/DTS/TrueHD audio decoded in-app (WASM) and played beside native video; real Chinese E-AC3 track measured audible, ~50–80 ms sync, follows seeks.
+- [ ] Full player test on a real phone: every Dolby file on the site is HEVC video, which the test browser cannot show — needs the owner's Android phone.
+- [ ] Data: The Remarried Empress Ep 4 "Default" link points to a Love Me Love My Voice file (owner must fix the link in admin).

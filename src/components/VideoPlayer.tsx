@@ -8,15 +8,18 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { subscribePenalty } from "@/lib/adPenalty";
+import { videoLockRemaining } from "@/lib/adTiming";
+import VideoAdLock from "@/components/player/VideoAdLock";
 import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
+import { decodeSubtitleBytes, parseSubtitleFile, uniqueLines } from "@/lib/subtitleFormats";
 import { EmbeddedSubtitleLayer, SUBTITLE_FONTS } from "@/components/player/EmbeddedSubtitleLayer";
 import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
-import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -24,6 +27,7 @@ import {
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, get } from "@/lib/firebase";
+import { firebaseRestGet } from "@/lib/firebaseRest";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
@@ -560,6 +564,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>(() => readCachedVideoServers());
   const [videoServersLoaded, setVideoServersLoaded] = useState(() => readCachedVideoServers().length > 0);
+  // A brand-new device has no saved server list yet: give Firebase a moment
+  // before starting, or the episode opens on its stored (often dead) address.
+  const [serverWaitDone, setServerWaitDone] = useState(() => readCachedVideoServers().length > 0);
+  useEffect(() => {
+    if (serverWaitDone) return;
+    const t = setTimeout(() => setServerWaitDone(true), 2500);
+    return () => clearTimeout(t);
+  }, [serverWaitDone]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const manualServerSelectedRef = useRef(false);
@@ -568,12 +580,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const premiumServerApplied = useRef(false);
 
   useEffect(() => {
+    let live = false;
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
+      live = true;
       const servers = normalizeVideoServersValue(snap.val());
       setVideoServers(servers);
       setVideoServersLoaded(true);
       try { localStorage.setItem(VIDEO_SERVERS_CACHE_KEY, JSON.stringify(servers)); } catch {}
     });
+    // The live connection can take several seconds on a new device; one quick
+    // read gets the current server addresses in time for the first play.
+    if (!readCachedVideoServers().length) {
+      void firebaseRestGet<unknown>("settings/videoServers").then((val) => {
+        if (live || val == null) return;
+        const servers = normalizeVideoServersValue(val);
+        if (!servers.length) return;
+        setVideoServers(servers);
+        setVideoServersLoaded(true);
+      }).catch(() => undefined);
+    }
     return () => unsub();
   }, []);
 
@@ -799,6 +824,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => { cancelled = true; unsub1(); };
   }, [noProxy, preferProxy, src, videoServerFingerprint]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
+  // Fast-close ad penalty: every video stays paused until the lock ends.
+  const [videoLockedUntil, setVideoLockedUntil] = useState(0);
+  useEffect(() => subscribePenalty((p) => setVideoLockedUntil(videoLockRemaining(p) > 0 ? p.lockedUntil : 0)), []);
+  useEffect(() => {
+    if (!videoLockedUntil || isPremium) return;
+    const hold = () => {
+      if (Date.now() >= videoLockedUntil) return;
+      const v = videoRef.current;
+      try { if (v && !v.paused) v.pause(); } catch { /* ignore */ }
+      sendEmbedCmd("pause");
+    };
+    hold();
+    const v = videoRef.current;
+    v?.addEventListener("play", hold);
+    v?.addEventListener("playing", hold);
+    const t = window.setInterval(hold, 500);
+    return () => { v?.removeEventListener("play", hold); v?.removeEventListener("playing", hold); clearInterval(t); };
+  }, [videoLockedUntil, isPremium, currentSrc, sendEmbedCmd]);
   const [adGateBusy, setAdGateBusy] = useState(false);
   const downloadAdPassedRef = useRef(false);
 
@@ -2679,11 +2722,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
-    const activeText = subtitleCueListRef.current
+    const activeText = uniqueLines(subtitleCueListRef.current
       .filter((cue) => v.currentTime >= cue.start && v.currentTime <= cue.end)
-      .map((cue) => cue.text)
-      .join("\n")
-      .trim();
+      .map((cue) => cue.text));
 
     setSubtitleOverlayText(activeText);
   }, [currentHlsSubtitle]);
@@ -2691,7 +2732,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const fetchSubtitleText = useCallback(async (targetUrl: string) => {
     const response = await fetch(targetUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.text();
+    // Real encoding of the file (UTF-8/16, Windows-1252), not always UTF-8.
+    return decodeSubtitleBytes(await response.arrayBuffer());
   }, []);
 
   const applyCueOffset = useCallback((cues: Array<{ start: number; end: number; text: string }>, offsetSeconds: number) => {
@@ -2738,8 +2780,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const payload = await fetchSubtitleText(trackUrl);
     const normalized = payload.replace(/\r/g, "").trim();
     if (!normalized) return [];
-    if (/^WEBVTT\b/i.test(normalized)) return parseVttToCues(payload);
-    if (!/^#EXTM3U\b/i.test(normalized)) return parseVttToCues(payload);
+    // Direct caption files: SRT, VTT, ASS/SSA, SBV, TTML/DFXP, SAMI, MicroDVD.
+    if (!/^#EXTM3U\b/i.test(normalized)) {
+      return parseSubtitleFile(payload)
+        .map((cue) => ({ ...cue, text: sanitizeSubtitleText(cue.text) }))
+        .filter((cue) => !!cue.text);
+    }
 
     const segments = extractSubtitleSegments(payload, trackUrl);
     if (segments.length === 0) throw new Error("No subtitle media file found");
@@ -2769,7 +2815,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       });
 
     return Array.from(deduped.values());
-  }, [applyCueOffset, extractSubtitleSegments, fetchSubtitleText, parseVttToCues]);
+  }, [applyCueOffset, extractSubtitleSegments, fetchSubtitleText, parseVttToCues, sanitizeSubtitleText]);
 
   const loadSubtitleCues = useCallback(async (selectedIdx: number) => {
     if (selectedIdx < 0) {
@@ -3372,6 +3418,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   useEffect(() => {
     if (!playbackRouteReady) return;
     if (!noServerSwitch && !isHlsLikeUrl(src) && isInsecureHttpSource(src) && !effectiveVideoServers.length && !videoServersLoaded) return;
+    if (!noServerSwitch && !isHlsLikeUrl(src) && !videoServersLoaded && !serverWaitDone) return;
     const episodeKey = `${(anime as any)?.id ?? ""}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
     const nextFingerprint = `${src}__${episodeKey}`;
     if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
@@ -3466,7 +3513,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, noServerSwitch, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, videoServersLoaded, anime, isAnimeSaltContent]);
+  }, [src, qualityOptions, noProxy, noServerSwitch, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, videoServersLoaded, serverWaitDone, anime, isAnimeSaltContent]);
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
@@ -3946,7 +3993,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Only show the small player spinner during native media startup/switching.
   // AN/details navigation uses only the top "Loading details..." toast from Index.
-  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitching);
+  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitching || embedded.holding);
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -5095,7 +5142,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       case "back": {
         consume();
-        if (panelOpen) {
+            if (panelOpen) {
           setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
           return;
         }
@@ -5222,7 +5269,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
+          {videoLockedUntil > 0 && !isPremium && <VideoAdLock until={videoLockedUntil} />}
 
           {!isEmbedPlayback && embedded.activeSubtitle >= 0 && (
             <EmbeddedSubtitleLayer

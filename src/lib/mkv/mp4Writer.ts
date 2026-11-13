@@ -74,6 +74,8 @@ export interface AudioTrackConfig {
   codecPrivate: Uint8Array;
   /** esds objectTypeIndication: 0x40 = AAC (default), 0x6b = MP3. */
   objectType?: number;
+  /** FLAC STREAMINFO (34 bytes): writes a `fLaC` sample entry instead of `mp4a`. */
+  flacStreamInfo?: Uint8Array;
 }
 
 export type TrackConfig = VideoTrackConfig | AudioTrackConfig;
@@ -154,7 +156,27 @@ const stsdVideo = (cfg: VideoTrackConfig): Uint8Array => {
   );
 };
 
-const stsdAudio = (cfg: AudioTrackConfig): Uint8Array =>
+const stsdFlac = (cfg: AudioTrackConfig, info: Uint8Array): Uint8Array =>
+  fullBox(
+    "stsd",
+    0,
+    0,
+    u32(1),
+    box(
+      "fLaC",
+      ZERO(6),
+      u16(1),
+      ZERO(8),
+      u16(cfg.channels || 2),
+      u16(cfg.sampleSize || 16),
+      ZERO(4),
+      u32(Math.round(cfg.sampleRate) * 0x10000),
+      // dfLa: one metadata block, STREAMINFO, marked as the last one.
+      fullBox("dfLa", 0, 0, u8(0x80, 0, 0, info.length), info),
+    ),
+  );
+
+const stsdAudio = (cfg: AudioTrackConfig): Uint8Array => cfg.flacStreamInfo ? stsdFlac(cfg, cfg.flacStreamInfo) :
   fullBox(
     "stsd",
     0,

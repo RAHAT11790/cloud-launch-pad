@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { db, ref, onValue, runTransaction } from "@/lib/firebase";
 import { normalizeDownloadFlowSettings } from "@/lib/downloadFlow";
+import { checkRouteAlive, isRouteKnownDead } from "@/lib/routeHealth";
+import { resolveActiveServer, serverModeKey, type DownloadServerMode, type ServerEntry } from "@/lib/downloadServerRef";
+
+export { serverModeKey, type DownloadServerMode };
 
 /**
  * Download Manager settings (admin controlled, Firebase backed).
@@ -18,16 +22,19 @@ import { normalizeDownloadFlowSettings } from "@/lib/downloadFlow";
  * Daily counters live at stats/downloads/{YYYY-MM-DD} = { telegram, website, total }.
  */
 
-export type DownloadServerMode = "http" | "https";
-
 export type DownloadManagerConfig = {
   telegramEnabled: boolean;
   websiteEnabled: boolean;
   serverModes: Record<string, DownloadServerMode>;
   /** Firebase-safe key of the server chosen to serve every download. */
   activeServerKey: string;
-  /** Domain/base URL of that server, e.g. https://dl3.example.com */
+  /** Domain/base URL of that server when it was picked (may be stale — see activeServerRef). */
   activeServerDomain: string;
+  /** Live reference to the picked server ("video:<index>:<name>" or "custom:<id>"). */
+  activeServerRef: string;
+  /** HTTP/HTTPS choice saved with the pick (kept when the address changes). */
+  activeServerMode: string;
+  customServers: Record<string, ServerEntry>;
   maxEpisodes: number;
   adSteps: number[];
   sponsorSeconds: number;
@@ -42,6 +49,9 @@ export const DEFAULT_DOWNLOAD_MANAGER_CONFIG: DownloadManagerConfig = {
   serverModes: {},
   activeServerKey: "",
   activeServerDomain: "",
+  activeServerRef: "",
+  activeServerMode: "",
+  customServers: {},
   ...normalizeDownloadFlowSettings(),
 };
 
@@ -59,6 +69,9 @@ export const parseDownloadManagerConfig = (raw: any): DownloadManagerConfig => {
     serverModes,
     activeServerKey: String(raw?.activeServerKey || ""),
     activeServerDomain: String(raw?.activeServerDomain || ""),
+    activeServerRef: String(raw?.activeServerRef || ""),
+    activeServerMode: String(raw?.activeServerMode || ""),
+    customServers: raw?.customServers && typeof raw.customServers === "object" ? raw.customServers : {},
     ...normalizeDownloadFlowSettings(raw || {}),
   };
 };
@@ -71,6 +84,21 @@ function markConfigReady() {
   configReady = true;
   readyListeners.forEach(fn => fn(true));
 }
+
+// Live Video Servers list: the selected download server is a reference into
+// it, so an address change there reaches downloads immediately.
+const SERVERS_CACHE_KEY = "rs_dm_video_servers_v1";
+let videoServers: ServerEntry[] = [];
+export const parseVideoServers = (val: any): ServerEntry[] =>
+  Array.isArray(val) ? val.map((s: any) => (s && s.domain ? { name: String(s.name || ""), domain: String(s.domain) } : {}))
+    : val && typeof val === "object" ? (Object.values(val) as any[]).map((s) => (s && s.domain ? { name: String(s.name || ""), domain: String(s.domain) } : {}))
+    : [];
+try {
+  if (typeof window !== "undefined") {
+    const cachedServers = localStorage.getItem(SERVERS_CACHE_KEY);
+    if (cachedServers) videoServers = parseVideoServers(JSON.parse(cachedServers));
+  }
+} catch {}
 
 try {
   if (typeof window !== "undefined") {
@@ -85,8 +113,15 @@ try {
       config = parseDownloadManagerConfig(snap.val() || {});
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(config)); } catch {}
       listeners.forEach((fn) => { try { fn(config); } catch {} });
+      void checkActiveDownloadServer();
       markConfigReady();
     }, markConfigReady);
+    onValue(ref(db, "settings/videoServers"), (snap) => {
+      videoServers = parseVideoServers(snap.val());
+      try { localStorage.setItem(SERVERS_CACHE_KEY, JSON.stringify(videoServers)); } catch {}
+      listeners.forEach((fn) => { try { fn(config); } catch {} });
+      void checkActiveDownloadServer();
+    });
   }
 } catch {}
 
@@ -113,19 +148,6 @@ export const useDownloadManagerConfig = (): DownloadManagerConfig => {
 // Server keys + mode lookup
 // ---------------------------------------------------------------------------
 
-/** Firebase-safe key for a server domain or any media URL. */
-export const serverModeKey = (domainOrUrl?: string | null): string => {
-  const raw = String(domainOrUrl || "").trim();
-  if (!raw) return "";
-  let host = raw;
-  try {
-    host = new URL(/^https?:\/\//i.test(raw) ? raw : `http://${raw}`).hostname;
-  } catch {
-    host = raw.replace(/^https?:\/\//i, "").split("/")[0];
-  }
-  return host.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-};
-
 const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServerMode => {
   const key = serverModeKey(domainOrUrl);
   if (!key) return "http";
@@ -137,12 +159,27 @@ const getServerDownloadMode = (domainOrUrl?: string | null): DownloadServerMode 
 // ---------------------------------------------------------------------------
 
 /** The server the admin selected to serve every download ("" = keep source). */
-const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
-  const domain = String(config.activeServerDomain || "").trim();
-  if (!domain) return null;
-  const key = config.activeServerKey || serverModeKey(domain);
-  return { key, domain, mode: config.serverModes[key] === "https" ? "https" : "http" };
+const activeServerUrl = (domain: string, mode: DownloadServerMode) => {
+  const base = domain.replace(/\/+$/, "");
+  return /^https?:\/\//i.test(base) ? base : `${mode === "https" ? "https" : "http"}://${base}`;
 };
+/** The selected download server with its CURRENT address (live from Video Servers). */
+export const getSelectedDownloadServer = () => resolveActiveServer(config, videoServers, config.customServers);
+const getActiveDownloadServer = (): { key: string; domain: string; mode: DownloadServerMode } | null => {
+  const active = getSelectedDownloadServer();
+  if (!active) return null;
+  // A server that was just proven offline acts like "no server selected":
+  // downloads come from the file's own server instead of a dead host.
+  if (isRouteKnownDead(activeServerUrl(active.domain, active.mode))) return null;
+  return active;
+};
+
+/** Checks (once, cached on the device) whether the selected download server is online. */
+export function checkActiveDownloadServer(): Promise<boolean> {
+  const active = getSelectedDownloadServer();
+  if (!active || typeof window === "undefined") return Promise.resolve(true);
+  return checkRouteAlive(activeServerUrl(active.domain, active.mode));
+}
 
 /**
  * Rewrites a media URL so it is served by the selected download server while
