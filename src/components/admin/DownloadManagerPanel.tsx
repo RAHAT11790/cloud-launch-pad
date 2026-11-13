@@ -28,7 +28,6 @@ import {
   serverModeKey,
   sumDownloadStats,
 } from "@/lib/downloadManagerSettings";
-import { customServerRef, modeForServer, resolveActiveServer, serverNameModeKey, videoServerRef } from "@/lib/downloadServerRef";
 
 type Props = {
   glassCard?: string;
@@ -39,8 +38,6 @@ type VideoServer = { name?: string; domain?: string; proxy?: string; customId?: 
 const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
   const [config, setConfig] = useState<DownloadManagerConfig>(DEFAULT_DOWNLOAD_MANAGER_CONFIG);
   const [servers, setServers] = useState<VideoServer[]>([]);
-  /** Video Servers exactly as stored (positions matter for the saved reference). */
-  const [serversRaw, setServersRaw] = useState<VideoServer[]>([]);
   const [stats, setStats] = useState<DownloadDayStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,12 +63,12 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
   };
   const removeCustomServer = async (server: VideoServer) => {
     if (!server.customId) return;
-    const isActive = config.activeServerRef === customServerRef(server.customId) || serverModeKey(String(server.domain || "")) === config.activeServerKey;
+    const isActive = serverModeKey(String(server.domain || "")) === config.activeServerKey;
     setSaving(true);
     try {
       await update(ref(db, "settings/downloadManager"), {
         [`customServers/${server.customId}`]: null,
-        ...(isActive ? { activeServerKey: "", activeServerDomain: "", activeServerRef: "", activeServerMode: "" } : {}),
+        ...(isActive ? { activeServerKey: "", activeServerDomain: "" } : {}),
       });
       toast.success("Custom server removed");
     } catch { toast.error("Could not remove custom server"); }
@@ -109,7 +106,6 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
           ? (Object.values(val) as VideoServer[]).filter((s: any) => s && s.domain)
           : [];
       setServers(list);
-      setServersRaw(Array.isArray(val) ? val.map((s: any) => s || {}) : list);
     });
     const unsubStats = onValue(ref(db, "stats/downloads"), (snap) => {
       setStats(parseDownloadStats(snap.val()));
@@ -138,40 +134,19 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
     patch({ [key]: next });
   };
 
-  const customMap = useMemo(() => Object.fromEntries(customServers.filter((c) => c.customId).map((c) => [c.customId as string, c])), [customServers]);
-  /** Selected server with its CURRENT address (follows Video Servers edits / auto URL changes). */
-  const selected = useMemo(() => resolveActiveServer(config, serversRaw, customMap), [config, serversRaw, customMap]);
-  const refFor = (server: VideoServer) => {
-    if (server.customId) return customServerRef(server.customId);
-    const index = serversRaw.findIndex((s) => s === server || (s?.domain === server.domain && s?.name === server.name));
-    return videoServerRef(Math.max(0, index), server.name);
-  };
-
-  // Keep the stored address in step with the live one (the site already
-  // follows the reference; this only keeps the saved copy tidy).
-  useEffect(() => {
-    if (loading || !selected?.live || !config.activeServerRef) return;
-    if (selected.domain === config.activeServerDomain) return;
-    void update(ref(db, "settings/downloadManager"), { activeServerDomain: selected.domain, activeServerKey: selected.key }).catch(() => undefined);
-  }, [loading, selected, config.activeServerRef, config.activeServerDomain]);
-
-  const setServerMode = (server: VideoServer, mode: DownloadServerMode) => {
-    const key = serverModeKey(String(server.domain || ""));
+  const setServerMode = (domain: string, mode: DownloadServerMode) => {
+    const key = serverModeKey(domain);
     if (!key) return;
-    const nameKey = server.customId ? "" : serverNameModeKey(server.name);
-    const isActive = !!selected && selected.key === key;
-    setConfig((prev) => ({ ...prev, serverModes: { ...prev.serverModes, [key]: mode, ...(nameKey ? { [nameKey]: mode } : {}) }, ...(isActive ? { activeServerMode: mode } : {}) }));
-    patch({ [`serverModes/${key}`]: mode, ...(nameKey ? { [`serverModes/${nameKey}`]: mode } : {}), ...(isActive ? { activeServerMode: mode } : {}) });
+    setConfig((prev) => ({ ...prev, serverModes: { ...prev.serverModes, [key]: mode } }));
+    patch({ [`serverModes/${key}`]: mode });
   };
 
-  const selectActiveServer = (server: VideoServer | null) => {
-    const trimmed = String(server?.domain || "").trim();
+  const selectActiveServer = (domain: string) => {
+    const trimmed = String(domain || "").trim();
     const key = trimmed ? serverModeKey(trimmed) : "";
-    const refValue = server && trimmed ? refFor(server) : "";
-    const mode = server && trimmed ? modeForServer(config, trimmed, server.name) : "";
-    setConfig((prev) => ({ ...prev, activeServerKey: key, activeServerDomain: trimmed, activeServerRef: refValue, activeServerMode: mode }));
-    patch({ activeServerKey: key, activeServerDomain: trimmed, activeServerRef: refValue, activeServerMode: mode });
-    toast.success(trimmed ? "Download server selected — it follows this server's address changes" : "Using each video's own source server");
+    setConfig((prev) => ({ ...prev, activeServerKey: key, activeServerDomain: trimmed }));
+    patch({ activeServerKey: key, activeServerDomain: trimmed });
+    toast.success(trimmed ? "Download server selected" : "Using each video's own source server");
   };
 
   const today = useMemo(() => {
@@ -307,22 +282,14 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
 
         <div className="mb-3 rounded-xl border border-white/10 bg-black/25 px-3.5 py-3">
           <p className={label}>Selected download server</p>
-          {selected ? (
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                {selected.name ? <span className="text-[12px] font-bold text-white">{selected.name}</span> : null}
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                  selected.mode === "https" ? "bg-emerald-500/15 text-emerald-300" : "bg-sky-500/15 text-sky-300"
-                }`}>
-                  {selected.mode === "https" ? "https · rename" : "http · rename"}
-                </span>
-              </div>
-              <p className="truncate font-mono text-[11.5px] font-semibold text-emerald-300">{selected.domain}</p>
-              <p className={`text-[10.5px] leading-relaxed ${selected.live ? "text-zinc-400" : "text-amber-300"}`}>
-                {selected.live
-                  ? "Linked to this server — when its address changes in Video Servers, downloads switch to the new address automatically."
-                  : "This address is no longer in Video Servers. Select the server again below so downloads follow its new address."}
-              </p>
+          {config.activeServerDomain ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-mono text-[11.5px] font-semibold text-emerald-300">{config.activeServerDomain}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                (config.serverModes[config.activeServerKey] === "https") ? "bg-emerald-500/15 text-emerald-300" : "bg-sky-500/15 text-sky-300"
+              }`}>
+                {config.serverModes[config.activeServerKey] === "https" ? "https · rename" : "http · rename"}
+              </span>
             </div>
           ) : (
             <p className="text-[11.5px] text-zinc-400">
@@ -330,8 +297,8 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
             </p>
           )}
           <button
-            onClick={() => selectActiveServer(null)}
-            disabled={!selected}
+            onClick={() => selectActiveServer("")}
+            disabled={!config.activeServerDomain}
             className="mt-2.5 h-8 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-zinc-300 hover:text-white disabled:opacity-40"
           >
             Use source server
@@ -347,9 +314,9 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
             {[...servers, ...customServers].map((server, idx) => {
               const domain = String(server?.domain || "");
               const key = serverModeKey(domain);
-              const mode: DownloadServerMode = modeForServer(config, domain, server.customId ? "" : server.name);
+              const mode: DownloadServerMode = config.serverModes[key] === "https" ? "https" : "http";
               const directOk = Boolean(buildDirectDownloadLink(`${domain.replace(/\/+$/, "")}/watch/sample.mp4`));
-              const isActive = !!selected && key === selected.key;
+              const isActive = !!config.activeServerDomain && key === config.activeServerKey;
               return (
                 <div
                   key={`${key}-${idx}`}
@@ -357,7 +324,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <button
-                      onClick={() => selectActiveServer(server)}
+                      onClick={() => selectActiveServer(domain)}
                       aria-label={`Select ${server?.name || domain} as download server`}
                       className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
                         isActive ? "border-emerald-400 bg-emerald-400" : "border-zinc-600 hover:border-zinc-400"
@@ -379,7 +346,7 @@ const DownloadManagerPanel = ({ glassCard = "" }: Props) => {
                       {(["http", "https"] as DownloadServerMode[]).map((option) => (
                         <button
                           key={option}
-                          onClick={() => setServerMode(server, option)}
+                          onClick={() => setServerMode(domain, option)}
                           className={`h-8 px-3 rounded-[7px] text-[11px] font-bold uppercase tracking-wide transition-colors ${
                             mode === option ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-white"
                           }`}

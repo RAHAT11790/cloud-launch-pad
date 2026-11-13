@@ -10,9 +10,7 @@
 //      picture never flashes black. Any failure returns to native playback.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { MkvEngine, canPlayAudioTrack, canPlayTrackCombo, type TextCue } from "@/lib/mkv/mkvEngine";
-import { pictureDecodingPossible, prewarmPictureDecoder } from "@/lib/mkv/pictureDecoder";
-import { videoFamily } from "@/lib/mkv/videoCodec";
+import { MkvEngine, canPlayTrackCombo, type TextCue } from "@/lib/mkv/mkvEngine";
 import { AudioSidecar } from "@/lib/mkv/audioSidecar";
 import type { MkvHeader } from "@/lib/mkv/mkvDemux";
 import { videoMime } from "@/lib/mkv/mkvRemux";
@@ -22,8 +20,6 @@ import { detectSubtitleLanguage } from "@/lib/mkv/subtitleLanguage";
 import { isProbeCandidate, loadHeader, mediaKey, peekEmbeddedTracks, probeEmbeddedTracks, refineSubtitleLabels, type EmbeddedTrack, type EmbeddedTrackList } from "@/lib/mkv/trackProbe";
 import { pickDefaultAudio } from "@/lib/mkv/audioDefault";
 import { warmTrackProxy } from "@/lib/trackProxy";
-import { canDecodeTrack, prewarmAudioDecoder } from "@/lib/mkv/audioDecode";
-import { uniqueLines } from "@/lib/subtitleFormats";
 
 const PREF_AUDIO = "rs_mkv_pref_audio_v1";
 const PREF_SUB = "rs_mkv_pref_sub_v1";
@@ -57,12 +53,6 @@ const wantsFullEngine = (header: MkvHeader, audioNumber: number): boolean => {
   if (/hvc1|hev1/i.test(mime)) return false;
   return !brokenMse().includes(mime);
 };
-// Video formats this device's browser plays as a black screen (sound only)
-// inside .mkv files: those open straight in picture mode next time.
-const BLACK_PICTURE = "rs_native_picture_black_v1";
-const blackPictures = (): string[] => { try { return JSON.parse(localStorage.getItem(BLACK_PICTURE) || "[]"); } catch { return []; } };
-const markBlackPicture = (family: string) => { try { const l = blackPictures(); if (family && !l.includes(family)) localStorage.setItem(BLACK_PICTURE, JSON.stringify([...l, family].slice(-10))); } catch { /* ignore */ } };
-const pictureCapable = () => typeof window !== "undefined" && typeof (window as any).VideoFrame !== "undefined" && typeof Worker !== "undefined" && typeof WebAssembly === "object";
 const langOf = (t?: EmbeddedTrack | null) => String(t?.language || "").toLowerCase().split(/[-_]/)[0];
 
 const insertSorted = <T extends { start: number }>(list: T[], item: T) => {
@@ -86,10 +76,6 @@ export interface EmbeddedTracksState {
   activeAudio: number;
   activeSubtitle: number;
   busy: boolean;
-  /** Playback is held while the chosen sound / the picture loads, so both start together. */
-  holding: boolean;
-  /** The picture is drawn by the built-in decoder ("hardware" / "software"), or "none". */
-  pictureMode: string;
   engineActive: boolean;
   ownsRef: RefObject<boolean>;
   subtitleText: string;
@@ -108,12 +94,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const [activeAudio, setActiveAudio] = useState(-1);
   const [activeSubtitle, setActiveSubtitle] = useState(-1);
   const [busy, setBusy] = useState(false);
-  const [holding, setHolding] = useState(false);
-  const [pictureMode, setPictureMode] = useState("none");
   const [engineActive, setEngineActive] = useState(false);
-  /** Media key that needs the picture drawn by us (sound-only black screen). */
-  const pictureKeyRef = useRef("");
-  const pictureFailedRef = useRef(new Set<string>());
   const [subtitleText, setSubtitleText] = useState("");
   const [bitmapCue, setBitmapCue] = useState<PgsBitmapCue | null>(null);
   const engineRef = useRef<MkvEngine | null>(null);
@@ -129,8 +110,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const noticeRef = useRef(onNotice);
   noticeRef.current = onNotice;
   const autoAppliedRef = useRef("");
-  /** Opened with no picture track (videoWidth 0): sound held until our picture is ready. */
-  const blackHoldRef = useRef<{ key: string; play: boolean } | null>(null);
   const busyRef = useRef(false);
   const setBusyBoth = (value: boolean) => { busyRef.current = value; setBusy(value); };
 
@@ -229,7 +208,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     engineRef.current = null;
     ownsRef.current = false;
     setEngineActive(false);
-    setPictureMode("none");
     if (e) { try { e.destroy(); } catch { /* ignore */ } }
   }, []);
 
@@ -285,9 +263,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     activeAudioRef.current = -1;
     setActiveAudio(-1);
     autoAppliedRef.current = "";
-    pictureKeyRef.current = "";
-    blackHoldRef.current = null;
-    setHolding(false);
     if (!candidate) return;
     let cancelled = false;
     const apply = (list: EmbeddedTrackList | null) => {
@@ -295,15 +270,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       tracksRef.current = list;
       setTracks(list);
       if (activeAudioRef.current < 0) { activeAudioRef.current = list.nativeAudio; setActiveAudio(list.nativeAudio); }
-      // Start the decoders this episode will need while it opens, so the
-      // sound / picture don't wait for them later.
-      try {
-        const pick = pickDefaultAudio(list, readMediaPref(key).a, readPref(PREF_AUDIO));
-        const picked = list.audio.find((a) => a.number === pick);
-        if (list.decodeNative || (picked && !picked.mime && canDecodeTrack(picked.codec))) prewarmAudioDecoder();
-        const family = list.container === "mkv" ? videoFamily(list.videoMime) : "";
-        if (family && pictureCapable() && blackPictures().includes(family)) prewarmPictureDecoder();
-      } catch { /* warming is optional */ }
       // Pre-read the full header + cues right away (through the track proxy
       // when the server refuses direct reads) so a language switch later
       // starts instantly instead of paying that round-trip.
@@ -326,7 +292,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     // Let the first frames load before we spend bandwidth on the probe.
     const timer = setTimeout(() => { probeEmbeddedTracks(candidate).then(apply).catch(() => undefined); }, 600);
     return () => { cancelled = true; clearTimeout(timer); if (warmTimer) clearTimeout(warmTimer); };
-  }, [candidate, destroyEngine, key, stopSubReader]);
+  }, [candidate, destroyEngine, stopSubReader]);
 
   // If anything else (server/quality switch, retry) replaces the element's
   // source, the engine silently steps aside.
@@ -355,28 +321,20 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
 
 
   /** Hand the element to the engine with `audioNumber` at the current time. */
-  const handOver = useCallback(async (audioNumber: number, holdStart = false) => {
+  const handOver = useCallback(async (audioNumber: number) => {
     const v = videoRef.current;
     const playUrl = srcRef.current;
     if (!v || !playUrl) return false;
     const op = ++opRef.current;
     const time = v.currentTime || 0;
-    const wasPlaying = !v.paused || holdStart;
-    const mediaKeyNow = keyRef.current;
-    const picture = !!mediaKeyNow && pictureKeyRef.current === mediaKeyNow;
+    const wasPlaying = !v.paused;
     setBusyBoth(true);
-    // Picture and sound start together: hold playback while the new sound
-    // (or the picture) loads instead of letting one run ahead of the other.
-    if (wasPlaying) { setHolding(true); v.pause(); }
     try {
       const { header, cues, corsUrl } = await loadHeader(playUrl);
       if (op !== opRef.current) return false;
-      if (picture && (!pictureDecodingPossible(header.video) || !canPlayAudioTrack(header.audio.find((a) => a.number === audioNumber) || header.audio[0]))) {
-        throw new Error("picture decoding not possible here");
-      }
-      if (!picture && !wantsFullEngine(header, audioNumber)) {
+      if (!wantsFullEngine(header, audioNumber)) {
         // Sidecar: video keeps playing natively, only the sound changes.
-        if (engineRef.current) { const t = v.currentTime; freeze(); destroyEngine(); v.src = playUrl; v.load(); await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); try { v.currentTime = t; } catch { /* ignore */ } unfreeze(); }
+        if (engineRef.current) { const t = v.currentTime; freeze(); destroyEngine(); v.src = playUrl; v.load(); await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); try { v.currentTime = t; } catch { /* ignore */ } if (wasPlaying) v.play().catch(() => undefined); unfreeze(); }
         const old = sidecarRef.current; sidecarRef.current = null;
         old?.destroy(); // gives the sound back before the next language takes it
         const sc = new AudioSidecar(corsUrl, header, cues, audioNumber, (error) => {
@@ -389,7 +347,6 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         if (op !== opRef.current) { sc.destroy(); return false; }
         sidecarRef.current = sc;
         setEngineActive(true);
-        if (wasPlaying) await v.play().catch(() => undefined);
         return true;
       }
       freeze();
@@ -397,27 +354,24 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       stopSubReader(); // the engine reads subtitles itself
       const engine = new MkvEngine(corsUrl, header, cues, audioNumber, {
         ...cueCallbacks,
-        picture,
         onFatal: (error) => {
           if (engineRef.current !== engine) return;
           console.warn("[mkv] engine stopped:", error.message);
           const t = videoRef.current?.currentTime || time;
           const playing = videoRef.current ? !videoRef.current.paused : wasPlaying;
           freeze();
-          if (picture) { pictureFailedRef.current.add(mediaKeyNow); pictureKeyRef.current = ""; }
           backToNative(t, playing);
-          noticeRef.current?.(picture ? "This video's picture can't be shown on this device." : "This audio track couldn't play here — switched back to the original audio.");
+          noticeRef.current?.("This audio track couldn't play here — switched back to the original audio.");
         },
       });
       engineRef.current = engine;
       ownsRef.current = true;
       setEngineActive(true);
+      if (wasPlaying) v.pause();
       await engine.attach(v, time);
       if (op !== opRef.current || engineRef.current !== engine) return false;
-      setPictureMode(engine.pictureKind);
       if (wasPlaying) await v.play().catch(() => undefined);
       unfreeze();
-      if (picture) return true;
       // Watchdog: sound but no picture (seen with some phones' decoders) →
       // remember it and continue through the sidecar with the native video.
       const q0 = (v as any).getVideoPlaybackQuality?.()?.totalVideoFrames ?? 0;
@@ -436,34 +390,19 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     } catch (error) {
       if (op === opRef.current) {
         console.warn("[mkv] hand-over failed:", (error as Error)?.message);
-        if (picture) { pictureFailedRef.current.add(mediaKeyNow); pictureKeyRef.current = ""; }
         backToNative(time, wasPlaying);
-        noticeRef.current?.(picture ? "This video's picture can't be shown on this device." : "Couldn't switch audio on this device right now.");
+        noticeRef.current?.("Couldn't switch audio on this device right now.");
       }
       return false;
     } finally {
-      if (op === opRef.current) { setBusyBoth(false); setHolding(false); }
+      if (op === opRef.current) setBusyBoth(false);
     }
   }, [backToNative, cueCallbacks, destroyEngine, freeze, stopSubReader, unfreeze, videoRef]);
-
-  /** Sound but a black screen: the picture is drawn by our own decoder from now on. */
-  const startPicture = useCallback((reason: string) => {
-    const key0 = keyRef.current;
-    if (!key0 || pictureKeyRef.current === key0 || pictureFailedRef.current.has(key0)) return;
-    console.warn("[mkv] browser shows no picture for this video —", reason);
-    pictureKeyRef.current = key0;
-    const list = tracksRef.current;
-    const audio = activeAudioRef.current >= 0 ? activeAudioRef.current : list?.nativeAudio ?? -1;
-    const v = videoRef.current;
-    void handOver(audio, !!v && !v.paused);
-  }, [handOver, videoRef]);
 
   const selectAudio = useCallback((number: number) => {
     const list = tracksRef.current;
     const track = list?.audio.find((a) => a.number === number);
     if (!list || !track || busyRef.current) return;
-    // The file's own audio plays natively — unless it is Dolby/DTS the browser can't hear.
-    const nativeOk = number === list.nativeAudio && !list.decodeNative;
     if (!track.playable && number !== list.nativeAudio) {
       noticeRef.current?.(`${track.label} (${track.codec}) can't play in this browser.`);
       return;
@@ -485,7 +424,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     activeAudioRef.current = number;
     setActiveAudio(number);
     if (sidecarRef.current) {
-      if (nativeOk) { backToNative(videoRef.current?.currentTime || 0, !videoRef.current?.paused); return; }
+      if (number === list.nativeAudio) { backToNative(videoRef.current?.currentTime || 0, !videoRef.current?.paused); return; }
       void handOver(number);
       return;
     }
@@ -498,7 +437,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         .finally(() => { if (op === opRef.current) setBusyBoth(false); });
       return;
     }
-    if (nativeOk) return; // native already plays it
+    if (number === list.nativeAudio) return; // native already plays it
     void handOver(number);
   }, [backToNative, handOver, videoRef]);
 
@@ -522,151 +461,33 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     const media = readMediaPref(key);
     const prefSub = media.s || readPref(PREF_SUB);
     // Hindi opens by default; only a choice made on this very file overrides it.
-    let audioNumber = pickDefaultAudio(tracks, media.a, readPref(PREF_AUDIO));
-    // Staying on the file's own Dolby/DTS audio still needs the software decoder.
-    if (audioNumber == null && tracks.decodeNative) audioNumber = tracks.nativeAudio;
+    const audioNumber = pickDefaultAudio(tracks, media.a, readPref(PREF_AUDIO));
     const audioMatch = audioNumber != null ? tracks.audio.find((a) => a.number === audioNumber) : undefined;
     const subMatch = prefSub && prefSub !== "off"
       ? tracks.subtitles.find((s) => langOf(s) === prefSub && !s.forced && !/sign|song/i.test(`${s.rawName || ""} ${s.label}`)) || tracks.subtitles.find((s) => langOf(s) === prefSub)
       : undefined;
-    // This device shows this kind of video as a black screen: open straight
-    // in picture mode (one hand-over, with the chosen language).
-    const family = tracks.container === "mkv" ? videoFamily(tracks.videoMime) : "";
-    const canPicture = !!family && pictureCapable() && !pictureFailedRef.current.has(key);
-    const pictureFirst = canPicture && blackPictures().includes(family);
+    if (!audioMatch && !subMatch) { autoAppliedRef.current = key; return; }
     const v = videoRef.current;
-    // The file opened without any picture track (HEVC in MKV on most
-    // browsers): draw the picture ourselves straight away, sound held.
-    const blackNow = () => canPicture && !!v && v.readyState >= 1 && v.videoWidth === 0;
-    const releaseHold = () => {
-      const hold = blackHoldRef.current;
-      if (!hold || hold.key !== key) return;
-      blackHoldRef.current = null;
-      setHolding(false);
-      if (hold.play && v) void v.play().catch(() => undefined);
-    };
-    if (!audioMatch && !subMatch && !pictureFirst && !canPicture) { releaseHold(); autoAppliedRef.current = key; return; }
     if (!v) return;
     let settleTimer = 0;
-    const run = (now = false) => {
+    const run = () => {
       if (autoAppliedRef.current === key) return;
-      const picture = now || pictureFirst || blackNow();
       // Continue-watching seeks right after start; hand over only once the
       // resume position is applied so the chosen audio starts from there.
-      if (!now && (v.seeking || (v.currentTime < 1 && v.readyState < 3))) {
-        v.addEventListener("seeked", () => run(), { once: true });
+      if (v.seeking || (v.currentTime < 1 && v.readyState < 3)) {
+        v.addEventListener("seeked", run, { once: true });
         return;
       }
       autoAppliedRef.current = key;
       if (subMatch) { activeSubRef.current = subMatch.number; setActiveSubtitle(subMatch.number); }
-      if (picture) {
-        if (!pictureFirst) markBlackPicture(family);
-        const hold = blackHoldRef.current;
-        blackHoldRef.current = null;
-        pictureKeyRef.current = key;
-        const a = audioMatch?.number ?? (activeAudioRef.current >= 0 ? activeAudioRef.current : tracks.nativeAudio);
-        activeAudioRef.current = a; setActiveAudio(a);
-        console.warn("[mkv] browser shows no picture for this video —", `${family}: opened without picture`);
-        void handOver(a, !v.paused || (!!hold && hold.key === key && hold.play));
-      } else {
-        releaseHold();
-        if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number, !v.paused); }
-        else if (subMatch) void startSubReader();
-      }
+      if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number); }
+      else if (subMatch) void startSubReader();
     };
-    if (blackNow()) { run(true); return; }
-    // A held start whose file turns out to have a picture after all.
-    if (blackHoldRef.current?.key === key && !canPicture) releaseHold();
-    const onMeta = () => { if (blackNow()) { clearTimeout(settleTimer); run(true); } };
-    // Decide right away: playback is held until the chosen sound is ready.
-    const start = () => { settleTimer = window.setTimeout(() => run(), 40); };
-    v.addEventListener("loadedmetadata", onMeta);
+    const start = () => { settleTimer = window.setTimeout(run, 350); };
     if (!v.paused && v.readyState >= 3) start();
     else v.addEventListener("playing", start, { once: true });
-    return () => { clearTimeout(settleTimer); v.removeEventListener("loadedmetadata", onMeta); v.removeEventListener("playing", start); };
+    return () => { clearTimeout(settleTimer); v.removeEventListener("playing", start); v.removeEventListener("seeked", run); };
   }, [candidate, handOver, key, startSubReader, tracks, videoRef]);
-
-  // ---- no picture track at all, before the track list is known ----
-  // Hold the sound the moment the file opens without a picture size, so
-  // sound never runs ahead of the picture; released if no picture is coming.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !candidate || !pictureCapable()) return;
-    let releaseTimer = 0;
-    const hold = () => {
-      if (engineRef.current || busyRef.current || ownsRef.current || tracksRef.current) return;
-      if (pictureKeyRef.current === key || pictureFailedRef.current.has(key)) return;
-      if (v.readyState < 1 || v.videoWidth > 0) return;
-      const current = blackHoldRef.current;
-      if (current && current.key === key) {
-        if (!v.paused) { current.play = true; v.pause(); }
-        return;
-      }
-      blackHoldRef.current = { key, play: !v.paused || v.autoplay };
-      setHolding(true);
-      if (!v.paused) v.pause();
-      // No track list in time (file unreadable here): play as before.
-      releaseTimer = window.setTimeout(() => {
-        const h = blackHoldRef.current;
-        if (!h || h.key !== key || tracksRef.current) return;
-        blackHoldRef.current = null;
-        setHolding(false);
-        if (h.play) void v.play().catch(() => undefined);
-      }, 7000);
-    };
-    v.addEventListener("loadedmetadata", hold);
-    v.addEventListener("play", hold);
-    hold();
-    return () => { clearTimeout(releaseTimer); v.removeEventListener("loadedmetadata", hold); v.removeEventListener("play", hold); };
-  }, [candidate, key, videoRef]);
-
-  // ---- silent original audio (Dolby/DTS the browser claimed it could play) ----
-  // Chrome counts decoded audio bytes; none after a few seconds of playback
-  // means the viewer hears nothing, so the software decoder takes over.
-  useEffect(() => {
-    const v = videoRef.current as (HTMLVideoElement & { webkitAudioDecodedByteCount?: number }) | null;
-    if (!v || !tracks || !candidate || tracks.decodeNative || tracks.container === "mp4") return;
-    const native = tracks.audio.find((a) => a.number === tracks.nativeAudio);
-    if (!native || !/^(AC3|E-AC3|DTS|TrueHD)$/i.test(native.codec) || !canDecodeTrack(native.codec)) return;
-    if (typeof v.webkitAudioDecodedByteCount !== "number") return;
-    let t0 = -1;
-    const check = () => {
-      if (v.paused || v.seeking || engineRef.current || sidecarRef.current || busyRef.current) { t0 = -1; return; }
-      if (t0 < 0) { t0 = v.currentTime; return; }
-      if (v.currentTime - t0 < 3) return;
-      clearInterval(timer);
-      if ((v.webkitAudioDecodedByteCount || 0) > 0) return;
-      const next = { ...tracks, decodeNative: true };
-      tracksRef.current = next;
-      setTracks(next);
-      if (activeAudioRef.current === tracks.nativeAudio || activeAudioRef.current < 0) void handOver(tracks.nativeAudio);
-    };
-    const timer = window.setInterval(check, 700);
-    return () => clearInterval(timer);
-  }, [candidate, handOver, tracks, videoRef]);
-
-  // ---- black screen with sound (HEVC / 10-bit video the browser can't show) ----
-  // Time moves and sound plays but no picture was ever decoded: remember it
-  // for this kind of video and draw the picture with our own decoder.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !tracks || !candidate || tracks.container !== "mkv" || !pictureCapable()) return;
-    if (pictureKeyRef.current === key || pictureFailedRef.current.has(key)) return;
-    let t0 = -1;
-    const timer = window.setInterval(() => {
-      if (engineRef.current || busyRef.current || v.paused || v.seeking || v.readyState < 2) { t0 = -1; return; }
-      const frames = (v as any).getVideoPlaybackQuality?.()?.totalVideoFrames;
-      const showing = v.videoWidth > 0 && (typeof frames !== "number" || frames > 0);
-      if (showing) { window.clearInterval(timer); return; }
-      if (t0 < 0) { t0 = v.currentTime; return; }
-      if (v.currentTime - t0 < 1.2) return;
-      window.clearInterval(timer);
-      const family = videoFamily(tracks.videoMime);
-      if (family) markBlackPicture(family);
-      startPicture(`${family || "video"}: sound only`);
-    }, 400);
-    return () => window.clearInterval(timer);
-  }, [candidate, key, startPicture, tracks, videoRef]);
 
   // ---- subtitle clock ----
   useEffect(() => {
@@ -678,7 +499,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         const t = v.currentTime;
         if (Math.abs(t - last) > 0.08) {
           last = t;
-          const text = uniqueLines(findActive(textCues.current.get(activeSubtitle), t).map((c) => c.text));
+          const text = findActive(textCues.current.get(activeSubtitle), t).map((c) => c.text).join("\n");
           setSubtitleText((prev) => (prev === text ? prev : text));
           const bmp = findActive(bitmapCues.current.get(activeSubtitle), t);
           const cue = bmp.length ? bmp[bmp.length - 1] : null;
@@ -694,5 +515,5 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   useEffect(() => () => { destroyEngine(); stopSubReader(); freezeRef.current?.remove(); }, [destroyEngine, stopSubReader]);
 
   const available = !!tracks && (tracks.audio.length > 1 || tracks.subtitles.length > 0);
-  return { available, tracks, activeAudio, activeSubtitle, busy, holding, pictureMode, engineActive, ownsRef, subtitleText, bitmapCue, selectAudio, selectSubtitle };
+  return { available, tracks, activeAudio, activeSubtitle, busy, engineActive, ownsRef, subtitleText, bitmapCue, selectAudio, selectSubtitle };
 }

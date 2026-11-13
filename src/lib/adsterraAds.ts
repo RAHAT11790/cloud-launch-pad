@@ -49,9 +49,6 @@ declare global {
     __adsterraTagAskedAt?: number;
     __adsterraLeaveHooked?: boolean;
     __adsNoAdZone?: number;
-    __adsOpenAllowedUntil?: number;
-    __adsPageLeftAt?: number;
-    __adsAnchorGuard?: boolean;
   }
 }
 
@@ -61,10 +58,7 @@ export type AdsterraConfig = {
   directLink: string;
   streamLink: string;
   pushNotification: string;
-  refreshIntervalSec: number; // coin-task cool-down only (automatic ads use the random gap)
-  /** Random gap range for automatic ads (minutes, 1..10). */
-  gapMinMinutes?: number;
-  gapMaxMinutes?: number;
+  refreshIntervalSec: number; // legacy only; player no longer uses cooldown timers
 };
 
 const DEFAULT: AdsterraConfig = {
@@ -131,7 +125,6 @@ function hookPageLeave() {
   if (typeof window === "undefined" || window.__adsterraLeaveHooked) return;
   window.__adsterraLeaveHooked = true;
   const onLeave = () => {
-    window.__adsPageLeftAt = Date.now();
     const asked = window.__adsterraTagAskedAt || 0;
     if (asked && Date.now() - asked < TAG_VERIFY_MS) {
       window.__adsterraTagOpenAt = Date.now();
@@ -141,23 +134,6 @@ function hookPageLeave() {
   window.addEventListener("blur", onLeave);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") onLeave(); });
 }
-
-/** Did the page lose focus / get covered since `at` (proof an ad tab opened)? */
-export function pageLeftSince(at: number): boolean {
-  if (typeof window === "undefined") return false;
-  return (window.__adsPageLeftAt || 0) >= at;
-}
-
-/**
- * Inside the ad zone a sponsor tab may only open during a release this app
- * started itself — the tag's own click handler can never fire ads on its own
- * rhythm. Opens for `ms` after the call.
- */
-export function allowSponsorOpen(ms = 1500) {
-  if (typeof window === "undefined") return;
-  window.__adsOpenAllowedUntil = Date.now() + ms;
-}
-const sponsorOpenAllowed = () => typeof window !== "undefined" && Date.now() <= (window.__adsOpenAllowedUntil || 0);
 
 function reserveAdFire(): boolean {
   if (typeof window === "undefined") return false;
@@ -188,8 +164,6 @@ function normalize(v: any): AdsterraConfig {
     streamLink: typeof v?.streamLink === "string" ? v.streamLink : "",
     pushNotification: typeof v?.pushNotification === "string" ? v.pushNotification : "",
     refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 50,
-    gapMinMinutes: Number(v?.gapMinMinutes) || undefined,
-    gapMaxMinutes: Number(v?.gapMaxMinutes) || undefined,
   };
 }
 
@@ -348,7 +322,7 @@ function installPopunderThrottle() {
       // Ad-free zones (Global Chat): no sponsor tab may open from any tag.
       if (!isAppUrl && (window.__adsNoAdZone || 0) > 0) return null;
       if (!isAppUrl && window.__adsterraPlayerScopeActive) {
-        if (!sponsorOpenAllowed()) return null;
+        if (!reserveAdFire()) return null;
         noteRealOpen();
         clearTagCap();
       }
@@ -571,25 +545,11 @@ async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
   }
 }
 
-// Tags that open sponsor tabs through a detached <a target=_blank> instead of
-// window.open: same rule — only during a release this app started.
-function installAnchorGuard() {
-  if (typeof window === "undefined" || window.__adsAnchorGuard) return;
-  window.__adsAnchorGuard = true;
-  document.addEventListener("click", (e) => {
-    if (!window.__adsterraPlayerScopeActive || sponsorOpenAllowed()) return;
-    const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
-    if (!a || document.getElementById("root")?.contains(a)) return;
-    if (a.href && !a.href.startsWith(location.origin)) { e.preventDefault(); e.stopImmediatePropagation(); }
-  }, true);
-}
-
 export function enterAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive) removeKnownAdResidue();
+  removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
-  installAnchorGuard();
   hookPageLeave();
 }
 
@@ -643,10 +603,10 @@ export function exitAdsterraPlayerScope() {
 
 /**
  * Release ONE ad cycle. Pacing (how often this may be called) is owned by
- * `src/lib/adScheduler.ts` — this function no longer keeps its own cool-down,
+ * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
  * so the ad script is never hammered into a permanent network cool-down.
  */
-export async function loadAdsterraSlots(): Promise<boolean> {
+async function loadAdsterraSlots(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (!window.__adsterraPlayerScopeActive) return false;
   if (window.__adsterraPremium) return false;
@@ -699,7 +659,6 @@ export async function firePopunderAd(): Promise<boolean> {
     }
 
     window.__adsterraPopunderMounted = true;
-    allowSponsorOpen(2000);
     const tmp = document.createElement("div");
     tmp.innerHTML = snippet;
     Array.from(tmp.childNodes).forEach((node) => {
@@ -726,16 +685,18 @@ export async function firePopunderAd(): Promise<boolean> {
 export type AdRelease = "direct" | "tag" | "mounted" | "none";
 
 /**
- * Release ONE ad. WHEN to release is decided only by `adScheduler.ts`.
+ * Anti-adblock release cycle.
  *
- * • The pop-under tag is mounted once per page session (re-injecting stacks
- *   click handlers → ad storms) and gets the tap when it is healthy; every
- *   third ad goes to the Direct Link instead.
- * • When the tag is blocked or hit its own frequency cap, or there is no tap
- *   to hand over (`forceDirect`), the Direct Link opens synchronously —
- *   it has no cap, so ads keep coming for the whole visit.
+ * 1. The Adsterra pop-under tag is mounted exactly once per page session
+ *    (re-injecting stacks click handlers → ad storms).
+ * 2. Every eligible click after the cool-down releases ONE ad:
+ *      • normally the mounted tag handles the click (higher CPM), every
+ *        third cycle the Direct Link opens instead;
+ *      • when the tag is blocked or has hit its own frequency cap (it did
+ *        not open a tab last time), the Direct Link opens synchronously
+ *        inside the gesture — so ads keep running for the whole session.
  */
-export async function releaseAd(opts: { forceDirect?: boolean } = {}): Promise<AdRelease> {
+export async function releaseAd(): Promise<AdRelease> {
   if (typeof window === "undefined") return "none";
   if (window.__adsterraPremium || inNoAdZone()) return "none";
 
@@ -747,14 +708,18 @@ export async function releaseAd(opts: { forceDirect?: boolean } = {}): Promise<A
   if (!direct && !script) return "none";
 
   const now = Date.now();
+  const lastPop = window.__adsterraPopFiredAt || 0;
+  if (now - lastPop < getAdGapMs()) return "none";
+
   const mounted = !!window.__adsterraPopunderMounted;
   const scriptBlocked = window.__adsterraScriptOk === false;
   const tagCapped = now < tagCappedUntil();
   const cycle = (window.__adsterraCycleCount ?? 0) + 1;
 
-  // Direct-link path — runs synchronously inside the tap / user activation.
-  const useDirect = !!direct && (opts.forceDirect || scriptBlocked || !script || tagCapped || !mounted || cycle % 3 === 0);
+  // Direct-link path — must run synchronously inside the user gesture.
+  const useDirect = !!direct && (scriptBlocked || !script || tagCapped || (mounted && cycle % 3 === 0));
   if (useDirect) {
+    if (!reserveAdFire()) return "none";
     window.__adsterraCycleCount = cycle;
     const opener = window.__adsterraOpenOriginal || window.open;
     try { opener?.(direct, "_blank", "noopener,noreferrer"); } catch { return "none"; }
@@ -762,13 +727,12 @@ export async function releaseAd(opts: { forceDirect?: boolean } = {}): Promise<A
     return "direct";
   }
 
-  if (!script || opts.forceDirect) return "none";
+  if (!script) return "none";
   window.__adsterraCycleCount = cycle;
   if (mounted) {
     // The tag's own click listener runs right after this one; the caller
     // verifies with tagOpenedSince() whether it really opened a tab.
     window.__adsterraTagAskedAt = now;
-    allowSponsorOpen(TAG_VERIFY_MS);
     return "tag";
   }
   return (await loadAdsterraSlots()) ? "mounted" : "none";

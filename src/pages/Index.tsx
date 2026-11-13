@@ -1546,7 +1546,6 @@ const Index = () => {
   const detailsLoadingToastRef = useRef<string | number | null>(null);
   const detailsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailsRequestRef = useRef(0);
-  const playRequestRef = useRef(0);
 
   const dismissDetailsLoadingToast = useCallback(() => {
     if (detailsLoadingTimeoutRef.current) {
@@ -2372,10 +2371,6 @@ const Index = () => {
       toast.error("This account is blocked due to token misuse.");
       return;
     }
-    // Only the newest open request may continue after a wait: an older one
-    // finishing late would stop the player the newer one already started.
-    const playGen = ++playRequestRef.current;
-    const stale = () => playGen !== playRequestRef.current;
 
     const isAnimeSaltContentEarly = anime.source === "animesalt"
       || String(anime.id || "").startsWith("as_")
@@ -2485,7 +2480,6 @@ const Index = () => {
       }
     }
 
-    if (stale()) return;
     const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
@@ -2504,7 +2498,6 @@ const Index = () => {
     if (!hasFreeAccess() && !saltIsPremium && !isAnimeSaltContent) {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
       const shortenerOn = await isShortenerEnabled();
-      if (stale()) return;
       if (shortenerOn) {
         redirectToUnlockRequired(anime, resolvedSeasonIdx, resolvedEpIdx);
         return;
@@ -2523,7 +2516,6 @@ const Index = () => {
       if (!season || !episode) { inPlayerSwitchRef.current = false; toast.error("This episode is no longer available. Please select another episode."); return; }
       if (isAnimeSaltContent && isAnimeSaltSentinel(episode.link)) {
         const resolved = await resolveAnEpisodePlayback(slugFromSentinel(episode.link), { seriesSlug: anime.anSlug || anime.animeSaltSlug || anime.slug });
-        if (stale()) return;
         if (resolved) Object.assign(episode, resolved);
       }
       src = getEpisodeSrc(episode);
@@ -2581,7 +2573,6 @@ const Index = () => {
       return;
     }
 
-    if (src && stale()) return;
     if (src) {
       addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx);
       setPlayerState({

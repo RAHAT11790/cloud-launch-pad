@@ -88,31 +88,6 @@
 .download-go:hover:not(:disabled) { background: hsl(var(--download-go) / .88); }
 .download-ring-track { fill: none; stroke: hsl(var(--border)); stroke-width: 4; }
 .download-ring-fill { fill: none; stroke: hsl(var(--primary)); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
-/* "Ad closed too fast" warning + video lock (adTiming.ts rules) */
-.ad-warn-root { position: fixed; inset: 0; z-index: 2147483600; display: flex; align-items: center; justify-content: center; padding: 1.25rem; background: hsl(var(--background) / .74); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: ad-warn-fade .18s ease-out; }
-.ad-warn-card { width: 100%; max-width: 21rem; display: flex; flex-direction: column; align-items: center; gap: .6rem; padding: 1.4rem 1.25rem 1.1rem; border-radius: 1.4rem; text-align: center; background: hsl(var(--card)); color: hsl(var(--foreground)); border: 1px solid hsl(var(--destructive) / .35); box-shadow: 0 24px 60px hsl(var(--background) / .65), 0 0 0 4px hsl(var(--destructive) / .08); animation: ad-warn-pop .26s cubic-bezier(.2,.9,.3,1.2); }
-.ad-warn-icon { display: flex; width: 3.25rem; height: 3.25rem; align-items: center; justify-content: center; border-radius: 999px; color: hsl(var(--destructive)); background: hsl(var(--destructive) / .12); border: 1px solid hsl(var(--destructive) / .3); }
-.ad-warn-card.is-locked .ad-warn-icon { animation: ad-warn-shake .5s ease-in-out .15s; }
-.ad-warn-title { font-size: 1.08rem; font-weight: 800; letter-spacing: -.01em; }
-.ad-warn-text { font-size: .82rem; line-height: 1.45; color: hsl(var(--muted-foreground)); }
-.ad-warn-meter { width: 100%; display: flex; flex-direction: column; align-items: center; gap: .45rem; margin-top: .15rem; }
-.ad-warn-dots { display: grid; grid-template-columns: repeat(6, 1fr); gap: .3rem; width: 100%; max-width: 15rem; }
-.ad-warn-dots span { height: .42rem; border-radius: 999px; background: hsl(var(--muted)); transition: background .2s ease; }
-.ad-warn-dots span.on { background: hsl(var(--destructive)); }
-.ad-warn-count { font-size: .72rem; font-weight: 600; color: hsl(var(--destructive)); }
-.ad-warn-clock { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; color: hsl(var(--destructive)); line-height: 1.1; }
-.ad-warn-btn { margin-top: .35rem; width: 100%; padding: .72rem 1rem; border-radius: .9rem; font-weight: 700; font-size: .88rem; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); transition: transform .12s ease, opacity .15s ease; }
-.ad-warn-btn:active { transform: scale(.97); }
-.vid-lock-root { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .4rem; padding: 1rem 1.5rem; text-align: center; background: hsl(var(--background) / .88); color: hsl(var(--foreground)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.vid-lock-icon { display: flex; width: 2.9rem; height: 2.9rem; align-items: center; justify-content: center; border-radius: 999px; color: hsl(var(--destructive)); background: hsl(var(--destructive) / .14); }
-.vid-lock-title { font-weight: 800; font-size: .95rem; }
-.vid-lock-clock { font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; color: hsl(var(--destructive)); line-height: 1.05; }
-.vid-lock-bar { width: min(14rem, 70%); height: .3rem; border-radius: 999px; overflow: hidden; background: hsl(var(--muted)); }
-.vid-lock-bar span { display: block; height: 100%; background: hsl(var(--destructive)); transform-origin: left; transition: transform .5s linear; }
-.vid-lock-sub { max-width: 19rem; font-size: .7rem; line-height: 1.4; color: hsl(var(--muted-foreground)); }
-@keyframes ad-warn-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes ad-warn-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
-@keyframes ad-warn-shake { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
 :root {
   --telegram-canvas: 209 69% 15%;
   --telegram-surface: 204 62% 27%;
