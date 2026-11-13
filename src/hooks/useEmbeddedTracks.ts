@@ -129,6 +129,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   const noticeRef = useRef(onNotice);
   noticeRef.current = onNotice;
   const autoAppliedRef = useRef("");
+  /** Opened with no picture track (videoWidth 0): sound held until our picture is ready. */
+  const blackHoldRef = useRef<{ key: string; play: boolean } | null>(null);
   const busyRef = useRef(false);
   const setBusyBoth = (value: boolean) => { busyRef.current = value; setBusy(value); };
 
@@ -284,6 +286,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     setActiveAudio(-1);
     autoAppliedRef.current = "";
     pictureKeyRef.current = "";
+    blackHoldRef.current = null;
     setHolding(false);
     if (!candidate) return;
     let cancelled = false;
@@ -529,35 +532,93 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     // This device shows this kind of video as a black screen: open straight
     // in picture mode (one hand-over, with the chosen language).
     const family = tracks.container === "mkv" ? videoFamily(tracks.videoMime) : "";
-    const pictureFirst = !!family && pictureCapable() && blackPictures().includes(family) && !pictureFailedRef.current.has(key);
-    if (!audioMatch && !subMatch && !pictureFirst) { autoAppliedRef.current = key; return; }
+    const canPicture = !!family && pictureCapable() && !pictureFailedRef.current.has(key);
+    const pictureFirst = canPicture && blackPictures().includes(family);
     const v = videoRef.current;
+    // The file opened without any picture track (HEVC in MKV on most
+    // browsers): draw the picture ourselves straight away, sound held.
+    const blackNow = () => canPicture && !!v && v.readyState >= 1 && v.videoWidth === 0;
+    const releaseHold = () => {
+      const hold = blackHoldRef.current;
+      if (!hold || hold.key !== key) return;
+      blackHoldRef.current = null;
+      setHolding(false);
+      if (hold.play && v) void v.play().catch(() => undefined);
+    };
+    if (!audioMatch && !subMatch && !pictureFirst && !canPicture) { releaseHold(); autoAppliedRef.current = key; return; }
     if (!v) return;
     let settleTimer = 0;
-    const run = () => {
+    const run = (now = false) => {
       if (autoAppliedRef.current === key) return;
+      const picture = now || pictureFirst || blackNow();
       // Continue-watching seeks right after start; hand over only once the
       // resume position is applied so the chosen audio starts from there.
-      if (v.seeking || (v.currentTime < 1 && v.readyState < 3)) {
-        v.addEventListener("seeked", run, { once: true });
+      if (!now && (v.seeking || (v.currentTime < 1 && v.readyState < 3))) {
+        v.addEventListener("seeked", () => run(), { once: true });
         return;
       }
       autoAppliedRef.current = key;
       if (subMatch) { activeSubRef.current = subMatch.number; setActiveSubtitle(subMatch.number); }
-      if (pictureFirst) {
+      if (picture) {
+        if (!pictureFirst) markBlackPicture(family);
+        const hold = blackHoldRef.current;
+        blackHoldRef.current = null;
         pictureKeyRef.current = key;
         const a = audioMatch?.number ?? (activeAudioRef.current >= 0 ? activeAudioRef.current : tracks.nativeAudio);
         activeAudioRef.current = a; setActiveAudio(a);
-        void handOver(a, !v.paused);
-      } else if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number, !v.paused); }
-      else if (subMatch) void startSubReader();
+        console.warn("[mkv] browser shows no picture for this video —", `${family}: opened without picture`);
+        void handOver(a, !v.paused || (!!hold && hold.key === key && hold.play));
+      } else {
+        releaseHold();
+        if (audioMatch) { activeAudioRef.current = audioMatch.number; setActiveAudio(audioMatch.number); void handOver(audioMatch.number, !v.paused); }
+        else if (subMatch) void startSubReader();
+      }
     };
+    if (blackNow()) { run(true); return; }
+    // A held start whose file turns out to have a picture after all.
+    if (blackHoldRef.current?.key === key && !canPicture) releaseHold();
+    const onMeta = () => { if (blackNow()) { clearTimeout(settleTimer); run(true); } };
     // Decide right away: playback is held until the chosen sound is ready.
-    const start = () => { settleTimer = window.setTimeout(run, 40); };
+    const start = () => { settleTimer = window.setTimeout(() => run(), 40); };
+    v.addEventListener("loadedmetadata", onMeta);
     if (!v.paused && v.readyState >= 3) start();
     else v.addEventListener("playing", start, { once: true });
-    return () => { clearTimeout(settleTimer); v.removeEventListener("playing", start); v.removeEventListener("seeked", run); };
+    return () => { clearTimeout(settleTimer); v.removeEventListener("loadedmetadata", onMeta); v.removeEventListener("playing", start); };
   }, [candidate, handOver, key, startSubReader, tracks, videoRef]);
+
+  // ---- no picture track at all, before the track list is known ----
+  // Hold the sound the moment the file opens without a picture size, so
+  // sound never runs ahead of the picture; released if no picture is coming.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !candidate || !pictureCapable()) return;
+    let releaseTimer = 0;
+    const hold = () => {
+      if (engineRef.current || busyRef.current || ownsRef.current || tracksRef.current) return;
+      if (pictureKeyRef.current === key || pictureFailedRef.current.has(key)) return;
+      if (v.readyState < 1 || v.videoWidth > 0) return;
+      const current = blackHoldRef.current;
+      if (current && current.key === key) {
+        if (!v.paused) { current.play = true; v.pause(); }
+        return;
+      }
+      blackHoldRef.current = { key, play: !v.paused || v.autoplay };
+      setHolding(true);
+      if (!v.paused) v.pause();
+      // No track list in time (file unreadable here): play as before.
+      releaseTimer = window.setTimeout(() => {
+        const h = blackHoldRef.current;
+        if (!h || h.key !== key || tracksRef.current) return;
+        blackHoldRef.current = null;
+        setHolding(false);
+        if (h.play) void v.play().catch(() => undefined);
+      }, 7000);
+    };
+    v.addEventListener("loadedmetadata", hold);
+    v.addEventListener("play", hold);
+    hold();
+    return () => { clearTimeout(releaseTimer); v.removeEventListener("loadedmetadata", hold); v.removeEventListener("play", hold); };
+  }, [candidate, key, videoRef]);
 
   // ---- silent original audio (Dolby/DTS the browser claimed it could play) ----
   // Chrome counts decoded audio bytes; none after a few seconds of playback

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, get } from "@/lib/firebase";
+import { firebaseRestGet } from "@/lib/firebaseRest";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
@@ -578,12 +579,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const premiumServerApplied = useRef(false);
 
   useEffect(() => {
+    let live = false;
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
+      live = true;
       const servers = normalizeVideoServersValue(snap.val());
       setVideoServers(servers);
       setVideoServersLoaded(true);
       try { localStorage.setItem(VIDEO_SERVERS_CACHE_KEY, JSON.stringify(servers)); } catch {}
     });
+    // The live connection can take several seconds on a new device; one quick
+    // read gets the current server addresses in time for the first play.
+    if (!readCachedVideoServers().length) {
+      void firebaseRestGet<unknown>("settings/videoServers").then((val) => {
+        if (live || val == null) return;
+        const servers = normalizeVideoServersValue(val);
+        if (!servers.length) return;
+        setVideoServers(servers);
+        setVideoServersLoaded(true);
+      }).catch(() => undefined);
+    }
     return () => unsub();
   }, []);
 

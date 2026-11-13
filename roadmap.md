@@ -1,11 +1,11 @@
 # Roadmap
 
 ## H265 picture, synced audio start, download server URL, subtitles (approved 2026-11-13)
-- [ ] H265 (HEVC) episodes: picture must show (no black screen) — hardware decoder first, built-in software decoder when the phone has none.
-- [ ] Audio and picture start together: hold the picture while the chosen language loads, then start both at once; shorten the wait.
-- [ ] Download manager follows the selected video server's CURRENT address (server URL changes must reach downloads automatically).
-- [ ] Subtitles: SRT, ASS/SSA, WebVTT and other in-file formats shown cleanly (styling tags removed, line breaks kept).
-- [ ] Check every audio format path (AAC, Opus, Vorbis, MP3, FLAC, AC3, E-AC3, DTS, TrueHD, PCM) with real test files.
+- [x] H265 (HEVC) episodes: picture must show (no black screen) — hardware decoder first, built-in software decoder when the phone has none.
+- [x] Audio and picture start together: hold the picture while the chosen language loads, then start both at once; shorten the wait.
+- [x] Download manager follows the selected video server's CURRENT address (server URL changes must reach downloads automatically).
+- [x] Subtitles: SRT, ASS/SSA, WebVTT and other in-file formats shown cleanly (styling tags removed, line breaks kept).
+- [x] Check every audio format path (AAC, Opus, Vorbis, MP3, FLAC, AC3, E-AC3, DTS, TrueHD, PCM) with real test files.
 
 ## Google login broken (2026-11-10)
 - [x] Reproduced on phone size: Google shows "Error 401: deleted_client" — the Google sign-in key of Firebase project animeverse-d7b79 was deleted in Google Cloud. Site code is fine.
