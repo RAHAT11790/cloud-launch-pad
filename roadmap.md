@@ -1,5 +1,12 @@
 # Roadmap
 
+## Ads gone, video stalls, Naruto ep, download N/A (approved 2026-11-13)
+- [ ] Ads stopped appearing after one lock — make automatic ads show again for every user.
+- [ ] Video stalls every few seconds — videos that play natively must play directly; built-in decoder only for real black-picture files.
+- [ ] Naruto Shippuden (RS FR 03, ep 383) shows 0:00/0:00 and never plays — fix.
+- [ ] Download sheet shows N/A for every episode/quality — fix.
+- [ ] Test all on phone-size browser with real content.
+
 ## Real H.265 links + automatic ads (approved 2026-11-13)
 - [x] Test the owner's two real links (Frontier Lord .mp4, FlyTon S08E12 .mkv — both H.265 10-bit) in the real player: picture, seek.
 - [x] Remove the 5-second ad back-lock completely.
