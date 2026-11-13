@@ -69,6 +69,18 @@ export function decodedAudioInit(): Uint8Array {
 
 type Reply = { id: number; ok: boolean; fragments?: Uint8Array[]; error?: string };
 
+// A decoder started ahead of time (download + compile the WASM while the
+// episode opens), so a Dolby/DTS track starts without that wait.
+let warmWorker: Worker | null = null;
+const takeWarmWorker = () => { const w = warmWorker; warmWorker = null; return w; };
+export function prewarmAudioDecoder() {
+  if (warmWorker || typeof Worker === "undefined" || !decodedAudioSupported()) return;
+  try {
+    warmWorker = new Worker(new URL("./audioDecode.worker.ts", import.meta.url), { type: "module" });
+    warmWorker.postMessage({ type: "reset", id: 0 }); // loads the decoder; reply is ignored
+  } catch { warmWorker = null; }
+}
+
 /** One decode worker per playing track; messages are answered in order. */
 export class AudioDecoderClient {
   private worker: Worker;
@@ -77,7 +89,7 @@ export class AudioDecoderClient {
   private dead: Error | null = null;
 
   constructor() {
-    this.worker = new Worker(new URL("./audioDecode.worker.ts", import.meta.url), { type: "module" });
+    this.worker = takeWarmWorker() || new Worker(new URL("./audioDecode.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (e: MessageEvent<Reply>) => {
       const w = this.waiting.get(e.data.id);
       if (!w) return;

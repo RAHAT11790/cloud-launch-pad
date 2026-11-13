@@ -10,14 +10,25 @@
 //   * text subtitles → cue callbacks, PGS → bitmap cue callbacks
 // Switching language again keeps the video buffer and only swaps the audio
 // SourceBuffer (changeType), so the picture never goes black.
+//
+// Picture mode (HEVC / 10-bit video the browser shows as a black screen):
+// only the SOUND goes through Media Source on the <video>; the picture is
+// decoded by PictureDecoder and painted over the element. One reader feeds
+// both, and after every start / seek / language change the sound is held
+// until the matching picture is on screen, so both always start together.
+// Dolby / DTS tracks are software-decoded (audioDecode.ts) in both modes.
 
 import { isPgsTrack, loadMkvCues, MkvBlockStream, parseMkvHeader, subtitleBlockText, unpackFrame, type MkvBlock, type MkvCue, type MkvHeader, type MkvTrack, type RangeSource } from "./mkvDemux";
 import { AudioFragmenter, VideoFragmenter, audioInit, audioMime, videoInit, videoMime } from "./mkvRemux";
 import { PgsDecoder, type PgsBitmapCue } from "./pgs";
+import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
+import { PictureDecoder } from "./pictureDecoder";
 
 export interface TextCue { start: number; end: number; text: string }
 
 export interface MkvEngineCallbacks {
+  /** Draw the picture ourselves (the browser can't decode this video). */
+  picture?: boolean;
   onTextCue?: (trackNumber: number, cue: TextCue) => void;
   onBitmapCue?: (trackNumber: number, cue: PgsBitmapCue) => void;
   onFatal?: (error: Error) => void;
@@ -165,6 +176,17 @@ export function canPlayTrackCombo(video: MkvTrack | null, audio: MkvTrack | null
   return MS.isTypeSupported(videoMime(video)) && MS.isTypeSupported(audioMime(audio));
 }
 
+/** Software-decoded audio (Dolby / DTS / TrueHD …) for a track MSE can't take. */
+const decodesAudio = (audio: MkvTrack) => !audio.route && canDecodeTrack(audio.codec, { zlib: audio.zlib, bitDepth: audio.bitDepth });
+
+/** Can the sound of `audio` go through Media Source (as-is or software-decoded)? */
+export function canPlayAudioTrack(audio: MkvTrack | null | undefined): boolean {
+  if (!audio || !mseAvailable()) return false;
+  if (decodesAudio(audio)) return true;
+  if (!audio.route) return false;
+  try { return (window as any).MediaSource.isTypeSupported(audioMime(audio)); } catch { return false; }
+}
+
 export async function openMkv(src: RangeSource): Promise<{ header: MkvHeader; cues: MkvCue[] }> {
   const header = await parseMkvHeader(src);
   const cues = await loadMkvCues(src, header).catch(() => [] as MkvCue[]);
@@ -194,6 +216,12 @@ export class MkvEngine {
   private seenCues = new Set<string>();
   private wakeTimer: ReturnType<typeof setInterval> | null = null;
   private readAhead = 45;
+  private picture: PictureDecoder | null = null;
+  private audioDecoder: AudioDecoderClient | null = null;
+  /** Sound waiting for its picture after a start / seek (picture mode). */
+  private heldAudio: Uint8Array[] = [];
+  private audioGateOpen = true;
+  private lastStartSec = -1;
 
   constructor(
     url: string,
@@ -207,7 +235,21 @@ export class MkvEngine {
     this.textTracks = header.subtitles.filter((s) => s.route === "text" && !isPgsTrack(s));
     this.pgsTracks = header.subtitles.filter((s) => s.route === "text" && isPgsTrack(s));
     this.pgsTracks.forEach((t) => this.pgs.set(t.number, new PgsDecoder()));
+    if (cb.picture) this.readAhead = 20; // compressed picture is kept in memory
   }
+
+  get pictureMode() { return !!this.cb.picture; }
+  get pictureKind() { return this.picture?.kind || "none"; }
+  get pictureStats() { return this.picture?.stats; }
+
+  private audioMimeFor(track: MkvTrack) { return decodesAudio(track) ? DECODED_AUDIO_MIME : audioMime(track); }
+  private async ensureAudioDecoder(track: MkvTrack) {
+    if (!decodesAudio(track)) return;
+    this.audioDecoder?.destroy();
+    this.audioDecoder = new AudioDecoderClient();
+    await this.audioDecoder.open(track);
+  }
+  private audioInitFor(track: MkvTrack) { return decodesAudio(track) ? decodedAudioInit() : audioInit(this.header, track); }
 
   get audioNumber() { return this.audio.number; }
   get isDestroyed() { return this.destroyed; }
@@ -231,7 +273,22 @@ export class MkvEngine {
   /** Take over `video`, start at `startAt`; resolves once playable data is buffered. */
   async attach(video: HTMLVideoElement, startAt: number): Promise<void> {
     const v = this.header.video;
-    if (!v || !canPlayTrackCombo(v, this.audio)) throw new Error("codec not supported by this browser");
+    if (!v) throw new Error("no video track");
+    if (this.cb.picture) {
+      if (!canPlayAudioTrack(this.audio)) throw new Error("audio codec not supported by this browser");
+    } else {
+      const MS0 = (window as any).MediaSource;
+      const videoOk = mseAvailable() && !!v.route && MS0.isTypeSupported(videoMime(v));
+      if (!videoOk || !canPlayAudioTrack(this.audio)) throw new Error("codec not supported by this browser");
+    }
+    await this.ensureAudioDecoder(this.audio);
+    if (this.destroyed) throw new Error("aborted");
+    if (this.cb.picture) {
+      const pic = new PictureDecoder(this.header, v, video, (e) => this.fatal(e));
+      this.picture = pic;
+      await pic.open();
+      if (this.destroyed) throw new Error("aborted");
+    }
     const MS = (window as any).MediaSource;
     const ms: MediaSource = new MS();
     this.ms = ms;
@@ -245,9 +302,9 @@ export class MkvEngine {
     await opened;
     if (this.destroyed) throw new Error("aborted");
     if (this.header.durationMs > 0) ms.duration = this.header.durationMs / 1000;
-    this.vw = new SbWriter(ms.addSourceBuffer(videoMime(v)), this.owner);
-    this.aw = new SbWriter(ms.addSourceBuffer(audioMime(this.audio)), this.owner);
-    await Promise.all([this.vw.append(videoInit(this.header, v)), this.aw.append(audioInit(this.header, this.audio))]);
+    if (!this.cb.picture) this.vw = new SbWriter(ms.addSourceBuffer(videoMime(v)), this.owner);
+    this.aw = new SbWriter(ms.addSourceBuffer(this.audioMimeFor(this.audio)), this.owner);
+    await Promise.all([this.vw?.append(videoInit(this.header, v)), this.aw.append(this.audioInitFor(this.audio))]);
     video.addEventListener("seeking", this.onSeeking);
     video.addEventListener("error", this.onVideoError);
     this.wakeTimer = setInterval(this.wake, 700);
@@ -268,7 +325,7 @@ export class MkvEngine {
       const check = () => {
         if (this.destroyed) return reject(new Error("aborted"));
         if (this.failed) return reject(new Error("engine failed"));
-        const ve = rangeEndAt(this.vw?.ranges() || [], t);
+        const ve = this.picture ? (this.picture.ready ? Infinity : -1) : rangeEndAt(this.vw?.ranges() || [], t);
         const ae = rangeEndAt(this.aw?.ranges() || [], t);
         if ((ve > t + 0.4 && ae > t + 0.4) || this.eofReached) return resolve();
         if (Date.now() - started > timeoutMs) return reject(new Error("timed out waiting for media"));
@@ -282,6 +339,12 @@ export class MkvEngine {
     const video = this.owner.video;
     if (!video || this.destroyed || this.failed) return;
     const t = video.currentTime;
+    if (this.picture) {
+      // The engine's own start position: the reader is already there.
+      if (this.lastStartSec >= 0 && Math.abs(t - this.lastStartSec) < 0.05) return;
+      this.startReader(t);
+      return;
+    }
     const ve = rangeEndAt(this.vw?.ranges() || [], t);
     const ae = rangeEndAt(this.aw?.ranges() || [], t);
     if (ve > t + 0.5 && ae > t + 0.5) { this.wake(); return; }
@@ -308,16 +371,38 @@ export class MkvEngine {
 
   private reader: MkvBlockStream | null = null;
   private vf: VideoFragmenter | null = null;
-  private af: AudioFragmenter | null = null;
+  private af: AudioFragmenter | DecodedAudioFragmenter | null = null;
+
+  /** Picture mode: sound waits until its picture is on screen. */
+  private appendAudio(frag: Uint8Array, gen: number): Promise<void> | void {
+    if (!this.aw) return;
+    if (!this.audioGateOpen) { if (gen === this.generation) this.heldAudio.push(frag); return; }
+    return this.aw.append(frag);
+  }
+  private openAudioGate(gen: number) {
+    if (gen !== this.generation || this.destroyed || this.audioGateOpen) return;
+    this.audioGateOpen = true;
+    const held = this.heldAudio;
+    this.heldAudio = [];
+    for (const frag of held) void this.aw?.append(frag).catch((e) => this.fatal(e));
+  }
 
   private startReader(seconds: number) {
     this.generation += 1;
+    const gen = this.generation;
     this.source.cancelPending();
     this.eofReached = false;
+    this.lastStartSec = seconds;
     const wanted = new Set<number>([this.header.video!.number, this.audio.number, ...this.textTracks.map((t) => t.number), ...this.pgsTracks.map((t) => t.number)]);
     this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), wanted, 1024 * 1024);
     this.vf = new VideoFragmenter(this.header, this.header.video!);
-    this.af = new AudioFragmenter(this.header, this.audio);
+    this.af = decodesAudio(this.audio) && this.audioDecoder ? new DecodedAudioFragmenter(this.header, this.audio, this.audioDecoder) : new AudioFragmenter(this.header, this.audio);
+    if (this.picture) {
+      this.picture.reset(seconds);
+      this.heldAudio = [];
+      this.audioGateOpen = false;
+      void this.picture.whenReady(10000).then(() => this.openAudioGate(gen));
+    }
     // A seek jumps the PGS epoch: start fresh, cues already shown stay cached.
     this.pgs.forEach((d) => d.reset());
     this.seenCues.clear();
@@ -327,6 +412,12 @@ export class MkvEngine {
 
   private bufferedAhead(): number {
     const t = this.owner.video?.currentTime || 0;
+    if (this.picture) {
+      const ahead = this.picture.aheadSeconds();
+      if (!this.audioGateOpen) return ahead;
+      const ae = rangeEndAt(this.aw?.ranges() || [], t);
+      return ae < 0 ? 0 : Math.min(ae - t, ahead);
+    }
     const ve = rangeEndAt(this.vw?.ranges() || [], t);
     const ae = rangeEndAt(this.aw?.ranges() || [], t);
     if (ve < 0 || ae < 0) return 0;
@@ -336,7 +427,7 @@ export class MkvEngine {
   private async pump(gen: number) {
     if (this.running || this.destroyed || this.failed) return;
     const reader = this.reader; const vf = this.vf; const af = this.af;
-    if (!reader || !vf || !af || !this.vw || !this.aw) return;
+    if (!reader || !vf || !af || (!this.vw && !this.picture) || !this.aw) return;
     this.running = true;
     const vNum = this.header.video!.number;
     try {
@@ -345,13 +436,18 @@ export class MkvEngine {
         const block = await reader.next();
         if (gen !== this.generation || this.destroyed) return;
         if (!block) {
-          const fv = vf.flush(); if (fv) await this.vw.append(fv);
-          const fa = af.flush(true); if (fa) await this.aw.append(fa);
+          if (this.vw) { const fv = vf.flush(); if (fv) await this.vw.append(fv); }
+          const fa = await af.flush(true);
+          if (gen !== this.generation || this.destroyed) return;
+          if (fa) await this.appendAudio(fa, gen);
+          this.openAudioGate(gen);
           this.eofReached = true;
           if (gen === this.generation) await this.endStream();
           break;
         }
-        if (block.track === vNum) {
+        if (block.track === vNum && this.picture) {
+          this.picture.push(block);
+        } else if (block.track === vNum && this.vw) {
           if (this.videoSkipUntil >= 0) {
             const s = this.tickSeconds(block.ptsTicks);
             if (!block.isKey || s < this.videoSkipUntil) continue;
@@ -361,9 +457,10 @@ export class MkvEngine {
           const frag = vf.push(block);
           if (frag) await this.vw.append(frag);
         } else if (block.track === this.audio.number) {
-          const frag = af.push(block);
-          if (frag) await this.aw.append(frag);
-        } else {
+          const frag = await af.push(block);
+          if (gen !== this.generation || this.destroyed) return;
+          if (frag) await this.appendAudio(frag, gen);
+        } else if (block.track !== vNum) {
           this.emitSubtitle(block);
         }
       }
@@ -415,15 +512,17 @@ export class MkvEngine {
   async switchAudio(number: number): Promise<void> {
     const next = this.header.audio.find((a) => a.number === number);
     if (!next || next.number === this.audio.number || !this.aw || !this.ms) return;
-    if (!canPlayTrackCombo(this.header.video, next)) throw new Error("codec not supported by this browser");
+    if (!canPlayAudioTrack(next)) throw new Error("codec not supported by this browser");
     const video = this.owner.video!;
     const t = video.currentTime;
     const sb = this.aw.sb as SourceBuffer & { changeType?: (type: string) => void };
-    const prevMime = audioMime(this.audio);
-    const nextMime = audioMime(next);
+    const prevMime = this.audioMimeFor(this.audio);
+    const nextMime = this.audioMimeFor(next);
     if (prevMime !== nextMime && typeof sb.changeType !== "function") throw new Error("changeType unsupported");
     this.generation += 1; // stop the reader
     this.source.cancelPending();
+    await this.ensureAudioDecoder(next);
+    if (this.destroyed) return;
     this.audio = next;
     if (this.ms.readyState === "ended") {
       // Re-open by appending; spec allows append() on an ended MediaSource.
@@ -431,7 +530,7 @@ export class MkvEngine {
     await this.aw.run(() => { try { sb.abort(); } catch { /* ignore */ } });
     await this.aw.run(() => { try { sb.remove(0, Infinity); } catch { /* ignore */ } });
     if (prevMime !== nextMime) await this.aw.run(() => sb.changeType!(nextMime));
-    await this.aw.append(audioInit(this.header, next));
+    await this.aw.append(this.audioInitFor(next));
     const ve = rangeEndAt(this.vw?.ranges() || [], t);
     const ready = this.waitForData(t);
     this.startReader(t);
@@ -445,6 +544,11 @@ export class MkvEngine {
     this.generation += 1;
     this.source.abort();
     if (this.wakeTimer) clearInterval(this.wakeTimer);
+    this.picture?.destroy();
+    this.picture = null;
+    this.audioDecoder?.destroy();
+    this.audioDecoder = null;
+    this.heldAudio = [];
     const video = this.owner.video;
     if (video) {
       video.removeEventListener("seeking", this.onSeeking);

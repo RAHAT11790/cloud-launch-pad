@@ -16,6 +16,7 @@ import {
   readUtf8Bytes,
   readVint,
 } from "./ebml";
+import { cleanSubtitleText } from "../subtitleFormats";
 
 export type TrackKind = "video" | "audio" | "subtitle";
 /** How a track reaches the browser: fMP4, WebM, parsed text or not at all. */
@@ -326,6 +327,45 @@ export async function loadMkvCues(src: RangeSource, header: MkvHeader): Promise<
   return cues;
 }
 
+/**
+ * Byte position of the last cluster that starts at or before `seconds`.
+ * Cues usually index only video keyframes (often 5–10 s apart, many MB);
+ * sound and subtitles can start at ANY cluster, so this narrows the read with
+ * one or two small range reads instead of downloading the whole keyframe span.
+ */
+export async function clusterNear(src: RangeSource, header: MkvHeader, cues: MkvCue[], seconds: number, minSpan = 1_500_000): Promise<number> {
+  if (!cues.length) return header.firstClusterPos;
+  const target = (Math.max(0, seconds) * 1e9) / header.timecodeScale;
+  let i = 0;
+  while (i + 1 < cues.length && cues[i + 1].timeTicks <= target) i += 1;
+  const a = cues[i]; const b = cues[i + 1];
+  if (!b || a.timeTicks > target || b.pos - a.pos < minSpan || b.timeTicks <= a.timeTicks) return a.pos;
+  const WINDOW = Math.min(192 * 1024, Math.max(4096, Math.floor((b.pos - a.pos) / 2)));
+  const frac = (target - a.timeTicks) / (b.timeTicks - a.timeTicks);
+  let guess = Math.max(a.pos, Math.min(b.pos - WINDOW, Math.round(a.pos + (b.pos - a.pos) * frac) - Math.round(WINDOW * 0.75)));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let data: Uint8Array;
+    try { data = await src.read(guess, WINDOW); } catch { return a.pos; }
+    let best = -1; let tooLate = false;
+    for (let o = 0; o + 12 < data.length; o += 1) {
+      if (data[o] !== 0x1f || data[o + 1] !== 0x43 || data[o + 2] !== 0xb6 || data[o + 3] !== 0x75) continue;
+      const el = readElementHeader(data, o);
+      if (!el || el.id !== EBML_IDS.Cluster) continue;
+      let tc = readElementHeader(data, o + el.headerSize);
+      // A cluster may open with a CRC-32 (0xBF) or Void (0xEC) before its Timestamp.
+      if (tc && (tc.id === 0xbf || tc.id === 0xec) && !tc.unknownSize && tc.size < 64) tc = readElementHeader(data, tc.dataStart + tc.size);
+      if (!tc || tc.id !== EBML_IDS.Timecode || tc.size < 1 || tc.size > 8 || tc.dataStart + tc.size > data.length) continue;
+      const ticks = readUintBytes(data, tc.dataStart, tc.size);
+      if (ticks < a.timeTicks || ticks > b.timeTicks) continue; // not a real cluster header
+      if (ticks <= target) best = guess + o; else { tooLate = true; break; }
+    }
+    if (best >= 0) return best;
+    if (!tooLate || guess <= a.pos) return a.pos; // no usable cluster: keep the safe start
+    guess = Math.max(a.pos, guess - 2 * WINDOW);
+  }
+  return a.pos;
+}
+
 // ------------------------------------------------------------------
 // Block stream
 // ------------------------------------------------------------------
@@ -519,21 +559,13 @@ export const assToText = (raw: string): string => {
   const parts = raw.split(",");
   // Matroska ASS block: ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text
   const body = parts.length >= 9 ? parts.slice(8).join(",") : raw;
-  return body
-    .replace(/\{[^}]*\}/g, "")
-    .replace(/\\N/g, "\n").replace(/\\n/g, "\n").replace(/\\h/g, " ")
-    .replace(/[ \t]+\n/g, "\n")
-    .trim();
+  return cleanSubtitleText(body, "ass");
 };
 
 export const subtitleBlockText = (track: MkvTrack, frame: Uint8Array): string => {
   const raw = readUtf8Bytes(frame, 0, frame.length);
-  if (/ASS|SSA/i.test(track.codecId)) {
-    // Drawing commands (\p1) render as garbage text — drop them.
-    if (/\\p[1-9]/.test(raw)) return "";
-    return assToText(raw);
-  }
-  return raw.replace(/<[^>]+>/g, "").trim();
+  if (/ASS|SSA/i.test(track.codecId)) return assToText(raw);
+  return cleanSubtitleText(raw, /WEBVTT/i.test(track.codecId) ? "vtt" : "srt");
 };
 export const isPgsTrack = (track: MkvTrack) => /^S_HDMV\/PGS$/i.test(track.codecId);
 

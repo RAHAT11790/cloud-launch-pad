@@ -15,6 +15,7 @@ import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
+import { decodeSubtitleBytes, parseSubtitleFile, uniqueLines } from "@/lib/subtitleFormats";
 import { EmbeddedSubtitleLayer, SUBTITLE_FONTS } from "@/components/player/EmbeddedSubtitleLayer";
 import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
@@ -2680,11 +2681,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
-    const activeText = subtitleCueListRef.current
+    const activeText = uniqueLines(subtitleCueListRef.current
       .filter((cue) => v.currentTime >= cue.start && v.currentTime <= cue.end)
-      .map((cue) => cue.text)
-      .join("\n")
-      .trim();
+      .map((cue) => cue.text));
 
     setSubtitleOverlayText(activeText);
   }, [currentHlsSubtitle]);
@@ -2692,7 +2691,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const fetchSubtitleText = useCallback(async (targetUrl: string) => {
     const response = await fetch(targetUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.text();
+    // Real encoding of the file (UTF-8/16, Windows-1252), not always UTF-8.
+    return decodeSubtitleBytes(await response.arrayBuffer());
   }, []);
 
   const applyCueOffset = useCallback((cues: Array<{ start: number; end: number; text: string }>, offsetSeconds: number) => {
@@ -2739,8 +2739,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const payload = await fetchSubtitleText(trackUrl);
     const normalized = payload.replace(/\r/g, "").trim();
     if (!normalized) return [];
-    if (/^WEBVTT\b/i.test(normalized)) return parseVttToCues(payload);
-    if (!/^#EXTM3U\b/i.test(normalized)) return parseVttToCues(payload);
+    // Direct caption files: SRT, VTT, ASS/SSA, SBV, TTML/DFXP, SAMI, MicroDVD.
+    if (!/^#EXTM3U\b/i.test(normalized)) {
+      return parseSubtitleFile(payload)
+        .map((cue) => ({ ...cue, text: sanitizeSubtitleText(cue.text) }))
+        .filter((cue) => !!cue.text);
+    }
 
     const segments = extractSubtitleSegments(payload, trackUrl);
     if (segments.length === 0) throw new Error("No subtitle media file found");
@@ -2770,7 +2774,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       });
 
     return Array.from(deduped.values());
-  }, [applyCueOffset, extractSubtitleSegments, fetchSubtitleText, parseVttToCues]);
+  }, [applyCueOffset, extractSubtitleSegments, fetchSubtitleText, parseVttToCues, sanitizeSubtitleText]);
 
   const loadSubtitleCues = useCallback(async (selectedIdx: number) => {
     if (selectedIdx < 0) {
@@ -3948,7 +3952,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Only show the small player spinner during native media startup/switching.
   // AN/details navigation uses only the top "Loading details..." toast from Index.
-  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitching);
+  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitching || embedded.holding);
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {

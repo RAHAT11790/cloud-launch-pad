@@ -11,7 +11,7 @@
 // Tracks the browser can't decode (AC3 / E-AC3 / DTS / TrueHD) go through the
 // WASM decoder (audioDecode.ts) and arrive here as FLAC — same element, same clock.
 
-import { MkvBlockStream, type MkvCue, type MkvHeader, type MkvTrack } from "./mkvDemux";
+import { MkvBlockStream, clusterNear, type MkvCue, type MkvHeader, type MkvTrack } from "./mkvDemux";
 import { HttpRangeSource, mseAvailable } from "./mkvEngine";
 import { AudioFragmenter, audioInit, audioMime } from "./mkvRemux";
 import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
@@ -237,12 +237,19 @@ export class AudioSidecar {
 
   private startReader(seconds: number) {
     this.gen += 1;
+    const gen = this.gen;
     this.source.cancelPending();
     this.eof = false;
-    this.reader = new MkvBlockStream(this.source, this.cueFor(seconds), new Set([this.track.number]), 1024 * 1024);
-    this.frag = this.decoded && this.decoder ? new DecodedAudioFragmenter(this.header, this.track, this.decoder) : new AudioFragmenter(this.header, this.track);
+    this.reader = null;
     this.running = false;
-    void this.pump(this.gen);
+    // Sound can start at any cluster: find the one right before the playhead
+    // instead of reading from the (often far earlier) video keyframe.
+    void clusterNear(this.source, this.header, this.cues, seconds - 0.5).catch(() => this.cueFor(seconds)).then((pos) => {
+      if (gen !== this.gen || this.destroyed) return;
+      this.reader = new MkvBlockStream(this.source, pos, new Set([this.track.number]), 512 * 1024);
+      this.frag = this.decoded && this.decoder ? new DecodedAudioFragmenter(this.header, this.track, this.decoder) : new AudioFragmenter(this.header, this.track);
+      void this.pump(gen);
+    });
   }
 
   private async pump(gen: number) {
