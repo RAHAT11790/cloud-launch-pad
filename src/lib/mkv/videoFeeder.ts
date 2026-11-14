@@ -11,8 +11,7 @@ export class VideoFeeder {
   private cap = 0;
   constructor(private readonly m: RsVideoModule) {}
 
-  open(codec: "hevc" | "h264", extra: Uint8Array | null, threads = 1): boolean {
-    this.m._rv_set_threads?.(threads);
+  open(codec: "hevc" | "h264", extra: Uint8Array | null): boolean {
     let p = 0;
     if (extra?.length) { p = this.m._rv_alloc(extra.length); this.m.HEAPU8.set(extra, p); }
     const r = this.m._rv_open(codec === "h264" ? 2 : 1, p, extra?.length || 0);

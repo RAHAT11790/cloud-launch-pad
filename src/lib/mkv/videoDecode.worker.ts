@@ -8,7 +8,6 @@
 import createRsVideo from "./wasm/rsvideo.mjs";
 import wasmUrl from "./wasm/rsvideo.wasm?url";
 import { VideoFeeder, type DecodedPicture } from "./videoFeeder";
-import { decoderThreads } from "./wasm/rsvideo-mt-config";
 
 type Msg =
   | { type: "warm" }
@@ -25,30 +24,7 @@ let out: { postMessage(m: unknown, t?: Transferable[]): void } = ctx;
 let feeder: VideoFeeder | null = null;
 let planes = false;
 let modulePromise: ReturnType<typeof createRsVideo> | null = null;
-// Inside the isolated decoder frame (isoFrame.ts) the multi-core build is
-// used: several pictures are decoded at once on different cores.
-const isolated = (self as any).crossOriginIsolated === true && typeof SharedArrayBuffer === "function";
-const cores = Math.max(1, Number((self.navigator as any)?.hardwareConcurrency) || 1);
-let threads = 1;
-const loadSingle = () => createRsVideo({ locateFile: () => wasmUrl });
-const loadModule = () => (modulePromise ||= (async () => {
-  if (isolated && cores >= 3) {
-    try {
-      const [{ default: createMt }, { default: mtUrl }] = await Promise.all([import("./wasm/rsvideo-mt.mjs"), import("./wasm/rsvideo-mt.wasm?url")]);
-      // The helper threads must start within a few seconds, or this phone gets the one-core decoder.
-      const m = await Promise.race([
-        createMt({ locateFile: () => mtUrl }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("threads did not start")), 8000)),
-      ]);
-      threads = decoderThreads(cores);
-      return m;
-    } catch (e) {
-      out.postMessage({ type: "log", text: `multi-core decoder unavailable (${String((e as Error)?.message || e)})` });
-    }
-  }
-  threads = 1;
-  return loadSingle();
-})());
+const loadModule = () => (modulePromise ||= createRsVideo({ locateFile: () => wasmUrl }));
 let gen = 0;
 const queue: Array<{ gen: number; data: Uint8Array; pts: number }> = [];
 let pool: ArrayBuffer[] = [];
@@ -96,7 +72,7 @@ const handle = async (msg: Msg) => {
         const m = await loadModule();
         feeder = new VideoFeeder(m);
         planes = !!msg.planes;
-        out.postMessage({ type: "opened", ok: feeder.open(msg.codec, msg.extra, threads), threads });
+        out.postMessage({ type: "opened", ok: feeder.open(msg.codec, msg.extra) });
       } catch (error) {
         out.postMessage({ type: "opened", ok: false, error: String((error as Error)?.message || error) });
       }
