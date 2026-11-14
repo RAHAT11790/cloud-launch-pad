@@ -4,6 +4,7 @@ import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowL
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
+import { firebaseRestGet } from "@/lib/firebaseRest";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
@@ -181,6 +182,31 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     }
   };
 
+  /** Plain words for Google sign-in failures (null = the viewer closed it themselves). */
+  const googleErrorText = (code?: string, message?: string): string | null => {
+    switch (code) {
+      case "auth/popup-closed-by-user":
+      case "auth/cancelled-popup-request":
+      case "auth/user-cancelled":
+        return null;
+      case "auth/popup-blocked":
+        return "Your browser blocked the Google window. Allow pop-ups for this site, then tap Continue with Google again.";
+      case "auth/unauthorized-domain":
+        return `Google sign-in isn't allowed on ${window.location.hostname} yet. Please use ${"rsanime03.lovable.app"} or sign in with email.`;
+      case "auth/network-request-failed":
+        return "No connection to Google. Check your internet and try again.";
+      case "auth/operation-not-supported-in-this-environment":
+      case "auth/web-storage-unsupported":
+        return "This browser can't open Google sign-in. Open the site in Chrome, or sign in with email.";
+      case "auth/too-many-requests":
+        return "Too many tries. Please wait a minute and try again.";
+      case "auth/internal-error":
+        return "Google sign-in had a problem. Please try again.";
+      default:
+        return "Google sign-in failed: " + (message || code || "unknown error");
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setDeviceLimitError(null);
@@ -258,9 +284,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         setGoogleSetPwMode(true);
       }
     } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        toast.error("Google sign-in failed: " + err.message);
-      }
+      const msg = googleErrorText(err?.code, err?.message);
+      if (msg) toast.error(msg, { duration: 7000 });
     }
     setLoading(false);
   };
@@ -615,12 +640,15 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       }
 
       if (allMatches.length === 0 && !isRegister) {
+        // Login by username: scan the small appUsers list first and the big
+        // users list only when needed, over plain HTTPS (a multi-MB read on
+        // the live socket froze sign-in on phones).
         for (const node of nodesToSearch) {
+          if (allMatches.some((m) => m.data?.password)) break;
           try {
-            const allRef = ref(db, node);
-            const allSnap = await get(allRef);
-            if (allSnap.exists()) {
-              const allData = allSnap.val();
+            let allData: any = await firebaseRestGet<any>(node).catch(() => undefined);
+            if (allData === undefined) { const allSnap = await get(ref(db, node)); allData = allSnap.exists() ? allSnap.val() : null; }
+            if (allData && typeof allData === "object") {
               for (const key of Object.keys(allData)) {
                 const u = allData[key];
                 if (u && typeof u === 'object') {

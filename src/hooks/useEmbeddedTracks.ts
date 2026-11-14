@@ -57,11 +57,19 @@ const wantsFullEngine = (header: MkvHeader, audioNumber: number): boolean => {
   if (/hvc1|hev1/i.test(mime)) return false;
   return !brokenMse().includes(mime);
 };
-// Video formats this device's browser plays as a black screen (sound only)
-// inside .mkv files: those open straight in picture mode next time.
-const BLACK_PICTURE = "rs_native_picture_black_v1";
+/** A black-screen file the phone can still decode itself once re-packed for Media Source. */
+const wantsNativeRemux = (header: MkvHeader, audioNumber: number): boolean => {
+  const v = header.video; const a = header.audio.find((x) => x.number === audioNumber) || header.audio[0] || null;
+  if (!v || !v.route || !canPlayTrackCombo(v, a)) return false;
+  return !brokenMse().includes(videoMime(v));
+};
+// Exact files (media keys) this device showed as a black screen (sound only):
+// only those open straight in picture mode next time. Never a whole codec
+// family — other files of the same kind usually play natively and must stay native.
+const BLACK_PICTURE = "rs_native_picture_black_files_v2";
 const blackPictures = (): string[] => { try { return JSON.parse(localStorage.getItem(BLACK_PICTURE) || "[]"); } catch { return []; } };
-const markBlackPicture = (family: string) => { try { const l = blackPictures(); if (family && !l.includes(family)) localStorage.setItem(BLACK_PICTURE, JSON.stringify([...l, family].slice(-10))); } catch { /* ignore */ } };
+const markBlackPicture = (fileKey: string) => { try { const l = blackPictures(); if (fileKey && !l.includes(fileKey)) localStorage.setItem(BLACK_PICTURE, JSON.stringify([...l, fileKey].slice(-60))); } catch { /* ignore */ } };
+try { localStorage.removeItem("rs_native_picture_black_v1"); } catch { /* old per-codec list sent every file of a kind to the decoder */ }
 const pictureCapable = () => typeof window !== "undefined" && typeof (window as any).VideoFrame !== "undefined" && typeof Worker !== "undefined" && typeof WebAssembly === "object";
 const langOf = (t?: EmbeddedTrack | null) => String(t?.language || "").toLowerCase().split(/[-_]/)[0];
 
@@ -114,6 +122,8 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
   /** Media key that needs the picture drawn by us (sound-only black screen). */
   const pictureKeyRef = useRef("");
   const pictureFailedRef = useRef(new Set<string>());
+  /** Black-screen files whose phone video path (Media Source) also showed no picture. */
+  const mseRemuxFailedRef = useRef(new Set<string>());
   const [subtitleText, setSubtitleText] = useState("");
   const [bitmapCue, setBitmapCue] = useState<PgsBitmapCue | null>(null);
   const engineRef = useRef<MkvEngine | null>(null);
@@ -302,7 +312,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         const picked = list.audio.find((a) => a.number === pick);
         if (list.decodeNative || (picked && !picked.mime && canDecodeTrack(picked.codec))) prewarmAudioDecoder();
         const family = list.container === "mkv" ? videoFamily(list.videoMime) : "";
-        if (family && pictureCapable() && blackPictures().includes(family)) prewarmPictureDecoder();
+        if (family && pictureCapable() && blackPictures().includes(key)) prewarmPictureDecoder();
       } catch { /* warming is optional */ }
       // Pre-read the full header + cues right away (through the track proxy
       // when the server refuses direct reads) so a language switch later
@@ -374,6 +384,10 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       if (picture && (!pictureDecodingPossible(header.video) || !canPlayAudioTrack(header.audio.find((a) => a.number === audioNumber) || header.audio[0]))) {
         throw new Error("picture decoding not possible here");
       }
+      // Black-screen file: first let the phone's own video decoder play it
+      // (same file re-packed for Media Source — smooth, hardware); our
+      // canvas decoder is only used when the phone has no such decoder.
+      const usePicture = picture && !(header.video && !mseRemuxFailedRef.current.has(mediaKeyNow) && wantsNativeRemux(header, audioNumber));
       if (!picture && !wantsFullEngine(header, audioNumber)) {
         // Sidecar: video keeps playing natively, only the sound changes.
         if (engineRef.current) { const t = v.currentTime; freeze(); destroyEngine(); v.src = playUrl; v.load(); await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true })); try { v.currentTime = t; } catch { /* ignore */ } unfreeze(); }
@@ -397,10 +411,16 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       stopSubReader(); // the engine reads subtitles itself
       const engine = new MkvEngine(corsUrl, header, cues, audioNumber, {
         ...cueCallbacks,
-        picture,
+        picture: usePicture,
         onFatal: (error) => {
           if (engineRef.current !== engine) return;
           console.warn("[mkv] engine stopped:", error.message);
+          if (picture && !usePicture) {
+            mseRemuxFailedRef.current.add(mediaKeyNow);
+            if (header.video) markBrokenMse(videoMime(header.video));
+            void handOver(audioNumber, true);
+            return;
+          }
           const t = videoRef.current?.currentTime || time;
           const playing = videoRef.current ? !videoRef.current.paused : wasPlaying;
           freeze();
@@ -417,7 +437,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       setPictureMode(engine.pictureKind);
       if (wasPlaying) await v.play().catch(() => undefined);
       unfreeze();
-      if (picture) return true;
+      if (usePicture) return true;
       // Watchdog: sound but no picture (seen with some phones' decoders) →
       // remember it and continue through the sidecar with the native video.
       const q0 = (v as any).getVideoPlaybackQuality?.()?.totalVideoFrames ?? 0;
@@ -427,9 +447,10 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         const frames = ((v as any).getVideoPlaybackQuality?.()?.totalVideoFrames ?? q0 + 99) - q0;
         const moved = v.currentTime - t0;
         if (moved > 1.5 && (!v.videoWidth || frames < 3)) {
-          console.warn("[mkv] no picture through media source — using native video");
+          console.warn("[mkv] no picture through media source —", picture ? "using our picture decoder" : "using native video");
           if (header.video) markBrokenMse(videoMime(header.video));
-          void handOver(audioNumber);
+          if (picture) mseRemuxFailedRef.current.add(mediaKeyNow);
+          void handOver(audioNumber, !v.paused);
         }
       }, 3500);
       return true;
@@ -533,7 +554,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
     // in picture mode (one hand-over, with the chosen language).
     const family = tracks.container === "mkv" ? videoFamily(tracks.videoMime) : "";
     const canPicture = !!family && pictureCapable() && !pictureFailedRef.current.has(key);
-    const pictureFirst = canPicture && blackPictures().includes(family);
+    const pictureFirst = canPicture && blackPictures().includes(key);
     const v = videoRef.current;
     // The file opened without any picture track (HEVC in MKV on most
     // browsers): draw the picture ourselves straight away, sound held.
@@ -560,7 +581,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       autoAppliedRef.current = key;
       if (subMatch) { activeSubRef.current = subMatch.number; setActiveSubtitle(subMatch.number); }
       if (picture) {
-        if (!pictureFirst) markBlackPicture(family);
+        if (!pictureFirst) markBlackPicture(key);
         const hold = blackHoldRef.current;
         blackHoldRef.current = null;
         pictureKeyRef.current = key;
@@ -659,10 +680,12 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
       const showing = v.videoWidth > 0 && (typeof frames !== "number" || frames > 0);
       if (showing) { window.clearInterval(timer); return; }
       if (t0 < 0) { t0 = v.currentTime; return; }
-      if (v.currentTime - t0 < 1.2) return;
+      // Hidden tabs report no frames; give a slow phone decoder time too.
+      if (document.visibilityState !== "visible") { t0 = -1; return; }
+      if (v.currentTime - t0 < 2.5) return;
       window.clearInterval(timer);
       const family = videoFamily(tracks.videoMime);
-      if (family) markBlackPicture(family);
+      markBlackPicture(key);
       startPicture(`${family || "video"}: sound only`);
     }, 400);
     return () => window.clearInterval(timer);

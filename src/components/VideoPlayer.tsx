@@ -8,9 +8,6 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
-import { subscribePenalty } from "@/lib/adPenalty";
-import { videoLockRemaining } from "@/lib/adTiming";
-import VideoAdLock from "@/components/player/VideoAdLock";
 import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -20,6 +17,7 @@ import { useEmbeddedTracks } from "@/hooks/useEmbeddedTracks";
 import { decodeSubtitleBytes, parseSubtitleFile, uniqueLines } from "@/lib/subtitleFormats";
 import { EmbeddedSubtitleLayer, SUBTITLE_FONTS } from "@/components/player/EmbeddedSubtitleLayer";
 import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
+import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -824,24 +822,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => { cancelled = true; unsub1(); };
   }, [noProxy, preferProxy, src, videoServerFingerprint]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
-  // Fast-close ad penalty: every video stays paused until the lock ends.
-  const [videoLockedUntil, setVideoLockedUntil] = useState(0);
-  useEffect(() => subscribePenalty((p) => setVideoLockedUntil(videoLockRemaining(p) > 0 ? p.lockedUntil : 0)), []);
-  useEffect(() => {
-    if (!videoLockedUntil || isPremium) return;
-    const hold = () => {
-      if (Date.now() >= videoLockedUntil) return;
-      const v = videoRef.current;
-      try { if (v && !v.paused) v.pause(); } catch { /* ignore */ }
-      sendEmbedCmd("pause");
-    };
-    hold();
-    const v = videoRef.current;
-    v?.addEventListener("play", hold);
-    v?.addEventListener("playing", hold);
-    const t = window.setInterval(hold, 500);
-    return () => { v?.removeEventListener("play", hold); v?.removeEventListener("playing", hold); clearInterval(t); };
-  }, [videoLockedUntil, isPremium, currentSrc, sendEmbedCmd]);
   const [adGateBusy, setAdGateBusy] = useState(false);
   const downloadAdPassedRef = useRef(false);
 
@@ -5142,7 +5122,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       case "back": {
         consume();
-            if (panelOpen) {
+        if (panelOpen) {
           setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
           return;
         }
@@ -5269,7 +5249,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          {videoLockedUntil > 0 && !isPremium && <VideoAdLock until={videoLockedUntil} />}
+          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
           {!isEmbedPlayback && embedded.activeSubtitle >= 0 && (
             <EmbeddedSubtitleLayer

@@ -9,7 +9,6 @@ import {
   DEFAULT_PREMIUM_SETTINGS,
 } from "@/lib/premiumAccess";
 import { Zap, Radio, LayoutGrid, Sparkles, Link2, Save } from "lucide-react";
-import { gapRangeFromMinutes } from "@/lib/adTiming";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 
@@ -33,7 +32,7 @@ const FREE_PREMIUM_SLOTS: SlotDef[] = [
 // Warm-start cache — paints Adsterra config instantly on re-open.
 const CACHE_KEY = "rs_admin_adsterra_cache_v1";
 type CacheShape = {
-  vpEnabled: boolean; popunder: string; directLink: string; socialLink: string; cooldownSec: number; gapMin?: number; gapMax?: number;
+  vpEnabled: boolean; popunder: string; directLink: string; socialLink: string; cooldownSec: number;
 };
 let adsterraCache: CacheShape | null = (() => {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch { return null; }
@@ -52,8 +51,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [directLink, setDirectLink] = useState<string>(adsterraCache?.directLink ?? "");
   const [socialLink, setSocialLink] = useState<string>(adsterraCache?.socialLink ?? "");
   const [cooldownSec, setCooldownSec] = useState<number>(adsterraCache?.cooldownSec ?? 50);
-  const [gapMin, setGapMin] = useState<number>(adsterraCache?.gapMin ?? 2);
-  const [gapMax, setGapMax] = useState<number>(adsterraCache?.gapMax ?? 10);
   const [savingVp, setSavingVp] = useState(false);
 
   const [coinAds, setCoinAds] = useState<Record<string, CoinAd>>({});
@@ -73,7 +70,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         pendingRef.current = null;
         setVpEnabled(p.vpEnabled); setPopunder(p.popunder); setDirectLink(p.directLink);
         setSocialLink(p.socialLink); setCooldownSec(p.cooldownSec);
-        setGapMin(p.gapMin ?? 2); setGapMax(p.gapMax ?? 10);
       }
     }, 4000);
   };
@@ -88,8 +84,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         directLink: v.directLink || "",
         socialLink: v.streamLink || v.socialLink || v.pushNotification || "",
         cooldownSec: Number.isFinite(cd) && cd >= 0 ? cd : 50,
-        gapMin: gapRangeFromMinutes(v.gapMinMinutes, v.gapMaxMinutes).minMs / 60000,
-        gapMax: gapRangeFromMinutes(v.gapMinMinutes, v.gapMaxMinutes).maxMs / 60000,
       };
       writeCache(snapshot);
       if (typingRef.current) {
@@ -100,7 +94,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         setDirectLink(snapshot.directLink);
         setSocialLink(snapshot.socialLink);
         setCooldownSec(snapshot.cooldownSec);
-        setGapMin(snapshot.gapMin ?? 2); setGapMax(snapshot.gapMax ?? 10);
       }
     });
     const u2 = subscribeCoinAds((list) => {
@@ -126,7 +119,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setSavingVp(true);
     try {
       const cd = Math.max(10, Math.min(3600, Number(cooldownSec) || 60));
-      const gaps = gapRangeFromMinutes(gapMin, gapMax);
       await set(ref(db, "settings/adsterra"), {
         enabled: vpEnabled,
         popunder: popunder.trim(),
@@ -137,8 +129,6 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         socialBar: socialLink.trim(),
         minGapSec: cd,
         refreshIntervalSec: cd,
-        gapMinMinutes: gaps.minMs / 60000,
-        gapMaxMinutes: gaps.maxMs / 60000,
       });
       toast.success("Video Player ads saved");
     } catch { toast.error("Save failed"); }
@@ -272,37 +262,13 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         <div className="space-y-1.5 min-w-0">
           <div className="flex items-center gap-2">
             <Zap className="w-3.5 h-3.5 text-emerald-300" />
-            <span className="text-[11px] font-semibold text-white/85">Automatic ads — random gap (minutes)</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="space-y-1 min-w-0">
-              <span className="text-[10px] text-white/55">Shortest</span>
-              <input type="number" min={1} max={10} step={0.5} value={gapMin}
-                onChange={(e) => { markTyping(); setGapMin(Number(e.target.value)); }}
-                className={inputClass} />
-            </label>
-            <label className="space-y-1 min-w-0">
-              <span className="text-[10px] text-white/55">Longest (max 10)</span>
-              <input type="number" min={1} max={10} step={0.5} value={gapMax}
-                onChange={(e) => { markTyping(); setGapMax(Number(e.target.value)); }}
-                className={inputClass} />
-            </label>
-          </div>
-          <p className="text-[10px] text-white/45">
-            Ads come by themselves at a random time inside this range, across the whole site, for as long as the visitor stays. The first ad comes after 1–3 minutes; never more than 10 minutes apart.
-          </p>
-        </div>
-
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-emerald-300" />
-            <span className="text-[11px] font-semibold text-white/85">Coin-task ad cool-down (seconds)</span>
+            <span className="text-[11px] font-semibold text-white/85">Ad Cool-down (seconds)</span>
           </div>
           <input type="number" min={10} max={3600} value={cooldownSec}
             onChange={(e) => { markTyping(); setCooldownSec(Number(e.target.value)); }}
             className={inputClass} />
           <p className="text-[10px] text-white/45">
-            Minimum gap between two ads opened from coin tasks / invite buttons.
+            Minimum gap between two player ads. 60 = one ad per minute, all session long (new users get 1.5× this gap).
           </p>
         </div>
 

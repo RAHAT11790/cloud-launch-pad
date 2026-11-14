@@ -1,11 +1,15 @@
 # Roadmap
 
-## Ads gone, video stalls, Naruto ep, download N/A (approved 2026-11-13)
-- [ ] Ads stopped appearing after one lock — make automatic ads show again for every user.
-- [ ] Video stalls every few seconds — videos that play natively must play directly; built-in decoder only for real black-picture files.
-- [ ] Naruto Shippuden (RS FR 03, ep 383) shows 0:00/0:00 and never plays — fix.
-- [ ] Download sheet shows N/A for every episode/quality — fix.
-- [ ] Test all on phone-size browser with real content.
+## Old ads back, native-first video, Naruto, Shield Hero, login (approved 2026-11-14)
+- [x] Remove the new automatic ad system (random timer, fast-close warnings, 5-min video lock); old click-paced player ads restored — phone test: sponsor tab opened from a tap on the video.
+- [x] Videos that play natively stay native; only an exact black-picture file uses our decoder (no more whole-codec memory); such files try the phone's own decoder through Media Source first.
+- [x] Naruto Shippuden ep 383 (H.264) plays on phone size (file's stored host is dead; video servers serve it).
+- [x] Owner's new Shield Hero S01E17 link (HEVC 10-bit) plays with picture in the real player (link swapped only inside the test).
+- [x] Google sign-in opens Google's account screen (OAuth client restored); clear messages for blocked pop-ups / unapproved web address.
+- [x] Email/username sign-in tested with a temporary account (wrong password refused, right one signed in); test account removed.
+- [ ] Shield Hero ep 17 in the site still has the old link — owner must save the new link in admin.
+- [ ] Software HEVC picture on phones without an HEVC decoder can still lag (phone power); real phone check needed.
+- [ ] Download sheet shows N/A for every episode/quality — not looked at yet.
 
 ## Real H.265 links + automatic ads (approved 2026-11-13)
 - [x] Test the owner's two real links (Frontier Lord .mp4, FlyTon S08E12 .mkv — both H.265 10-bit) in the real player: picture, seek.
