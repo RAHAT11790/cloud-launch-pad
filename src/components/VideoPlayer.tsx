@@ -61,7 +61,9 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-import { buildVideoDownloadUrlCandidates, unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { unwrapManagedVideoUrl } from "@/lib/videoDownload";
+import { DownloadSizeChip } from "@/components/download/DownloadSizeChip";
+import { readSizeCache, probeDownloadSizes, canRetrySize, formatDownloadSize } from "@/lib/downloadSize";
 import { formatEpisodeChip, formatEpisodeLabel, getEpisodeEnd } from "@/lib/episodeCombo";
 import { groupTelegramSelections } from "@/lib/telegramQuality";
 import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, normalizeTelegramQuality, telegramEpisodeRange } from "@/lib/telegramDownload";
@@ -888,19 +890,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [activePlaybackLanguage, setActivePlaybackLanguage] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
-  const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
-    try {
-      const raw = localStorage.getItem("rs_dl_size_cache_v1");
-      const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-      const filtered: Record<string, number> = {};
-      Object.entries(parsed).forEach(([key, value]) => {
-        const n = Number(value || 0);
-        // Keep positive sizes AND known-unknown marker (-1) so UI stops probing forever
-        if (Number.isFinite(n) && (n > 512 * 1024 || n === -1)) filtered[key] = n;
-      });
-      return filtered;
-    } catch { return {}; }
-  });
+  const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => readSizeCache());
+  const downloadSizeCacheRef = useRef(downloadSizeCache);
+  downloadSizeCacheRef.current = downloadSizeCache;
   const getCachedDownloadSize = useCallback((url?: string) => {
     const n = Number(url ? downloadSizeCache[url] || 0 : 0);
     return Number.isFinite(n) && n > 512 * 1024 ? n : 0;
@@ -1427,89 +1419,40 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, [availableDownloadQualities, isPremium, preferredDownloadQuality, selectedDownloadQuality, selectedSeasonHas480p]);
 
+  // Real file sizes for the download sheet: check exactly the links the rows
+  // show (premium = chosen quality, free = each episode's first direct file).
   useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const quality = selectedDownloadQuality;
-    if (!quality) return;
-    const urls: string[] = [];
-    downloadEpisodes.forEach((ep) => {
-      const u = ep.qualityLinks[quality];
-      if (u && !hasProbedDownloadSize(u)) urls.push(u);
-    });
-    if (!hasEpisodeTree) {
-      // Movies: probe EVERY quality so the panel can show a size per quality
-      // (same experience as series) instead of only the selected one.
-      Object.values(movieQualityLinks).forEach((movieUrl) => {
-        const u = String(movieUrl || "").trim();
-        if (u && !hasProbedDownloadSize(u) && !urls.includes(u)) urls.push(u);
-      });
-    }
-    if (!urls.length) return;
-
-
-    let cancelled = false;
-    const probe = async (u: string): Promise<[string, number] | null> => {
-      if (isHlsLikeUrl(u)) return [u, -1]; // HLS: mark known, size N/A
-      const withTimeout = async (input: string, init: RequestInit, ms = 4000) => {
-        const ac = new AbortController();
-        const t = window.setTimeout(() => ac.abort(), ms);
-        try { return await fetch(input, { ...init, signal: ac.signal }); }
-        finally { window.clearTimeout(t); }
-      };
-      const isValidSizeResponse = (r: Response) => {
-        if (!r.ok && r.status !== 206) return false;
-        const ct = String(r.headers.get("content-type") || "").toLowerCase();
-        return !/json|text\/html/.test(ct);
-      };
-      const acceptBytes = (n: number) => Number.isFinite(n) && n > 128 * 1024;
-      const proxiedCandidates = buildVideoDownloadUrlCandidates(u, "probe.mp4");
-      for (const proxied of proxiedCandidates) {
-        try {
-          const r2 = await withTimeout(proxied, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
-          if (!isValidSizeResponse(r2)) { try { await r2.body?.cancel(); } catch {}; continue; }
-          const cr = r2.headers.get("content-range");
-          if (cr) {
-            const m = /\/(\d+)\s*$/.exec(cr);
-            if (m) {
-              try { await r2.body?.cancel(); } catch {}
-              const total = Number(m[1]);
-              if (acceptBytes(total)) return [u, total];
-            }
-          }
-          const len = Number(r2.headers.get("content-length") || 0);
-          try { await r2.body?.cancel(); } catch {}
-          if (acceptBytes(len)) return [u, len];
-        } catch {}
-        try {
-          const r = await withTimeout(proxied, { method: "HEAD", mode: "cors" });
-          if (!isValidSizeResponse(r)) { try { await r.body?.cancel(); } catch {}; continue; }
-          const len = Number(r.headers.get("content-length") || 0);
-          try { await r.body?.cancel(); } catch {}
-          if (acceptBytes(len)) return [u, len];
-        } catch {}
-      }
-      // Nothing worked — mark as "known-unknown" so UI stops showing "Ready" forever
-      return [u, -1];
+    const cache = downloadSizeCacheRef.current;
+    const wanted: string[] = [];
+    const add = (raw: string) => {
+      const u = String(raw || "").trim();
+      if (!u || wanted.includes(u)) return;
+      const known = cache[u];
+      if (known === undefined || (known === -1 && canRetrySize(u))) wanted.push(u);
     };
-    (async () => {
-      // High concurrency: 8 in parallel keeps every episode resolving in ~1s
-      const chunk = 8;
-      for (let i = 0; i < urls.length; i += chunk) {
-        if (cancelled) return;
-        const results = await Promise.all(urls.slice(i, i + chunk).map(probe));
-        if (cancelled) return;
-        const updates = results.filter(Boolean) as [string, number][];
-        if (!updates.length) continue;
-        setDownloadSizeCache((prev) => {
-          const next = { ...prev };
-          updates.forEach(([u, n]) => { if (!next[u]) next[u] = n; });
-          try { localStorage.setItem("rs_dl_size_cache_v1", JSON.stringify(next)); } catch {}
-          return next;
-        });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasProbedDownloadSize, hasEpisodeTree, movieQualityLinks]);
+    downloadEpisodes.forEach((ep) => {
+      if (quality) add(ep.qualityLinks[quality] || "");
+      add(Object.values(ep.qualityLinks).find((url) => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)) || "");
+    });
+    if (!hasEpisodeTree) Object.values(movieQualityLinks).forEach((u) => add(String(u || "")));
+    const hls = wanted.filter((u) => isHlsLikeUrl(u));
+    const files = wanted.filter((u) => !isHlsLikeUrl(u));
+    if (!wanted.length) return;
+    // Clear old "unknown" marks so the rows show "Checking" again.
+    setDownloadSizeCache((prev) => {
+      const next = { ...prev };
+      files.forEach((u) => { if (next[u] === -1) delete next[u]; });
+      hls.forEach((u) => { next[u] = -1; });
+      return next;
+    });
+    const ac = new AbortController();
+    void probeDownloadSizes(files, (url, bytes) => {
+      setDownloadSizeCache((prev) => (prev[url] === bytes ? prev : { ...prev, [url]: bytes }));
+    }, ac.signal);
+    return () => ac.abort();
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, hasEpisodeTree, movieQualityLinks]);
 
 
 
@@ -7067,23 +7010,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </div>
 
                     {hasMultiEpisodes && panelSeason && (() => {
-                      const fmtSize = (bytes: number) => {
-                        if (!bytes || bytes <= 0) return "";
-                        const mb = bytes / (1024 * 1024);
-                        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
-                        return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
-                      };
                       return (
                         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-                          <div className="space-y-2.5">
+                          <div className="space-y-1.5">
                             {panelEpisodes.map((ep) => {
                               const selected = dlSelectedEpisodes.has(ep.index);
                               const qualityUrl = freeWebsite ? Object.values(ep.qualityLinks).find(url => isDirectDownloadCandidate(unwrapManagedVideoUrl(url) || url)) || "" : activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                               const lockedByRule = !!qualityUrl && activeQuality ? !isDownloadAllowedForFree(activeQuality, ep.index) : false;
                               const sizeBytes = getCachedDownloadSize(qualityUrl);
-                              const sizeLabel = fmtSize(sizeBytes);
                               return (
-                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule || (freeWebsite && !selected && dlSelectedEpisodes.size >= freeLimit)} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left ${lockedByRule ? 'opacity-55' : ''}`}>
+                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} disabled={!qualityUrl || lockedByRule || (freeWebsite && !selected && dlSelectedEpisodes.size >= freeLimit)} onClick={() => toggleEpisode(ep.index)} className={`w-full flex items-start gap-2.5 text-left rounded-[10px] border px-2.5 py-2 transition-colors ${selected ? 'border-emerald-400/45 bg-emerald-400/[0.07]' : 'border-white/[0.07] bg-white/[0.03]'} ${lockedByRule ? 'opacity-55' : ''}`}>
                                   <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${lockedByRule ? 'border-amber-400/50 text-amber-300' : selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
                                     {lockedByRule ? <Lock className="w-3 h-3" /> : <Check className="w-3 h-3" />}
                                   </span>
@@ -7094,8 +7030,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                   {freeWebsite && qualityUrl && (
                                     <span className="shrink-0 self-center max-w-[116px] text-center leading-tight rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-[9.5px] font-bold uppercase tracking-wide text-emerald-300">All Quality Free Download</span>
                                   )}
-                                  <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
-                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? (sizeLabel ? sizeLabel : hasProbedDownloadSize(qualityUrl) ? <span className="text-white/40 font-normal">N/A</span> : <span className="text-white/45 font-normal">…</span>) : <span className="text-white/30 font-normal">Not available</span>}
+                                  <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90">
+                                    {lockedByRule ? <span className="text-amber-300/80 font-semibold">LOCK</span> : qualityUrl ? <DownloadSizeChip bytes={sizeBytes} checked={hasProbedDownloadSize(qualityUrl)} /> : <span className="text-white/30 font-normal">Not available</span>}
                                   </span>
                                 </button>
                               );
@@ -7106,12 +7042,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     })()}
 
                     {!hasMultiEpisodes && !freeWebsite && (() => {
-                      const fmtSize = (bytes: number) => {
-                        if (!bytes || bytes <= 0) return "";
-                        const mb = bytes / (1024 * 1024);
-                        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
-                        return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
-                      };
                       return (
                         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                           <div className="rounded-[10px] border border-white/10 bg-white/[0.04] p-2">
@@ -7122,7 +7052,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                 const available = !!url;
                                 const locked = available && !isDownloadAllowedForFree(label);
                                 const sizeBytes = available ? getCachedDownloadSize(url) : 0;
-                                const sizeLabel = fmtSize(sizeBytes);
                                 const isActive = available && label === activeQuality;
                                 return (
                                   <button
@@ -7143,9 +7072,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                                     <span className="shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-300/90">
                                       {!available ? <span className="text-white/30 font-normal">—</span>
                                         : locked ? <span className="text-amber-300/80">LOCK</span>
-                                        : sizeLabel ? sizeLabel
-                                        : hasProbedDownloadSize(url) ? <span className="text-white/40 font-normal">N/A</span>
-                                        : <span className="text-white/45 font-normal">…</span>}
+                                        : <DownloadSizeChip bytes={sizeBytes} checked={hasProbedDownloadSize(url)} />}
                                     </span>
                                   </button>
                                 );
@@ -7161,12 +7088,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
                   {downloadMode === "website" && websiteDownloadEnabled && (() => {
-                    const fmtSize = (bytes: number) => {
-                      if (!bytes || bytes <= 0) return "";
-                      const mb = bytes / (1024 * 1024);
-                      if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
-                      return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
-                    };
+                    const fmtSize = formatDownloadSize;
                     const selectedList = hasMultiEpisodes
                       ? panelEpisodes.filter((ep) => dlSelectedEpisodes.has(ep.index) && (!activeQuality || isDownloadAllowedForFree(activeQuality, ep.index)))
                       : [];

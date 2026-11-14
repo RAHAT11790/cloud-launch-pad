@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatDownloadSize, probeDownloadSize, readSizeCache } from "@/lib/downloadSize";
 import { ArrowLeft, ArrowRight, Check, Download, ShieldCheck, ShieldAlert, Loader2, RefreshCw, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DOWNLOAD_FLOW_KEY, DOWNLOAD_FINAL_KEY, downloadWaitRemaining, nextDownloadStep, downloadStepsFor, readDownloadTimer, saveDownloadTimer, resumeDownloadTimer, sponsorVisitOutcome, BACK_TO_WATCH_KEY, type DownloadFlowRequest } from "@/lib/downloadFlow";
@@ -55,7 +56,7 @@ export default function DownloadPage() {
   const [base, setBase] = useState("");
   const [relayState, setRelayState] = useState<"checking" | "ready" | "unavailable">("checking");
   const [fileState, setFileState] = useState<Record<string, "ready" | "direct" | "unavailable">>({});
-  const [sizes, setSizes] = useState<Record<string, number>>({});
+  const [sizes, setSizes] = useState<Record<string, number>>(() => readSizeCache());
   // The link that answered for each file (active server, or the file's own server as fallback).
   const [hrefs, setHrefs] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -188,6 +189,7 @@ export default function DownloadPage() {
         if (response.ok) {
           const bytes = Number(response.headers.get("content-length"));
           if (bytes > 0) setSizes(current => ({ ...current, [choice.url]: bytes }));
+          else void probeDownloadSize(choice.url).then(n => { if (n > 0) setSizes(current => ({ ...current, [choice.url]: n })); });
           setHrefs(current => ({ ...current, [choice.url]: candidate.href }));
           setFileState(current => ({ ...current, [choice.url]: "ready" }));
           return;
@@ -292,7 +294,7 @@ export default function DownloadPage() {
           {(relayState === "unavailable" || (request.episodes.flatMap(ep => ep.choices).length > 0 && request.episodes.flatMap(ep => ep.choices).every(choice => fileState[choice.url] === "unavailable"))) && <div role="alert" className="mb-4 text-sm text-destructive"><p>Website downloads are currently unavailable. {showTelegram ? "Please use the Telegram episode links, or try again later." : "Please try again later."}</p><Button variant="outline" className="mt-2" onClick={() => void resolveRelay()}><RefreshCw size={14} />Retry</Button></div>}
           <div className="space-y-4">{request.episodes.map(ep => <section key={ep.number} className="download-card rounded-xl border border-border p-3">
             <div className="mb-2.5 flex items-center gap-2.5">{request.poster && <img src={request.poster} alt="" className="h-9 w-7 rounded object-cover" />}<span className="text-sm font-bold">Episode {String(ep.number).padStart(2, "0")}</span><span className="ml-auto text-[11px] text-muted-foreground">{ep.choices.length} {ep.choices.length === 1 ? "quality" : "qualities"}</span></div>
-            <div className="space-y-2">{ep.choices.map(choice => { const key = `w:${ep.number}:${choice.quality}`; const ext = (choice.fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "file").toUpperCase(); return <Button key={choice.quality} type="button" className="download-go flex min-h-14 h-auto w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left disabled:opacity-50" disabled={!base || !config.websiteEnabled || fileState[choice.url] === "unavailable"} onClick={() => tapWithAd(key, () => startWebsite(choice))}><Download size={20} className="shrink-0" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{qualityLabel(choice.quality)}</span><span className="block text-xs opacity-90">{fileState[choice.url] === "unavailable" ? (reasons[choice.url] || "File unavailable") : !fileState[choice.url] ? "Checking file…" : sizes[choice.url] ? `${(sizes[choice.url] / 1048576).toFixed(1)} MB` : "Size unavailable"} • {ext}</span></span><span className="shrink-0 text-[11px] font-semibold">{adSeen.has(key) ? "Download now" : "Download"}</span></Button>; })}{!ep.choices.length && <p className="text-xs text-muted-foreground">No website files available.</p>}</div>
+            <div className="space-y-2">{ep.choices.map(choice => { const key = `w:${ep.number}:${choice.quality}`; const ext = (choice.fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] || "file").toUpperCase(); return <Button key={choice.quality} type="button" className="download-go flex min-h-14 h-auto w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left disabled:opacity-50" disabled={!base || !config.websiteEnabled || fileState[choice.url] === "unavailable"} onClick={() => tapWithAd(key, () => startWebsite(choice))}><Download size={20} className="shrink-0" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{qualityLabel(choice.quality)}</span><span className="block text-xs opacity-90">{fileState[choice.url] === "unavailable" ? (reasons[choice.url] || "File unavailable") : !fileState[choice.url] ? "Checking file…" : sizes[choice.url] ? formatDownloadSize(sizes[choice.url]) : "Size unavailable"} • {ext}</span></span><span className="shrink-0 text-[11px] font-semibold">{adSeen.has(key) ? "Download now" : "Download"}</span></Button>; })}{!ep.choices.length && <p className="text-xs text-muted-foreground">No website files available.</p>}</div>
             {config.telegramEnabled && ep.telegramUrl && <Button className="download-telegram mt-3 h-11 w-full" onClick={() => tapWithAd(`telegram:${ep.number}`, () => startTelegram(ep.telegramUrl, 1))}><TelegramLogo />Telegram · Episode {ep.number}</Button>}
           </section>)}</div>
           {showTelegram && (request.telegramEpisodeCount || request.episodes.length) > 1 && <Button className="download-telegram mt-4 h-12 w-full" onClick={() => tapWithAd("telegram", () => startTelegram())}><TelegramLogo />Telegram · All {request.telegramEpisodeCount || request.episodes.length} episodes</Button>}
