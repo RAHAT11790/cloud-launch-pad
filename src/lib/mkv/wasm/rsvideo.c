@@ -23,6 +23,10 @@ EMSCRIPTEN_KEEPALIVE void rv_close(void) {
   ctx = NULL; pkt = NULL; frm = NULL;
 }
 
+static int open_threads = 1;
+/** Threads for the next rv_open (only the multi-thread build can use > 1). */
+EMSCRIPTEN_KEEPALIVE void rv_set_threads(int n) { open_threads = n < 1 ? 1 : n > 8 ? 8 : n; }
+
 /** codec: 1 = HEVC, 2 = H.264. Returns 0 on success. */
 EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len) {
   rv_close();
@@ -35,7 +39,10 @@ EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len)
     memcpy(ctx->extradata, extra, extra_len);
     ctx->extradata_size = extra_len;
   }
-  ctx->thread_count = 1;
+  ctx->thread_count = open_threads;
+  // Frame threads decode several pictures at once (the big win for HEVC);
+  // slice threads also split one picture when the file allows it.
+  if (open_threads > 1) ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
   ctx->flags2 |= AV_CODEC_FLAG2_FAST;
   if (avcodec_open2(ctx, c, NULL) < 0) { rv_close(); return -3; }
   pkt = av_packet_alloc();

@@ -72,6 +72,8 @@ const hardwareBackend = async (config: VideoDecoderConfig): Promise<CoreBackend 
 
 // ---------- built-in software decoder (other worker) ----------
 let decGen = 1;
+/** Cores the software decoder uses (more than 1 inside the isolated frame). */
+let decoderThreads = 1;
 let inflight = 0;
 const softwareBackend = (): Promise<CoreBackend> => new Promise((resolve, reject) => {
   const m0 = openMsg!;
@@ -101,7 +103,7 @@ const softwareBackend = (): Promise<CoreBackend> => new Promise((resolve, reject
       }
       return;
     }
-    if (m.type === "opened") { if (m.ok) resolve(backend); else reject(new Error(m.error || "software decoder could not open this video")); return; }
+    if (m.type === "opened") { decoderThreads = Number(m.threads) || 1; if (m.ok) resolve(backend); else reject(new Error(m.error || "software decoder could not open this video")); return; }
     if (m.type === "error") ctx.postMessage({ type: "error", error: m.error });
   };
   port!.postMessage({ type: "open", codec: m0.codec, extra: m0.extra, planes: true });
@@ -133,7 +135,7 @@ const hardwareFailed = async (why: string) => {
 };
 
 const postState = () => {
-  if (core) ctx.postMessage({ type: "state", gen: resetGen, shown: core.shownSeconds, skip: core.skip, ready: core.ready, stats: core.stats, painter: painter?.kind, decoder: core.backend?.kind });
+  if (core) ctx.postMessage({ type: "state", gen: resetGen, shown: core.shownSeconds, skip: core.skip, ready: core.ready, stats: core.stats, painter: painter?.kind, decoder: core.backend?.kind, threads: core.backend?.kind === "software" ? decoderThreads : 0 });
 };
 
 // Wakes up right when the next picture is due.

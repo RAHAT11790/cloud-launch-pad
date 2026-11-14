@@ -89,10 +89,11 @@ export class PictureCore<P extends Pic = VideoFrame> {
     this.backend?.setSkip(this.backend.kind === "software" ? Math.max(SKIP_NONREF, this.skipLevel) : 0);
   }
 
-  // A few pictures in reserve absorb slow keyframes without a visible hitch.
-  private maxFrames() { return this.backend?.kind === "hardware" ? 6 : 8; }
+  // Software: a few pictures in reserve absorb slow keyframes without a
+  // visible hitch. Hardware frames stay few (phone decoders own a small pool).
+  private maxFrames() { return this.backend?.kind === "hardware" ? 3 : 8; }
   // Keep the decoder busy: a skipped packet gives no picture, so "done" refills too.
-  private maxInflight() { return this.backend?.kind === "hardware" ? 6 : 8; }
+  private maxInflight() { return this.backend?.kind === "hardware" ? 4 : 8; }
 
   feed() {
     const b = this.backend;

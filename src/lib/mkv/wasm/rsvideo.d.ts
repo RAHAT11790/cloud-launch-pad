@@ -3,6 +3,8 @@ export interface RsVideoModule {
   _rv_open(codec: number, extra: number, extraLen: number): number;
   _rv_close(): void;
   _rv_set_skip(level: number): void;
+  /** Threads for the next open (the multi-core build only; older builds lack it). */
+  _rv_set_threads?(n: number): void;
   _rv_send(data: number, len: number, pts: number): number;
   _rv_send_eof(): number;
   _rv_receive(): number;

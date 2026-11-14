@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { MkvEngine, canPlayAudioTrack, canPlayTrackCombo, type TextCue } from "@/lib/mkv/mkvEngine";
 import { pictureDecodingPossible, prewarmPictureDecoder } from "@/lib/mkv/pictureDecoder";
+import { prepareIsolatedDecoder } from "@/lib/mkv/isolatedDecoder";
 import { videoFamily } from "@/lib/mkv/videoCodec";
 import { AudioSidecar } from "@/lib/mkv/audioSidecar";
 import type { MkvHeader } from "@/lib/mkv/mkvDemux";
@@ -313,6 +314,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
         if (list.decodeNative || (picked && !picked.mime && canDecodeTrack(picked.codec))) prewarmAudioDecoder();
         const family = list.container === "mkv" ? videoFamily(list.videoMime) : "";
         if (family && pictureCapable() && blackPictures().includes(key)) prewarmPictureDecoder();
+        else if (family && pictureCapable()) void prepareIsolatedDecoder(); // multi-core decoder ready in case this file shows no picture
       } catch { /* warming is optional */ }
       // Pre-read the full header + cues right away (through the track proxy
       // when the server refuses direct reads) so a language switch later
