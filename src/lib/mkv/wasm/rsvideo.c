@@ -43,12 +43,14 @@ EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len)
   return 0;
 }
 
-/** 0 = full quality, 1 = skip non-reference frames, 2 = also skip the
- *  deblocking filter, 3 = keyframes only. Raised while the phone falls behind. */
+/** Raised step by step while the phone falls behind; motion stays smooth as
+ *  long as possible (filters go first, whole pictures last):
+ *  0 = full quality, 1 = no deblocking/SAO (every picture still shown),
+ *  2 = also skip non-reference pictures, 3 = keyframes only. */
 EMSCRIPTEN_KEEPALIVE void rv_set_skip(int level) {
   if (!ctx) return;
-  ctx->skip_frame = level >= 3 ? AVDISCARD_NONKEY : level >= 1 ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-  ctx->skip_loop_filter = level >= 2 ? AVDISCARD_ALL : AVDISCARD_DEFAULT;
+  ctx->skip_frame = level >= 3 ? AVDISCARD_NONKEY : level >= 2 ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
+  ctx->skip_loop_filter = level >= 1 ? AVDISCARD_ALL : AVDISCARD_DEFAULT;
 }
 
 /** Returns 0 when accepted, 1 when the decoder is full (receive first), <0 on error. */

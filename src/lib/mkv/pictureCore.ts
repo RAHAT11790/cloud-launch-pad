@@ -30,6 +30,10 @@ export interface CoreClock {
 /** Anything with a presentation time that can be given back after use. */
 export interface Pic { readonly timestamp: number; close(): void }
 
+/** Software quality steps (see rv_set_skip in wasm/rsvideo.c). */
+export const SKIP_NONREF = 2;
+export const SKIP_KEYS = 3;
+
 export type CoreStats = { drawn: number; dropped: number; resyncs: number; ticks: number; drawMs: number; arrived: number; syncMs: number; decodeMs: number };
 
 export class PictureCore<P extends Pic = VideoFrame> {
@@ -82,12 +86,13 @@ export class PictureCore<P extends Pic = VideoFrame> {
     this.needKey = true;
     this.lastOut = -1;
     // Race to the wanted picture: references only, no deblocking, until it is on screen.
-    this.backend?.setSkip(this.backend.kind === "software" ? Math.max(2, this.skipLevel) : 0);
+    this.backend?.setSkip(this.backend.kind === "software" ? Math.max(SKIP_NONREF, this.skipLevel) : 0);
   }
 
-  private maxFrames() { return this.backend?.kind === "hardware" ? 3 : 5; }
+  // A few pictures in reserve absorb slow keyframes without a visible hitch.
+  private maxFrames() { return this.backend?.kind === "hardware" ? 6 : 8; }
   // Keep the decoder busy: a skipped packet gives no picture, so "done" refills too.
-  private maxInflight() { return this.backend?.kind === "hardware" ? 4 : 6; }
+  private maxInflight() { return this.backend?.kind === "hardware" ? 6 : 8; }
 
   feed() {
     const b = this.backend;
@@ -178,23 +183,25 @@ export class PictureCore<P extends Pic = VideoFrame> {
       this.target = idx >= 0 ? this.queue[0].pts : now + 300_000;
       this.primed = false;
       this.paintAtOnce = false;
-      if (soft) { this.skipLevel = Math.min(3, this.skipLevel + 1); b.setSkip(this.skipLevel); }
+      if (soft) { this.skipLevel = Math.min(SKIP_KEYS, this.skipLevel + 1); b.setSkip(this.skipLevel); }
       this.calmSince = 0;
       return;
     }
     if (!soft) return;
-    // 0 full quality · 1 skip non-reference frames · 2 + no deblocking · 3 keyframes only
+    // 0 full · 1 no deblocking/SAO (every picture kept) · 2 + skip non-reference
+    // pictures · 3 keyframes only. Filters go first: the motion stays fluid,
+    // only fine edges soften.
     const t = performance.now();
     let level = this.skipLevel;
-    if (lag > 0.8 && level >= 2) level = 3;
-    else if (lag > 0.3) level = Math.max(level, 2);
-    else if (lag > 0.12) level = Math.max(level, 1);
+    if (lag > 0.8 && level >= SKIP_NONREF) level = SKIP_KEYS;
+    else if (lag > 0.45) level = Math.max(level, SKIP_NONREF);
+    else if (lag > 0.06) level = Math.max(level, 1);
     // Step up BEFORE falling behind: the decoder needs more time per picture
     // than the picture lasts (measured at the current step, so wait a moment
     // after each change for the average to settle).
     const budgetMs = this.frameUs / 1000 / Math.max(0.25, this.clock.rate?.() || 1);
     const load = this.stats.decodeMs > 0 ? this.stats.decodeMs / budgetMs : 0;
-    if (load > 0.95 && level === this.skipLevel && level < 2 && t - this.lastStep > 1200) level += 1; // keyframes-only stays a last resort
+    if (load > 0.9 && level === this.skipLevel && level < SKIP_NONREF && t - this.lastStep > 1000) level += 1; // keyframes-only stays a last resort
     if (lag < 0.06 && load < 0.55) {
       if (!this.calmSince) this.calmSince = t;
       else if (t - this.calmSince > 6000 && level > 0) { level -= 1; this.calmSince = t; }

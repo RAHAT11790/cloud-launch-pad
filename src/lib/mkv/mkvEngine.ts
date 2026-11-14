@@ -170,10 +170,16 @@ const rangeEndAt = (ranges: Array<[number, number]>, t: number) => {
 
 export const mseAvailable = () => typeof window !== "undefined" && typeof (window as any).MediaSource?.isTypeSupported === "function";
 
+/**
+ * Can video + this sound play together through ONE Media Source? Sound the
+ * browser can't decode (Dolby / DTS …) counts when our decoder turns it into
+ * FLAC: the file is then read once and the browser keeps picture and sound in
+ * step itself (a second read for the sound alone starves on slow networks).
+ */
 export function canPlayTrackCombo(video: MkvTrack | null, audio: MkvTrack | null): boolean {
-  if (!mseAvailable() || !video?.route || !audio?.route) return false;
-  const MS = (window as any).MediaSource;
-  return MS.isTypeSupported(videoMime(video)) && MS.isTypeSupported(audioMime(audio));
+  if (!mseAvailable() || !video?.route || !audio) return false;
+  try { if (!(window as any).MediaSource.isTypeSupported(videoMime(video))) return false; } catch { return false; }
+  return canPlayAudioTrack(audio);
 }
 
 /** Software-decoded audio (Dolby / DTS / TrueHD …) for a track MSE can't take. */
@@ -182,7 +188,7 @@ const decodesAudio = (audio: MkvTrack) => !audio.route && canDecodeTrack(audio.c
 /** Can the sound of `audio` go through Media Source (as-is or software-decoded)? */
 export function canPlayAudioTrack(audio: MkvTrack | null | undefined): boolean {
   if (!audio || !mseAvailable()) return false;
-  if (decodesAudio(audio)) return true;
+  if (decodesAudio(audio)) { try { return (window as any).MediaSource.isTypeSupported(DECODED_AUDIO_MIME); } catch { return false; } }
   if (!audio.route) return false;
   try { return (window as any).MediaSource.isTypeSupported(audioMime(audio)); } catch { return false; }
 }

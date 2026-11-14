@@ -398,7 +398,7 @@ export function useEmbeddedTracks({ videoRef, src, enabled, onNotice }: {
           console.warn("[mkv] audio sidecar stopped:", error.message);
           backToNative(v.currentTime, !v.paused);
           noticeRef.current?.("This audio track couldn't play here — switched back to the original audio.");
-        });
+        }, (on) => { if (sidecarRef.current === sc) setHolding(on); });
         await sc.attach(v).catch((e) => { sc.destroy(); throw e; });
         if (op !== opRef.current) { sc.destroy(); return false; }
         sidecarRef.current = sc;
