@@ -56,7 +56,7 @@ describe("picture timing (H.265 software path)", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("lowers the quality step when the decoder needs longer than a picture lasts — but never to keyframes-only just for being busy", () => {
+  it("lowers the quality step when the decoder needs longer than a picture lasts — filters first, never keyframes-only just for being busy", () => {
     let wall = 0;
     vi.spyOn(performance, "now").mockImplementation(() => wall);
     const t = setup({ decodeMs: 60 }); // 60 ms per picture, a picture lasts ~42 ms
@@ -68,6 +68,7 @@ describe("picture timing (H.265 software path)", () => {
       t.step();
       levels.add(t.core.skip);
     }
+    // filters (1) are dropped before whole pictures (2); keyframes-only (3) never just for being busy
     expect(levels.has(1)).toBe(true);
     expect(Math.max(...levels)).toBe(2);
   });

@@ -54,8 +54,19 @@ export class AudioSidecar {
   /** What the player itself asked for (the video is force-muted while we run). */
   private wantMuted = false;
   private selfMuting = false;
+  /** The sound ran out: the video is held (loading circle) until it refills. */
+  private starved = false;
+  private lastResync = 0;
 
-  constructor(url: string, private readonly header: MkvHeader, private readonly cues: MkvCue[], audioNumber: number, private readonly onFatal?: (e: Error) => void) {
+  constructor(
+    url: string,
+    private readonly header: MkvHeader,
+    private readonly cues: MkvCue[],
+    audioNumber: number,
+    private readonly onFatal?: (e: Error) => void,
+    /** Called with true while the video waits for the sound, false when both continue. */
+    private readonly onHold?: (on: boolean) => void,
+  ) {
     this.source = new HttpRangeSource(url);
     this.track = header.audio.find((a) => a.number === audioNumber) || header.audio[0];
     this.decoded = !this.track.route && canDecodeTrack(this.track.codec, { zlib: this.track.zlib, bitDepth: this.track.bitDepth });
@@ -197,9 +208,27 @@ export class AudioSidecar {
   private onPlay = () => {
     const v = this.video; const a = this.audioEl;
     if (!v || !a || v.paused) return;
-    if (Math.abs(a.currentTime - v.currentTime) > 0.2) { try { a.currentTime = v.currentTime; } catch { /* ignore */ } }
+    if (Math.abs(a.currentTime - v.currentTime) > 0.2) { try { a.currentTime = v.currentTime; this.lastResync = performance.now(); } catch { /* ignore */ } }
     a.play().catch(() => undefined);
   };
+
+  /** Sound ran out while playing: hold the picture too instead of running silent. */
+  private starve() {
+    const v = this.video; const a = this.audioEl;
+    if (!v || !a || this.starved) return;
+    this.starved = true;
+    a.pause();
+    v.pause();
+    this.onHold?.(true);
+  }
+
+  private unstarve(resume: boolean) {
+    if (!this.starved) return;
+    this.starved = false;
+    this.onHold?.(false);
+    const v = this.video;
+    if (resume && v && v.paused) void v.play().catch(() => undefined);
+  }
 
   private onPause = () => { this.audioEl?.pause(); };
   private onRate = () => { if (this.audioEl && this.video) this.audioEl.playbackRate = this.video.playbackRate || 1; };
@@ -226,11 +255,21 @@ export class AudioSidecar {
     }
     const playing = !v.paused && !v.seeking && v.readyState >= 3;
     const ahead = rangeEnd(this.sb?.buffered, t) - t;
-    if (playing) {
-      if (ahead > 0.3) {
-        if (Math.abs(a.currentTime - t) > 0.3) { try { a.currentTime = t; } catch { /* ignore */ } }
+    if (this.starved) {
+      // Continue only with a real cushion, so it doesn't stop again a moment later.
+      if (ahead > 3 || this.eof) this.unstarve(true);
+    } else if (playing) {
+      if (ahead > 0.3 || this.eof) {
+        const drift = a.currentTime - t;
+        const now = performance.now();
+        // Big gap: jump once (never repeatedly — each jump is a short silence on phones).
+        if (Math.abs(drift) > 0.35 && now - this.lastResync > 3000) { try { a.currentTime = t; this.lastResync = now; } catch { /* ignore */ } }
+        // Small gap: nudge the speed a little instead of jumping.
+        const base = v.playbackRate || 1;
+        const want = Math.abs(drift) > 0.06 ? base * (drift > 0 ? 0.97 : 1.03) : base;
+        if (Math.abs(a.playbackRate - want) > 0.001) a.playbackRate = want;
         if (a.paused) a.play().catch(() => undefined);
-      } else if (!a.paused) a.pause();
+      } else this.starve();
     } else if (!a.paused) a.pause();
     if (!this.running && !this.eof && ahead < this.aheadSec - 5) void this.pump(this.gen);
   };
@@ -290,6 +329,7 @@ export class AudioSidecar {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.starved) { this.starved = false; this.onHold?.(false); }
     this.gen += 1;
     this.source.abort();
     this.decoder?.destroy();

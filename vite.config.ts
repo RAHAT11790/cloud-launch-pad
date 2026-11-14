@@ -13,6 +13,13 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     hmr: { overlay: false },
   },
+  build: {
+    rollupOptions: {
+      // Second page: the hidden isolated frame of the multi-core video decoder.
+      input: { main: path.resolve(__dirname, "index.html"), rsIsoFrame: path.resolve(__dirname, "rs-iso/frame.html") },
+    },
+  },
+  worker: { format: "es" },
   plugins: [
     react(),
     mode === "development" && componentTagger(),

@@ -23,6 +23,10 @@ EMSCRIPTEN_KEEPALIVE void rv_close(void) {
   ctx = NULL; pkt = NULL; frm = NULL;
 }
 
+static int open_threads = 1;
+/** Threads for the next rv_open (only the multi-thread build can use > 1). */
+EMSCRIPTEN_KEEPALIVE void rv_set_threads(int n) { open_threads = n < 1 ? 1 : n > 8 ? 8 : n; }
+
 /** codec: 1 = HEVC, 2 = H.264. Returns 0 on success. */
 EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len) {
   rv_close();
@@ -35,7 +39,9 @@ EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len)
     memcpy(ctx->extradata, extra, extra_len);
     ctx->extradata_size = extra_len;
   }
-  ctx->thread_count = 1;
+  ctx->thread_count = open_threads;
+  // Frame threads decode several pictures at once (the big win for HEVC).
+  if (open_threads > 1) ctx->thread_type = FF_THREAD_FRAME;
   ctx->flags2 |= AV_CODEC_FLAG2_FAST;
   if (avcodec_open2(ctx, c, NULL) < 0) { rv_close(); return -3; }
   pkt = av_packet_alloc();
@@ -43,12 +49,14 @@ EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len)
   return 0;
 }
 
-/** 0 = full quality, 1 = skip non-reference frames, 2 = also skip the
- *  deblocking filter, 3 = keyframes only. Raised while the phone falls behind. */
+/** Raised step by step while the phone falls behind; motion stays smooth as
+ *  long as possible (filters go first, whole pictures last):
+ *  0 = full quality, 1 = no deblocking/SAO (every picture still shown),
+ *  2 = also skip non-reference pictures, 3 = keyframes only. */
 EMSCRIPTEN_KEEPALIVE void rv_set_skip(int level) {
   if (!ctx) return;
-  ctx->skip_frame = level >= 3 ? AVDISCARD_NONKEY : level >= 1 ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
-  ctx->skip_loop_filter = level >= 2 ? AVDISCARD_ALL : AVDISCARD_DEFAULT;
+  ctx->skip_frame = level >= 3 ? AVDISCARD_NONKEY : level >= 2 ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
+  ctx->skip_loop_filter = level >= 1 ? AVDISCARD_ALL : AVDISCARD_DEFAULT;
 }
 
 /** Returns 0 when accepted, 1 when the decoder is full (receive first), <0 on error. */

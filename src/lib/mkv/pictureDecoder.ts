@@ -13,6 +13,7 @@ import type { MkvBlock, MkvHeader, MkvTrack } from "./mkvDemux";
 import { webCodecsVideoCodec } from "./videoCodec";
 
 import { PictureCore, type Chunk, type CoreStats } from "./pictureCore";
+import { isolatedDecoderReady, prepareIsolatedDecoder, spawnIsolatedDecoder, type DecoderHandle } from "./isolatedDecoder";
 
 interface Backend {
   readonly kind: "hardware" | "software";
@@ -32,14 +33,45 @@ const ownBytes = (d: Uint8Array) => (d.byteOffset === 0 && d.byteLength === d.bu
 
 const wcSupportCache = new Map<string, boolean>();
 
-// Software decoder started ahead of time on phones known to need it.
-let warmWorker: Worker | null = null;
-const takeWorker = () => { const w = warmWorker || newVideoWorker(); warmWorker = null; return w; };
 const newVideoWorker = () => new Worker(new URL("./videoDecode.worker.ts", import.meta.url), { type: "module" });
 const newPaintWorker = () => new Worker(new URL("./videoPaint.worker.ts", import.meta.url), { type: "module" });
+
+/** A decoder worker on this page (one core). */
+const localDecoder = (): DecoderHandle => {
+  const w = newVideoWorker();
+  const h: DecoderHandle = {
+    isolated: false,
+    onerror: null,
+    postMessage: (m, t = []) => w.postMessage(m, t),
+    terminate: () => w.terminate(),
+  };
+  w.onerror = (e) => h.onerror?.({ message: e.message || "software decoder crashed" });
+  return h;
+};
+/** Multi-core decoder in the isolated frame when the browser allows it, else the page's own. */
+const newDecoder = (warm = false): DecoderHandle => {
+  const iso = spawnIsolatedDecoder(warm);
+  if (iso) return iso;
+  const h = localDecoder();
+  if (warm) h.postMessage({ type: "warm" });
+  return h;
+};
+
+// Software decoder started ahead of time on phones known to need it.
+let warmDecoder: DecoderHandle | null = null;
+const takeDecoder = async (): Promise<DecoderHandle> => {
+  if (!isolatedDecoderReady()) await Promise.race([prepareIsolatedDecoder(), new Promise((r) => setTimeout(r, 2500))]);
+  const w = warmDecoder; warmDecoder = null;
+  if (w && (w.isolated || !isolatedDecoderReady())) return w;
+  w?.terminate();
+  return newDecoder();
+};
 export function prewarmPictureDecoder() {
-  if (warmWorker || typeof Worker === "undefined" || typeof WebAssembly !== "object") return;
-  try { warmWorker = newVideoWorker(); warmWorker.postMessage({ type: "warm" }); } catch { warmWorker = null; }
+  if (warmDecoder || typeof Worker === "undefined" || typeof WebAssembly !== "object") return;
+  void prepareIsolatedDecoder().then(() => {
+    if (warmDecoder) return;
+    try { warmDecoder = newDecoder(true); } catch { warmDecoder = null; }
+  });
 }
 
 /** Is there any way to draw this track's picture on this device? */
@@ -94,7 +126,7 @@ class SoftwareBackend implements Backend {
   decodeMs = 0;
   private constructor(worker: Worker) { this.worker = worker; }
   static async create(track: MkvTrack, onFrame: (f: VideoFrame) => void, onError: (e: Error) => void, onDone?: () => void): Promise<SoftwareBackend> {
-    const worker = takeWorker();
+    const worker = newVideoWorker(); // old browsers without worker painting: one core, on this page
     const b = new SoftwareBackend(worker);
     const opened = new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("software decoder did not start")), 20000);
@@ -136,7 +168,7 @@ export class PictureDecoder {
   private backend: Backend | null = null;
   /** Painting worker (the normal software path); it talks to its own decoding worker. */
   private worker: Worker | null = null;
-  private decodeWorker: Worker | null = null;
+  private decodeWorker: DecoderHandle | null = null;
   private workerDecoder: "hardware" | "software" = "software";
   private workerState: { gen: number; shown: number; skip: number; ready: boolean; stats: CoreStats; painter?: string } | null = null;
   private resetGen = 0;
@@ -215,9 +247,10 @@ export class PictureDecoder {
   }
 
   private async openWorkerPaint() {
+    const dec = await takeDecoder();
+    if (this.destroyed) { dec.terminate(); throw new Error("aborted"); }
     const c = this.mountCanvas();
     const off = c.transferControlToOffscreen();
-    const dec = takeWorker();
     let w: Worker;
     try { w = newPaintWorker(); } catch (e) { dec.terminate(); throw e; }
     this.worker = w; this.decodeWorker = dec;
@@ -238,7 +271,7 @@ export class PictureDecoder {
         }
         if (m.type === "kind") { this.workerDecoder = m.kind; return; }
         if (m.type === "needDecoder") {
-          const d = newVideoWorker(); const ch = new MessageChannel();
+          const d = newDecoder(); const ch = new MessageChannel();
           this.decodeWorker = d;
           d.onerror = (ev) => this.fail(new Error(ev.message || "software decoder crashed"));
           d.postMessage({ type: "port", port: ch.port1 }, [ch.port1]);
@@ -250,7 +283,7 @@ export class PictureDecoder {
         if (m.type === "ready") { if (m.gen === this.resetGen) { this.workerReady = true; this.markReady(); } return; }
         if (m.type === "error") this.fail(new Error(m.error));
       };
-      const crashed = (e: ErrorEvent) => { clearTimeout(timer); const err = new Error(e.message || "software decoder crashed"); reject(err); this.fail(err); };
+      const crashed = (e: { message: string }) => { clearTimeout(timer); const err = new Error(e.message || "software decoder crashed"); reject(err); this.fail(err); };
       w.onerror = crashed; dec.onerror = crashed;
       w.postMessage({
         type: "open", canvas: off, port: link.port2, frameUs: this.frameUs,
