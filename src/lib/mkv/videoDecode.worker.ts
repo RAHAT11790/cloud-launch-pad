@@ -35,7 +35,11 @@ const loadModule = () => (modulePromise ||= (async () => {
   if (isolated && cores >= 3) {
     try {
       const [{ default: createMt }, { default: mtUrl }] = await Promise.all([import("./wasm/rsvideo-mt.mjs"), import("./wasm/rsvideo-mt.wasm?url")]);
-      const m = await createMt({ locateFile: () => mtUrl });
+      // The helper threads must start within a few seconds, or this phone gets the one-core decoder.
+      const m = await Promise.race([
+        createMt({ locateFile: () => mtUrl }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("threads did not start")), 8000)),
+      ]);
       threads = decoderThreads(cores);
       return m;
     } catch (e) {

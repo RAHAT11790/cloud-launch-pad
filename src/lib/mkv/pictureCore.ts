@@ -93,7 +93,8 @@ export class PictureCore<P extends Pic = VideoFrame> {
   // visible hitch. Hardware frames stay few (phone decoders own a small pool).
   private maxFrames() { return this.backend?.kind === "hardware" ? 3 : 8; }
   // Keep the decoder busy: a skipped packet gives no picture, so "done" refills too.
-  private maxInflight() { return this.backend?.kind === "hardware" ? 4 : 8; }
+  // (the multi-core software decoder needs several packets in hand to keep every core busy)
+  private maxInflight() { return this.backend?.kind === "hardware" ? 4 : 12; }
 
   feed() {
     const b = this.backend;

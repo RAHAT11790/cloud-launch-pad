@@ -40,9 +40,8 @@ EMSCRIPTEN_KEEPALIVE int rv_open(int codec, const uint8_t *extra, int extra_len)
     ctx->extradata_size = extra_len;
   }
   ctx->thread_count = open_threads;
-  // Frame threads decode several pictures at once (the big win for HEVC);
-  // slice threads also split one picture when the file allows it.
-  if (open_threads > 1) ctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+  // Frame threads decode several pictures at once (the big win for HEVC).
+  if (open_threads > 1) ctx->thread_type = FF_THREAD_FRAME;
   ctx->flags2 |= AV_CODEC_FLAG2_FAST;
   if (avcodec_open2(ctx, c, NULL) < 0) { rv_close(); return -3; }
   pkt = av_packet_alloc();
