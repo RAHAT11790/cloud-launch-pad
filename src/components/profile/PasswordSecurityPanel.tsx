@@ -238,7 +238,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
             )}
             {step === 1 && (
               <>
-                <SentToCard email={email} note="Check Spam or Promotions if you can't see it." />
+                <SentToCard email={email} />
                 <OtpBoxes value={code} onChange={(v) => { setCode(v); if (error) setError(""); }} onComplete={(v) => void checkCode(v)} disabled={busy} error={!!error} />
                 <PasteCodeButton disabled={busy} onCode={(c) => { setCode(c); if (error) setError(""); }} />
                 <div className="flex flex-wrap items-center justify-between gap-2">

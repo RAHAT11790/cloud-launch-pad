@@ -67,7 +67,7 @@ export class EmailServiceError extends Error {
   }
 }
 
-/** Opaque "rid.session" ticket returned by the Gmail email Worker. */
+/** Opaque "rid.session" ticket returned by the email Worker. */
 export type EmailTicket = {
   token: string; expiresAt: number; linkExpiresAt: number; resendAt: number; maxAttempts: number;
   /** Codes this email can still request today (Bangladesh day), and the daily maximum. */
@@ -139,7 +139,7 @@ export function formatWait(sec: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
-/** Sends one email with a 6-digit code and a one-tap "Verify" link (Gmail API Worker). */
+/** Sends one email with a 6-digit code and a one-tap "Verify" link (SMTP email Worker). */
 export async function sendEmailCode(email: string, purpose: EmailPurpose, name?: string): Promise<EmailTicket> {
   const e = normalizeEmail(email);
   if (!isAllowedEmail(e)) throw new EmailServiceError("domain_not_allowed", `Only ${allowedDomainsLabel(loginAccessNow().allowedDomains)} addresses are allowed.`);

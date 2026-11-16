@@ -906,7 +906,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
               {step === 1 && (
                 <>
-                  <SentToCard email={forgotEmail} note="Check Spam or Promotions if you can't see it." />
+                  <SentToCard email={forgotEmail} />
                   <OtpBoxes value={forgotOtp} onChange={(v) => { setForgotOtp(v); if (forgotError) setForgotError(""); }}
                     onComplete={(v) => void confirmForgotCode(v)} disabled={forgotLoading} error={!!forgotError} />
                   <PasteCodeButton disabled={forgotLoading} onCode={(c) => { setForgotOtp(c); if (forgotError) setForgotError(""); }} />
@@ -1005,7 +1005,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
             </div>
 
             <div className="mt-5 space-y-3">
-              <SentToCard email={verifyPending.email} note="Check Spam or Promotions if you can't see it." />
+              <SentToCard email={verifyPending.email} />
               <OtpBoxes value={digits} onChange={(v) => { setVerifyCode(v); if (verifyError) setVerifyError(""); }}
                 onComplete={(v) => void submitVerifyCode(v)} disabled={verifyLoading} error={!!verifyError} />
               <PasteCodeButton disabled={verifyLoading} onCode={(c) => { setVerifyCode(c); if (verifyError) setVerifyError(""); }} />

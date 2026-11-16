@@ -1,26 +1,26 @@
 // ============================================================
-// RS ANIME — EMAIL SERVICE · Gmail API (Cloudflare build) · v4
+// RS ANIME — EMAIL SERVICE · SMTP (Alwaysdata, Cloudflare build) · v5
 // ------------------------------------------------------------
-// Sign-up verification + password-reset emails sent through the
-// official Gmail API (users.messages.send). No Resend / SMTP.
+// Sign-up verification + password-reset emails sent over SMTP
+// (port 465, direct TLS) through the Alwaysdata mailbox.
 //
-// Required secrets (Cloudflare → Worker → Settings → Variables
+// Required secret (Cloudflare → Worker → Settings → Variables
 // and Secrets → Add → type "Secret"):
-//   GMAIL_CLIENT_ID      Google OAuth client ID
-//   GMAIL_CLIENT_SECRET  Google OAuth client secret
-//   GMAIL_REFRESH_TOKEN  refresh token with scope gmail.send
-//   GMAIL_SENDER_EMAIL   the Gmail address that authorised it
-// Optional:
+//   SMTP_PASS            password of the Alwaysdata mailbox
+// Optional (defaults in SMTP_DEFAULTS below):
+//   SMTP_HOST            smtp-rsanime03.alwaysdata.net
+//   SMTP_PORT            465
+//   SMTP_USER            rsanime03@alwaysdata.net
+//   SMTP_FROM            sender address (defaults to SMTP_USER)
 //   EMAIL_SECRET         long random text used to hash codes
-//                        (falls back to a key derived from the
-//                         Gmail client secret + refresh token)
 //   SITE_URL             default https://rsanime03.lovable.app
 //   FIREBASE_DB_URL      Firebase Realtime Database URL
 //   FIREBASE_DB_SECRET   Firebase database secret (admin writes)
 //   ALLOWED_ORIGINS      extra site origins, comma separated
+//   ADMIN_PIN            unlocks full emails in the admin panel
 //
 // Routes
-//   GET  /                 → health  (?deep=1 also checks Gmail)
+//   GET  /                 → health  (?deep=1 also logs in to SMTP)
 //   GET  /preview?type=register|reset[&format=text] → template
 //   GET  /v/{rid}/{token}  → "Confirm" page (scanner-safe)
 //   POST /v/{rid}/{token}  → marks the email verified, redirects
@@ -37,7 +37,7 @@
 // link works exactly once and using one kills the other.
 // ============================================================
 
-const VERSION = "email-service-gmail-v4";
+const VERSION = "email-service-smtp-v5";
 const BRAND = "RS ANIME03";
 const LOGO = "https://i.ibb.co/6RcjXRjL/image.jpg";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
@@ -45,10 +45,10 @@ const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.fireba
 const PROJECT_TAG = "d9496f6f-add2-411c-96f8-fb97b0c234a7";
 const ROOT = "emailAuth";
 
-// Anti-spam defaults (admin can tune inside BOUNDS): one live code at a time,
-// 3 codes per email per Bangladesh day, and hard caps that keep the Gmail
-// account far below Google's sending limits so it is never flagged.
-const DEFAULTS = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
+// Sending limits (admin can tune inside BOUNDS): one live code at a time with a
+// 60-second resend wait, 3 codes per email per Bangladesh day, and service caps
+// that keep the mailbox well inside its provider's sending limits.
+const DEFAULTS = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 60, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
 const BOUNDS = { otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10], perEmailDaily: [1, 20], perIpDaily: [2, 200], hourlyPerIp: [2, 100], perMinute: [2, 60], dailyLimit: [10, 2000] };
 const IP_WRONG_PER_HOUR = 40;
 const ADMIN_WRONG_PER_HOUR = 8;
@@ -142,7 +142,7 @@ const canonicalKey = (email) => email.endsWith("@gmail.com")
 // ---------------- crypto ----------------
 let keyMemo = { src: "", hmac: null, aes: null };
 async function keys(env) {
-  const src = env.EMAIL_SECRET || `${env.GMAIL_CLIENT_SECRET || ""}|${env.GMAIL_REFRESH_TOKEN || ""}`;
+  const src = env.EMAIL_SECRET || `smtp|${env.SMTP_PASS || ""}|${env.SMTP_USER || SMTP_DEFAULTS.user}`;
   if (keyMemo.hmac && keyMemo.src === src) return keyMemo;
   const hk = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("rs-email-hmac-v3|" + src)));
   const ak = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("rs-email-aes-v3|" + src)));
@@ -306,44 +306,103 @@ async function cleanup(env, now) {
   if (Object.keys(patch).length) await dbPatch(env, ROOT, patch);
 }
 
-// ---------------- Gmail API ----------------
-let tokenMemo = { key: "", token: "", exp: 0, scope: "" };
-function gmailError(code, message) { const e = new Error(message); e.code = code; return e; }
-async function gmailAccessToken(env, force = false) {
-  const key = `${env.GMAIL_CLIENT_ID}|${env.GMAIL_REFRESH_TOKEN}`;
-  if (!force && tokenMemo.key === key && tokenMemo.exp > Date.now() + 60_000) return tokenMemo;
-  const r = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.GMAIL_CLIENT_ID, client_secret: env.GMAIL_CLIENT_SECRET,
-      refresh_token: env.GMAIL_REFRESH_TOKEN, grant_type: "refresh_token",
-    }).toString(),
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok || !d.access_token) {
-    const why = `${d.error || r.status}${d.error_description ? `: ${d.error_description}` : ""}`.slice(0, 160);
-    if (d.error === "invalid_grant") throw gmailError("gmail_token_revoked", `Refresh token rejected (${why})`);
-    if (d.error === "invalid_client" || d.error === "unauthorized_client") throw gmailError("gmail_client_invalid", `OAuth client rejected (${why})`);
-    throw gmailError("gmail_token_failed", `Token exchange failed (${why})`);
+// ---------------- SMTP (Alwaysdata, port 465 direct TLS) ----------------
+const SMTP_DEFAULTS = { host: "smtp-rsanime03.alwaysdata.net", port: 465, user: "rsanime03@alwaysdata.net" };
+const smtpConf = (env) => {
+  const user = String(env.SMTP_USER || SMTP_DEFAULTS.user).trim();
+  return {
+    host: String(env.SMTP_HOST || SMTP_DEFAULTS.host).trim(),
+    port: Number(env.SMTP_PORT) || SMTP_DEFAULTS.port,
+    user,
+    pass: String(env.SMTP_PASS || ""),
+    from: String(env.SMTP_FROM || user).trim(),
+  };
+};
+function mailError(code, message) { const e = new Error(message); e.code = code; return e; }
+/** Opens a TLS socket. Cloudflare: cloudflare:sockets; other runtimes set globalThis.__rsOpenTls. */
+async function openTls(host, port) {
+  if (typeof globalThis.__rsOpenTls === "function") return globalThis.__rsOpenTls(host, port);
+  const spec = "cloudflare:" + "sockets";
+  const { connect } = await import(spec);
+  const s = connect({ hostname: host, port }, { secureTransport: "on", allowHalfOpen: false });
+  await s.opened;
+  return { readable: s.readable, writable: s.writable, close: () => { try { s.close(); } catch {} } };
+}
+const withTimeout = (p, ms, code, what) => {
+  let t;
+  return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(mailError(code, `${what} timed out`)), ms); })]).finally(() => clearTimeout(t));
+};
+/** One SMTP conversation. send(null) only logs in (health check). */
+async function smtpSession(env, msg) {
+  const c = smtpConf(env);
+  if (!c.pass) throw mailError("smtp_not_configured", "SMTP_PASS secret is missing");
+  let sock;
+  try { sock = await withTimeout(openTls(c.host, c.port), 12_000, "smtp_connect_failed", "Connecting to the mail server"); }
+  catch (e) { throw e.code ? e : mailError("smtp_connect_failed", `Could not reach ${c.host}:${c.port} (${String(e?.message || e).slice(0, 120)})`); }
+  const reader = sock.readable.getReader();
+  const writer = sock.writable.getWriter();
+  let buf = "";
+  const readReply = () => withTimeout((async () => {
+    const lines = [];
+    for (;;) {
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).replace(/\r$/, "");
+        buf = buf.slice(i + 1);
+        lines.push(line);
+        if (/^\d{3}(?: |$)/.test(line)) return { code: Number(line.slice(0, 3)), text: lines.join(" | ").slice(0, 240) };
+      }
+      const { value, done } = await reader.read();
+      if (done) throw mailError("smtp_closed", "Mail server closed the connection");
+      buf += dec.decode(value, { stream: true });
+    }
+  })(), 20_000, "smtp_timeout", "Mail server reply");
+  const write = (s) => writer.write(enc.encode(s));
+  const step = async (cmd, ok, code, what) => {
+    if (cmd != null) await write(cmd + "\r\n");
+    const r = await readReply();
+    if (!ok.includes(r.code)) {
+      const busy = r.code >= 400 && r.code < 500;
+      const quota = /limit|quota|too many|rate/i.test(r.text);
+      throw mailError(quota ? "smtp_quota" : busy ? "smtp_busy" : code, `${what}: ${r.text}`);
+    }
+    return r;
+  };
+  try {
+    await step(null, [220], "smtp_greeting", "Greeting");
+    await step("EHLO rsanime03.mail", [250], "smtp_ehlo", "EHLO");
+    await step(`AUTH PLAIN ${bytesToB64(enc.encode(`\u0000${c.user}\u0000${c.pass}`))}`, [235], "smtp_auth_failed", "Login refused");
+    if (msg) {
+      if ([msg.to, c.from].some(hasCtl)) throw mailError("bad_header", "Invalid address");
+      await step(`MAIL FROM:<${c.from}>`, [250], "smtp_rejected", "Sender refused");
+      await step(`RCPT TO:<${msg.to}>`, [250, 251], "smtp_rcpt_rejected", "Recipient refused");
+      await step("DATA", [354], "smtp_rejected", "DATA refused");
+      const raw = buildMime({ ...msg, from: c.from }).replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..");
+      await write(raw.endsWith("\r\n") ? raw : raw + "\r\n");
+      const r = await step(".", [250], "smtp_rejected", "Message refused");
+      await write("QUIT\r\n").catch(() => 0);
+      return r.text;
+    }
+    await write("QUIT\r\n").catch(() => 0);
+    return "ok";
+  } finally {
+    try { reader.releaseLock(); } catch {}
+    try { writer.releaseLock(); } catch {}
+    sock.close();
   }
-  // Google adds refresh_token_expires_in when the refresh token has a limited
-  // life (OAuth app still in "Testing" → 7 days). Shown in the admin panel.
-  const rtx = Number(d.refresh_token_expires_in) || 0;
-  tokenMemo = { key, token: d.access_token, exp: Date.now() + (Number(d.expires_in) || 3600) * 1000, scope: String(d.scope || ""), refreshExpiresAt: rtx ? Date.now() + rtx * 1000 : 0 };
-  return tokenMemo;
 }
 const encWord = (s) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${bytesToB64(enc.encode(s))}?=`);
 const wrap76 = (s) => s.match(/.{1,76}/g)?.join("\r\n") || "";
 function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
-  if ([from, to, subject, ref].some(hasCtl)) throw gmailError("bad_header", "Invalid header value");
+  if ([from, to, subject, ref].some(hasCtl)) throw mailError("bad_header", "Invalid header value");
   const b = `rs_${randBase36(18)}`;
+  const domain = String(from).split("@")[1] || "rsanime.mail";
   const head = [
-    `From: ${encWord(BRAND)} <${from}>`,
+    `From: "${encWord(BRAND)}" <${from}>`,
     `To: <${to}>`,
     `Subject: ${encWord(subject)}`,
     `Date: ${date.toUTCString().replace("GMT", "+0000")}`,
-    `Message-ID: <${ref}.${date.getTime().toString(36)}@rsanime.mail>`,
+    `Message-ID: <${ref}.${date.getTime().toString(36)}@${domain}>`,
     "MIME-Version: 1.0",
     "Auto-Submitted: auto-generated",
     `X-Entity-Ref-ID: ${ref}`,
@@ -352,37 +411,15 @@ function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
   const part = (type, body) => [`--${b}`, `Content-Type: ${type}; charset=UTF-8`, "Content-Transfer-Encoding: base64", "", wrap76(bytesToB64(enc.encode(body)))].join("\r\n");
   return `${head.join("\r\n")}\r\n\r\n${part("text/plain", text)}\r\n${part("text/html", html)}\r\n--${b}--\r\n`;
 }
-async function sendGmail(env, msg) {
-  const raw = b64url(enc.encode(buildMime({ ...msg, from: env.GMAIL_SENDER_EMAIL })));
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const { token } = await gmailAccessToken(env, attempt > 0);
-    const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ raw }),
-    });
-    if (r.status === 401 && attempt === 0) continue; // stale token → refresh once
-    const text = await r.text();
-    let d = {}; try { d = JSON.parse(text); } catch {}
-    if (r.ok && d.id) return d.id;
-    const reason = d?.error?.errors?.[0]?.reason || d?.error?.status || "";
-    const why = `${r.status} ${reason} ${d?.error?.message || ""}`.trim().slice(0, 180);
-    console.error("gmail send failed:", why);
-    if (r.status === 429 || /rateLimit|dailyLimit|quota/i.test(reason)) throw gmailError("gmail_quota", `Gmail sending limit reached (${why})`);
-    if (r.status === 403) throw gmailError("gmail_scope_missing", `Gmail refused (${why}) — token needs the gmail.send scope`);
-    if (r.status === 400) throw gmailError("gmail_rejected", `Gmail rejected the message (${why})`);
-    throw gmailError("gmail_send_failed", `Gmail send failed (${why})`);
-  }
-  throw gmailError("gmail_send_failed", "Gmail send failed (401 after refresh)");
-}
+const sendMail = (env, msg) => smtpSession(env, msg);
 
 // ---------------- templates ----------------
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "'SF Mono',SFMono-Regular,Menlo,Consolas,'Roboto Mono','Courier New',monospace";
 const C = {
-  bg: "#04060E", card: "#0A1124", panel: "#0D1730", cell: "#101C3C", line: "#1A2850", line2: "#24386E",
-  blue: "#2563EB", blue2: "#3B82F6", sky: "#60A5FA", cyan: "#22D3EE", text: "#E8EEFF", soft: "#AEBBDF", mute: "#8191C0", dim: "#5A6A9C",
-  ok: "#34D399", warn: "#FBBF24",
+  bg: "#0d0f17", card: "#161926", line: "#2a2f45", panel: "#0d0f17",
+  pink: "#ec4899", violet: "#8b5cf6", grad: "linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%)",
+  text: "#F4F1FF", soft: "#B9B5D0", mute: "#8A86A6", dim: "#6B6888", warn: "#FBBF24",
 };
 function fmtTime(t) {
   try {
@@ -392,29 +429,23 @@ function fmtTime(t) {
 const mins = (n) => `${n} minute${n === 1 ? "" : "s"}`;
 function copyFor(purpose) {
   return purpose === "reset"
-    ? { eyebrow: "PASSWORD RESET", glyph: "&#128273;", title: "Reset your password", subject: `Reset your ${BRAND} password`, button: "Reset Password",
-        intro: `Someone (hopefully you) asked to reset the password of your ${BRAND} account. Use the code below in the app, or tap the button to confirm it's you.` }
-    : { eyebrow: "VERIFY YOUR EMAIL", glyph: "&#10022;", title: "Confirm your email address", subject: `Verify your ${BRAND} email`, button: "Verify Email",
-        intro: `Welcome to ${BRAND}! Use the code below in the app, or tap the button, to confirm this inbox is yours and finish creating your account.` };
+    ? { title: "Reset Your Password", subject: `Reset your ${BRAND} password`, button: "Reset Password",
+        intro: `We received a request to reset the password of your ${BRAND} account. Enter this code in the app, or tap the button below.` }
+    : { title: "Verify Your Email", subject: `Verify your ${BRAND} email`, button: "Verify Email",
+        intro: `Welcome to ${BRAND}! Enter this code in the app, or tap the button below, to confirm your email and finish creating your account.` };
 }
-/** Brand word mark: "RS ANIME" + accent "03". */
-const wordmark = (size, ls) => `<span style="font-family:${FONT};font-size:${size}px;font-weight:900;letter-spacing:${ls}px;color:#FFFFFF;">RS&nbsp;ANIME</span><span style="font-family:${FONT};font-size:${size}px;font-weight:900;letter-spacing:${ls}px;color:${C.sky};">03</span>`;
 
 function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt, rid = "" }) {
   const c = copyFor(purpose);
   const year = new Date(requestedAt).getUTCFullYear();
   const host = site.replace(/^https?:\/\//, "");
   const hi = name ? `Hi <b style="color:#FFFFFF;">${esc(name)}</b>,` : "Hi there,";
-  const pre = `${code} is your ${BRAND} code — valid for ${mins(otpMinutes)}.`;
+  const pre = `${code} is your ${BRAND} code. It expires in ${mins(otpMinutes)}.`;
   const td = `font-family:${FONT};`;
-  const digits = String(code).split("").map((d) =>
-    `<td class="rs-cell" align="center" valign="middle" width="46" height="58" style="width:46px;height:58px;background:${C.cell};border:1px solid ${C.line2};border-radius:12px;font-family:${MONO};font-size:30px;line-height:58px;font-weight:800;color:#FFFFFF;">${esc(d)}</td>`,
-  ).join(`<td class="rs-gap" width="8" style="width:8px;font-size:0;line-height:0;">&nbsp;</td>`);
   const ref = shortRef(rid);
-  // Code rides in the URL fragment, which browsers never send to the server.
   let copyUrl = "";
   try { copyUrl = `${new URL(link).origin}/c#${code}`; } catch { copyUrl = `${site}#${code}`; }
-  const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:5px 0;width:96px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:5px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
+  const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:4px 0;width:92px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:4px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting">
@@ -425,86 +456,55 @@ body{margin:0!important;padding:0!important;background:${C.bg};-webkit-text-size
 a{text-decoration:none}img{border:0;outline:none;display:block}
 @media (max-width:520px){
 .rs-pad{padding-left:20px!important;padding-right:20px!important}
-.rs-outer{padding:18px 8px!important}
-.rs-h1{font-size:23px!important;line-height:30px!important}
-.rs-cell{width:38px!important;height:50px!important;font-size:25px!important;line-height:50px!important;border-radius:10px!important}
-.rs-gap{width:5px!important}
-.rs-btn a{padding:15px 26px!important}
+.rs-outer{padding:16px 8px!important}
+.rs-h1{font-size:22px!important;line-height:29px!important}
+.rs-otp{font-size:32px!important;letter-spacing:8px!important;padding:16px 6px 16px 14px!important}
+.rs-btn a{padding:14px 26px!important}
 }
 </style></head>
 <body style="margin:0;padding:0;background:${C.bg};">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;color:${C.bg};">${esc(pre)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};">
 <tr><td align="center" class="rs-outer" style="padding:32px 14px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;">
 
-<tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:24px;overflow:hidden;">
+<tr><td bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.line};border-radius:14px;overflow:hidden;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <!-- header -->
-    <tr><td align="center" bgcolor="#0B1A45" style="background:#0B1A45;background-image:radial-gradient(120% 140% at 50% 0%,#1E3A8A 0%,#0B1A45 55%,#0A1124 100%);border-radius:24px 24px 0 0;padding:30px 20px 26px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:3px;border-radius:20px;background:#3B82F6;background-image:linear-gradient(135deg,#60A5FA,#2563EB 55%,#22D3EE);">
-        <img src="${LOGO}" width="62" height="62" alt="${BRAND}" style="width:62px;height:62px;border-radius:17px;">
-      </td></tr></table>
-      <div style="margin-top:14px;">${wordmark(20, 3)}</div>
-      <div style="${td}margin-top:6px;font-size:10px;font-weight:700;letter-spacing:3px;color:#93B4F5;">SECURE ACCOUNT EMAIL</div>
+    <tr><td align="center" bgcolor="${C.pink}" style="background:${C.pink};background-image:${C.grad};border-radius:14px 14px 0 0;padding:28px 20px 24px;">
+      <img src="${LOGO}" width="56" height="56" alt="${BRAND}" style="width:56px;height:56px;border-radius:16px;border:2px solid rgba(255,255,255,.55);margin:0 auto;">
+      <div style="${td}margin-top:12px;font-size:22px;font-weight:900;letter-spacing:4px;color:#FFFFFF;text-transform:uppercase;">RS&nbsp;ANIME<span style="color:#FDE7F3;">03</span></div>
+      <div style="${td}margin-top:6px;font-size:11px;font-weight:700;letter-spacing:2px;color:#FCE7F3;text-transform:uppercase;">Account Security &amp; Verification</div>
     </td></tr>
-    <tr><td height="3" style="height:3px;line-height:3px;font-size:0;background:${C.blue};background-image:linear-gradient(90deg,#1D4ED8,#3B82F6,#22D3EE,#3B82F6,#1D4ED8);">&nbsp;</td></tr>
 
-    <!-- title -->
-    <tr><td class="rs-pad" align="center" style="padding:30px 40px 0;">
-      <span style="${td}display:inline-block;padding:6px 12px;border-radius:999px;background:#12224B;border:1px solid ${C.line2};font-size:10px;font-weight:800;letter-spacing:2.5px;color:${C.sky};">${c.glyph}&nbsp; ${c.eyebrow}</span>
-      <h1 class="rs-h1" style="${td}margin:16px 0 0;font-size:27px;line-height:35px;font-weight:800;color:#FFFFFF;">${esc(c.title)}</h1>
+    <tr><td class="rs-pad" align="center" style="padding:30px 36px 0;">
+      <h1 class="rs-h1" style="${td}margin:0;font-size:26px;line-height:34px;font-weight:800;color:#FFFFFF;">${esc(c.title)}</h1>
       <p style="${td}margin:12px 0 0;font-size:15px;line-height:24px;color:${C.soft};">${hi}<br>${esc(c.intro)}</p>
     </td></tr>
 
-    <!-- code -->
-    <tr><td class="rs-pad" style="padding:26px 40px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.panel};border:1px solid ${C.line2};border-radius:20px;">
-        <tr><td align="center" style="${td}padding:20px 12px 12px;font-size:10px;font-weight:800;letter-spacing:3px;color:${C.mute};">YOUR VERIFICATION CODE</td></tr>
-        <tr><td align="center" style="padding:0 8px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${digits}</tr></table>
-        </td></tr>
-        <tr><td align="center" style="padding:14px 12px 0;">
-          <a href="${esc(copyUrl)}" target="_blank" style="${td}display:inline-block;padding:9px 18px;border-radius:999px;background:#12224B;border:1px solid ${C.line2};font-size:13px;font-weight:800;color:#FFFFFF;text-decoration:none;">&#10697;&nbsp; Copy code</a>
-        </td></tr>
-        <tr><td align="center" style="${td}padding:8px 12px 0;font-size:11px;color:${C.dim};">or long-press <span style="font-family:${MONO};color:#FFFFFF;font-weight:800;letter-spacing:2px;user-select:all;-webkit-user-select:all;">${esc(code)}</span> to copy</td></tr>
-        <tr><td align="center" style="padding:14px 12px 20px;">
-          <span style="${td}display:inline-block;padding:6px 12px;border-radius:999px;background:#1A1608;border:1px solid #4A3A10;font-size:11px;font-weight:700;color:${C.warn};">&#9201;&nbsp; Valid for ${mins(otpMinutes)} &nbsp;&#183;&nbsp; single use</span>
-        </td></tr>
-      </table>
-    </td></tr>
-
-    <!-- divider -->
-    <tr><td class="rs-pad" style="padding:24px 40px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td width="44%" style="font-size:0;line-height:0;"><div style="height:1px;background:${C.line};">&nbsp;</div></td>
-        <td align="center" style="${td}padding:0 10px;font-size:10px;font-weight:800;letter-spacing:2px;color:${C.dim};white-space:nowrap;">OR ONE TAP</td>
-        <td width="44%" style="font-size:0;line-height:0;"><div style="height:1px;background:${C.line};">&nbsp;</div></td>
+    <tr><td class="rs-pad" align="center" style="padding:24px 36px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+        <td class="rs-otp" align="center" bgcolor="${C.panel}" style="background:${C.panel};border:2px solid ${C.violet};border-radius:14px;padding:18px 14px 18px 24px;font-family:${MONO};font-size:38px;line-height:44px;font-weight:800;letter-spacing:10px;color:${C.pink};text-shadow:0 0 12px rgba(236,72,153,.75),0 0 26px rgba(139,92,246,.45);box-shadow:0 0 24px rgba(139,92,246,.35);user-select:all;-webkit-user-select:all;">${esc(code)}</td>
       </tr></table>
+      <div style="${td}margin-top:14px;font-size:13px;font-weight:700;color:${C.warn};">&#9201;&nbsp; This code will expire in ${mins(otpMinutes)}.</div>
+      <div style="margin-top:12px;"><a href="${esc(copyUrl)}" target="_blank" style="${td}display:inline-block;padding:8px 16px;border-radius:999px;background:#1F2236;border:1px solid ${C.line};font-size:12px;font-weight:800;color:#FFFFFF;">&#10697;&nbsp; Copy code</a></div>
     </td></tr>
 
-    <!-- button -->
-    <tr><td align="center" class="rs-pad" style="padding:20px 40px 0;">
+    <tr><td align="center" class="rs-pad" style="padding:24px 36px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="rs-btn"><tr>
-        <td align="center" bgcolor="${C.blue}" style="border-radius:14px;background:${C.blue};background-image:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);box-shadow:0 12px 28px rgba(37,99,235,.38);">
-          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:16px 42px;font-size:16px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:14px;">${esc(c.button)}&nbsp;&rarr;</a>
+        <td align="center" bgcolor="${C.pink}" style="border-radius:12px;background:${C.pink};background-image:${C.grad};box-shadow:0 10px 26px rgba(236,72,153,.35);">
+          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:15px 40px;font-size:15px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:12px;">${esc(c.button)}&nbsp;&rarr;</a>
         </td>
       </tr></table>
-      <div style="${td}margin-top:11px;font-size:12px;line-height:18px;color:${C.mute};">Opens your browser &#183; confirms instantly &#183; link valid ${mins(linkMinutes)}</div>
+      <div style="${td}margin-top:10px;font-size:12px;line-height:18px;color:${C.mute};">One tap confirms it &#183; button works for ${mins(linkMinutes)}</div>
     </td></tr>
 
-    <!-- security -->
-    <tr><td class="rs-pad" style="padding:26px 40px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E1A3A;border:1px solid ${C.line};border-radius:16px;">
-        <tr>
-          <td width="44" valign="top" style="padding:16px 0 16px 16px;font-size:20px;line-height:22px;">&#128737;&#65039;</td>
-          <td style="${td}padding:15px 16px 15px 10px;font-size:13px;line-height:20px;color:${C.soft};"><b style="color:${C.text};">Never share this code.</b> ${BRAND} staff will never ask for it by chat, call or message. Didn't ask for this email? Ignore it &mdash; your account stays safe and nothing changes.</td>
-        </tr>
+    <tr><td class="rs-pad" style="padding:24px 36px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#1B1530;border:1px solid #3A2A5C;border-radius:12px;">
+        <tr><td style="${td}padding:14px 16px;font-size:13px;line-height:20px;color:${C.soft};">&#128737;&#65039;&nbsp; <b style="color:#FFFFFF;">Never share your ${BRAND} code with anyone.</b> Our team will never ask for it. Didn't request this? You can ignore this email.</td></tr>
       </table>
     </td></tr>
 
-    <!-- details -->
-    <tr><td class="rs-pad" style="padding:18px 40px 30px;">
+    <tr><td class="rs-pad" style="padding:18px 36px 26px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.line};">
         <tr><td style="height:10px;line-height:10px;font-size:0;" colspan="2">&nbsp;</td></tr>
         ${row("Requested", esc(fmtTime(requestedAt)))}
@@ -515,41 +515,40 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
   </table>
 </td></tr>
 
-<tr><td align="center" style="${td}padding:20px 18px 0;font-size:12px;line-height:18px;color:${C.dim};">
-  Button not working? Copy this link into your browser:<br>
-  <a href="${esc(link)}" style="color:${C.sky};word-break:break-all;">${esc(link)}</a>
+<tr><td align="center" style="${td}padding:18px 18px 0;font-size:12px;line-height:18px;color:${C.dim};">
+  Button not working? Open this link:<br>
+  <a href="${esc(link)}" style="color:#F472B6;word-break:break-all;">${esc(link)}</a>
 </td></tr>
-
-<tr><td align="center" style="padding:26px 16px 6px;">
-  <div>${wordmark(12, 3)}</div>
-  <div style="${td}margin-top:8px;font-size:11px;line-height:17px;color:${C.dim};">Automated security email &mdash; replies are not read.<br>
-  <a href="${esc(site)}" style="color:#7FA8F8;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} ${BRAND}</div>
+<tr><td align="center" style="${td}padding:22px 16px 6px;font-size:11px;line-height:17px;color:${C.dim};">
+  ${BRAND} &mdash; Premium Anime Streaming &#8226; Automated Message<br>
+  <a href="${esc(site)}" style="color:#C4B5FD;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} ${BRAND}
 </td></tr>
 
 </table>
 </td></tr></table>
 </body></html>`;
   const text = [
-    `${BRAND} — ${c.title}`,
+    `${BRAND} — Account Security & Verification`,
     "",
+    c.title,
     name ? `Hi ${name},` : "Hi there,",
     c.intro,
     "",
-    `Your 6-digit code: ${code}`,
-    `(valid for ${mins(otpMinutes)}, works only once)`,
+    `Your code: ${code}`,
+    `This code will expire in ${mins(otpMinutes)}.`,
     `Copy it here: ${copyUrl}`,
     "",
-    `Or open this link (valid ${mins(linkMinutes)}):`,
+    `Or open this link (works for ${mins(linkMinutes)}):`,
     link,
     "",
-    `Never share this code. ${BRAND} will never ask for it.`,
-    "Didn't request this? Ignore this email — nothing will change.",
+    `Never share your ${BRAND} code with anyone.`,
+    "Didn't request this? You can ignore this email.",
     "",
     `Requested: ${fmtTime(requestedAt)}`,
     `Account: ${email}`,
     ...(ref ? [`Reference: #${ref}`] : []),
     "",
-    `© ${year} ${BRAND} · ${host}`,
+    `${BRAND} — Premium Anime Streaming • Automated Message · ${host}`,
   ].join("\n");
   return { subject: `${code} is your ${BRAND} code`, html, text };
 }
@@ -571,19 +570,19 @@ function pageHtml({ state, purpose, redirect, action, title, message }) {
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>${esc(title)} · ${BRAND}</title>
 ${ok ? `<meta http-equiv="refresh" content="4;url=${esc(redirect)}">` : ""}
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#16306F 0%,#070C1E 58%,#04060E 100%);font-family:${FONT};color:#E8EEFF}
-.card{width:100%;max-width:400px;background:rgba(10,17,36,.94);border:1px solid #1A2850;border-radius:26px;padding:0 0 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
-.head{padding:26px 20px 20px;background:radial-gradient(120% 140% at 50% 0%,#1E3A8A 0%,#0B1A45 60%,#0A1124 100%);border-bottom:3px solid #3B82F6}
-.ring{display:inline-block;padding:3px;border-radius:18px;background:linear-gradient(135deg,#60A5FA,#2563EB 55%,#22D3EE)}.ring img{display:block;width:52px;height:52px;border-radius:15px}
-.brand{margin-top:10px;font-weight:900;letter-spacing:3px;font-size:16px}.brand span{color:#60A5FA}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#3B1650 0%,#12101E 58%,#0d0f17 100%);font-family:${FONT};color:#F4F1FF}
+.card{width:100%;max-width:400px;background:#161926;border:1px solid #2a2f45;border-radius:14px;padding:0 0 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
+.head{padding:26px 20px 20px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);border-bottom:0}
+.ring{display:inline-block;padding:3px;border-radius:18px;background:rgba(255,255,255,.55)}.ring img{display:block;width:52px;height:52px;border-radius:15px}
+.brand{margin-top:10px;font-weight:900;letter-spacing:3px;font-size:16px}.brand span{color:#FDE7F3}
 .body{padding:24px 24px 0}
 .ck{width:84px;height:84px;margin:0 auto 6px;display:block}.ck circle{fill:none;stroke:#34D399;stroke-width:3;stroke-dasharray:160;stroke-dashoffset:160;animation:d .7s ease forwards}.ck path{fill:none;stroke:#34D399;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:d .4s .6s ease forwards}
-@keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#60A5FA}
-.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #1A2850;border-top-color:#3B82F6;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+@keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#C4B5FD}
+.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #2a2f45;border-top-color:#ec4899;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .bad{width:72px;height:72px;margin:6px auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:#FCA5A5;background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.45)}
-h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#AEBBDF}
-.btn{display:block;width:100%;margin-top:22px;padding:15px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 12px 28px rgba(37,99,235,.38)}
-.btn.ghost{background:#12224B;border:1px solid #24386E;box-shadow:none}.small{font-size:12px;color:#8191C0}.foot{margin-top:20px;font-size:11px;color:#5A6A9C}
+h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#B9B5D0}
+.btn{display:block;width:100%;margin-top:22px;padding:15px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 12px 28px rgba(236,72,153,.35)}
+.btn.ghost{background:#1F2236;border:1px solid #2a2f45;box-shadow:none}.small{font-size:12px;color:#8A86A6}.foot{margin-top:20px;font-size:11px;color:#6B6888}
 </style></head><body><main class="card">
 <div class="head"><span class="ring"><img src="${LOGO}" alt=""></span><div class="brand">RS ANIME<span>03</span></div></div>
 <div class="body">${icon}<h1>${esc(title)}</h1><p>${esc(message)}</p>${btn}
@@ -594,12 +593,12 @@ h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14
 function copyPage(site) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Copy code · ${BRAND}</title>
-<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#16306F 0%,#070C1E 58%,#04060E 100%);font-family:${FONT};color:#E8EEFF}
-.card{width:100%;max-width:380px;background:rgba(10,17,36,.94);border:1px solid #1A2850;border-radius:26px;padding:26px 22px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
-.brand{font-weight:900;letter-spacing:3px;font-size:15px}.brand span{color:#60A5FA}.lbl{margin-top:18px;font-size:10px;font-weight:800;letter-spacing:3px;color:#8191C0}
-.code{margin-top:10px;font:800 40px ${MONO};letter-spacing:10px;padding-left:10px;user-select:all;-webkit-user-select:all}
-.btn{display:block;width:100%;margin-top:20px;padding:15px;border:0;border-radius:14px;background:linear-gradient(135deg,#1D4ED8,#3B82F6 60%,#0EA5E9);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none}
-.btn.ok{background:#059669}.ghost{background:#12224B;border:1px solid #24386E}p{font-size:13px;line-height:20px;color:#AEBBDF;margin:14px 0 0}</style></head>
+<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#3B1650 0%,#12101E 58%,#0d0f17 100%);font-family:${FONT};color:#F4F1FF}
+.card{width:100%;max-width:380px;background:#161926;border:1px solid #2a2f45;border-radius:14px;padding:26px 22px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.brand{font-weight:900;letter-spacing:3px;font-size:15px}.brand span{color:#FDE7F3}.lbl{margin-top:18px;font-size:10px;font-weight:800;letter-spacing:3px;color:#8A86A6}
+.code{margin-top:10px;font:800 40px ${MONO};letter-spacing:10px;padding:14px 0 14px 10px;color:#ec4899;text-shadow:0 0 12px rgba(236,72,153,.7);background:#0d0f17;border:2px solid #8b5cf6;border-radius:14px;user-select:all;-webkit-user-select:all}
+.btn{display:block;width:100%;margin-top:20px;padding:15px;border:0;border-radius:14px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none}
+.btn.ok{background:#059669}.ghost{background:#1F2236;border:1px solid #2a2f45}p{font-size:13px;line-height:20px;color:#B9B5D0;margin:14px 0 0}</style></head>
 <body><main class="card"><div class="brand">RS ANIME<span>03</span></div><div class="lbl">YOUR VERIFICATION CODE</div>
 <div class="code" id="c">------</div><button class="btn" id="b" type="button">Copy code</button>
 <p id="m">Copy it, go back to the app and tap “Paste code”.</p><a class="btn ghost" href="${esc(site)}">Open ${BRAND}</a></main>
@@ -638,17 +637,17 @@ const html = (body, status = 200) => new Response(body, {
     "Content-Security-Policy": "default-src 'none'; img-src https://i.ibb.co data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
   },
 });
-const MISSING = (env) => ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "GMAIL_SENDER_EMAIL"].filter((k) => !env[k]);
+const MISSING = (env) => ["SMTP_PASS"].filter((k) => !env[k]);
 function parseTicket(t) {
   const [rid, session] = String(t || "").split(".");
   return RID_RE.test(rid || "") && TOKEN_RE.test(session || "") ? { rid, session } : null;
 }
 const PUBLIC_ERRORS = {
-  gmail_quota: "Email sending limit reached for today. Please try again later.",
+  smtp_quota: "Email sending limit reached for now. Please try again later.",
   db_error: "Server storage is busy. Please try again.",
   db_busy: "Server is busy. Please try again.",
 };
-const publicGmailMessage = (code) => PUBLIC_ERRORS[code] || "Email could not be sent right now. Please try again in a few minutes.";
+const publicMailMessage = (code) => PUBLIC_ERRORS[code] || "Email could not be sent right now. Please try again in a few minutes.";
 
 // ---------------- core flows ----------------
 function noteHealth(env, ctx, patch) {
@@ -712,7 +711,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
     return limited("email_daily", "email_daily", `You've used all ${cfg.perEmailDaily} codes for this email today. Please try again tomorrow.`, { retryAfter: toMidnight, dailyLeft: 0, dailyMax: cfg.perEmailDaily });
   }
 
-  // 2) Whole-service daily cap (keeps the Gmail account far below Google's limits).
+  // 2) Whole-service daily cap (keeps the mailbox inside its sending limits).
   const sentToday = Math.max(Number(await dbGet(env, `${ROOT}/stats/${day}/sent`).catch(() => 0)) || 0, shadowGet(`g:${day}`, now));
   if (sentToday >= cfg.dailyLimit) return limited("daily_limit", "daily", "Today's email limit is reached. Please try again tomorrow.", { retryAfter: toMidnight });
 
@@ -766,7 +765,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
   const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now, rid });
   const t0 = Date.now();
   try {
-    await sendGmail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
+    await sendMail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
   } catch (err) {
     const ms = Date.now() - t0;
     const codeErr = String(err?.code || "send_failed");
@@ -776,7 +775,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
     ]);
     track(env, ctx, { failed: 1 }, ev("failed", { ms, err: codeErr, why: String(err?.message || "").slice(0, 200) }));
     noteHealth(env, ctx, { ok: false, lastErrAt: Date.now(), lastErr: codeErr, lastErrMsg: String(err?.message || "").slice(0, 300) });
-    return fail(cors, codeErr === "gmail_quota" ? 429 : 502, codeErr, publicGmailMessage(codeErr));
+    return fail(cors, codeErr === "smtp_quota" ? 429 : 502, codeErr, publicMailMessage(codeErr));
   }
   const ms = Date.now() - t0;
   await ticketTxn(env, ctx, rid, (cur) => (cur && cur.st === "sending" ? { next: { ...cur, st: "pending" }, result: 1 } : { result: 0 }));
@@ -786,7 +785,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
       ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 })).catch(() => 0);
   }
   shadowPut(`g:${day}`, sentToday + 1, dayExp);
-  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, gmail_ms: ms, gmail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
+  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, mail_ms: ms, mail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
   noteHealth(env, ctx, { ok: true, lastOkAt: Date.now(), lastMs: ms });
   const dailyLeft = Math.max(0, cfg.perEmailDaily - gate.n);
   return json(cors, {
@@ -1005,10 +1004,11 @@ async function health(env, deep) {
   ]);
   const sent = Math.max(Number(sentRaw) || 0, shadowGet(`g:${day}`, now));
   const out = {
-    ok: true, service: VERSION, provider: "gmail-api", ready: missing.length === 0, missing,
+    ok: true, service: VERSION, provider: "smtp", ready: missing.length === 0, missing,
     optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET, ADMIN_PIN: !!env.ADMIN_PIN },
-    sender: env.GMAIL_SENDER_EMAIL ? maskEmail(normEmail(env.GMAIL_SENDER_EMAIL)) : null,
-    senderValid: env.GMAIL_SENDER_EMAIL ? SENDER_RE.test(String(env.GMAIL_SENDER_EMAIL).trim()) : false,
+    sender: smtpConf(env).from,
+    senderValid: SENDER_RE.test(smtpConf(env).from),
+    smtpHost: `${smtpConf(env).host}:${smtpConf(env).port}`,
     settings: cfg,
     today: { day, sent, limit: cfg.dailyLimit, left: Math.max(0, cfg.dailyLimit - sent), resetsInSec: Math.ceil(msToDayEnd(now) / 1000) },
     last: last && typeof last === "object" ? {
@@ -1019,21 +1019,16 @@ async function health(env, deep) {
     now,
   };
   if (deep && out.ready) {
-    if (deepMemo.v && now - deepMemo.at < 60_000) out.gmail = deepMemo.v;
+    if (deepMemo.v && now - deepMemo.at < 60_000) out.smtp = deepMemo.v;
     else {
       const t0 = Date.now();
       try {
-        const tk = await gmailAccessToken(env, true);
-        const scoped = !tk.scope || /gmail\.send|mail\.google\.com|gmail\.modify|gmail\.compose/.test(tk.scope);
-        out.gmail = {
-          ok: scoped, code: scoped ? "ok" : "gmail_scope_missing", ms: Date.now() - t0,
-          message: scoped ? "Gmail authorised — refresh token works" : "Token works but is missing the gmail.send scope",
-          scope: String(tk.scope || "").slice(0, 200), accessExpiresAt: tk.exp || 0, refreshExpiresAt: tk.refreshExpiresAt || 0, checkedAt: Date.now(),
-        };
+        await smtpSession(env, null);
+        out.smtp = { ok: true, code: "ok", ms: Date.now() - t0, message: "Mail server login works", checkedAt: Date.now() };
       } catch (err) {
-        out.gmail = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200), checkedAt: Date.now() };
+        out.smtp = { ok: false, code: err?.code || "error", ms: Date.now() - t0, message: String(err?.message || err).slice(0, 200), checkedAt: Date.now() };
       }
-      deepMemo = { at: Date.now(), v: out.gmail };
+      deepMemo = { at: Date.now(), v: out.smtp };
     }
   }
   return out;
@@ -1071,7 +1066,7 @@ async function actAdminEvents(env, cors, body, ip) {
 
 export default {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { buildMime, emailTemplate, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
+  _internals: { buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);

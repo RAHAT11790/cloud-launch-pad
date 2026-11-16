@@ -1,19 +1,19 @@
-/** Counters written by the Gmail email Worker to Firebase `emailAuth/stats/{YYYY-MM-DD}` (Bangladesh day). */
+/** Counters written by the email Worker to Firebase `emailAuth/stats/{YYYY-MM-DD}` (Bangladesh day). */
 export type EmailDayStats = {
   sent?: number; sent_register?: number; sent_reset?: number; failed?: number; resend?: number;
   verified_otp?: number; verified_link?: number; claimed?: number;
   wrong?: number; locked?: number; expired?: number; limited?: number; tampered?: number;
-  gmail_ms?: number; gmail_n?: number;
+  gmail_ms?: number; gmail_n?: number; mail_ms?: number; mail_n?: number;
 };
 
 export type EmailSummary = {
   sent: number; failed: number; verified: number; viaOtp: number; viaLink: number;
   register: number; reset: number; wrong: number; locked: number; expired: number; limited: number; resend: number; tampered: number;
-  /** % of send attempts Gmail accepted. */
+  /** % of send attempts the mail server accepted. */
   deliveryRate: number | null;
   /** % of sent emails that were verified (code or button). */
   verifyRate: number | null;
-  /** Average Gmail API time per email, ms. */
+  /** Average mail-server time per email, ms. */
   avgMs: number | null;
 };
 
@@ -34,7 +34,7 @@ export function summarizeEmailStats(days: EmailDayStats[]): EmailSummary {
     wrong: t.wrong || 0, locked: t.locked || 0, expired: t.expired || 0, limited: t.limited || 0, resend: t.resend || 0, tampered: t.tampered || 0,
     deliveryRate: pct(sent, sent + failed),
     verifyRate: sent > 0 ? Math.min(100, pct(verified, sent) as number) : null,
-    avgMs: t.gmail_n ? Math.round((t.gmail_ms || 0) / t.gmail_n) : null,
+    avgMs: (t.mail_n || 0) + (t.gmail_n || 0) ? Math.round(((t.mail_ms || 0) + (t.gmail_ms || 0)) / ((t.mail_n || 0) + (t.gmail_n || 0))) : null,
   };
 }
 
@@ -51,7 +51,7 @@ export type EmailServiceSettings = {
   perEmailDaily: number; perIpDaily: number; hourlyPerIp: number; perMinute: number; dailyLimit: number;
 };
 /** Same defaults as the Worker (`DEFAULTS` in cloudflare-workers/email-service.js). */
-export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 300, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
+export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 60, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
 /** Same limits the Worker clamps to. */
 export const EMAIL_SETTING_BOUNDS: Record<keyof EmailServiceSettings, [number, number]> = {
   otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10],

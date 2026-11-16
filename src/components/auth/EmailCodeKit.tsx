@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, ClipboardPaste, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
+import { Check, ClipboardPaste, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
 import { formatWait } from "@/lib/emailService";
 
 /**
@@ -42,13 +42,13 @@ export function OtpBoxes({
           const active = focused && i === Math.min(digits.length, 5) && !success;
           const tone = success ? "border-emerald-400/70 bg-emerald-400/10 text-foreground"
             : error ? "border-destructive/70 bg-destructive/10 text-foreground"
-            : active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/25"
-            : filled ? "border-primary/60 bg-primary/10 text-foreground"
+            : active ? "otp-glow-active text-foreground"
+            : filled ? "otp-glow-filled otp-pop"
             : "border-border bg-secondary text-muted-foreground";
           return (
             <div key={i} className={`otp-box relative flex h-[52px] items-center justify-center rounded-xl border text-[22px] font-black tabular-nums transition-colors ${tone}`}>
               {digits[i] || ""}
-              {active && !filled && <span className="otp-caret absolute h-6 w-[2px] rounded bg-primary" />}
+              {active && !filled && <span className="otp-caret otp-glow-caret absolute h-6 w-[2px] rounded" />}
             </div>
           );
         })}
@@ -103,25 +103,17 @@ export function ResendButton({ waitSec, busy, onClick, dailyLeft }: { waitSec: n
   );
 }
 
-/** Where the email went + a clear red "check Spam" warning (many codes land there). */
+/** Where the email went. */
 export function SentToCard({ email }: { email: string; note?: string }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.07] px-3.5 py-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl gradient-primary">
-          <Check className="h-[18px] w-[18px] text-primary-foreground" />
-        </span>
-        <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground">
-          Code sent to
-          <b className="block truncate text-[13px] text-foreground">{email}</b>
-        </span>
-      </div>
-      <div role="note" className="flex items-start gap-2.5 rounded-2xl border border-destructive/50 bg-destructive/10 px3 px-3 py-2.5">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-        <p className="text-[11.5px] leading-snug text-foreground">
-          <b className="text-destructive">Not in your Inbox?</b> Open your <b>Spam</b> (or Promotions) folder — the code is often there. Tap <b>"Not spam"</b> so the next one arrives in your Inbox.
-        </p>
-      </div>
+    <div className="otp-sent-card flex items-center gap-3 rounded-2xl border px-3.5 py-3">
+      <span className="otp-grad flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+        <Check className="h-[18px] w-[18px] text-primary-foreground" />
+      </span>
+      <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground">
+        Code sent to your inbox
+        <b className="block truncate text-[13px] text-foreground">{email}</b>
+      </span>
     </div>
   );
 }

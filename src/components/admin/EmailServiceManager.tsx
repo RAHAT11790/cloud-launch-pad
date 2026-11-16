@@ -15,7 +15,8 @@ type Props = { glassCard: string; inputClass: string; btnPrimary: string; btnSec
 type Health = {
   ok: boolean; service?: string; provider?: string; ready?: boolean; missing?: string[]; sender?: string | null; senderValid?: boolean;
   optional?: Record<string, boolean>;
-  gmail?: { ok: boolean; code: string; ms: number; message: string; scope?: string; accessExpiresAt?: number; refreshExpiresAt?: number; checkedAt?: number };
+  smtpHost?: string;
+  smtp?: { ok: boolean; code: string; ms: number; message: string; checkedAt?: number };
   today?: { day: string; sent: number; limit: number; left: number; resetsInSec: number };
   last?: { ok: boolean; lastOkAt: number; lastErrAt: number; lastErr: string; lastErrMsg: string; lastMs: number } | null;
   security?: Record<string, boolean>;
@@ -23,7 +24,7 @@ type Health = {
 };
 type EventRow = { id: string; t: number; k: string; p?: string; m?: string; email?: string; ms?: number; err?: string; why?: string; r?: string };
 
-const REQUIRED = ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "GMAIL_SENDER_EMAIL"];
+const REQUIRED = ["SMTP_PASS"];
 const EVENT_LOOK: Record<string, { label: string; tone: string }> = {
   sent: { label: "Email sent", tone: "text-sky-300" },
   failed: { label: "Send failed", tone: "text-red-400" },
@@ -155,13 +156,12 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
   const sentToday = Math.max(todaySum.sent, health?.today?.sent || 0);
   const quotaPct = Math.min(100, Math.round((sentToday / Math.max(1, settingsDraft.dailyLimit)) * 100));
   const shownEvents = fullEvents || events;
-  const rtx = health?.gmail?.refreshExpiresAt || 0;
 
   const missing = health?.missing || [];
   const ready = !!health?.ready;
-  const gmailOk = !!health?.gmail?.ok;
-  const statusTone = unreachable ? "red" : !health ? "zinc" : !ready ? "amber" : health.gmail && !gmailOk ? "red" : "emerald";
-  const statusText = unreachable ? "Server unreachable" : !health ? "Checking…" : !ready ? "Waiting for Gmail secrets" : health.gmail && !gmailOk ? "Gmail authorisation failed" : "Live · Gmail API connected";
+  const smtpOk = !!health?.smtp?.ok;
+  const statusTone = unreachable ? "red" : !health ? "zinc" : !ready ? "amber" : health.smtp && !smtpOk ? "red" : "emerald";
+  const statusText = unreachable ? "Server unreachable" : !health ? "Checking…" : !ready ? "Waiting for the mail password" : health.smtp && !smtpOk ? "Mail server login failed" : "Live · Mail server connected";
   const toneCls: Record<string, string> = {
     red: "bg-red-500/10 text-red-300 border-red-500/30", amber: "bg-amber-500/10 text-amber-300 border-amber-500/30",
     emerald: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30", zinc: "bg-white/5 text-zinc-400 border-white/10",
@@ -177,11 +177,11 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold text-white flex items-center gap-2"><Mail size={18} className="text-sky-400" /> Email Service <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">GMAIL API</span></h2>
+      <h2 className="text-lg font-bold text-white flex items-center gap-2"><Mail size={18} className="text-pink-400" /> Email Service <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-500/15 text-pink-300 border border-pink-500/30">SMTP · ALWAYSDATA</span></h2>
 
       {/* Status */}
       <div className={`${glassCard} p-4 space-y-3 relative overflow-hidden`}>
-        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-blue-700 via-blue-500 to-cyan-400" />
+        <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-500" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500">Server status</p>
@@ -195,35 +195,33 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         </div>
         <div className="grid grid-cols-2 gap-2 text-[10px]">
           <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2 min-w-0">
-            <p className="text-zinc-500">Sender Gmail</p>
+            <p className="text-zinc-500">Sender address</p>
             <p className="text-zinc-200 font-mono truncate">{health?.sender || "—"}</p>
           </div>
           <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2 min-w-0">
             <p className="text-zinc-500">Response time</p>
-            <p className="text-zinc-200 font-mono">{latency != null ? `${latency} ms` : "—"}{health?.gmail ? ` · Google ${health.gmail.ms} ms` : ""}</p>
+            <p className="text-zinc-200 font-mono">{latency != null ? `${latency} ms` : "—"}{health?.smtp ? ` · Mail ${health.smtp.ms} ms` : ""}</p>
           </div>
         </div>
         <div className="text-[10px] font-mono text-zinc-500 truncate flex items-center gap-1.5"><LinkIcon size={10} className="shrink-0" />{url || "Not set in EGD Router → email-service"}</div>
-        {health?.gmail && !gmailOk && (
+        {health?.smtp && !smtpOk && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[10px] text-red-200 leading-relaxed">
-            <b>{health.gmail.code}</b> — {health.gmail.message}
-            {health.gmail.code === "gmail_token_revoked" && <p className="mt-1 text-red-300/80">The refresh token was revoked or expired. If the Google OAuth app is still in "Testing" mode, Google expires refresh tokens after 7 days — publish the app (Google Cloud → OAuth consent screen → Publish) and create a new refresh token once.</p>}
+            <b>{health.smtp.code}</b> — {health.smtp.message}
+            {health.smtp.code === "smtp_auth_failed" && <p className="mt-1 text-red-300/80">The mailbox password was refused. Put the current Alwaysdata mailbox password into the <b>SMTP_PASS</b> secret of the email-service Worker.</p>}
           </div>
         )}
       </div>
 
       {/* API + token health */}
       <div className={`${glassCard} p-4 space-y-2.5`}>
-        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><Fingerprint size={14} className="text-sky-400" /> API &amp; token health</h3>
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><Fingerprint size={14} className="text-pink-400" /> Mail server health</h3>
         {(() => {
           const rows: [string, string, "ok" | "bad" | "warn" | "off"][] = [
-            ["Gmail API", !health?.gmail ? "Not checked yet" : gmailOk ? `Working · ${health.gmail.ms} ms` : `${health.gmail.code}`, !health?.gmail ? "off" : gmailOk ? "ok" : "bad"],
-            ["Refresh token", !health?.gmail ? "—" : !gmailOk ? (health.gmail.code === "gmail_token_revoked" ? "Expired or revoked" : "Not working") : rtx ? `Expires in ${until(rtx)} (Google app in Testing mode)` : "Valid · no expiry reported", !health?.gmail ? "off" : !gmailOk ? "bad" : rtx ? "warn" : "ok"],
-            ["Access token", health?.gmail?.accessExpiresAt ? `Fresh · renews in ${until(health.gmail.accessExpiresAt)}` : "—", health?.gmail?.accessExpiresAt ? "ok" : "off"],
-            ["Send permission", health?.gmail ? (health.gmail.scope ? (/gmail\.send|mail\.google\.com/.test(health.gmail.scope) ? "gmail.send granted" : "gmail.send missing") : gmailOk ? "granted" : "—") : "—", health?.gmail ? (gmailOk ? "ok" : "bad") : "off"],
+            ["Mail server", health?.smtpHost || "—", health?.smtpHost ? "ok" : "off"],
+            ["Server login", !health?.smtp ? "Not checked yet" : smtpOk ? `Working · ${health.smtp.ms} ms` : `${health.smtp.code}`, !health?.smtp ? "off" : smtpOk ? "ok" : "bad"],
             ["Last email sent", health?.last?.lastOkAt ? `${ago(health.last.lastOkAt)}${health.last.lastMs ? ` · ${health.last.lastMs} ms` : ""}` : "No email yet", health?.last?.lastOkAt ? "ok" : "off"],
             ["Last error", health?.last?.lastErrAt ? `${health.last.lastErr} · ${ago(health.last.lastErrAt)}` : "None", health?.last?.lastErrAt ? (health.last.ok ? "warn" : "bad") : "ok"],
-            ["Server version", health?.service || "—", health?.service ? (health.service.endsWith("v4") ? "ok" : "warn") : "off"],
+            ["Server version", health?.service || "—", health?.service ? (health.service.endsWith("v5") ? "ok" : "warn") : "off"],
           ];
           const dot = { ok: "bg-emerald-400", bad: "bg-red-500", warn: "bg-amber-400", off: "bg-zinc-600" };
           return (
@@ -239,15 +237,15 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
           );
         })()}
         {health?.last?.lastErrMsg && !health.last.ok && <p className="text-[9.5px] text-red-300/80 break-words">{health.last.lastErrMsg}</p>}
-        {health?.service && !health.service.endsWith("v4") && <p className="text-[9.5px] text-amber-300/90">The live Worker is older than this panel. Redeploy <b>email-service</b> from Cloudflare Manager to get the new limits and protection.</p>}
-        {health?.gmail?.checkedAt && <p className="text-[9px] text-zinc-600">Checked {ago(health.gmail.checkedAt)} (cached 1 min on the server)</p>}
+        {health?.service && !health.service.endsWith("v5") && <p className="text-[9.5px] text-amber-300/90">The live Worker is older than this panel. Redeploy <b>email-service</b> from Cloudflare Manager to get the new limits and protection.</p>}
+        {health?.smtp?.checkedAt && <p className="text-[9px] text-zinc-600">Checked {ago(health.smtp.checkedAt)} (cached 1 min on the server)</p>}
       </div>
 
       {/* Limits in plain words */}
       <div className={`${glassCard} p-4 space-y-2`}>
-        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><ShieldCheck size={14} className="text-emerald-400" /> Anti-spam protection</h3>
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><ShieldCheck size={14} className="text-emerald-400" /> Sending limits</h3>
         <ul className="text-[10.5px] text-zinc-300 leading-relaxed space-y-1">
-          <li>• One live code per email — a new one only after <b>{Math.round(settingsDraft.cooldownSeconds / 60 * 10) / 10} min</b></li>
+          <li>• One live code per email — a new one only after <b>{settingsDraft.cooldownSeconds < 120 ? `${settingsDraft.cooldownSeconds} s` : `${Math.round(settingsDraft.cooldownSeconds / 60 * 10) / 10} min`}</b></li>
           <li>• <b>{settingsDraft.perEmailDaily}</b> codes per email per day (resets at midnight, Bangladesh time)</li>
           <li>• <b>{settingsDraft.hourlyPerIp}</b>/hour and <b>{settingsDraft.perIpDaily}</b>/day from one network (IP)</li>
           <li>• Whole service: <b>{settingsDraft.perMinute}</b>/minute, <b>{settingsDraft.dailyLimit}</b>/day</li>
@@ -261,7 +259,7 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><ShieldCheck size={14} className="text-emerald-400" /> Cloudflare secrets</h3>
         <div className="grid grid-cols-1 gap-1.5">
           {REQUIRED.map((k) => {
-            const ok = !!health && !missing.includes(k) && (k !== "GMAIL_SENDER_EMAIL" || health.senderValid !== false);
+            const ok = !!health && !missing.includes(k) && health.senderValid !== false;
             return (
               <div key={k} className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2">
                 <span className="text-[11px] font-mono text-zinc-200">{k}</span>
@@ -284,8 +282,8 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         {showGuide && (
           <ol className="text-[10px] text-zinc-400 leading-relaxed list-decimal pl-4 space-y-1">
             <li>Admin → <b>Cloudflare Manager</b> → select <b>email-service</b> → Env values.</li>
-            <li>Add each name above with its value and press Save (or Cloudflare dashboard → Workers → email-service → Settings → Variables and Secrets → Add → type <b>Secret</b>).</li>
-            <li>Come back here and press <b>Check now</b> — it should say "Live · Gmail API connected".</li>
+            <li>Add <b>SMTP_PASS</b> (the Alwaysdata mailbox password) and press Save. Optional: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_FROM to use another mailbox (or Cloudflare dashboard → Workers → email-service → Settings → Variables and Secrets → Add → type <b>Secret</b>).</li>
+            <li>Come back here and press <b>Check now</b> — it should say "Live · Mail server connected".</li>
           </ol>
         )}
       </div>
@@ -306,7 +304,7 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
           <div className="h-2 rounded-full bg-white/5 overflow-hidden">
             <div className={`h-full rounded-full ${quotaPct > 85 ? "bg-red-500" : quotaPct > 60 ? "bg-amber-400" : "bg-gradient-to-r from-blue-600 to-cyan-400"}`} style={{ width: `${quotaPct}%` }} />
           </div>
-          <p className="text-[9px] text-zinc-600 mt-1">A personal Gmail account can send about 500 emails a day — keep this cap below it so Google never flags the account.</p>
+          <p className="text-[9px] text-zinc-600 mt-1">Keep this cap inside the mailbox provider’s daily sending limit.</p>
         </div>
       </div>
 
@@ -339,7 +337,7 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Delivery" value={pctText(weekSum.deliveryRate)} sub={`${weekSum.sent} sent`} tone="text-sky-300" />
           <Stat label="Verify rate" value={pctText(weekSum.verifyRate)} sub={`${weekSum.verified} verified`} tone="text-emerald-400" />
-          <Stat label="Gmail speed" value={weekSum.avgMs != null ? `${weekSum.avgMs}ms` : "—"} sub="avg per email" />
+          <Stat label="Send speed" value={weekSum.avgMs != null ? `${weekSum.avgMs}ms` : "—"} sub="avg per email" />
         </div>
         <div className="grid grid-cols-4 gap-2">
           <Stat label="Resends" value={weekSum.resend} />

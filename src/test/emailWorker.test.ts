@@ -22,9 +22,46 @@ const resolveSv = (cur: any, v: any): any => {
   return v;
 };
 
-let gmailRaw: string[] = [];
-let tokenCalls = 0;
-let gmailFail: null | { status: number; body: any } = null;
+let mails: string[] = [];
+let logins = 0;
+let smtpFail: null | { at: "auth" | "rcpt"; code: number; text: string } = null;
+const te = new TextEncoder();
+const tdc = new TextDecoder();
+/** In-memory SMTP server speaking just enough ESMTP for the worker. */
+function fakeSmtp() {
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+  let closed = false;
+  const say = (s: string) => { if (!closed) ctrl.enqueue(te.encode(s + "\r\n")); };
+  const close = () => { if (!closed) { closed = true; try { ctrl.close(); } catch { /* closed */ } } };
+  const readable = new ReadableStream<Uint8Array>({ start(c) { ctrl = c; say("220 fake.smtp ESMTP"); } });
+  let buf = "", inData = false, data: string[] = [];
+  const writable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      buf += tdc.decode(chunk);
+      let i;
+      while ((i = buf.indexOf("\r\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (inData) {
+          if (line === ".") { inData = false; mails.push(data.join("\r\n")); data = []; say("250 2.0.0 queued"); }
+          else data.push(line.startsWith("..") ? line.slice(1) : line);
+          continue;
+        }
+        const cmd = line.slice(0, 4).toUpperCase();
+        if (cmd === "EHLO") say("250-fake.smtp\r\n250 AUTH PLAIN LOGIN");
+        else if (cmd === "AUTH") {
+          logins++;
+          const pass = Buffer.from(line.split(" ")[2], "base64").toString("utf8").split("\u0000")[2];
+          say(smtpFail?.at === "auth" || pass !== ENV.SMTP_PASS ? "535 5.7.8 Authentication failed" : "235 2.7.0 ok");
+        } else if (cmd === "MAIL") say("250 ok");
+        else if (cmd === "RCPT") say(smtpFail?.at === "rcpt" ? `${smtpFail.code} ${smtpFail.text}` : "250 ok");
+        else if (cmd === "DATA") { inData = true; say("354 go ahead"); }
+        else if (cmd === "QUIT") { say("221 bye"); close(); }
+        else say("502 unknown");
+      }
+    },
+  });
+  return { readable, writable, close };
+}
 let now = Date.UTC(2026, 10, 8, 14, 0, 0);
 
 const DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -32,15 +69,6 @@ async function fakeFetch(input: any, init: any = {}): Promise<Response> {
   const url = new URL(typeof input === "string" ? input : input.url);
   const method = (init.method || "GET").toUpperCase();
   const headers = new Headers(init.headers || {});
-  if (url.href.startsWith("https://oauth2.googleapis.com/token")) {
-    tokenCalls++;
-    return new Response(JSON.stringify({ access_token: "ya29.test", expires_in: 3599, scope: "https://www.googleapis.com/auth/gmail.send", token_type: "Bearer" }), { status: 200 });
-  }
-  if (url.href.startsWith("https://gmail.googleapis.com/gmail/v1/users/me/messages/send")) {
-    if (gmailFail) return new Response(JSON.stringify(gmailFail.body), { status: gmailFail.status });
-    gmailRaw.push(JSON.parse(init.body).raw);
-    return new Response(JSON.stringify({ id: `m${gmailRaw.length}`, threadId: "t" }), { status: 200 });
-  }
   if (url.origin === DB) {
     const p = decodeURIComponent(url.pathname.replace(/\.json$/, ""));
     if (method === "GET") {
@@ -70,7 +98,7 @@ async function fakeFetch(input: any, init: any = {}): Promise<Response> {
   throw new Error(`unexpected fetch ${method} ${url.href}`);
 }
 
-const ENV = { GMAIL_CLIENT_ID: "cid.apps.googleusercontent.com", GMAIL_CLIENT_SECRET: "csecret", GMAIL_REFRESH_TOKEN: "1//refresh", GMAIL_SENDER_EMAIL: "rsanime.mail@gmail.com", EMAIL_SECRET: "unit-test-secret" };
+const ENV = { SMTP_PASS: "smtp-test-pass", EMAIL_SECRET: "unit-test-secret" };
 const SITE = "https://rsanime03.lovable.app";
 const W = "https://email-service.test.workers.dev";
 const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); } };
@@ -93,7 +121,7 @@ const link = async (url: string, method: "GET" | "POST") => {
 };
 
 function decodeMail(raw: string) {
-  const mime = Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  const mime = raw;
   const parts = mime.split(/--rs_[a-z0-9]+/);
   const body = (i: number) => Buffer.from(parts[i].split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64").toString("utf8");
   const text = body(1), html = body(2);
@@ -102,35 +130,37 @@ function decodeMail(raw: string) {
 
 beforeEach(() => {
   tree = { settings: { loginAccess: { allowedDomains: ["gmail.com"] } }, appUsers: { "old,user99@gmail,com": { name: "Old User", password: "x" } } };
-  gmailRaw = []; tokenCalls = 0; gmailFail = null; pending = [];
+  mails = []; logins = 0; smtpFail = null; pending = [];
+  (globalThis as any).__rsOpenTls = async () => fakeSmtp();
   now = Date.UTC(2026, 10, 8, 14, 0, 0) + Math.floor(Math.random() * 1e6) * 1000;
   vi.spyOn(Date, "now").mockImplementation(() => now);
   vi.stubGlobal("fetch", fakeFetch);
   (worker as any)._internals.resetMemory();
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete (globalThis as any).__rsOpenTls; });
 
-describe("Gmail API email worker", () => {
-  it("sends one branded MIME email (code + Verify button) through Gmail with a refreshed token", async () => {
+describe("SMTP email worker", () => {
+  it("sends one branded MIME email (code + Verify button) over SMTP after one login", async () => {
     const r = await api("send", { email: "new.user55@gmail.com", purpose: "register", name: "Rahat" });
     expect(r.status).toBe(200);
     expect(r.data.ticket).toMatch(/^[a-z0-9]+\.[A-Za-z0-9_-]+$/);
-    expect(gmailRaw).toHaveLength(1);
-    expect(gmailRaw[0]).not.toMatch(/[+/=]/); // base64url
-    const m = decodeMail(gmailRaw[0]);
-    expect(m.mime).toContain("From: RS ANIME03 <rsanime.mail@gmail.com>");
+    expect(mails).toHaveLength(1);
+    const m = decodeMail(mails[0]);
+    expect(m.mime).toContain("From: \"RS ANIME03\" <rsanime03@alwaysdata.net>");
     expect(m.mime).toContain("To: <new.user55@gmail.com>");
     expect(m.mime).toContain("multipart/alternative");
     expect(m.html).toContain("https://i.ibb.co/6RcjXRjL/image.jpg");
     expect(m.html).toContain(m.code);
     expect(m.html).toContain("Verify Email");
     expect(m.link.startsWith(`${W}/v/`)).toBe(true);
-    expect(tokenCalls).toBe(1);
+    expect(logins).toBe(1);
+    expect(m.html).toContain("Account Security &amp; Verification");
+    expect(m.html).toContain("This code will expire in 5 minutes.");
   });
 
   it("stores only hashes — no plain email, code or link token in the database", async () => {
     await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     const dump = JSON.stringify(tree.emailAuth.tickets);
     expect(dump).not.toContain("new.user55@gmail.com");
     expect(dump).not.toContain(m.code);
@@ -139,7 +169,7 @@ describe("Gmail API email worker", () => {
 
   it("a correct code works once and then the email button no longer verifies", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     const ok = await api("verify", { ticket: data.ticket, code: m.code });
     expect(ok.data).toMatchObject({ ok: true, email: "new.user55@gmail.com", purpose: "register", via: "otp" });
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("already_used");
@@ -150,7 +180,7 @@ describe("Gmail API email worker", () => {
 
   it("opening the link (GET) does not verify — only the page's POST does — and then the code is dead", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     const get = await link(m.link, "GET");
     expect(get.html).toContain("Verifying your email");
     expect((await api("status", { ticket: data.ticket })).data.status).toBe("pending");
@@ -167,7 +197,7 @@ describe("Gmail API email worker", () => {
 
   it("locks after 5 wrong codes, even for the right code", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     const wrong = m.code === "111111" ? "222222" : "111111";
     for (let i = 4; i >= 1; i--) {
       const r = await api("verify", { ticket: data.ticket, code: wrong });
@@ -181,43 +211,42 @@ describe("Gmail API email worker", () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     expect(data.expiresAt - now).toBe(5 * 60_000);
     expect(data.linkExpiresAt - now).toBe(10 * 60_000);
-    const m = decodeMail(gmailRaw[0]);
-    expect(m.text).toContain("valid for 5 minutes");
+    const m = decodeMail(mails[0]);
+    expect(m.text).toContain("This code will expire in 5 minutes.");
     now += 5 * 60_000 + 1000;
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("expired");
     now += 5 * 60_000;
     expect((await link(m.link, "POST")).html).toContain("Link expired");
   });
 
-  it("enforces the 5 minute resend wait, and a resend kills the old code", async () => {
+  it("enforces the 60 second resend wait, and a resend kills the old code", async () => {
     const first = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const oldCode = decodeMail(gmailRaw[0]).code;
+    const oldCode = decodeMail(mails[0]).code;
     const tooSoon = await api("resend", { ticket: first.data.ticket });
     expect(tooSoon.status).toBe(429);
     expect(tooSoon.data.error).toBe("cooldown");
-    expect(tooSoon.data.retryAfter).toBe(300);
-    now += 299_000;
+    expect(tooSoon.data.retryAfter).toBe(60);
+    now += 59_000;
     expect((await api("resend", { ticket: first.data.ticket })).data.error).toBe("cooldown");
     now += 2_000;
     const again = await api("resend", { ticket: first.data.ticket });
     expect(again.status).toBe(200);
-    expect(gmailRaw).toHaveLength(2);
+    expect(mails).toHaveLength(2);
     expect((await api("verify", { ticket: first.data.ticket, code: oldCode })).data.error).toBe("replaced");
-    const newCode = decodeMail(gmailRaw[1]).code;
+    const newCode = decodeMail(mails[1]).code;
     expect((await api("verify", { ticket: again.data.ticket, code: newCode })).data.ok).toBe(true);
-    expect(tokenCalls).toBeLessThanOrEqual(1); // access token reused, refreshed only when needed
   });
 
   it("checks the account server-side: sign-up needs a new email, reset needs an existing one", async () => {
     expect((await api("send", { email: "old.user99@gmail.com", purpose: "register" })).data.error).toBe("already_registered");
     expect((await api("send", { email: "nobody123@gmail.com", purpose: "reset" })).data.error).toBe("no_account");
     expect((await api("send", { email: "someone@yahoo.com", purpose: "register" })).data.error).toBe("domain_not_allowed");
-    expect(gmailRaw).toHaveLength(0);
+    expect(mails).toHaveLength(0);
   });
 
   it("a reset grant from the link page finishes once on another device", async () => {
     await api("send", { email: "old.user99@gmail.com", purpose: "reset" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     expect(m.html).toContain("Reset Password");
     expect(m.html).toContain("Old User");
     const page = await link(m.link, "POST");
@@ -228,22 +257,22 @@ describe("Gmail API email worker", () => {
     expect((await api("claim", { rid, grant })).data.error).toBe("already_used");
   });
 
-  it("rejects other websites and reports missing Gmail secrets", async () => {
+  it("rejects other websites and reports a missing SMTP password", async () => {
     expect((await api("send", { email: "new.user55@gmail.com", purpose: "register" }, { origin: "https://evil.example" })).status).toBe(403);
-    const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" }, { env: { ...ENV, GMAIL_REFRESH_TOKEN: "" } });
+    const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" }, { env: { ...ENV, SMTP_PASS: "" } });
     expect(r.status).toBe(503);
-    expect(r.data.missing).toEqual(["GMAIL_REFRESH_TOKEN"]);
+    expect(r.data.missing).toEqual(["SMTP_PASS"]);
     const h = await worker.fetch(new Request(`${W}/`), {}, ctx);
-    expect((await h.json()).missing).toEqual(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "GMAIL_SENDER_EMAIL"]);
+    expect((await h.json()).missing).toEqual(["SMTP_PASS"]);
   });
 
-  it("a Gmail failure is reported without secrets and does not start the resend wait", async () => {
-    gmailFail = { status: 403, body: { error: { code: 403, message: "Request had insufficient authentication scopes.", errors: [{ reason: "insufficientPermissions" }] } } };
+  it("a mail-server failure is reported without secrets and does not start the resend wait", async () => {
+    smtpFail = { at: "auth", code: 535, text: "Authentication failed" };
     const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     expect(r.status).toBe(502);
-    expect(r.data.error).toBe("gmail_scope_missing");
-    expect(JSON.stringify(r.data)).not.toContain("csecret");
-    gmailFail = null;
+    expect(r.data.error).toBe("smtp_auth_failed");
+    expect(JSON.stringify(r.data)).not.toContain("smtp-test-pass");
+    smtpFail = null;
     expect((await api("send", { email: "new.user55@gmail.com", purpose: "register" })).status).toBe(200);
   });
 
@@ -262,7 +291,7 @@ describe("Gmail API email worker", () => {
     const blocked = await api("resend", { ticket: t });
     expect(blocked.status).toBe(429);
     expect(blocked.data).toMatchObject({ error: "email_daily", dailyLeft: 0 });
-    expect(gmailRaw).toHaveLength(3);
+    expect(mails).toHaveLength(3);
   });
 
   it("one network (IP) is limited to 10 emails per hour, even to different addresses", async () => {
@@ -279,7 +308,7 @@ describe("Gmail API email worker", () => {
 
   it("an edited ticket in the database is rejected (sealed), and a rolled-back one stays locked", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(gmailRaw[0]);
+    const m = decodeMail(mails[0]);
     const rid = data.ticket.split(".")[0];
     const snapshot = JSON.parse(JSON.stringify(tree.emailAuth.tickets[rid]));
     const wrong = m.code === "111111" ? "222222" : "111111";
@@ -302,7 +331,7 @@ describe("Gmail API email worker", () => {
 
   it("a used code frees the email for its next request right away", async () => {
     const { data } = await api("send", { email: "old.user99@gmail.com", purpose: "reset" });
-    expect((await api("verify", { ticket: data.ticket, code: decodeMail(gmailRaw[0]).code })).data.ok).toBe(true);
+    expect((await api("verify", { ticket: data.ticket, code: decodeMail(mails[0]).code })).data.ok).toBe(true);
     expect((await api("send", { email: "old.user99@gmail.com", purpose: "reset" })).status).toBe(200);
   });
 
@@ -317,12 +346,12 @@ describe("Gmail API email worker", () => {
     expect(JSON.stringify(tree.emailAuth.events)).not.toContain("new.user55@gmail.com");
   });
 
-  it("health shows today's usage and the last Gmail result", async () => {
+  it("health shows today's usage and the last send result", async () => {
     await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     const h = await (await worker.fetch(new Request(`${W}/`), ENV, ctx)).json();
     expect(h.today).toMatchObject({ sent: 1, limit: 300, left: 299 });
     expect(h.last.ok).toBe(true);
-    expect(h.settings).toMatchObject({ otpMinutes: 5, cooldownSeconds: 300, perEmailDaily: 3 });
+    expect(h.settings).toMatchObject({ otpMinutes: 5, cooldownSeconds: 60, perEmailDaily: 3 });
   });
 
   it("the Lovable Cloud copy is the same code as the Cloudflare worker", () => {

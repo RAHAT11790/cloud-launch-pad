@@ -18,7 +18,7 @@ describe("admin email statistics", () => {
   });
   it("keeps admin rules inside the worker's limits", () => {
     expect(clampEmailSettings({ otpMinutes: 99, cooldownSeconds: 1, maxAttempts: null as any })).toMatchObject({ otpMinutes: 30, cooldownSeconds: 30, maxAttempts: 5 });
-    expect(clampEmailSettings(null)).toMatchObject({ otpMinutes: 5, cooldownSeconds: 300, perEmailDaily: 3 });
+    expect(clampEmailSettings(null)).toMatchObject({ otpMinutes: 5, cooldownSeconds: 60, perEmailDaily: 3 });
   });
   it("matches the Worker's own defaults and limits exactly", async () => {
     const { EMAIL_SETTING_DEFAULTS, EMAIL_SETTING_BOUNDS } = await import("@/lib/emailStats");
