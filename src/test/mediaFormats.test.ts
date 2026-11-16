@@ -58,8 +58,9 @@ describe("every audio format in an .mkv has a working path", () => {
       const frames = blocks.flatMap((b) => b.frames.map((data, i) => ({ data: data.slice(), pts: i === 0 ? Math.round((b.ptsTicks * h.timecodeScale * 48000) / 1e9) : -1 })));
       const out = feeder.push(frames, true);
       const bytes = out.reduce((n, f) => n + f.length, 0);
-      // ~1 s of 48 kHz stereo as lossless FLAC frames (a sine compresses, so stay generous)
-      expect(bytes, t.codec).toBeGreaterThan(20_000);
+      // ~1 s of 48 kHz stereo as compressed lossless FLAC: a test tone shrinks a lot,
+      // but silence would be only ~250 bytes (constant subframes)
+      expect(bytes, t.codec).toBeGreaterThan(5_000);
       feeder.close();
     }
   });
