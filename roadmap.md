@@ -1,5 +1,12 @@
 # Roadmap
 
+## Audio vanishes after 3–5 s on the owner's phone + email deploy via admin (2026-11-16)
+- [x] Reproduced with the phone's 2 MB audio buffer: Study Group (Dolby DDP2.0) stopped after ~3 s with "SourceBuffer is full", then silent.
+- [x] Full buffer now waits instead of failing; decoded Dolby audio packed ~3x smaller (lossless, checked with FFmpeg).
+- [x] Phone-size tests at 2 MB and 1 MB buffers, normal and 4x slower CPU: Hindi → Korean → Hindi → jump to 10:00, sound never stopped, no message (200 s run at 1 MB).
+- [x] Admin → Cloudflare Manager: email-service redeployed, SMTP_HOST/PORT/USER/FROM + ALLOWED_ORIGINS added (all others kept); deep check OK, real reset code sent, wrong code refused.
+- [ ] Owner's real phone check after publishing.
+
 ## Audio track drops + "couldn't play here" on phones (2026-11-16)
 - [x] Reproduced: a short internet drop (25 s) stopped the Hindi track, showed "This audio track couldn't play here", then the video died with "Link expired".
 - [x] Reads now keep retrying through a dropped connection (up to 2 min); native player waits for the internet and resumes the same second.

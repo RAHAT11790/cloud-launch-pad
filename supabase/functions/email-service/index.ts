@@ -2,7 +2,7 @@
 // Lovable Cloud copy of cloudflare-workers/email-service.js (same code, Deno adapter
 // at the end). Keep both files identical above the adapter — a unit test checks it.
 // ============================================================
-// RS ANIME — EMAIL SERVICE · SMTP (Alwaysdata, Cloudflare build) · v5
+// RS ANIME — EMAIL SERVICE · SMTP (Alwaysdata, Cloudflare build) · v6
 // ------------------------------------------------------------
 // Sign-up verification + password-reset emails sent over SMTP
 // (port 465, direct TLS) through the Alwaysdata mailbox.
