@@ -70,6 +70,7 @@ import { buildTelegramDownloadUrl, getTelegramBotUrl, TELEGRAM_FREE_QUALITIES, n
 import { useDownloadManagerConfig, recordDownloadEvent, getDownloadManagerConfig } from "@/lib/downloadManagerSettings";
 import { resolveServerProxyForUrl, readCachedProxyServers } from "@/lib/serverProxy";
 import { fromOpaqueUrlToken, toOpaqueUrlToken, wrapAnHlsPlaybackUrl } from "@/lib/anPlaybackProxy";
+import { networkReachable, waitForNetwork } from "@/lib/netRecovery";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -2273,7 +2274,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(t);
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
-  const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+  const tryNextPlaybackRouteInner = useCallback((lastKnownTime = 0) => {
     // The embedded-track engine recovers on its own (falls back to native).
     if (embeddedOwnsRef.current) return false;
     if (isAnimeSaltContent) {
@@ -2464,6 +2465,45 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setVideoError(true);
     return false;
   }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, isCurrentPlaybackSourceValid, noProxy, preferProxy, proxyApiKey, proxyUrl, resolvePlaybackSrc, shouldAllowAutoQualityShift, src]);
+
+  // A dropped connection is not a dead link: first check the internet. When
+  // it is gone, wait for it and resume the SAME video at the same second
+  // instead of burning every server/quality and showing "Link expired".
+  const tryNextInnerRef = useRef(tryNextPlaybackRouteInner);
+  useEffect(() => { tryNextInnerRef.current = tryNextPlaybackRouteInner; }, [tryNextPlaybackRouteInner]);
+  const netWaitRef = useRef(0);
+  useEffect(() => { netWaitRef.current = 0; }, [src]);
+  const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    if (embeddedOwnsRef.current || isAnimeSaltContent) return tryNextInnerRef.current(lastKnownTime);
+    if (netWaitRef.current) return true;
+    const at = lastKnownTime || videoRef.current?.currentTime || lastPlaybackPositionRef.current || 0;
+    const token = Date.now();
+    netWaitRef.current = token;
+    void (async () => {
+      const reachable = await networkReachable();
+      if (netWaitRef.current !== token) return;
+      if (reachable) { netWaitRef.current = 0; tryNextInnerRef.current(at); return; }
+      console.log("[RS] connection lost — waiting to resume at", at);
+      setVideoError(false);
+      setIsBuffering(true);
+      const back = await waitForNetwork(10 * 60_000, () => netWaitRef.current !== token);
+      if (netWaitRef.current !== token) return;
+      netWaitRef.current = 0;
+      const el = videoRef.current;
+      if (!back || !el) { tryNextInnerRef.current(at); return; }
+      console.log("[RS] connection back — resuming at", at);
+      rsSoftRetriesRef.current = 0;
+      pendingSeek.current = at;
+      mediaRecoverySeekRef.current = at;
+      const restore = () => {
+        try { if (at > 0) el.currentTime = at; } catch { /* ignore */ }
+        if (userPlaybackIntentRef.current && !adGateActiveRef.current) el.play().catch(() => {});
+      };
+      try { el.load(); } catch { /* ignore */ }
+      el.addEventListener("loadedmetadata", restore, { once: true });
+    })();
+    return true;
+  }, [isAnimeSaltContent]);
 
   const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
   useEffect(() => {

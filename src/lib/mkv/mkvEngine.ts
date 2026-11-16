@@ -23,6 +23,7 @@ import { AudioFragmenter, VideoFragmenter, audioInit, audioMime, videoInit, vide
 import { PgsDecoder, type PgsBitmapCue } from "./pgs";
 import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
 import { PictureDecoder } from "./pictureDecoder";
+import { classifyReadFailure, readRetryDelay, whenOnline } from "../netRecovery";
 
 export interface TextCue { start: number; end: number; text: string }
 
@@ -43,10 +44,12 @@ export class HttpRangeSource implements RangeSource {
   private controllers = new Set<AbortController>();
   private prefetch: { start: number; length: number; promise: Promise<Uint8Array> } | null = null;
   private dead = false;
+  private epoch = 0;
   constructor(readonly url: string) {}
 
   abort() {
     this.dead = true;
+    this.epoch += 1;
     this.controllers.forEach((c) => { try { c.abort(); } catch { /* ignore */ } });
     this.controllers.clear();
     this.prefetch = null;
@@ -54,6 +57,7 @@ export class HttpRangeSource implements RangeSource {
 
   /** Cancel in-flight reads but keep the source usable (used on seek). */
   cancelPending() {
+    this.epoch += 1;
     this.controllers.forEach((c) => { try { c.abort(); } catch { /* ignore */ } });
     this.controllers.clear();
     this.prefetch = null;
@@ -63,15 +67,22 @@ export class HttpRangeSource implements RangeSource {
     if (this.dead) throw new Error("aborted");
     if (this.total >= 0 && start >= this.total) return new Uint8Array(0);
     const end = this.total >= 0 ? Math.min(this.total - 1, start + length - 1) : start + length - 1;
+    const epoch = this.epoch;
+    const began = Date.now();
     let lastError: unknown = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    // A dropped mobile connection must not end playback: network / server
+    // errors keep retrying for a while (netRecovery.ts decides how long).
+    for (let attempt = 1; ; attempt += 1) {
       const controller = new AbortController();
       this.controllers.add(controller);
       const timer = setTimeout(() => controller.abort(), 20000);
+      let status = 0;
       try {
         const res = await fetch(this.url, { headers: { Range: `bytes=${start}-${end}` }, signal: controller.signal });
+        status = res.status;
         if (res.status === 416) { this.total = start; return new Uint8Array(0); }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        status = 0;
         if (res.headers.get("x-rs-proxy-fallback") === "1") throw new Error("proxy fallback");
         const cr = (res.headers.get("content-range") || "").match(/bytes\s+(\d+)-\d+\/(\d+)/i);
         if (cr) {
@@ -84,9 +95,13 @@ export class HttpRangeSource implements RangeSource {
         return res.status === 200 && buf.length > length ? buf.subarray(0, length) : buf;
       } catch (error) {
         lastError = error;
-        if (this.dead) throw new Error("aborted");
+        if (this.dead || epoch !== this.epoch) throw new Error("aborted");
         if ((error as any)?.name === "AbortError" && !this.controllers.has(controller)) throw new Error("aborted");
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+        const wait = readRetryDelay(classifyReadFailure(error, status), attempt, Date.now() - began);
+        if (wait < 0) break;
+        await whenOnline(60000);
+        await new Promise((r) => setTimeout(r, wait));
+        if (this.dead || epoch !== this.epoch) throw new Error("aborted");
       } finally {
         clearTimeout(timer);
         this.controllers.delete(controller);
