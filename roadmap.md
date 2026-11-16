@@ -1,5 +1,12 @@
 # Roadmap
 
+## Email service on Alwaysdata SMTP, spam text removed (2026-11-16)
+- [x] Email Worker v5 sends over Alwaysdata SMTP (465 TLS); deployed to Cloudflare, SMTP_PASS secret set, old Gmail keys removed; live login check OK.
+- [x] New pink/violet email design (code box, expiry line, security note, footer).
+- [x] Resend wait 60 s; all "check Spam" warnings removed from site; admin Email Service shows mail-server health.
+- [x] Phone-size Forgot password test: server sent the code (1 sent today).
+- [ ] Owner to confirm the email lands in Gmail Inbox (no inbox access here).
+
 ## Old ads back, native-first video, Naruto, Shield Hero, login (approved 2026-11-14)
 - [x] Remove the new automatic ad system (random timer, fast-close warnings, 5-min video lock); old click-paced player ads restored — phone test: sponsor tab opened from a tap on the video.
 - [x] Videos that play natively stay native; only an exact black-picture file uses our decoder (no more whole-codec memory); such files try the phone's own decoder through Media Source first.
