@@ -1,5 +1,14 @@
 # Roadmap
 
+## Audio track drops + "couldn't play here" on phones (2026-11-16)
+- [x] Reproduced: a short internet drop (25 s) stopped the Hindi track, showed "This audio track couldn't play here", then the video died with "Link expired".
+- [x] Reads now keep retrying through a dropped connection (up to 2 min); native player waits for the internet and resumes the same second.
+- [x] Phone-size test: 25 s and 70 s internet cuts — Hindi kept playing / resumed by itself, no message; Hindi ↔ Korean switching works.
+- [ ] Real phone check by the owner after publishing.
+
+## Email redesign + copy (2026-11-16)
+- [x] New 3D blue/gold email design live (v6); browser-opening Copy button removed, code is press-and-hold to copy.
+
 ## Email service on Alwaysdata SMTP, spam text removed (2026-11-16)
 - [x] Email Worker v5 sends over Alwaysdata SMTP (465 TLS); deployed to Cloudflare, SMTP_PASS secret set, old Gmail keys removed; live login check OK.
 - [x] New pink/violet email design (code box, expiry line, security note, footer).
