@@ -37,7 +37,7 @@
 // link works exactly once and using one kills the other.
 // ============================================================
 
-const VERSION = "email-service-smtp-v5";
+const VERSION = "email-service-smtp-v6";
 const BRAND = "RS ANIME03";
 const LOGO = "https://i.ibb.co/6RcjXRjL/image.jpg";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
@@ -416,11 +416,18 @@ const sendMail = (env, msg) => smtpSession(env, msg);
 // ---------------- templates ----------------
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "'SF Mono',SFMono-Regular,Menlo,Consolas,'Roboto Mono','Courier New',monospace";
+// "Midnight sapphire" palette: deep navy surfaces, cyan→royal-blue accent, gold highlight.
 const C = {
-  bg: "#0d0f17", card: "#161926", line: "#2a2f45", panel: "#0d0f17",
-  pink: "#ec4899", violet: "#8b5cf6", grad: "linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%)",
-  text: "#F4F1FF", soft: "#B9B5D0", mute: "#8A86A6", dim: "#6B6888", warn: "#FBBF24",
+  bg: "#05070D", card: "#0B1120", cardTop: "#111A2E", line: "#1C2740", hi: "#2B3A5C",
+  slab: "#0F172A", slabTop: "#1E293B", depth: "#020617",
+  cyan: "#38BDF8", blue: "#2563EB", navy: "#1E3A8A",
+  grad: "linear-gradient(160deg,#38BDF8 0%,#2563EB 55%,#1E3A8A 100%)",
+  btnGrad: "linear-gradient(180deg,#4CC9FA 0%,#2563EB 100%)",
+  gold: "#F5C451", text: "#F8FAFC", soft: "#B6C2D9", mute: "#8392AD", dim: "#5E6B85",
 };
+// Layered shadows give the code and brand an extruded, raised (3D) look.
+const DIGIT_3D = "0 1px 0 #BAE6FD,0 2px 0 #7DD3FC,0 3px 0 #38BDF8,0 4px 0 #0EA5E9,0 5px 0 #0369A1,0 10px 18px rgba(14,165,233,.45)";
+const BRAND_3D = "0 1px 0 #1D4ED8,0 2px 0 #1E40AF,0 3px 0 #1E3A8A,0 4px 0 #172554,0 8px 16px rgba(2,6,23,.55)";
 function fmtTime(t) {
   try {
     return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(t)) + " · Bangladesh time";
@@ -435,6 +442,10 @@ function copyFor(purpose) {
         intro: `Welcome to ${BRAND}! Enter this code in the app, or tap the button below, to confirm your email and finish creating your account.` };
 }
 
+/**
+ * Email HTML. Emails cannot run scripts, so a "copy" button would have to open a web page.
+ * Instead the code is one unbroken, select-all block: a single long-press selects it for copying.
+ */
 function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinutes, site, requestedAt, rid = "" }) {
   const c = copyFor(purpose);
   const year = new Date(requestedAt).getUTCFullYear();
@@ -443,63 +454,73 @@ function emailTemplate({ purpose, code, link, name, email, otpMinutes, linkMinut
   const pre = `${code} is your ${BRAND} code. It expires in ${mins(otpMinutes)}.`;
   const td = `font-family:${FONT};`;
   const ref = shortRef(rid);
-  let copyUrl = "";
-  try { copyUrl = `${new URL(link).origin}/c#${code}`; } catch { copyUrl = `${site}#${code}`; }
-  const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:4px 0;width:92px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:4px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
+  const row = (k, v) => `<tr><td style="${td}color:${C.dim};padding:5px 0;width:92px;font-size:12px;" valign="top">${k}</td><td style="${td}color:${C.soft};padding:5px 0;font-size:12px;word-break:break-all;">${v}</td></tr>`;
   const html = `<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting">
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
 <title>${esc(c.title)} · ${BRAND}</title>
 <style>
 body{margin:0!important;padding:0!important;background:${C.bg};-webkit-text-size-adjust:100%}
 a{text-decoration:none}img{border:0;outline:none;display:block}
+.rs-code a{color:${C.text}!important;text-decoration:none!important}
 @media (max-width:520px){
 .rs-pad{padding-left:20px!important;padding-right:20px!important}
-.rs-outer{padding:16px 8px!important}
-.rs-h1{font-size:22px!important;line-height:29px!important}
-.rs-otp{font-size:32px!important;letter-spacing:8px!important;padding:16px 6px 16px 14px!important}
-.rs-btn a{padding:14px 26px!important}
+.rs-outer{padding:14px 8px!important}
+.rs-h1{font-size:23px!important;line-height:30px!important}
+.rs-code{font-size:36px!important;letter-spacing:9px!important;padding:18px 8px 20px 17px!important}
+.rs-btn a{padding:15px 28px!important}
+.rs-brand{font-size:21px!important;letter-spacing:4px!important}
 }
 </style></head>
 <body style="margin:0;padding:0;background:${C.bg};">
 <div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;color:${C.bg};">${esc(pre)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};background-image:radial-gradient(120% 60% at 50% 0%,#0E2A4F 0%,${C.bg} 62%);">
 <tr><td align="center" class="rs-outer" style="padding:32px 14px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;">
 
-<tr><td bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.line};border-radius:14px;overflow:hidden;">
+<tr><td bgcolor="${C.card}" style="background:${C.card};background-image:linear-gradient(180deg,${C.cardTop} 0%,${C.card} 40%);border:1px solid ${C.line};border-top:1px solid ${C.hi};border-bottom:4px solid ${C.depth};border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6);">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td align="center" bgcolor="${C.pink}" style="background:${C.pink};background-image:${C.grad};border-radius:14px 14px 0 0;padding:28px 20px 24px;">
-      <img src="${LOGO}" width="56" height="56" alt="${BRAND}" style="width:56px;height:56px;border-radius:16px;border:2px solid rgba(255,255,255,.55);margin:0 auto;">
-      <div style="${td}margin-top:12px;font-size:22px;font-weight:900;letter-spacing:4px;color:#FFFFFF;text-transform:uppercase;">RS&nbsp;ANIME<span style="color:#FDE7F3;">03</span></div>
-      <div style="${td}margin-top:6px;font-size:11px;font-weight:700;letter-spacing:2px;color:#FCE7F3;text-transform:uppercase;">Account Security &amp; Verification</div>
+    <tr><td align="center" bgcolor="${C.blue}" style="background:${C.blue};background-image:${C.grad};border-radius:19px 19px 0 0;border-bottom:3px solid ${C.navy};padding:30px 20px 26px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+        <td style="padding:4px;border-radius:22px;background:rgba(255,255,255,.22);border-top:1px solid rgba(255,255,255,.7);border-bottom:3px solid rgba(15,23,42,.55);box-shadow:0 10px 22px rgba(2,6,23,.45);">
+          <img src="${LOGO}" width="60" height="60" alt="${BRAND}" style="width:60px;height:60px;border-radius:18px;">
+        </td>
+      </tr></table>
+      <div class="rs-brand" style="${td}margin-top:14px;font-size:24px;font-weight:900;letter-spacing:5px;color:#FFFFFF;text-transform:uppercase;text-shadow:${BRAND_3D};">RS&nbsp;ANIME<span style="color:${C.gold};">03</span></div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:12px;"><tr>
+        <td style="${td}padding:6px 14px;border-radius:999px;background:rgba(2,6,23,.32);border:1px solid rgba(255,255,255,.28);font-size:10px;font-weight:800;letter-spacing:2px;color:#E0F2FE;text-transform:uppercase;">&#128274;&nbsp; Account Security &amp; Verification</td>
+      </tr></table>
     </td></tr>
 
     <tr><td class="rs-pad" align="center" style="padding:30px 36px 0;">
-      <h1 class="rs-h1" style="${td}margin:0;font-size:26px;line-height:34px;font-weight:800;color:#FFFFFF;">${esc(c.title)}</h1>
+      <h1 class="rs-h1" style="${td}margin:0;font-size:26px;line-height:34px;font-weight:800;color:#FFFFFF;letter-spacing:-.2px;">${esc(c.title)}</h1>
       <p style="${td}margin:12px 0 0;font-size:15px;line-height:24px;color:${C.soft};">${hi}<br>${esc(c.intro)}</p>
     </td></tr>
 
-    <tr><td class="rs-pad" align="center" style="padding:24px 36px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
-        <td class="rs-otp" align="center" bgcolor="${C.panel}" style="background:${C.panel};border:2px solid ${C.violet};border-radius:14px;padding:18px 14px 18px 24px;font-family:${MONO};font-size:38px;line-height:44px;font-weight:800;letter-spacing:10px;color:${C.pink};text-shadow:0 0 12px rgba(236,72,153,.75),0 0 26px rgba(139,92,246,.45);box-shadow:0 0 24px rgba(139,92,246,.35);user-select:all;-webkit-user-select:all;">${esc(code)}</td>
+    <tr><td class="rs-pad" align="center" style="padding:26px 36px 0;">
+      <div style="${td}font-size:10px;font-weight:800;letter-spacing:3px;color:${C.mute};text-transform:uppercase;">Your verification code</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:12px;"><tr>
+        <td class="rs-code" align="center" bgcolor="${C.slab}" style="background:${C.slab};background-image:linear-gradient(180deg,${C.slabTop} 0%,${C.slab} 100%);border:1px solid #334155;border-top:1px solid #64748B;border-bottom:6px solid ${C.depth};border-radius:18px;padding:20px 14px 22px 26px;font-family:${MONO};font-size:42px;line-height:48px;font-weight:800;letter-spacing:12px;color:${C.text};text-shadow:${DIGIT_3D};box-shadow:0 18px 34px rgba(0,0,0,.55),0 0 0 4px rgba(56,189,248,.10);user-select:all;-webkit-user-select:all;white-space:nowrap;">${esc(code)}</td>
       </tr></table>
-      <div style="${td}margin-top:14px;font-size:13px;font-weight:700;color:${C.warn};">&#9201;&nbsp; This code will expire in ${mins(otpMinutes)}.</div>
-      <div style="margin-top:12px;"><a href="${esc(copyUrl)}" target="_blank" style="${td}display:inline-block;padding:8px 16px;border-radius:999px;background:#1F2236;border:1px solid ${C.line};font-size:12px;font-weight:800;color:#FFFFFF;">&#10697;&nbsp; Copy code</a></div>
+      <div style="${td}margin-top:14px;font-size:12px;line-height:18px;color:${C.mute};">Press and hold the code to copy it</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:12px;"><tr>
+        <td style="${td}padding:7px 14px;border-radius:999px;background:rgba(245,196,81,.10);border:1px solid rgba(245,196,81,.35);font-size:12px;font-weight:700;color:${C.gold};">&#9201;&nbsp; This code will expire in ${mins(otpMinutes)}.</td>
+      </tr></table>
     </td></tr>
 
-    <tr><td align="center" class="rs-pad" style="padding:24px 36px 0;">
+    <tr><td align="center" class="rs-pad" style="padding:26px 36px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="rs-btn"><tr>
-        <td align="center" bgcolor="${C.pink}" style="border-radius:12px;background:${C.pink};background-image:${C.grad};box-shadow:0 10px 26px rgba(236,72,153,.35);">
-          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:15px 40px;font-size:15px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:12px;">${esc(c.button)}&nbsp;&rarr;</a>
+        <td align="center" bgcolor="${C.blue}" style="border-radius:14px;background:${C.blue};background-image:${C.btnGrad};border-top:1px solid #7DD3FC;border-bottom:4px solid ${C.navy};box-shadow:0 12px 26px rgba(37,99,235,.45);">
+          <a href="${esc(link)}" target="_blank" style="${td}display:inline-block;padding:15px 42px;font-size:15px;font-weight:800;letter-spacing:.3px;color:#FFFFFF;border-radius:14px;text-shadow:0 1px 1px rgba(15,23,42,.5);">${esc(c.button)}&nbsp;&rarr;</a>
         </td>
       </tr></table>
       <div style="${td}margin-top:10px;font-size:12px;line-height:18px;color:${C.mute};">One tap confirms it &#183; button works for ${mins(linkMinutes)}</div>
     </td></tr>
 
-    <tr><td class="rs-pad" style="padding:24px 36px 0;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#1B1530;border:1px solid #3A2A5C;border-radius:12px;">
+    <tr><td class="rs-pad" style="padding:26px 36px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0E1A2F;border:1px solid ${C.line};border-left:3px solid ${C.gold};border-radius:12px;">
         <tr><td style="${td}padding:14px 16px;font-size:13px;line-height:20px;color:${C.soft};">&#128737;&#65039;&nbsp; <b style="color:#FFFFFF;">Never share your ${BRAND} code with anyone.</b> Our team will never ask for it. Didn't request this? You can ignore this email.</td></tr>
       </table>
     </td></tr>
@@ -517,11 +538,11 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
 
 <tr><td align="center" style="${td}padding:18px 18px 0;font-size:12px;line-height:18px;color:${C.dim};">
   Button not working? Open this link:<br>
-  <a href="${esc(link)}" style="color:#F472B6;word-break:break-all;">${esc(link)}</a>
+  <a href="${esc(link)}" style="color:${C.cyan};word-break:break-all;">${esc(link)}</a>
 </td></tr>
 <tr><td align="center" style="${td}padding:22px 16px 6px;font-size:11px;line-height:17px;color:${C.dim};">
   ${BRAND} &mdash; Premium Anime Streaming &#8226; Automated Message<br>
-  <a href="${esc(site)}" style="color:#C4B5FD;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} ${BRAND}
+  <a href="${esc(site)}" style="color:#93C5FD;">${esc(host)}</a> &nbsp;&#183;&nbsp; &copy; ${year} ${BRAND}
 </td></tr>
 
 </table>
@@ -536,7 +557,6 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
     "",
     `Your code: ${code}`,
     `This code will expire in ${mins(otpMinutes)}.`,
-    `Copy it here: ${copyUrl}`,
     "",
     `Or open this link (works for ${mins(linkMinutes)}):`,
     link,
@@ -570,43 +590,24 @@ function pageHtml({ state, purpose, redirect, action, title, message }) {
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>${esc(title)} · ${BRAND}</title>
 ${ok ? `<meta http-equiv="refresh" content="4;url=${esc(redirect)}">` : ""}
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#3B1650 0%,#12101E 58%,#0d0f17 100%);font-family:${FONT};color:#F4F1FF}
-.card{width:100%;max-width:400px;background:#161926;border:1px solid #2a2f45;border-radius:14px;padding:0 0 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
-.head{padding:26px 20px 20px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);border-bottom:0}
-.ring{display:inline-block;padding:3px;border-radius:18px;background:rgba(255,255,255,.55)}.ring img{display:block;width:52px;height:52px;border-radius:15px}
-.brand{margin-top:10px;font-weight:900;letter-spacing:3px;font-size:16px}.brand span{color:#FDE7F3}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#0E2A4F 0%,#070B14 60%,#05070D 100%);font-family:${FONT};color:#F8FAFC}
+.card{width:100%;max-width:400px;background:linear-gradient(180deg,#111A2E 0%,#0B1120 40%);border:1px solid #1C2740;border-top-color:#2B3A5C;border-bottom:4px solid #020617;border-radius:20px;padding:0 0 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+.head{padding:26px 20px 22px;background:linear-gradient(160deg,#38BDF8 0%,#2563EB 55%,#1E3A8A 100%);border-bottom:3px solid #1E3A8A}
+.ring{display:inline-block;padding:4px;border-radius:20px;background:rgba(255,255,255,.22);border-top:1px solid rgba(255,255,255,.7);border-bottom:3px solid rgba(15,23,42,.55);box-shadow:0 10px 22px rgba(2,6,23,.45)}.ring img{display:block;width:54px;height:54px;border-radius:16px}
+.brand{margin-top:12px;font-weight:900;letter-spacing:4px;font-size:18px;text-shadow:${BRAND_3D}}.brand span{color:#F5C451}
 .body{padding:24px 24px 0}
 .ck{width:84px;height:84px;margin:0 auto 6px;display:block}.ck circle{fill:none;stroke:#34D399;stroke-width:3;stroke-dasharray:160;stroke-dashoffset:160;animation:d .7s ease forwards}.ck path{fill:none;stroke:#34D399;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:d .4s .6s ease forwards}
-@keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#C4B5FD}
-.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #2a2f45;border-top-color:#ec4899;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+@keyframes d{to{stroke-dashoffset:0}}.ck.info circle,.ck.info path{stroke:#7DD3FC}
+.spin{width:64px;height:64px;margin:10px auto 16px;border-radius:50%;border:4px solid #1C2740;border-top-color:#38BDF8;animation:s 1s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .bad{width:72px;height:72px;margin:6px auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:#FCA5A5;background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.45)}
-h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#B9B5D0}
-.btn{display:block;width:100%;margin-top:22px;padding:15px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 12px 28px rgba(236,72,153,.35)}
-.btn.ghost{background:#1F2236;border:1px solid #2a2f45;box-shadow:none}.small{font-size:12px;color:#8A86A6}.foot{margin-top:20px;font-size:11px;color:#6B6888}
+h1{margin:8px 0 0;font-size:23px;line-height:30px}p{margin:10px 0 0;font-size:14px;line-height:22px;color:#B6C2D9}
+.btn{display:block;width:100%;margin-top:22px;padding:15px 18px;border:0;border-top:1px solid #7DD3FC;border-bottom:4px solid #1E3A8A;border-radius:14px;background:linear-gradient(180deg,#4CC9FA 0%,#2563EB 100%);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none;box-shadow:0 12px 28px rgba(37,99,235,.4)}
+.btn:active{transform:translateY(2px);border-bottom-width:2px}
+.btn.ghost{background:#111A2E;border:1px solid #1C2740;border-bottom:4px solid #020617;box-shadow:none}.small{font-size:12px;color:#8392AD}.foot{margin-top:20px;font-size:11px;color:#5E6B85}
 </style></head><body><main class="card">
 <div class="head"><span class="ring"><img src="${LOGO}" alt=""></span><div class="brand">RS ANIME<span>03</span></div></div>
 <div class="body">${icon}<h1>${esc(title)}</h1><p>${esc(message)}</p>${btn}
 <div class="foot">&#128274; Secured by ${BRAND}</div></div></main>${script}</body></html>`;
-}
-
-/** "Copy code" page opened from the email; the code is read from the URL fragment only. */
-function copyPage(site) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Copy code · ${BRAND}</title>
-<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(120% 70% at 50% 0%,#3B1650 0%,#12101E 58%,#0d0f17 100%);font-family:${FONT};color:#F4F1FF}
-.card{width:100%;max-width:380px;background:#161926;border:1px solid #2a2f45;border-radius:14px;padding:26px 22px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
-.brand{font-weight:900;letter-spacing:3px;font-size:15px}.brand span{color:#FDE7F3}.lbl{margin-top:18px;font-size:10px;font-weight:800;letter-spacing:3px;color:#8A86A6}
-.code{margin-top:10px;font:800 40px ${MONO};letter-spacing:10px;padding:14px 0 14px 10px;color:#ec4899;text-shadow:0 0 12px rgba(236,72,153,.7);background:#0d0f17;border:2px solid #8b5cf6;border-radius:14px;user-select:all;-webkit-user-select:all}
-.btn{display:block;width:100%;margin-top:20px;padding:15px;border:0;border-radius:14px;background:linear-gradient(135deg,#ec4899 0%,#8b5cf6 100%);color:#fff;font:800 15px ${FONT};cursor:pointer;text-decoration:none}
-.btn.ok{background:#059669}.ghost{background:#1F2236;border:1px solid #2a2f45}p{font-size:13px;line-height:20px;color:#B9B5D0;margin:14px 0 0}</style></head>
-<body><main class="card"><div class="brand">RS ANIME<span>03</span></div><div class="lbl">YOUR VERIFICATION CODE</div>
-<div class="code" id="c">------</div><button class="btn" id="b" type="button">Copy code</button>
-<p id="m">Copy it, go back to the app and tap “Paste code”.</p><a class="btn ghost" href="${esc(site)}">Open ${BRAND}</a></main>
-<script>(function(){var c=(location.hash.match(/\d{6}/)||[""])[0],e=document.getElementById("c"),b=document.getElementById("b"),m=document.getElementById("m");
-if(!c){e.textContent="------";b.disabled=true;m.textContent="This link has no code. Use the code shown in your email.";return;}
-e.textContent=c;function done(){b.textContent="Copied \u2713";b.className="btn ok";}
-function fb(){var r=document.createRange();r.selectNodeContents(e);var s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand("copy");done();}catch(x){m.textContent="Long-press the code to copy it.";}}
-b.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(c).then(done,fb);else fb();};})();</script></body></html>`;
 }
 
 // ---------------- HTTP helpers ----------------
@@ -1081,7 +1082,6 @@ export default {
         return await linkPage(env, ctx, req, link[1], link[2]);
       }
       if (req.method === "GET") {
-        if (path === "/c") return html(copyPage(siteUrl(env)));
         if (path === "/preview") {
           const type = url.searchParams.get("type") === "reset" ? "reset" : "register";
           const cfg = await settings(env);

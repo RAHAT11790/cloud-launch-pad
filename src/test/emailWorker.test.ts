@@ -158,6 +158,16 @@ describe("SMTP email worker", () => {
     expect(m.html).toContain("This code will expire in 5 minutes.");
   });
 
+  it("copy needs no browser: the code is one select-all block and no copy page link exists", async () => {
+    await api("send", { email: "copy.check77@gmail.com", purpose: "register", name: "Rahat" });
+    const m = decodeMail(mails[mails.length - 1]);
+    expect(m.html).not.toContain("/c#");
+    expect(m.html).not.toMatch(/<a[^>]*>[^<]*Copy code/);
+    expect(m.text).not.toContain("Copy it here");
+    expect(m.html).toMatch(new RegExp(`user-select:all[^>]*>${m.code}</td>`));
+    expect((await link(`${W}/c`, "GET")).html).not.toContain("Copy code");
+  });
+
   it("stores only hashes — no plain email, code or link token in the database", async () => {
     await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     const m = decodeMail(mails[0]);
