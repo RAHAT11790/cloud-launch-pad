@@ -15,6 +15,7 @@ import { MkvBlockStream, clusterNear, type MkvCue, type MkvHeader, type MkvTrack
 import { HttpRangeSource, mseAvailable } from "./mkvEngine";
 import { AudioFragmenter, audioInit, audioMime } from "./mkvRemux";
 import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
+import { TIGHT_BEHIND_SEC, appendWithRoom, learnedCap } from "./bufferRoom";
 
 /** Can this browser stream `track` on its own (no video re-mux needed)? */
 const canPlayAudioOnly = (track?: Pick<MkvTrack, "route"> | null, mime?: string): boolean => {
@@ -47,8 +48,8 @@ export class AudioSidecar {
   private readonly decoded: boolean;
   private decoder: AudioDecoderClient | null = null;
   /** Seconds buffered ahead / kept behind (decoded PCM is larger, so less). */
-  private readonly aheadSec: number;
-  private readonly behindSec: number;
+  private aheadSec: number;
+  private behindSec: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private chain: Promise<void> = Promise.resolve();
   /** What the player itself asked for (the video is force-muted while we run). */
@@ -96,18 +97,21 @@ export class AudioSidecar {
     return new Promise((r) => sb.addEventListener("updateend", () => r(), { once: true }));
   }
 
-  private append(data: Uint8Array) {
+  /** Append in order; a full buffer (phones keep only 2–5 MB of audio) waits for room. */
+  private append(data: Uint8Array, gen = -1) {
     this.chain = this.chain.then(async () => {
-      if (!this.sb || this.destroyed) return;
-      await this.idle();
-      try { this.sb.appendBuffer(data as unknown as BufferSource); }
-      catch (e: any) {
-        if (e?.name !== "QuotaExceededError") throw e;
-        const t = this.audioEl?.currentTime || 0;
-        if (t > 10) { this.sb.remove(0, t - 8); await this.idle(); }
-        this.sb.appendBuffer(data as unknown as BufferSource);
-      }
-      await this.idle();
+      const sb = this.sb;
+      if (!sb || this.destroyed) return;
+      await appendWithRoom(sb, data, {
+        clock: () => this.video?.currentTime || 0,
+        stale: () => this.destroyed || this.sb !== sb || (gen >= 0 && gen !== this.gen),
+        idle: () => this.idle(),
+        onFull: (ahead) => {
+          // Learn what fits on this phone and keep only a little played audio.
+          this.aheadSec = learnedCap(this.aheadSec, ahead);
+          this.behindSec = Math.min(this.behindSec, TIGHT_BEHIND_SEC + 1);
+        },
+      });
     });
     return this.chain;
   }
@@ -249,7 +253,7 @@ export class AudioSidecar {
     if (!v.muted) { this.wantMuted = false; this.muteVideo(); this.syncVolume(); }
     const t = v.currentTime;
     // Trim old audio so long episodes stay inside the buffer quota.
-    if (t > this.behindSec * 2 && this.sb && !this.sb.updating) {
+    if (t > this.behindSec + 1 && this.sb && !this.sb.updating) {
       const b = this.sb.buffered;
       if (b.length && b.start(0) < t - this.behindSec * 1.5) void this.run(() => { try { this.sb?.remove(0, t - this.behindSec); } catch { /* ignore */ } }).catch(() => undefined);
     }
@@ -271,7 +275,7 @@ export class AudioSidecar {
         if (a.paused) a.play().catch(() => undefined);
       } else this.starve();
     } else if (!a.paused) a.pause();
-    if (!this.running && !this.eof && ahead < this.aheadSec - 5) void this.pump(this.gen);
+    if (!this.running && !this.eof && ahead < this.aheadSec - Math.min(5, this.aheadSec / 3)) void this.pump(this.gen);
   };
 
   private startReader(seconds: number) {
@@ -305,7 +309,7 @@ export class AudioSidecar {
         if (!block) {
           const last = await frag.flush(true);
           if (gen !== this.gen || this.destroyed) return;
-          if (last) await this.append(last);
+          if (last) await this.append(last, gen);
           this.eof = true;
           break;
         }
@@ -316,7 +320,7 @@ export class AudioSidecar {
         if (blockSec < (this.video?.currentTime || 0) - 2) continue;
         const out = await frag.push(block);
         if (gen !== this.gen || this.destroyed) return;
-        if (out) await this.append(out);
+        if (out) await this.append(out, gen);
       }
     } catch (e: any) {
       if (gen === this.gen && !this.destroyed && String(e?.message) !== "aborted") this.fail(e);

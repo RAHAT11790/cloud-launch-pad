@@ -24,6 +24,7 @@ import { PgsDecoder, type PgsBitmapCue } from "./pgs";
 import { AudioDecoderClient, DECODED_AUDIO_MIME, DecodedAudioFragmenter, canDecodeTrack, decodedAudioInit } from "./audioDecode";
 import { PictureDecoder } from "./pictureDecoder";
 import { classifyReadFailure, readRetryDelay, whenOnline } from "../netRecovery";
+import { appendWithRoom, learnedCap } from "./bufferRoom";
 
 export interface TextCue { start: number; end: number; text: string }
 
@@ -136,15 +137,17 @@ export class HttpRangeSource implements RangeSource {
 // ------------------------------------------------------------------
 class SbWriter {
   private chain: Promise<void> = Promise.resolve();
-  constructor(readonly sb: SourceBuffer, private readonly owner: { video: HTMLVideoElement | null }) {}
+  /** Read-ahead (seconds) this buffer can really hold; learned when it overflows. */
+  capAhead = Infinity;
+  constructor(readonly sb: SourceBuffer, private readonly owner: { video: HTMLVideoElement | null; destroyed?: boolean }) {}
 
-  private idle(): Promise<void> {
+  private idle = (): Promise<void> => {
     if (!this.sb.updating) return Promise.resolve();
     return new Promise((resolve) => {
       const done = () => { this.sb.removeEventListener("updateend", done); resolve(); };
       this.sb.addEventListener("updateend", done);
     });
-  }
+  };
 
   run(task: () => void): Promise<void> {
     this.chain = this.chain.then(async () => {
@@ -155,18 +158,15 @@ class SbWriter {
     return this.chain;
   }
 
-  append(data: Uint8Array): Promise<void> {
+  /** Append in order; a full buffer waits for room (phones hold only a few MB). */
+  append(data: Uint8Array, stale: () => boolean = () => !!this.owner.destroyed): Promise<void> {
     this.chain = this.chain.then(async () => {
-      await this.idle();
-      try {
-        this.sb.appendBuffer(data as unknown as BufferSource);
-      } catch (error: any) {
-        if (error?.name !== "QuotaExceededError") throw error;
-        const t = this.owner.video?.currentTime || 0;
-        if (t > 10) { this.sb.remove(0, t - 8); await this.idle(); }
-        this.sb.appendBuffer(data as unknown as BufferSource);
-      }
-      await this.idle();
+      await appendWithRoom(this.sb, data, {
+        clock: () => this.owner.video?.currentTime || 0,
+        stale: () => !!this.owner.destroyed || stale(),
+        idle: this.idle,
+        onFull: (ahead) => { this.capAhead = learnedCap(this.capAhead, ahead); },
+      });
     });
     return this.chain;
   }
@@ -221,7 +221,7 @@ export class MkvEngine {
   private source: HttpRangeSource;
   private ms: MediaSource | null = null;
   private objectUrl = "";
-  private owner: { video: HTMLVideoElement | null } = { video: null };
+  private owner: { video: HTMLVideoElement | null; destroyed?: boolean } = { video: null };
   private vw: SbWriter | null = null;
   private aw: SbWriter | null = null;
   private audio: MkvTrack;
@@ -398,14 +398,15 @@ export class MkvEngine {
   private appendAudio(frag: Uint8Array, gen: number): Promise<void> | void {
     if (!this.aw) return;
     if (!this.audioGateOpen) { if (gen === this.generation) this.heldAudio.push(frag); return; }
-    return this.aw.append(frag);
+    return this.aw.append(frag, this.staleFor(gen));
   }
+  private staleFor(gen: number) { return () => gen !== this.generation || this.destroyed; }
   private openAudioGate(gen: number) {
     if (gen !== this.generation || this.destroyed || this.audioGateOpen) return;
     this.audioGateOpen = true;
     const held = this.heldAudio;
     this.heldAudio = [];
-    for (const frag of held) void this.aw?.append(frag).catch((e) => this.fatal(e));
+    for (const frag of held) void this.aw?.append(frag, this.staleFor(gen)).catch((e) => this.fatal(e));
   }
 
   private startReader(seconds: number) {
@@ -431,6 +432,11 @@ export class MkvEngine {
     void this.pump(this.generation);
   }
 
+  /** Read-ahead target, shrunk to what this phone's buffers can hold. */
+  private aheadLimit(): number {
+    return Math.min(this.readAhead, this.vw?.capAhead ?? Infinity, this.aw?.capAhead ?? Infinity);
+  }
+
   private bufferedAhead(): number {
     const t = this.owner.video?.currentTime || 0;
     if (this.picture) {
@@ -453,11 +459,11 @@ export class MkvEngine {
     const vNum = this.header.video!.number;
     try {
       while (gen === this.generation && !this.destroyed) {
-        if (this.bufferedAhead() > this.readAhead) break;
+        if (this.bufferedAhead() > this.aheadLimit()) break;
         const block = await reader.next();
         if (gen !== this.generation || this.destroyed) return;
         if (!block) {
-          if (this.vw) { const fv = vf.flush(); if (fv) await this.vw.append(fv); }
+          if (this.vw) { const fv = vf.flush(); if (fv) await this.vw.append(fv, this.staleFor(gen)); }
           const fa = await af.flush(true);
           if (gen !== this.generation || this.destroyed) return;
           if (fa) await this.appendAudio(fa, gen);
@@ -476,7 +482,7 @@ export class MkvEngine {
           }
           if (vf.dropUntilKey(block)) continue;
           const frag = vf.push(block);
-          if (frag) await this.vw.append(frag);
+          if (frag) await this.vw.append(frag, this.staleFor(gen));
         } else if (block.track === this.audio.number) {
           const frag = await af.push(block);
           if (gen !== this.generation || this.destroyed) return;
@@ -551,6 +557,7 @@ export class MkvEngine {
     await this.aw.run(() => { try { sb.abort(); } catch { /* ignore */ } });
     await this.aw.run(() => { try { sb.remove(0, Infinity); } catch { /* ignore */ } });
     if (prevMime !== nextMime) await this.aw.run(() => sb.changeType!(nextMime));
+    this.aw.capAhead = Infinity; // the new language has its own size per second
     await this.aw.append(this.audioInitFor(next));
     const ve = rangeEndAt(this.vw?.ranges() || [], t);
     const ready = this.waitForData(t);
@@ -562,6 +569,7 @@ export class MkvEngine {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.owner.destroyed = true;
     this.generation += 1;
     this.source.abort();
     if (this.wakeTimer) clearInterval(this.wakeTimer);
