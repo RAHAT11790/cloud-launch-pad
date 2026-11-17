@@ -14,18 +14,23 @@ import {
   subscribeLoginAccess, loginAccessNow, allowedDomainsLabel, type LoginAccess,
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
   resendEmailCode, claimEmailLink, takeVerifyRedirect, ticketRid, EmailServiceError,
-  savePendingReset, readPendingReset, clearPendingReset,
+  savePendingReset, readPendingReset, clearPendingReset, type PendingRegister,
 } from "@/lib/emailService";
 import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
-import { OtpBoxes, PasteCodeButton, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote } from "@/components/auth/EmailCodeKit";
+import { OtpBoxes, PasteCodeButton, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote, CodeCloseButton, ResumeNote } from "@/components/auth/EmailCodeKit";
 
 type CodeMeta = { expiresAt: number; totalMs: number; dailyLeft: number | null; dailyMax: number | null };
+/** Code-screen details saved with a pending request, so the screen can be rebuilt after the page was closed. */
+const savedMeta = (p: { expiresAt: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null }): CodeMeta =>
+  ({ expiresAt: p.expiresAt, totalMs: Math.max(60_000, Number(p.totalMs) || 5 * 60_000), dailyLeft: p.dailyLeft ?? null, dailyMax: p.dailyMax ?? null });
 const metaOf = (t: { expiresAt: number; dailyLeft: number | null; dailyMax: number | null }): CodeMeta =>
   ({ expiresAt: t.expiresAt, totalMs: Math.max(60_000, t.expiresAt - Date.now()), dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
   onGuest?: () => void;
+  /** Shown as ✕: closes the sign-in screens and returns to the page the visitor was on. */
+  onClose?: () => void;
 }
 
 const PARTICLE_SEEDS = Array.from({ length: 0 }, (_, i) => ({
@@ -75,7 +80,7 @@ const InlineError = ({ text }: { text: string }) => (
   </div>
 );
 
-const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
+const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
   const SESSION_STARTED_AT_KEY = "rs_session_started_at";
   const branding = useBranding();
   const logoSrc = branding.logoUrl || logoImg;
@@ -121,7 +126,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [verifyMeta, setVerifyMeta] = useState<CodeMeta | null>(null);
 
   // Sign-up email verification
-  const [verifyPending, setVerifyPending] = useState<{ name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number } | null>(null);
+  const [verifyPending, setVerifyPending] = useState<PendingRegister | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState("");
@@ -129,6 +134,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [linkNotice, setLinkNotice] = useState("");
   const [nowTick, setNowTick] = useState(() => Date.now());
   const linkHandledRef = useRef(false);
+  /** The code screen was reopened after the visitor came back from their email app. */
+  const [resumed, setResumed] = useState(false);
   const finishingRef = useRef(false);
 
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
@@ -356,7 +363,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       setForgotError("");
       setForgotLinkState("");
       setForgotOtp("");
-      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs: metaOf(t).totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
       setForgotOtpSent(true);
       toast.success(`📧 Code sent to: ${fEmail}`);
     } catch (err: any) {
@@ -368,8 +375,16 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const resetForgotState = () => {
     setShowForgotPw(false); setForgotOtpSent(false); setForgotOtp(""); setForgotToken("");
     setForgotNewPw(""); setForgotNewPwConfirm(""); setForgotEmail(""); setForgotLinkState("");
-    setForgotMeta(null); setForgotError("");
+    setForgotMeta(null); setForgotError(""); setResumed(false);
     clearPendingReset();
+  };
+
+  /** ✕ on a code screen: drop the request on this device and go back to where the visitor was. */
+  const closeCodeScreen = () => {
+    clearPendingRegister();
+    setVerifyPending(null); setVerifyCode(""); setVerifyError(""); setVerifyMeta(null);
+    resetForgotState();
+    onClose?.();
   };
 
   /** Step 2 → checks the code right away (single use), then asks for the new password. */
@@ -401,7 +416,8 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         else throw err;
       }
       setForgotToken(t.token); setForgotOtp(""); setForgotLinkState(""); setForgotMeta(metaOf(t)); setForgotError("");
-      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt });
+      savePendingReset({ email: fEmail, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs: metaOf(t).totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
+      setResumed(false);
       toast.success("📧 New code sent");
     } catch (err: any) { setForgotError(err.message || "Could not send the code"); }
     setForgotLoading(false);
@@ -546,12 +562,13 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         if (err instanceof EmailServiceError && ["not_found", "bad_ticket", "already_used"].includes(err.code)) t = await sendEmailCode(verifyPending.email, "register", verifyPending.name);
         else throw err;
       }
-      const next = { ...verifyPending, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
+      const next = { ...verifyPending, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs: metaOf(t).totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax };
       setVerifyMeta(metaOf(t));
       setVerifyPending(next);
       savePendingRegister(next);
       setVerifyCode("");
       setVerifyError("");
+      setResumed(false);
       toast.success("📧 New code sent");
     } catch (err: any) { setVerifyError(err.message); }
     setVerifyLoading(false);
@@ -576,7 +593,17 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     linkHandledRef.current = true;
     const back = takeVerifyRedirect();
     const savedReg = readPendingRegister();
-    if (!back) { if (savedReg) setVerifyPending(savedReg); return; }
+    if (!back) {
+      // Came back after leaving for the email app (the browser may have closed the page):
+      // reopen the code screen that was open, with its timer and daily count.
+      if (savedReg) { setVerifyPending(savedReg); setVerifyMeta(savedMeta(savedReg)); setResumed(true); return; }
+      const pendingReset = readPendingReset();
+      if (pendingReset) {
+        setShowForgotPw(true); setForgotEmail(pendingReset.email); setForgotToken(pendingReset.token);
+        setForgotMeta(savedMeta(pendingReset)); setForgotOtpSent(true); setForgotLinkState(""); setResumed(true);
+      }
+      return;
+    }
     if (back.purpose === "register") {
       if (savedReg && ticketRid(savedReg.token) === back.rid) {
         setVerifyPending(savedReg);
@@ -681,7 +708,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         const canon = await get(ref(db, `gmailRegistry/${emailCanonicalKey(formEmail)}`)).catch(() => null);
         if (canon?.exists()) { toast.error("This email already has an account. Please sign in."); setLoading(false); return; }
         const t = await sendEmailCode(formEmail, "register", formName);
-        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt };
+        const pending = { name: formName, email: normalizeEmail(formEmail), password: formPassword, token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs: metaOf(t).totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax };
         savePendingRegister(pending);
         setVerifyCode("");
         setVerifyError("");
@@ -864,7 +891,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                 className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="w-4 h-4" /> {step === 1 ? "Change email" : "Back to sign in"}
               </button>
-              <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP {step + 1}/3</span>
+              <span className="flex items-center gap-2.5">
+                <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP {step + 1}/3</span>
+                <CodeCloseButton onClick={closeCodeScreen} label={onClose ? "Close" : "Back to sign in"} />
+              </span>
             </div>
             <StepDots steps={["Email", "Code", "New password"]} current={step} />
 
@@ -906,6 +936,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
               {step === 1 && (
                 <>
+                  {resumed && <ResumeNote onDismiss={() => setResumed(false)} />}
                   <SentToCard email={forgotEmail} />
                   <OtpBoxes value={forgotOtp} onChange={(v) => { setForgotOtp(v); if (forgotError) setForgotError(""); }}
                     onComplete={(v) => void confirmForgotCode(v)} disabled={forgotLoading} error={!!forgotError} />
@@ -986,11 +1017,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         <motion.div className="relative w-full max-w-[370px] py-6" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div className="relative glass-card-strong rounded-3xl p-5 border border-primary/20">
             <div className="flex items-center justify-between mb-4">
-              <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); setVerifyMeta(null); }}
+              <button onClick={() => { clearPendingRegister(); setVerifyPending(null); setVerifyCode(""); setVerifyError(""); setVerifyMeta(null); setResumed(false); }}
                 className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="w-4 h-4" /> Change email
               </button>
-              <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP 2/2</span>
+              <span className="flex items-center gap-2.5">
+                <span className="text-[10px] font-bold tracking-[2px] text-muted-foreground">STEP 2/2</span>
+                <CodeCloseButton onClick={closeCodeScreen} label={onClose ? "Close" : "Back to sign in"} />
+              </span>
             </div>
             <StepDots steps={["Your details", "Verify email"]} current={1} />
             <div className="text-center mt-5">
@@ -1005,6 +1039,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
             </div>
 
             <div className="mt-5 space-y-3">
+              {resumed && <ResumeNote onDismiss={() => setResumed(false)} />}
               <SentToCard email={verifyPending.email} />
               <OtpBoxes value={digits} onChange={(v) => { setVerifyCode(v); if (verifyError) setVerifyError(""); }}
                 onComplete={(v) => void submitVerifyCode(v)} disabled={verifyLoading} error={!!verifyError} />
@@ -1105,6 +1140,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
               />
               
               <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
+                {onClose && (
+                  <div className="absolute right-3.5 top-3.5 z-20">
+                    <CodeCloseButton onClick={onClose} label="Close" />
+                  </div>
+                )}
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{

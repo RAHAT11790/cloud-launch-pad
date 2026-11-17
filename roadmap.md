@@ -1,5 +1,11 @@
 # Roadmap
 
+## Email lands in Spam + code screen lost after leaving for Gmail (2026-11-17)
+- [x] Email: outside image host (i.ibb.co) and hidden filler text removed; real EHLO name; button now opens the site's own /verify-email page instead of the workers.dev address. Worker v7 live on Cloudflare (all secrets kept), deep check OK.
+- [x] Code screen (sign-up, forgot password, profile reset) reopens after the browser closed the page, with timer and "Welcome back" note; phone test passed for forgot password and profile reset.
+- [x] ✕ on every code screen: closes and returns to the previous place; it does not reopen afterwards (phone test).
+- [ ] Owner: publish, then check whether the new email lands in Inbox. Full Inbox guarantee needs an own domain for the sender (the shared alwaysdata.net address has low reputation).
+
 ## Audio vanishes after 3–5 s on the owner's phone + email deploy via admin (2026-11-16)
 - [x] Reproduced with the phone's 2 MB audio buffer: Study Group (Dolby DDP2.0) stopped after ~3 s with "SourceBuffer is full", then silent.
 - [x] Full buffer now waits instead of failing; decoded Dolby audio packed ~3x smaller (lossless, checked with FFmpeg).

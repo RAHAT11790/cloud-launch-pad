@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ClipboardPaste, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
+import { Check, ClipboardPaste, Clock3, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { formatWait } from "@/lib/emailService";
 
 /**
@@ -100,6 +100,27 @@ export function ResendButton({ waitSec, busy, onClick, dailyLeft }: { waitSec: n
       {waitSec > 0 ? <Clock3 className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
       {out ? "No codes left today" : waitSec > 0 ? <>Resend in <span className="tabular-nums">{formatWait(waitSec)}</span></> : "Resend code"}
     </button>
+  );
+}
+
+/** Round raised ✕ for every code screen: closes it and goes back to where the visitor was. */
+export function CodeCloseButton({ onClick, label = "Close" }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label}
+      className="otp-close relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-muted-foreground transition-all hover:text-foreground active:translate-y-[2px]">
+      <X className="h-[18px] w-[18px]" strokeWidth={2.6} />
+    </button>
+  );
+}
+
+/** "Welcome back" strip shown when a code screen was reopened after leaving the site. */
+export function ResumeNote({ onDismiss }: { onDismiss?: () => void }) {
+  return (
+    <div role="status" className="otp-resume flex items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-[11.5px] leading-snug text-foreground">
+      <span className="otp-grad grid h-7 w-7 shrink-0 place-items-center rounded-lg"><RotateCcw className="h-3.5 w-3.5 text-primary-foreground" /></span>
+      <span className="min-w-0 flex-1"><b className="block text-[12px]">Welcome back</b><span className="text-muted-foreground">Your code is still waiting. Enter it below, or tap ✕ to close.</span></span>
+      {onDismiss && <button type="button" onClick={onDismiss} aria-label="Dismiss" className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}
+    </div>
   );
 }
 

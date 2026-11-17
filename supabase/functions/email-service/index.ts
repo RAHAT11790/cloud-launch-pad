@@ -2,7 +2,7 @@
 // Lovable Cloud copy of cloudflare-workers/email-service.js (same code, Deno adapter
 // at the end). Keep both files identical above the adapter — a unit test checks it.
 // ============================================================
-// RS ANIME — EMAIL SERVICE · SMTP (Alwaysdata, Cloudflare build) · v6
+// RS ANIME — EMAIL SERVICE · SMTP (Alwaysdata, Cloudflare build) · v7
 // ------------------------------------------------------------
 // Sign-up verification + password-reset emails sent over SMTP
 // (port 465, direct TLS) through the Alwaysdata mailbox.
@@ -33,6 +33,11 @@
 //     verify | verify-otp            { ticket, code }
 //     status                         { ticket }
 //     claim                          { ticket } | { rid, grant }
+//     link                           { rid, token }  (site's /verify-email page)
+//
+// Inbox placement: the email carries no outside images and, when the site asks
+// (linkMode "site"), its button opens the site's own /verify-email page instead
+// of this Worker's address — fewer mixed domains, fewer spam signals.
 //
 // Security: OTP, link token and session are stored only as
 // HMAC-SHA256 hashes; the email address is AES-GCM encrypted.
@@ -40,7 +45,7 @@
 // link works exactly once and using one kills the other.
 // ============================================================
 
-const VERSION = "email-service-smtp-v6";
+const VERSION = "email-service-smtp-v7";
 const BRAND = "RS ANIME03";
 const LOGO = "https://i.ibb.co/6RcjXRjL/image.jpg";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
@@ -321,6 +326,8 @@ const smtpConf = (env) => {
     from: String(env.SMTP_FROM || user).trim(),
   };
 };
+/** A real host name for EHLO (the site's), never a made-up one. */
+const ehloName = (env) => { try { return new URL(siteUrl(env)).hostname || "rsanime03.lovable.app"; } catch { return "rsanime03.lovable.app"; } };
 function mailError(code, message) { const e = new Error(message); e.code = code; return e; }
 /** Opens a TLS socket. Cloudflare: cloudflare:sockets; other runtimes set globalThis.__rsOpenTls. */
 async function openTls(host, port) {
@@ -373,7 +380,7 @@ async function smtpSession(env, msg) {
   };
   try {
     await step(null, [220], "smtp_greeting", "Greeting");
-    await step("EHLO rsanime03.mail", [250], "smtp_ehlo", "EHLO");
+    await step(`EHLO ${ehloName(env)}`, [250], "smtp_ehlo", "EHLO");
     await step(`AUTH PLAIN ${bytesToB64(enc.encode(`\u0000${c.user}\u0000${c.pass}`))}`, [235], "smtp_auth_failed", "Login refused");
     if (msg) {
       if ([msg.to, c.from].some(hasCtl)) throw mailError("bad_header", "Invalid address");
@@ -478,7 +485,7 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
 }
 </style></head>
 <body style="margin:0;padding:0;background:${C.bg};">
-<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;color:${C.bg};">${esc(pre)}${"&#847;&zwnj;&nbsp;".repeat(40)}</div>
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;color:${C.bg};">${esc(pre)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bg}" style="background:${C.bg};background-image:radial-gradient(120% 60% at 50% 0%,#0E2A4F 0%,${C.bg} 62%);">
 <tr><td align="center" class="rs-outer" style="padding:32px 14px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;">
@@ -488,7 +495,9 @@ a{text-decoration:none}img{border:0;outline:none;display:block}
     <tr><td align="center" bgcolor="${C.blue}" style="background:${C.blue};background-image:${C.grad};border-radius:19px 19px 0 0;border-bottom:3px solid ${C.navy};padding:30px 20px 26px;">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
         <td style="padding:4px;border-radius:22px;background:rgba(255,255,255,.22);border-top:1px solid rgba(255,255,255,.7);border-bottom:3px solid rgba(15,23,42,.55);box-shadow:0 10px 22px rgba(2,6,23,.45);">
-          <img src="${LOGO}" width="60" height="60" alt="${BRAND}" style="width:60px;height:60px;border-radius:18px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td align="center" valign="middle" width="60" height="60" bgcolor="${C.slab}" style="${td}width:60px;height:60px;border-radius:18px;background:${C.slab};background-image:linear-gradient(160deg,${C.slabTop} 0%,${C.depth} 100%);border-top:1px solid #64748B;border-bottom:3px solid ${C.depth};font-size:24px;line-height:60px;font-weight:900;letter-spacing:1px;color:#FFFFFF;text-shadow:${DIGIT_3D};">R<span style="color:${C.gold};">S</span></td>
+          </tr></table>
         </td>
       </tr></table>
       <div class="rs-brand" style="${td}margin-top:14px;font-size:24px;font-weight:900;letter-spacing:5px;color:#FFFFFF;text-transform:uppercase;text-shadow:${BRAND_3D};">RS&nbsp;ANIME<span style="color:${C.gold};">03</span></div>
@@ -687,7 +696,7 @@ function mailGate(cfg, now, cur, prev, eh, day) {
   return { n, last };
 }
 
-async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, replaces }) {
+async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, replaces, siteLink }) {
   const cfg = await settings(env);
   const now = Date.now();
   const day = dayKey(now);
@@ -765,7 +774,9 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
   }));
 
   const site = siteUrl(env);
-  const link = `${env.__WORKER_ORIGIN}/v/${rid}/${linkToken}`;
+  // New sites open the button on their own /verify-email page (same domain as the site);
+  // older site builds keep this Worker's confirm page.
+  const link = siteLink && origin ? `${String(origin).replace(/\/+$/, "")}/verify-email/${rid}/${linkToken}` : `${env.__WORKER_ORIGIN}/v/${rid}/${linkToken}`;
   const tpl = emailTemplate({ purpose, code: otp, link, name, email, otpMinutes: cfg.otpMinutes, linkMinutes: cfg.linkMinutes, site, requestedAt: now, rid });
   const t0 = Date.now();
   try {
@@ -829,7 +840,7 @@ async function actSend(env, ctx, cors, body, origin, ip) {
   const acc = await accountCheck(env, email, purpose);
   if (acc.err) return fail(cors, purpose === "reset" ? 404 : 409, acc.err[0], acc.err[1]);
   const typed = String(body.name || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 30);
-  return issueTicket(env, ctx, cors, { email, purpose, name: acc.name || typed, origin, ip });
+  return issueTicket(env, ctx, cors, { email, purpose, name: acc.name || typed, origin, ip, siteLink: body.linkMode === "site" });
 }
 
 async function loadOwned(env, ctx, cors, ticket) {
@@ -847,7 +858,7 @@ async function actResend(env, ctx, cors, body, origin, ip) {
   const email = await unseal(env, cur.ec);
   const acc = await accountCheck(env, email, cur.p);
   if (acc.err) return fail(cors, cur.p === "reset" ? 404 : 409, acc.err[0], acc.err[1]);
-  return issueTicket(env, ctx, cors, { email, purpose: cur.p, name: acc.name || String(body.name || "").slice(0, 30), origin: cur.org || origin, ip, replaces: t.rid });
+  return issueTicket(env, ctx, cors, { email, purpose: cur.p, name: acc.name || String(body.name || "").slice(0, 30), origin: cur.org || origin, ip, replaces: t.rid, siteLink: body.linkMode === "site" });
 }
 
 function stateError(cors, st, via) {
@@ -948,17 +959,8 @@ async function actClaim(env, ctx, cors, body) {
   return json(cors, { ok: true, email: await unseal(env, out.ec), purpose: out.p, via: "link" });
 }
 
-// Link page. GET only shows a confirm page (mail scanners pre-open links);
-// the page auto-submits a POST, which is what actually verifies.
-async function linkPage(env, ctx, req, rid, token) {
-  const site = siteUrl(env);
-  const action = `/v/${rid}/${token}`;
-  if (!RID_RE.test(rid) || !TOKEN_RE.test(token)) {
-    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME03." }), 400);
-  }
-  if (req.method === "GET") {
-    return html(pageHtml({ state: "confirm", action, redirect: site, title: "Verifying your email…", message: "Please wait a moment while we confirm your email address." }));
-  }
+/** Marks a link verified exactly once (shared by the Worker page and the site's /verify-email page). */
+async function confirmLink(env, ctx, rid, token, site) {
   const lh = await hash(env, "link", rid, token);
   const now = Date.now();
   const out = await ticketTxn(env, ctx, rid, (cur) => {
@@ -971,6 +973,21 @@ async function linkPage(env, ctx, req, rid, token) {
     if (now > cur.lx) return { result: { e: "expired", p: cur.p, back } };
     return { next: { ...cur, st: "verified", via: "link", v: now }, result: { ok: true, p: cur.p, m: cur.m, ec: cur.ec, back } };
   });
+  return out;
+}
+
+// Link page. GET only shows a confirm page (mail scanners pre-open links);
+// the page auto-submits a POST, which is what actually verifies.
+async function linkPage(env, ctx, req, rid, token) {
+  const site = siteUrl(env);
+  const action = `/v/${rid}/${token}`;
+  if (!RID_RE.test(rid) || !TOKEN_RE.test(token)) {
+    return html(pageHtml({ state: "error", redirect: site, title: "Invalid link", message: "This verification link is not valid. Please open the latest email from RS ANIME03." }), 400);
+  }
+  if (req.method === "GET") {
+    return html(pageHtml({ state: "confirm", action, redirect: site, title: "Verifying your email…", message: "Please wait a moment while we confirm your email address." }));
+  }
+  const out = await confirmLink(env, ctx, rid, token, site);
   const back = out.back || site;
   if (out.ok) {
     if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m, ec: out.ec });
@@ -994,6 +1011,30 @@ async function linkPage(env, ctx, req, rid, token) {
   }[out.e] || ["Link not valid", "Please ask for a new verification email."];
   if (out.e === "expired") track(env, ctx, { expired: 1 }, { k: "expired", p: out.p });
   return html(pageHtml({ state: out.e === "done" || out.e === "used" ? "info" : "error", redirect: back, title: msg[0], message: msg[1] }), out.e === "invalid" ? 400 : 200);
+}
+
+const LINK_ERRORS = {
+  invalid: [400, "This verification link is not valid. Please open the latest email from RS ANIME03."],
+  done: [409, "This email was already verified. You can continue in the RS ANIME03 app."],
+  used: [409, "This email was already verified with the code. You can continue in the app."],
+  expired: [410, "This link has expired. Go back to RS ANIME03 and ask for a new email."],
+  replaced: [410, "A newer email was sent to you. Please use the button in the latest email."],
+  locked: [423, "This request was locked after too many wrong codes. Ask for a new email."],
+  failed: [400, "This email could not be confirmed. Please ask for a new one."],
+  sending: [409, "This email is still being prepared. Try the button again in a few seconds."],
+};
+/** JSON twin of the link page for the site's own /verify-email/{rid}/{token} page. */
+async function actLink(env, ctx, cors, body) {
+  const rid = String(body.rid || ""), token = String(body.token || "");
+  if (!RID_RE.test(rid) || !TOKEN_RE.test(token)) return fail(cors, 400, "invalid", LINK_ERRORS.invalid[1]);
+  const out = await confirmLink(env, ctx, rid, token, siteUrl(env));
+  if (out.ok) {
+    if (!out.again) track(env, ctx, { verified_link: 1 }, { k: "verified_link", p: out.p, m: out.m, ec: out.ec });
+    return json(cors, { ok: true, purpose: out.p, rid, grant: await hash(env, "grant", rid) });
+  }
+  if (out.e === "expired") track(env, ctx, { expired: 1 }, { k: "expired", p: out.p });
+  const [status, message] = LINK_ERRORS[out.e] || [400, "Please ask for a new verification email."];
+  return fail(cors, status, out.e || "invalid", message, { purpose: out.p || null });
 }
 
 let deepMemo = { at: 0, v: null };
@@ -1112,6 +1153,7 @@ const worker = {
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
         case "status": return await actStatus(env, ctx, cors, body);
         case "claim": return await actClaim(env, ctx, cors, body);
+        case "link": return await actLink(env, ctx, cors, body);
         case "admin-events": return await actAdminEvents(env, cors, body, ip);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }

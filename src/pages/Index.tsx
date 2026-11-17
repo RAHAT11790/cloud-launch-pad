@@ -573,7 +573,7 @@ import CommunityChat from "@/components/CommunityChat";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
-import { entryChosen, markEntryChosen, clearEntryChosen, loginAccessNow, subscribeLoginAccess } from "@/lib/emailService";
+import { entryChosen, markEntryChosen, clearEntryChosen, loginAccessNow, subscribeLoginAccess, pendingSignInCode } from "@/lib/emailService";
 import { currentGuestId } from "@/lib/guestPersistence";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
@@ -3359,7 +3359,16 @@ const Index = () => {
     // Each page has its own scroll container now — no need to restore window scroll
   }, []);
 
-  const [showLogin, setShowLogin] = useState(false);
+  // A sign-up / forgot-password code screen was open when the visitor left to read
+  // their email (the browser may have closed the page): reopen it over this page.
+  const [showLogin, setShowLogin] = useState(() => {
+    if (!entryDone) return false; // the sign-in wall below reopens it by itself
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
+      if (u?.id && !currentGuestId()) return false;
+    } catch {}
+    return !!pendingSignInCode();
+  });
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
@@ -3906,14 +3915,8 @@ const Index = () => {
           <LoginPage
             onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
             onGuest={() => setShowLogin(false)}
+            onClose={() => setShowLogin(false)}
           />
-          <button
-            onClick={() => setShowLogin(false)}
-            aria-label="Close"
-            className="fixed top-4 right-4 z-[410] w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/80 transition"
-          >
-            ✕
-          </button>
         </div>
       )}
 

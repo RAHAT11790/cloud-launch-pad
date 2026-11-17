@@ -24,6 +24,7 @@ const resolveSv = (cur: any, v: any): any => {
 
 let mails: string[] = [];
 let logins = 0;
+let lastEhlo = "";
 let smtpFail: null | { at: "auth" | "rcpt"; code: number; text: string } = null;
 const te = new TextEncoder();
 const tdc = new TextDecoder();
@@ -47,7 +48,7 @@ function fakeSmtp() {
           continue;
         }
         const cmd = line.slice(0, 4).toUpperCase();
-        if (cmd === "EHLO") say("250-fake.smtp\r\n250 AUTH PLAIN LOGIN");
+        if (cmd === "EHLO") { lastEhlo = line; } if (cmd === "EHLO") say("250-fake.smtp\r\n250 AUTH PLAIN LOGIN");
         else if (cmd === "AUTH") {
           logins++;
           const pass = Buffer.from(line.split(" ")[2], "base64").toString("utf8").split("\u0000")[2];
@@ -125,7 +126,7 @@ function decodeMail(raw: string) {
   const parts = mime.split(/--rs_[a-z0-9]+/);
   const body = (i: number) => Buffer.from(parts[i].split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64").toString("utf8");
   const text = body(1), html = body(2);
-  return { mime, text, html, code: text.match(/code: (\d{6})/)![1], link: text.match(/(https:\/\/\S+\/v\/\S+)/)![1] };
+  return { mime, text, html, code: text.match(/code: (\d{6})/)![1], link: text.match(/(https:\/\/\S+\/(?:v|verify-email)\/\S+)/)![1] };
 }
 
 beforeEach(() => {
@@ -149,7 +150,10 @@ describe("SMTP email worker", () => {
     expect(m.mime).toContain("From: \"RS ANIME03\" <rsanime03@alwaysdata.net>");
     expect(m.mime).toContain("To: <new.user55@gmail.com>");
     expect(m.mime).toContain("multipart/alternative");
-    expect(m.html).toContain("https://i.ibb.co/6RcjXRjL/image.jpg");
+    expect(m.html).not.toContain("<img");
+    expect(m.html).not.toContain("i.ibb.co");
+    expect(m.html).not.toContain("&#847;");
+    expect(lastEhlo).toBe("EHLO rsanime03.lovable.app");
     expect(m.html).toContain(m.code);
     expect(m.html).toContain("Verify Email");
     expect(m.link.startsWith(`${W}/v/`)).toBe(true);
@@ -166,6 +170,31 @@ describe("SMTP email worker", () => {
     expect(m.text).not.toContain("Copy it here");
     expect(m.html).toMatch(new RegExp(`user-select:all[^>]*>${m.code}</td>`));
     expect((await link(`${W}/c`, "GET")).html).not.toContain("Copy code");
+  });
+
+  it("site link mode: the button opens the site's own /verify-email page, which verifies once", async () => {
+    const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register", linkMode: "site" });
+    const m = decodeMail(mails[0]);
+    const site = m.text.match(/(https:\/\/\S+\/verify-email\/(\S+)\/(\S+))/)!;
+    expect(site[1].startsWith(`${SITE}/verify-email/`)).toBe(true);
+    expect(m.html).not.toContain("workers.dev");
+    expect(m.text).not.toContain("workers.dev");
+    expect((await api("status", { ticket: data.ticket })).data.status).toBe("pending");
+    const ok = await api("link", { rid: site[2], token: site[3] });
+    expect(ok.data).toMatchObject({ ok: true, purpose: "register", rid: site[2] });
+    expect(String(ok.data.grant).length).toBeGreaterThan(10);
+    expect((await api("status", { ticket: data.ticket })).data.status).toBe("verified");
+    expect((await api("claim", { ticket: data.ticket })).data).toMatchObject({ ok: true, via: "link" });
+    expect((await api("link", { rid: site[2], token: site[3] })).data.error).toBe("done");
+    expect((await api("link", { rid: site[2], token: "x".repeat(43) })).data.ok).toBe(false);
+  });
+
+  it("site link mode is kept on resend", async () => {
+    const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register", linkMode: "site" });
+    now += 61_000;
+    await api("resend", { ticket: data.ticket, linkMode: "site" });
+    const m = decodeMail(mails[mails.length - 1]);
+    expect(m.text).toContain(`${SITE}/verify-email/`);
   });
 
   it("stores only hashes — no plain email, code or link token in the database", async () => {

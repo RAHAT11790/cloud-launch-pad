@@ -44,9 +44,12 @@ export function browserBrands(nav: Navigator): string[] | null {
   const data = (nav as Navigator & { userAgentData?: { brands?: { brand: string }[] } }).userAgentData;
   return Array.isArray(data?.brands) ? data.brands.map(b => b.brand) : null;
 }
-/** The admin panel (also opened from the Telegram mini app) is never browser-gated. */
+/**
+ * The admin panel (also opened from the Telegram mini app) and the email's
+ * Verify / Reset button page (opened from any mail app) are never browser-gated.
+ */
 export function browserGateApplies(pathname: string) {
-  return !/^\/admin(?:\/|$)/.test(pathname);
+  return !/^\/(?:admin|verify-email)(?:\/|$)/.test(pathname);
 }
 export function chromeLaunchUrl(url: string, ua: string): string {
   const parsed = new URL(url);

@@ -36,6 +36,7 @@ import { FrameBackLayers, FrameFrontLayers, frameStyleVars } from "@/components/
 import BackdropMedia from "@/components/profile/BackdropMedia";
 import EditProfilePanel from "@/components/profile/EditProfilePanel";
 import PasswordSecurityPanel from "@/components/profile/PasswordSecurityPanel";
+import { readPendingProfileReset } from "@/lib/emailService";
 import { moodOf, readCachedCard, subscribeProfileCard, type ProfileCard } from "@/lib/profileCard";
 
 import VideoPlayer from "@/components/VideoPlayer";
@@ -493,7 +494,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   })();
   const brandingCfg = useBranding();
   const { wallet: coinWallet, settings: premiumSettings } = usePremium();
-  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "customize" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
+  // Reopen "Password & security" when its emailed code was still waiting (the visitor left to read the email).
+  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "customize" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
+      if (u?.email && readPendingProfileReset(String(u.email))) return "change-password";
+    } catch {}
+    return "main";
+  });
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try {
       const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;

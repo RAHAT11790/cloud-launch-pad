@@ -6,8 +6,9 @@ import { db, get, ref, set, update } from "@/lib/firebase";
 import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 import {
   claimEmailLink, cooldownLeftMs, EmailServiceError, normalizeEmail, resendEmailCode, sendEmailCode, verifyEmailCode,
+  savePendingProfileReset, readPendingProfileReset, clearPendingProfileReset,
 } from "@/lib/emailService";
-import { CodeTimer, DailyPips, OtpBoxes, PasteCodeButton, PasswordStrength, ResendButton, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
+import { CodeCloseButton, CodeTimer, DailyPips, OtpBoxes, PasteCodeButton, PasswordStrength, ResendButton, ResumeNote, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
 
 const keyOf = (email: string) => email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
 const legacyKeyOf = (email: string) => email.toLowerCase().replace(/[^a-z0-9]/g, "_");
@@ -57,6 +58,8 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
   const [verified, setVerified] = useState<"" | "code" | "link">("");
   const [wait, setWait] = useState(0);
   const [now, setNow] = useState(Date.now());
+  /** Reopened after the visitor came back from their email app. */
+  const [resumed, setResumed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -64,6 +67,12 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
         const e = String(u.email || "");
         setEmail(e);
+        // A code was sent before the visitor left to read their email → reopen that step.
+        const saved = e ? readPendingProfileReset(e) : null;
+        if (saved) {
+          setMode("reset"); setTicket(saved.token); setVerified(""); setResumed(true);
+          setMeta({ expiresAt: saved.expiresAt, totalMs: Math.max(60_000, Number(saved.totalMs) || 5 * 60_000), dailyLeft: saved.dailyLeft ?? null, dailyMax: saved.dailyMax ?? null });
+        }
         if (!e) { setHasPassword(false); return; }
         for (const k of [keyOf(e), legacyKeyOf(e)]) {
           const s = await get(ref(db, `appUsers/${k}`));
@@ -135,8 +144,10 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
           else throw err;
         }
       } else t = await sendEmailCode(email, "reset");
-      setTicket(t.token); setCode(""); setVerified("");
-      setMeta({ expiresAt: t.expiresAt, totalMs: Math.max(60_000, t.expiresAt - Date.now()), dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
+      const totalMs = Math.max(60_000, t.expiresAt - Date.now());
+      setTicket(t.token); setCode(""); setVerified(""); setResumed(false);
+      setMeta({ expiresAt: t.expiresAt, totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
+      savePendingProfileReset({ email: normalizeEmail(email), token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
     } catch (e: any) { setError(e?.message || "Could not send the code"); }
     setBusy(false);
   };
@@ -148,7 +159,8 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     try {
       const r = await verifyEmailCode(ticket, v);
       if (r.email !== normalizeEmail(email) || r.purpose !== "reset") throw new Error("This code belongs to another email.");
-      setVerified("code");
+      setVerified("code"); setResumed(false);
+      clearPendingProfileReset();
     } catch (e: any) { setError(e?.message || "Incorrect code"); setCode(""); }
     setBusy(false);
   };
@@ -163,17 +175,20 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
         if (r.email !== normalizeEmail(email) || r.purpose !== "reset") throw new Error("This link belongs to another email.");
       }
       await writePassword(newPw);
+      clearPendingProfileReset();
       toast.success("New password saved");
       onBack();
     } catch (e: any) {
       setError(e?.message || "Could not save the password");
-      if (e instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(e.code)) { setTicket(""); setVerified(""); }
+      if (e instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(e.code)) { setTicket(""); setVerified(""); clearPendingProfileReset(); }
     }
     setBusy(false);
   };
 
   const enterReset = () => { setMode("reset"); setError(""); setOldPw(""); setNewPw(""); setConfirmPw(""); };
-  const leaveReset = () => { setMode("change"); setError(""); setTicket(""); setVerified(""); setCode(""); setNewPw(""); setConfirmPw(""); };
+  const leaveReset = () => { setMode("change"); setError(""); setTicket(""); setVerified(""); setCode(""); setNewPw(""); setConfirmPw(""); setResumed(false); clearPendingProfileReset(); };
+  /** ✕: drop the emailed code on this device and go back to where the visitor was. */
+  const closeReset = () => { leaveReset(); onBack(); };
   const step = !ticket ? 0 : verified ? 2 : 1;
 
   return (
@@ -187,6 +202,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
           <h2 className="text-base font-extrabold leading-tight">{mode === "reset" ? "Reset by email" : "Password & security"}</h2>
           <p className="text-[10.5px] text-muted-foreground truncate">{email || "No email on this account"}</p>
         </div>
+        {mode === "reset" && <span className="ml-auto"><CodeCloseButton onClick={closeReset} label="Close" /></span>}
       </div>
 
       <div className="mx-auto w-full max-w-[480px] px-4 pt-4 pb-28 space-y-3">
@@ -238,6 +254,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
             )}
             {step === 1 && (
               <>
+                {resumed && <ResumeNote onDismiss={() => setResumed(false)} />}
                 <SentToCard email={email} />
                 <OtpBoxes value={code} onChange={(v) => { setCode(v); if (error) setError(""); }} onComplete={(v) => void checkCode(v)} disabled={busy} error={!!error} />
                 <PasteCodeButton disabled={busy} onCode={(c) => { setCode(c); if (error) setError(""); }} />

@@ -146,7 +146,7 @@ export async function sendEmailCode(email: string, purpose: EmailPurpose, name?:
   const wait = cooldownLeftMs(e);
   if (wait > 0) throw new EmailServiceError("cooldown", `A code was already sent. You can ask for a new one in ${formatWait(Math.ceil(wait / 1000))}.`, { retryAfter: Math.ceil(wait / 1000) });
   try {
-    const t = toTicket(await call("send", { email: e, purpose, name }));
+    const t = toTicket(await call("send", { email: e, purpose, name, linkMode: "site" }));
     markResendAt(e, t.resendAt);
     return t;
   } catch (err) { rememberCooldown(e, err); throw err; }
@@ -156,7 +156,7 @@ export async function sendEmailCode(email: string, purpose: EmailPurpose, name?:
 export async function resendEmailCode(ticket: string, email: string): Promise<EmailTicket> {
   const e = normalizeEmail(email);
   try {
-    const t = toTicket(await call("resend", { ticket }));
+    const t = toTicket(await call("resend", { ticket, linkMode: "site" }));
     markResendAt(e, t.resendAt);
     return t;
   } catch (err) { rememberCooldown(e, err); throw err; }
@@ -189,6 +189,15 @@ export async function claimEmailLink(ticketOrRid: string, grant?: string): Promi
 
 export const ticketRid = (ticket: string) => String(ticket || "").split(".")[0] || "";
 
+/**
+ * The email button opens this site's /verify-email/{rid}/{token} page (same domain
+ * as the site, which keeps the email out of Spam). That page confirms it here once.
+ */
+export async function confirmEmailLinkOnSite(rid: string, token: string): Promise<{ purpose: EmailPurpose; rid: string; grant: string }> {
+  const d = await call("link", { rid, token });
+  return { purpose: d.purpose === "reset" ? "reset" : "register", rid: String(d.rid || rid), grant: String(d.grant || "") };
+}
+
 /** Reads (and removes) the ?ev=…&eg=…&ep=… the email link page sends people back with. */
 export function takeVerifyRedirect(): { rid: string; grant: string; purpose: EmailPurpose } | null {
   try {
@@ -206,7 +215,7 @@ export function takeVerifyRedirect(): { rid: string; grant: string; purpose: Ema
 
 // ---- Pending sign-up (lets the email's "Verify" button finish sign-up) ----
 const PENDING_KEY = "rs_pending_register";
-export type PendingRegister = { name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number };
+export type PendingRegister = { name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
 export const savePendingRegister = (p: PendingRegister) => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch {} };
 export const clearPendingRegister = () => { try { localStorage.removeItem(PENDING_KEY); } catch {} };
 export function readPendingRegister(now = Date.now()): PendingRegister | null {
@@ -220,7 +229,7 @@ export function readPendingRegister(now = Date.now()): PendingRegister | null {
 
 // ---- Pending password reset (so the email button can come back to this device) ----
 const RESET_KEY = "rs_pending_reset";
-export type PendingReset = { email: string; token: string; expiresAt: number; linkExpiresAt: number };
+export type PendingReset = { email: string; token: string; expiresAt: number; linkExpiresAt: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
 export const savePendingReset = (p: PendingReset) => { try { localStorage.setItem(RESET_KEY, JSON.stringify(p)); } catch {} };
 export const clearPendingReset = () => { try { localStorage.removeItem(RESET_KEY); } catch {} };
 export function readPendingReset(now = Date.now()): PendingReset | null {
@@ -229,6 +238,30 @@ export function readPendingReset(now = Date.now()): PendingReset | null {
     if (!p?.token || !p?.email || Math.max(Number(p.expiresAt) || 0, Number(p.linkExpiresAt) || 0) < now) return null;
     return p;
   } catch { return null; }
+}
+
+// ---- Pending in-profile password reset (signed-in "Forgot your current password?") ----
+const PROFILE_RESET_KEY = "rs_pending_profile_reset";
+export const savePendingProfileReset = (p: PendingReset) => { try { localStorage.setItem(PROFILE_RESET_KEY, JSON.stringify(p)); } catch {} };
+export const clearPendingProfileReset = () => { try { localStorage.removeItem(PROFILE_RESET_KEY); } catch {} };
+export function readPendingProfileReset(email?: string, now = Date.now()): PendingReset | null {
+  try {
+    const p = JSON.parse(localStorage.getItem(PROFILE_RESET_KEY) || "null");
+    if (!p?.token || !p?.email || !String(p.token).includes(".")) return null;
+    if (Math.max(Number(p.expiresAt) || 0, Number(p.linkExpiresAt) || 0) < now) return null;
+    if (email != null && normalizeEmail(email) !== normalizeEmail(p.email)) return null;
+    return p;
+  } catch { return null; }
+}
+
+/**
+ * A code screen the visitor left to read their email (the browser may have closed
+ * the page meanwhile). When one is still live, the site reopens that code screen.
+ */
+export function pendingSignInCode(now = Date.now()): "register" | "reset" | null {
+  if (readPendingRegister(now)) return "register";
+  if (readPendingReset(now)) return "reset";
+  return null;
 }
 
 // ---- Login-first entry wall ----
