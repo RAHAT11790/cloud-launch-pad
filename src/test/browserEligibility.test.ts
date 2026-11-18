@@ -22,7 +22,6 @@ describe("Chrome-only by browser brand", () => {
     expect(browserGateApplies("/admin")).toBe(false);
     expect(browserGateApplies("/admin/series")).toBe(false);
     expect(browserGateApplies("/watch/naruto")).toBe(true);
-    expect(browserGateApplies("/verify-email/abc/def")).toBe(false);
-    expect(browserGateApplies("/verify-emailx")).toBe(true);
+    expect(browserGateApplies("/verify-email/abc/def")).toBe(true);
   });
 });

@@ -1,5 +1,17 @@
 # Roadmap
 
+## Email without links + reset only for real accounts + redeem/lucky spin (2026-11-18)
+- [x] Email: no button, no link, no site/worker address, no "powered by"; only RS ANIME03 name, code, expiry, safety note; code in the subject. Worker v8 live on Cloudflare (all 11 secrets kept). Gmail decides itself whether to show "Copy code".
+- [x] Email: only Alwaysdata's names in the mail conversation (no own domain).
+- [x] Forgot password: email not in the database ⇒ no code, "ID not found. Please sign up first." (phone test).
+- [x] Redeem: bKash opens the bKash plans, Redeem Code opens the code box (phone test).
+- [x] Lucky Spin: admin tab (on/off, coins per spin, spins per N days, prizes with chance), golden Profile + Premium page button with timer, 3D wheel with logo (phone test: 3 spins, 60→0 coins, 2 days Premium won, locked 6d 23h). Left OFF for owner to switch on.
+- [ ] Admin Lucky Spin screen not opened in the test (admin PIN not available to me).
+- [ ] Backup copy of the email sender on Lovable Cloud not updated: Cloud is paused (Cloudflare copy is the live one).
+- [ ] Owner: check Gmail for the reset code mail sent in the test (Inbox / Copy code).
+- [ ] Waits for owner: Python email server (asked — default "not needed").
+- [ ] Waits for owner: whole-database Base64 encode (asked; passwords are readable by anyone today).
+
 ## Email lands in Spam + code screen lost after leaving for Gmail (2026-11-17)
 - [x] Email: outside image host (i.ibb.co) and hidden filler text removed; real EHLO name; button now opens the site's own /verify-email page instead of the workers.dev address. Worker v7 live on Cloudflare (all secrets kept), deep check OK.
 - [x] Code screen (sign-up, forgot password, profile reset) reopens after the browser closed the page, with timer and "Welcome back" note; phone test passed for forgot password and profile reset.

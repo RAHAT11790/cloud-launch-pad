@@ -67,13 +67,15 @@ export class EmailServiceError extends Error {
   }
 }
 
+/** Shown when "Forgot password" is used for an email that has no account (the Worker says the same). */
+export const NO_ACCOUNT_TEXT = "ID not found. Please sign up first.";
+
 /** Opaque "rid.session" ticket returned by the email Worker. */
 export type EmailTicket = {
-  token: string; expiresAt: number; linkExpiresAt: number; resendAt: number; maxAttempts: number;
+  token: string; expiresAt: number; resendAt: number; maxAttempts: number;
   /** Codes this email can still request today (Bangladesh day), and the daily maximum. */
   dailyLeft: number | null; dailyMax: number | null;
 };
-export type EmailStatus = "pending" | "verified" | "consumed" | "replaced" | "expired" | "locked" | "failed";
 
 const COOLDOWN_KEY = "rs_email_cooldown";
 const COOLDOWN_MS = 300_000;
@@ -123,7 +125,7 @@ async function call(action: string, body: Record<string, unknown>) {
   return data;
 }
 const toTicket = (d: any): EmailTicket => ({
-  token: String(d.ticket), expiresAt: Number(d.expiresAt), linkExpiresAt: Number(d.linkExpiresAt) || Number(d.expiresAt),
+  token: String(d.ticket), expiresAt: Number(d.expiresAt),
   resendAt: Number(d.resendAt) || Date.now() + COOLDOWN_MS, maxAttempts: Number(d.maxAttempts) || 5,
   dailyLeft: d.dailyLeft == null ? null : Number(d.dailyLeft), dailyMax: d.dailyMax == null ? null : Number(d.dailyMax),
 });
@@ -139,103 +141,59 @@ export function formatWait(sec: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
-/** Sends one email with a 6-digit code and a one-tap "Verify" link (SMTP email Worker). */
+/** Sends one code-only email with a 6-digit code (SMTP email Worker). */
 export async function sendEmailCode(email: string, purpose: EmailPurpose, name?: string): Promise<EmailTicket> {
   const e = normalizeEmail(email);
   if (!isAllowedEmail(e)) throw new EmailServiceError("domain_not_allowed", `Only ${allowedDomainsLabel(loginAccessNow().allowedDomains)} addresses are allowed.`);
   const wait = cooldownLeftMs(e);
   if (wait > 0) throw new EmailServiceError("cooldown", `A code was already sent. You can ask for a new one in ${formatWait(Math.ceil(wait / 1000))}.`, { retryAfter: Math.ceil(wait / 1000) });
   try {
-    const t = toTicket(await call("send", { email: e, purpose, name, linkMode: "site" }));
+    const t = toTicket(await call("send", { email: e, purpose, name }));
     markResendAt(e, t.resendAt);
     return t;
   } catch (err) { rememberCooldown(e, err); throw err; }
 }
 
-/** New email for the same request; the previous code and link stop working. */
+/** New email for the same request; the previous code stops working. */
 export async function resendEmailCode(ticket: string, email: string): Promise<EmailTicket> {
   const e = normalizeEmail(email);
   try {
-    const t = toTicket(await call("resend", { ticket, linkMode: "site" }));
+    const t = toTicket(await call("resend", { ticket }));
     markResendAt(e, t.resendAt);
     return t;
   } catch (err) { rememberCooldown(e, err); throw err; }
 }
 
-/** Checks the 6-digit code. Single use: the email link stops working once this succeeds. */
-export async function verifyEmailCode(ticket: string, code: string): Promise<{ email: string; purpose: EmailPurpose; via: "otp" | "link" }> {
-  try {
-    const data = await call("verify", { ticket, code: String(code).replace(/\D/g, "") });
-    clearResendAt(String(data.email));
-    return { email: String(data.email), purpose: data.purpose === "reset" ? "reset" : "register", via: "otp" };
-  } catch (err) {
-    // The user tapped the email button first — finish with that instead.
-    if (err instanceof EmailServiceError && err.code === "verified_by_link") return claimEmailLink(ticket);
-    throw err;
-  }
+/** Checks the 6-digit code. Single use. */
+export async function verifyEmailCode(ticket: string, code: string): Promise<{ email: string; purpose: EmailPurpose; via: "otp" }> {
+  const data = await call("verify", { ticket, code: String(code).replace(/\D/g, "") });
+  clearResendAt(String(data.email));
+  return { email: String(data.email), purpose: data.purpose === "reset" ? "reset" : "register", via: "otp" };
 }
 
-export async function checkEmailStatus(ticket: string): Promise<{ status: EmailStatus; purpose: EmailPurpose; codeExpired: boolean; attemptsLeft: number }> {
-  const d = await call("status", { ticket });
-  return { status: d.status, purpose: d.purpose === "reset" ? "reset" : "register", codeExpired: !!d.codeExpired, attemptsLeft: Number(d.attemptsLeft) || 0 };
-}
-
-/** Finishes a link-verified request exactly once (ticket owner, or a reset grant from the link page). */
-export async function claimEmailLink(ticketOrRid: string, grant?: string): Promise<{ email: string; purpose: EmailPurpose; via: "link" }> {
-  const d = await call("claim", grant ? { rid: ticketOrRid, grant } : { ticket: ticketOrRid });
-  clearResendAt(String(d.email));
-  return { email: String(d.email), purpose: d.purpose === "reset" ? "reset" : "register", via: "link" };
-}
-
-export const ticketRid = (ticket: string) => String(ticket || "").split(".")[0] || "";
-
-/**
- * The email button opens this site's /verify-email/{rid}/{token} page (same domain
- * as the site, which keeps the email out of Spam). That page confirms it here once.
- */
-export async function confirmEmailLinkOnSite(rid: string, token: string): Promise<{ purpose: EmailPurpose; rid: string; grant: string }> {
-  const d = await call("link", { rid, token });
-  return { purpose: d.purpose === "reset" ? "reset" : "register", rid: String(d.rid || rid), grant: String(d.grant || "") };
-}
-
-/** Reads (and removes) the ?ev=…&eg=…&ep=… the email link page sends people back with. */
-export function takeVerifyRedirect(): { rid: string; grant: string; purpose: EmailPurpose } | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const rid = params.get("ev") || "";
-    const grant = params.get("eg") || "";
-    if (!rid || !grant) return null;
-    const purpose: EmailPurpose = params.get("ep") === "reset" ? "reset" : "register";
-    for (const k of ["ev", "eg", "ep", "verify", "code"]) params.delete(k);
-    const q = params.toString();
-    window.history.replaceState(window.history.state, "", window.location.pathname + (q ? `?${q}` : "") + window.location.hash);
-    return { rid, grant, purpose };
-  } catch { return null; }
-}
-
-// ---- Pending sign-up (lets the email's "Verify" button finish sign-up) ----
+// ---- Pending sign-up (reopens the code screen after leaving for the email app) ----
 const PENDING_KEY = "rs_pending_register";
-export type PendingRegister = { name: string; email: string; password: string; token: string; expiresAt: number; linkExpiresAt?: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
+export type PendingRegister = { name: string; email: string; password: string; token: string; expiresAt: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
 export const savePendingRegister = (p: PendingRegister) => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch {} };
 export const clearPendingRegister = () => { try { localStorage.removeItem(PENDING_KEY); } catch {} };
 export function readPendingRegister(now = Date.now()): PendingRegister | null {
   try {
     const p = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
     if (!p?.token || !p?.email || !String(p.token).includes(".")) return null;
-    if (Math.max(Number(p.expiresAt) || 0, Number(p.linkExpiresAt) || 0) < now) return null;
+    if ((Number(p.expiresAt) || 0) < now) return null;
     return p;
   } catch { return null; }
 }
 
-// ---- Pending password reset (so the email button can come back to this device) ----
+// ---- Pending password reset (reopens the code screen after leaving for the email app) ----
 const RESET_KEY = "rs_pending_reset";
-export type PendingReset = { email: string; token: string; expiresAt: number; linkExpiresAt: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
+export type PendingReset = { email: string; token: string; expiresAt: number; totalMs?: number; dailyLeft?: number | null; dailyMax?: number | null };
 export const savePendingReset = (p: PendingReset) => { try { localStorage.setItem(RESET_KEY, JSON.stringify(p)); } catch {} };
 export const clearPendingReset = () => { try { localStorage.removeItem(RESET_KEY); } catch {} };
 export function readPendingReset(now = Date.now()): PendingReset | null {
   try {
     const p = JSON.parse(localStorage.getItem(RESET_KEY) || "null");
-    if (!p?.token || !p?.email || Math.max(Number(p.expiresAt) || 0, Number(p.linkExpiresAt) || 0) < now) return null;
+    if (!p?.token || !p?.email || (Number(p.expiresAt) || 0) < now) return null;
     return p;
   } catch { return null; }
 }
@@ -248,7 +206,7 @@ export function readPendingProfileReset(email?: string, now = Date.now()): Pendi
   try {
     const p = JSON.parse(localStorage.getItem(PROFILE_RESET_KEY) || "null");
     if (!p?.token || !p?.email || !String(p.token).includes(".")) return null;
-    if (Math.max(Number(p.expiresAt) || 0, Number(p.linkExpiresAt) || 0) < now) return null;
+    if ((Number(p.expiresAt) || 0) < now) return null;
     if (email != null && normalizeEmail(email) !== normalizeEmail(p.email)) return null;
     return p;
   } catch { return null; }

@@ -7,6 +7,8 @@ import { useBranding } from "@/hooks/useBranding";
 import { usePremium } from "@/hooks/usePremium";
 import { firebaseRestGet } from "@/lib/firebaseRest";
 import { buyPremiumWithCoins, type CoinPlan } from "@/lib/premiumAccess";
+import { premiumPayPath } from "@/lib/premiumPayLink";
+import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 
 const DEFAULT_COIN_PLANS: CoinPlan[] = [
   { id: "coin-10d", name: "10 Days", coins: 100, days: 10 },
@@ -123,7 +125,7 @@ export default function PremiumBuyPage() {
           <Button
             variant="outline"
             className="h-14 justify-start border-white/10 hover:bg-white/5"
-            onClick={() => navigate("/premium?tab=bkash")}
+            onClick={() => navigate(premiumPayPath("bkash"))}
           >
             <CreditCard className="w-5 h-5 text-pink-400" />
             <div className="text-left">
@@ -134,7 +136,7 @@ export default function PremiumBuyPage() {
           <Button
             variant="outline"
             className="h-14 justify-start border-white/10 hover:bg-white/5"
-            onClick={() => navigate("/premium?tab=redeem")}
+            onClick={() => navigate(premiumPayPath("redeem"))}
           >
             <KeyRound className="w-5 h-5 text-indigo-400" />
             <div className="text-left">
@@ -143,6 +145,9 @@ export default function PremiumBuyPage() {
             </div>
           </Button>
         </div>
+
+        {/* Lucky Spin — shown only while the admin has it switched on */}
+        <div className="mt-4"><LuckySpinButton /></div>
 
         {/* Buy with Coins — admin can close this store from Daily Task Manager */}
         {settings.coinStoreEnabled === false ? (

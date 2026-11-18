@@ -3,9 +3,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, Eye, EyeOff, KeyRound, Lock, Mail, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { db, get, ref, set, update } from "@/lib/firebase";
-import { useEmailLinkWatch } from "@/hooks/useEmailLinkWatch";
 import {
-  claimEmailLink, cooldownLeftMs, EmailServiceError, normalizeEmail, resendEmailCode, sendEmailCode, verifyEmailCode,
+  cooldownLeftMs, EmailServiceError, normalizeEmail, resendEmailCode, sendEmailCode, verifyEmailCode,
   savePendingProfileReset, readPendingProfileReset, clearPendingProfileReset,
 } from "@/lib/emailService";
 import { CodeCloseButton, CodeTimer, DailyPips, OtpBoxes, PasteCodeButton, PasswordStrength, ResendButton, ResumeNote, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
@@ -55,7 +54,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
   const [ticket, setTicket] = useState("");
   const [meta, setMeta] = useState<{ expiresAt: number; totalMs: number; dailyLeft: number | null; dailyMax: number | null } | null>(null);
   const [code, setCode] = useState("");
-  const [verified, setVerified] = useState<"" | "code" | "link">("");
+  const [verified, setVerified] = useState(false);
   const [wait, setWait] = useState(0);
   const [now, setNow] = useState(Date.now());
   /** Reopened after the visitor came back from their email app. */
@@ -70,7 +69,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
         // A code was sent before the visitor left to read their email → reopen that step.
         const saved = e ? readPendingProfileReset(e) : null;
         if (saved) {
-          setMode("reset"); setTicket(saved.token); setVerified(""); setResumed(true);
+          setMode("reset"); setTicket(saved.token); setVerified(false); setResumed(true);
           setMeta({ expiresAt: saved.expiresAt, totalMs: Math.max(60_000, Number(saved.totalMs) || 5 * 60_000), dailyLeft: saved.dailyLeft ?? null, dailyMax: saved.dailyMax ?? null });
         }
         if (!e) { setHasPassword(false); return; }
@@ -90,11 +89,6 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     const id = setInterval(t, 1000);
     return () => clearInterval(id);
   }, [mode, ticket, email]);
-
-  useEmailLinkWatch(mode === "reset" && ticket && !verified ? ticket : null, () => {
-    setVerified("link");
-    toast.success("Email confirmed — now set your new password");
-  });
 
   const pwMatch = confirmPw ? (newPw === confirmPw ? "ok" : "bad") : null;
   const pwReady = newPw.length >= MIN && newPw === confirmPw;
@@ -145,9 +139,9 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
         }
       } else t = await sendEmailCode(email, "reset");
       const totalMs = Math.max(60_000, t.expiresAt - Date.now());
-      setTicket(t.token); setCode(""); setVerified(""); setResumed(false);
+      setTicket(t.token); setCode(""); setVerified(false); setResumed(false);
       setMeta({ expiresAt: t.expiresAt, totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
-      savePendingProfileReset({ email: normalizeEmail(email), token: t.token, expiresAt: t.expiresAt, linkExpiresAt: t.linkExpiresAt, totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
+      savePendingProfileReset({ email: normalizeEmail(email), token: t.token, expiresAt: t.expiresAt, totalMs, dailyLeft: t.dailyLeft, dailyMax: t.dailyMax });
     } catch (e: any) { setError(e?.message || "Could not send the code"); }
     setBusy(false);
   };
@@ -159,7 +153,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     try {
       const r = await verifyEmailCode(ticket, v);
       if (r.email !== normalizeEmail(email) || r.purpose !== "reset") throw new Error("This code belongs to another email.");
-      setVerified("code"); setResumed(false);
+      setVerified(true); setResumed(false);
       clearPendingProfileReset();
     } catch (e: any) { setError(e?.message || "Incorrect code"); setCode(""); }
     setBusy(false);
@@ -170,23 +164,19 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     if (!pwReady) { setError(newPw.length < MIN ? `New password needs at least ${MIN} characters` : "Passwords don't match"); return; }
     setBusy(true);
     try {
-      if (verified === "link") {
-        const r = await claimEmailLink(ticket);
-        if (r.email !== normalizeEmail(email) || r.purpose !== "reset") throw new Error("This link belongs to another email.");
-      }
       await writePassword(newPw);
       clearPendingProfileReset();
       toast.success("New password saved");
       onBack();
     } catch (e: any) {
       setError(e?.message || "Could not save the password");
-      if (e instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(e.code)) { setTicket(""); setVerified(""); clearPendingProfileReset(); }
+      if (e instanceof EmailServiceError && ["already_used", "replaced", "locked", "expired", "not_found"].includes(e.code)) { setTicket(""); setVerified(false); clearPendingProfileReset(); }
     }
     setBusy(false);
   };
 
   const enterReset = () => { setMode("reset"); setError(""); setOldPw(""); setNewPw(""); setConfirmPw(""); };
-  const leaveReset = () => { setMode("change"); setError(""); setTicket(""); setVerified(""); setCode(""); setNewPw(""); setConfirmPw(""); setResumed(false); clearPendingProfileReset(); };
+  const leaveReset = () => { setMode("change"); setError(""); setTicket(""); setVerified(false); setCode(""); setNewPw(""); setConfirmPw(""); setResumed(false); clearPendingProfileReset(); };
   /** ✕: drop the emailed code on this device and go back to where the visitor was. */
   const closeReset = () => { leaveReset(); onBack(); };
   const step = !ticket ? 0 : verified ? 2 : 1;
@@ -242,7 +232,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
             {step === 0 && (
               <>
                 <div className="rounded-xl bg-foreground/5 p-3 text-[11.5px] text-muted-foreground leading-relaxed">
-                  We'll email a 6-digit code and a one-tap reset button to<br /><b className="text-foreground break-all">{email}</b>
+                  We'll email a 6-digit code to<br /><b className="text-foreground break-all">{email}</b>
                 </div>
                 {error && <Err text={error} />}
                 <motion.button whileTap={{ scale: 0.98 }} onClick={sendCode} disabled={busy || !email}
@@ -260,7 +250,6 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
                 <PasteCodeButton disabled={busy} onCode={(c) => { setCode(c); if (error) setError(""); }} />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   {meta && <CodeTimer expiresAt={meta.expiresAt} totalMs={meta.totalMs} now={now} />}
-                  <span className="text-[11px] text-muted-foreground">or tap the email button</span>
                 </div>
                 {error && <Err text={error} />}
                 <motion.button whileTap={{ scale: 0.98 }} onClick={() => checkCode()} disabled={busy || code.length !== 6}
@@ -277,7 +266,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
               <>
                 <div className="flex items-center gap-2.5 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3.5 py-2.5 text-[11.5px]">
                   <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>{verified === "link" ? "Email confirmed with the button." : "Code accepted."} Choose a new password.</span>
+                  <span>Code accepted. Choose a new password.</span>
                 </div>
                 <PwInput value={newPw} onChange={(v) => { setNewPw(v); setError(""); }} placeholder={`New password (min ${MIN})`} show={show} onToggle={() => setShow((s) => !s)} autoFocus />
                 <PasswordStrength value={newPw} />

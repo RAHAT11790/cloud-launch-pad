@@ -1,6 +1,8 @@
 import { filterExistingHistory } from "@/lib/historyFilter";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
+import { clearPremiumPayParam, readPremiumPayTab } from "@/lib/premiumPayLink";
+import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
 import { motion, AnimatePresence } from "framer-motion";
@@ -500,6 +502,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
       if (u?.email && readPendingProfileReset(String(u.email))) return "change-password";
     } catch {}
+    // Opened from the Premium page's bKash / Redeem Code buttons.
+    if (readPremiumPayTab(window.location.search)) return "premium";
     return "main";
   });
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
@@ -549,7 +553,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [pendingPaymentRequest, setPendingPaymentRequest] = useState<any | null>(null);
   const [editingPendingRequest, setEditingPendingRequest] = useState(false);
   const [bkashSenderNumber, setBkashSenderNumber] = useState("");
-  const [paymentTab, setPaymentTab] = useState<"bkash" | "redeem">("bkash");
+  const [paymentTab, setPaymentTab] = useState<"bkash" | "redeem">(() => readPremiumPayTab(window.location.search) || "bkash");
+  useEffect(() => { clearPremiumPayParam(); }, []);
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
   const [customization, setCustomization] = useState<ProfileCustomization>(() => {
@@ -1958,6 +1963,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </span>
           <ChevronRight className="h-4 w-4 shrink-0" />
         </Button>
+
+        <LuckySpinButton />
 
 
 

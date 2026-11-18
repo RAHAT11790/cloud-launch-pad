@@ -115,22 +115,16 @@ async function api(action: string, body: Record<string, unknown>, opts: { origin
   await flush();
   return { status: res.status, data: await res.json() };
 }
-const link = async (url: string, method: "GET" | "POST") => {
-  const r = await worker.fetch(new Request(url, { method }), ENV, ctx);
-  await flush();
-  return { status: r.status, html: await r.text(), headers: r.headers };
-};
-
 function decodeMail(raw: string) {
   const mime = raw;
   const parts = mime.split(/--rs_[a-z0-9]+/);
   const body = (i: number) => Buffer.from(parts[i].split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64").toString("utf8");
   const text = body(1), html = body(2);
-  return { mime, text, html, code: text.match(/code: (\d{6})/)![1], link: text.match(/(https:\/\/\S+\/(?:v|verify-email)\/\S+)/)![1] };
+  return { mime, text, html, code: text.match(/code: (\d{6})/)![1] };
 }
 
 beforeEach(() => {
-  tree = { settings: { loginAccess: { allowedDomains: ["gmail.com"] } }, appUsers: { "old,user99@gmail,com": { name: "Old User", password: "x" } } };
+  tree = { settings: { loginAccess: { allowedDomains: ["gmail.com"] } }, appUsers: { "old,user99@gmail,com": { id: "user_old99", name: "Old User", password: "x" }, "stub,user42@gmail,com": { photoUrl: "p.jpg" } } };
   mails = []; logins = 0; smtpFail = null; pending = [];
   (globalThis as any).__rsOpenTls = async () => fakeSmtp();
   now = Date.UTC(2026, 10, 8, 14, 0, 0) + Math.floor(Math.random() * 1e6) * 1000;
@@ -141,7 +135,7 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete (globalThis as any).__rsOpenTls; });
 
 describe("SMTP email worker", () => {
-  it("sends one branded MIME email (code + Verify button) over SMTP after one login", async () => {
+  it("sends one branded, code-only MIME email over SMTP after one login", async () => {
     const r = await api("send", { email: "new.user55@gmail.com", purpose: "register", name: "Rahat" });
     expect(r.status).toBe(200);
     expect(r.data.ticket).toMatch(/^[a-z0-9]+\.[A-Za-z0-9_-]+$/);
@@ -149,89 +143,61 @@ describe("SMTP email worker", () => {
     const m = decodeMail(mails[0]);
     expect(m.mime).toContain("From: \"RS ANIME03\" <rsanime03@alwaysdata.net>");
     expect(m.mime).toContain("To: <new.user55@gmail.com>");
+    expect(m.mime).toContain(`Subject: Your RS ANIME03 verification code: ${m.code}`);
+    expect(m.mime).toMatch(/Message-ID: <[^>]+@alwaysdata\.net>/);
     expect(m.mime).toContain("multipart/alternative");
-    expect(m.html).not.toContain("<img");
-    expect(m.html).not.toContain("i.ibb.co");
-    expect(m.html).not.toContain("&#847;");
-    expect(lastEhlo).toBe("EHLO rsanime03.lovable.app");
     expect(m.html).toContain(m.code);
-    expect(m.html).toContain("Verify Email");
-    expect(m.link.startsWith(`${W}/v/`)).toBe(true);
+    expect(m.text).toContain(`Your verification code: ${m.code}`);
+    expect(m.html).toContain("This code expires in 5 minutes.");
     expect(logins).toBe(1);
-    expect(m.html).toContain("Account Security &amp; Verification");
-    expect(m.html).toContain("This code will expire in 5 minutes.");
   });
 
-  it("copy needs no browser: the code is one select-all block and no copy page link exists", async () => {
+  it("the email carries no links, buttons, images, web addresses or the reader's email", async () => {
+    await api("send", { email: "new.user55@gmail.com", purpose: "register", name: "Rahat" });
+    const m = decodeMail(mails[0]);
+    for (const part of [m.html, m.text]) {
+      expect(part).not.toMatch(/https?:\/\//);
+      expect(part).not.toMatch(/www\.|\.app\b|\.dev\b|\.net\b|\.com\b/);
+      expect(part).not.toContain("new.user55");
+      expect(part.toLowerCase()).not.toContain("powered by");
+    }
+    expect(m.html).not.toMatch(/<a[\s>]|href=|<img|<form|<button/);
+    expect(m.html).not.toContain("&#847;");
+  });
+
+  it("talks to the mail server with Alwaysdata's own host name, never the site's domain", async () => {
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(lastEhlo).toBe("EHLO rsanime03.alwaysdata.net");
+    expect(mails[0]).not.toContain("lovable.app");
+  });
+
+  it("copy needs no browser: the code is one select-all block", async () => {
     await api("send", { email: "copy.check77@gmail.com", purpose: "register", name: "Rahat" });
     const m = decodeMail(mails[mails.length - 1]);
-    expect(m.html).not.toContain("/c#");
-    expect(m.html).not.toMatch(/<a[^>]*>[^<]*Copy code/);
-    expect(m.text).not.toContain("Copy it here");
     expect(m.html).toMatch(new RegExp(`user-select:all[^>]*>${m.code}</td>`));
-    expect((await link(`${W}/c`, "GET")).html).not.toContain("Copy code");
   });
 
-  it("site link mode: the button opens the site's own /verify-email page, which verifies once", async () => {
-    const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register", linkMode: "site" });
-    const m = decodeMail(mails[0]);
-    const site = m.text.match(/(https:\/\/\S+\/verify-email\/(\S+)\/(\S+))/)!;
-    expect(site[1].startsWith(`${SITE}/verify-email/`)).toBe(true);
-    expect(m.html).not.toContain("workers.dev");
-    expect(m.text).not.toContain("workers.dev");
-    expect((await api("status", { ticket: data.ticket })).data.status).toBe("pending");
-    const ok = await api("link", { rid: site[2], token: site[3] });
-    expect(ok.data).toMatchObject({ ok: true, purpose: "register", rid: site[2] });
-    expect(String(ok.data.grant).length).toBeGreaterThan(10);
-    expect((await api("status", { ticket: data.ticket })).data.status).toBe("verified");
-    expect((await api("claim", { ticket: data.ticket })).data).toMatchObject({ ok: true, via: "link" });
-    expect((await api("link", { rid: site[2], token: site[3] })).data.error).toBe("done");
-    expect((await api("link", { rid: site[2], token: "x".repeat(43) })).data.ok).toBe(false);
-  });
-
-  it("site link mode is kept on resend", async () => {
-    const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register", linkMode: "site" });
-    now += 61_000;
-    await api("resend", { ticket: data.ticket, linkMode: "site" });
-    const m = decodeMail(mails[mails.length - 1]);
-    expect(m.text).toContain(`${SITE}/verify-email/`);
-  });
-
-  it("stores only hashes — no plain email, code or link token in the database", async () => {
+  it("stores only hashes — no plain email or code in the database", async () => {
     await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     const m = decodeMail(mails[0]);
     const dump = JSON.stringify(tree.emailAuth.tickets);
     expect(dump).not.toContain("new.user55@gmail.com");
     expect(dump).not.toContain(m.code);
-    expect(dump).not.toContain(m.link.split("/").pop());
   });
 
-  it("a correct code works once and then the email button no longer verifies", async () => {
+  it("a correct code works exactly once", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     const m = decodeMail(mails[0]);
     const ok = await api("verify", { ticket: data.ticket, code: m.code });
     expect(ok.data).toMatchObject({ ok: true, email: "new.user55@gmail.com", purpose: "register", via: "otp" });
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("already_used");
-    const page = await link(m.link, "POST");
-    expect(page.html).toContain("Already verified");
-    expect(page.html).not.toContain("?ev=");
   });
 
-  it("opening the link (GET) does not verify — only the page's POST does — and then the code is dead", async () => {
+  it("the old button routes and actions are gone", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
-    const m = decodeMail(mails[0]);
-    const get = await link(m.link, "GET");
-    expect(get.html).toContain("Verifying your email");
-    expect((await api("status", { ticket: data.ticket })).data.status).toBe("pending");
-    const post = await link(m.link, "POST");
-    expect(post.html).toContain("Email verified");
-    expect(post.html).toContain(`${SITE}/?ev=`);
-    expect(post.headers.get("Referrer-Policy")).toBe("no-referrer");
-    expect((await api("status", { ticket: data.ticket })).data.status).toBe("verified");
-    expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("verified_by_link");
-    const claim = await api("claim", { ticket: data.ticket });
-    expect(claim.data).toMatchObject({ ok: true, email: "new.user55@gmail.com", via: "link" });
-    expect((await api("claim", { ticket: data.ticket })).data.error).toBe("already_used");
+    for (const action of ["status", "claim", "link"]) expect((await api(action, { ticket: data.ticket })).data.error).toBe("bad_action");
+    const r = await worker.fetch(new Request(`${W}/v/abc/def`), ENV, ctx);
+    expect(r.status).toBe(404);
   });
 
   it("locks after 5 wrong codes, even for the right code", async () => {
@@ -246,16 +212,14 @@ describe("SMTP email worker", () => {
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("locked");
   });
 
-  it("code expires after 5 minutes, link after 10 minutes", async () => {
+  it("code expires after 5 minutes", async () => {
     const { data } = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
     expect(data.expiresAt - now).toBe(5 * 60_000);
-    expect(data.linkExpiresAt - now).toBe(10 * 60_000);
+    expect(data.linkExpiresAt).toBeUndefined();
     const m = decodeMail(mails[0]);
-    expect(m.text).toContain("This code will expire in 5 minutes.");
+    expect(m.text).toContain("This code expires in 5 minutes.");
     now += 5 * 60_000 + 1000;
     expect((await api("verify", { ticket: data.ticket, code: m.code })).data.error).toBe("expired");
-    now += 5 * 60_000;
-    expect((await link(m.link, "POST")).html).toContain("Link expired");
   });
 
   it("enforces the 60 second resend wait, and a resend kills the old code", async () => {
@@ -278,22 +242,25 @@ describe("SMTP email worker", () => {
 
   it("checks the account server-side: sign-up needs a new email, reset needs an existing one", async () => {
     expect((await api("send", { email: "old.user99@gmail.com", purpose: "register" })).data.error).toBe("already_registered");
-    expect((await api("send", { email: "nobody123@gmail.com", purpose: "reset" })).data.error).toBe("no_account");
     expect((await api("send", { email: "someone@yahoo.com", purpose: "register" })).data.error).toBe("domain_not_allowed");
     expect(mails).toHaveLength(0);
   });
 
-  it("a reset grant from the link page finishes once on another device", async () => {
+  it("forgot password for an email with no account sends nothing and says to sign up first", async () => {
+    const r = await api("send", { email: "nobody123@gmail.com", purpose: "reset" });
+    expect(r.status).toBe(404);
+    expect(r.data).toMatchObject({ error: "no_account", message: "ID not found. Please sign up first." });
+    // a leftover id-less record (e.g. from a profile-photo write) is not an account
+    expect((await api("send", { email: "stub.user42@gmail.com", purpose: "reset" })).data.error).toBe("no_account");
+    expect(mails).toHaveLength(0);
+  });
+
+  it("a password reset email for a real account uses the reset wording and name", async () => {
     await api("send", { email: "old.user99@gmail.com", purpose: "reset" });
     const m = decodeMail(mails[0]);
-    expect(m.html).toContain("Reset Password");
+    expect(m.mime).toContain(`Subject: Your RS ANIME03 password reset code: ${m.code}`);
+    expect(m.html).toContain("Reset your password");
     expect(m.html).toContain("Old User");
-    const page = await link(m.link, "POST");
-    const back = new URL(page.html.match(/href="([^"]+\?ev=[^"]+)"/)![1].replace(/&amp;/g, "&"));
-    const rid = back.searchParams.get("ev")!, grant = back.searchParams.get("eg")!;
-    expect(back.searchParams.get("ep")).toBe("reset");
-    expect((await api("claim", { rid, grant })).data).toMatchObject({ ok: true, email: "old.user99@gmail.com", purpose: "reset" });
-    expect((await api("claim", { rid, grant })).data.error).toBe("already_used");
   });
 
   it("rejects other websites and reports a missing SMTP password", async () => {

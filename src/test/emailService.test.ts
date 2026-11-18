@@ -78,28 +78,28 @@ describe("code screen comes back after leaving for the email app", () => {
   const clearAll = () => { clearPendingRegister(); clearPendingReset(); clearPendingProfileReset(); };
   it("a live sign-up code reopens the sign-up code screen", () => {
     clearAll();
-    savePendingRegister({ name: "Rahat", email: "abcdef1@gmail.com", password: "secret1", token: "rid1.sess", expiresAt: now + 5 * 60_000, linkExpiresAt: now + 10 * 60_000 });
+    savePendingRegister({ name: "Rahat", email: "abcdef1@gmail.com", password: "secret1", token: "rid1.sess", expiresAt: now + 5 * 60_000 });
     expect(pendingSignInCode(now)).toBe("register");
   });
   it("a live forgot-password code reopens the reset code screen", () => {
     clearAll();
-    savePendingReset({ email: "abcdef1@gmail.com", token: "rid2.sess", expiresAt: now + 5 * 60_000, linkExpiresAt: now + 10 * 60_000 });
+    savePendingReset({ email: "abcdef1@gmail.com", token: "rid2.sess", expiresAt: now + 5 * 60_000 });
     expect(pendingSignInCode(now)).toBe("reset");
   });
-  it("nothing reopens once both the code (5 min) and the email button (10 min) have expired", () => {
+  it("nothing reopens once the 5-minute code has expired", () => {
     clearAll();
-    savePendingRegister({ name: "Rahat", email: "abcdef1@gmail.com", password: "secret1", token: "rid1.sess", expiresAt: now + 5 * 60_000, linkExpiresAt: now + 10 * 60_000 });
-    expect(pendingSignInCode(now + 10 * 60_000 + 1)).toBe(null);
+    savePendingRegister({ name: "Rahat", email: "abcdef1@gmail.com", password: "secret1", token: "rid1.sess", expiresAt: now + 5 * 60_000 });
+    expect(pendingSignInCode(now + 5 * 60_000 + 1)).toBe(null);
   });
   it("closing with ✕ (clearing) means it does not reopen", () => {
     clearAll();
-    savePendingReset({ email: "abcdef1@gmail.com", token: "rid2.sess", expiresAt: now + 5 * 60_000, linkExpiresAt: now + 10 * 60_000 });
+    savePendingReset({ email: "abcdef1@gmail.com", token: "rid2.sess", expiresAt: now + 5 * 60_000 });
     clearPendingReset();
     expect(pendingSignInCode(now)).toBe(null);
   });
   it("the in-profile reset code reopens only for the same signed-in email", () => {
     clearAll();
-    savePendingProfileReset({ email: "abcdef1@gmail.com", token: "rid3.sess", expiresAt: now + 5 * 60_000, linkExpiresAt: now + 10 * 60_000 });
+    savePendingProfileReset({ email: "abcdef1@gmail.com", token: "rid3.sess", expiresAt: now + 5 * 60_000 });
     expect(readPendingProfileReset("AbcDef1@gmail.com", now)?.token).toBe("rid3.sess");
     expect(readPendingProfileReset("other99@gmail.com", now)).toBe(null);
     expect(pendingSignInCode(now)).toBe(null);

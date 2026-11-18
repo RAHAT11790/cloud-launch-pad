@@ -47,14 +47,14 @@ export function lastDayKeys(count: number, now = Date.now()): string[] {
 }
 
 export type EmailServiceSettings = {
-  otpMinutes: number; linkMinutes: number; cooldownSeconds: number; maxAttempts: number;
+  otpMinutes: number; cooldownSeconds: number; maxAttempts: number;
   perEmailDaily: number; perIpDaily: number; hourlyPerIp: number; perMinute: number; dailyLimit: number;
 };
 /** Same defaults as the Worker (`DEFAULTS` in cloudflare-workers/email-service.js). */
-export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 5, linkMinutes: 10, cooldownSeconds: 60, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
+export const EMAIL_SETTING_DEFAULTS: EmailServiceSettings = { otpMinutes: 5, cooldownSeconds: 60, maxAttempts: 5, perEmailDaily: 3, perIpDaily: 30, hourlyPerIp: 10, perMinute: 10, dailyLimit: 300 };
 /** Same limits the Worker clamps to. */
 export const EMAIL_SETTING_BOUNDS: Record<keyof EmailServiceSettings, [number, number]> = {
-  otpMinutes: [1, 30], linkMinutes: [2, 120], cooldownSeconds: [30, 3600], maxAttempts: [3, 10],
+  otpMinutes: [1, 30], cooldownSeconds: [30, 3600], maxAttempts: [3, 10],
   perEmailDaily: [1, 20], perIpDaily: [2, 200], hourlyPerIp: [2, 100], perMinute: [2, 60], dailyLimit: [10, 2000],
 };
 export function clampEmailSettings(raw: Partial<Record<keyof EmailServiceSettings, unknown>> | null | undefined): EmailServiceSettings {

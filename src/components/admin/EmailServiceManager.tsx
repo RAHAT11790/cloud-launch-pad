@@ -43,7 +43,6 @@ const WHY: Record<string, string> = {
 };
 const SETTING_LABELS: Record<keyof EmailServiceSettings, [string, string]> = {
   otpMinutes: ["Code valid", "min"],
-  linkMinutes: ["Button link valid", "min"],
   cooldownSeconds: ["Resend wait (1 live code)", "sec"],
   maxAttempts: ["Wrong tries allowed", "tries"],
   perEmailDaily: ["Codes per email / day", "max"],
@@ -249,8 +248,8 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
           <li>• <b>{settingsDraft.perEmailDaily}</b> codes per email per day (resets at midnight, Bangladesh time)</li>
           <li>• <b>{settingsDraft.hourlyPerIp}</b>/hour and <b>{settingsDraft.perIpDaily}</b>/day from one network (IP)</li>
           <li>• Whole service: <b>{settingsDraft.perMinute}</b>/minute, <b>{settingsDraft.dailyLimit}</b>/day</li>
-          <li>• Code valid <b>{settingsDraft.otpMinutes} min</b>, button <b>{settingsDraft.linkMinutes} min</b>, <b>{settingsDraft.maxAttempts}</b> wrong tries then locked</li>
-          <li>• Codes, links and emails are hashed/encrypted; every request record is signed, so edited or rolled-back records are refused{weekSum.tampered ? <> — <b className="text-red-300">{weekSum.tampered} blocked this week</b></> : null}</li>
+          <li>• Code valid <b>{settingsDraft.otpMinutes} min</b>, <b>{settingsDraft.maxAttempts}</b> wrong tries then locked</li>
+          <li>• Codes and emails are hashed/encrypted; every request record is signed, so edited or rolled-back records are refused{weekSum.tampered ? <> — <b className="text-red-300">{weekSum.tampered} blocked this week</b></> : null}</li>
         </ul>
       </div>
 

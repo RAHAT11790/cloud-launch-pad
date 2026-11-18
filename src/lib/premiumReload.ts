@@ -13,6 +13,16 @@ export function shouldReloadForPremium(baseline: boolean | null, nextActive: boo
   return baseline === false && nextActive;
 }
 
+// A screen that is still showing something (the Lucky Spin wheel and its result)
+// can hold the reload; it then runs as soon as that screen releases it.
+let holds = 0;
+let pendingReload: (() => void) | null = null;
+export function holdPremiumReload() { holds += 1; }
+export function releasePremiumReload() {
+  holds = Math.max(0, holds - 1);
+  if (!holds && pendingReload) { const run = pendingReload; pendingReload = null; run(); }
+}
+
 export function usePremiumActivationReload() {
   useEffect(() => {
     try {
@@ -35,7 +45,8 @@ export function usePremiumActivationReload() {
         if (shouldReloadForPremium(baseline, active)) {
           reloading = true;
           try { sessionStorage.setItem(PREMIUM_RELOAD_FLAG, "1"); } catch {}
-          window.setTimeout(() => window.location.reload(), 900);
+          const run = () => window.setTimeout(() => window.location.reload(), 900);
+          if (holds) pendingReload = run; else run();
           return;
         }
         baseline = active;

@@ -3,8 +3,9 @@ import { toast } from "sonner";
 import {
   LayoutDashboard, ListChecks, Users as UsersIcon, Share2, Plus, Edit3, Trash2,
   Coins, ExternalLink, Search, Ban, ShieldCheck, TrendingUp, Send, Link as LinkIcon,
-  Megaphone, Sparkles, X, Save, Power, PowerOff, RefreshCw, Award, Filter,
+  Megaphone, Sparkles, X, Save, Power, PowerOff, RefreshCw, Award, Filter, RotateCw,
 } from "lucide-react";
+import LuckySpinManager from "@/components/admin/LuckySpinManager";
 import { db, ref, get, onValue, remove, runTransaction, update } from "@/lib/firebase";
 import {
   CustomTask, CustomTaskKind, subscribeCustomTasks, saveCustomTask, deleteCustomTask,
@@ -26,7 +27,7 @@ interface Props {
   btnSecondary: string;
 }
 
-type Tab = "overview" | "tasks" | "pricing" | "users" | "referrals";
+type Tab = "overview" | "tasks" | "pricing" | "spin" | "users" | "referrals";
 
 interface UserRow {
   id: string;
@@ -153,6 +154,7 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
           { id: "overview",  label: "Overview",  icon: LayoutDashboard },
           { id: "tasks",     label: "Tasks",     icon: ListChecks },
           { id: "pricing",   label: "Pricing",   icon: Coins },
+          { id: "spin",      label: "Lucky Spin", icon: RotateCw },
           { id: "users",     label: "Users",     icon: UsersIcon },
           { id: "referrals", label: "Referrals", icon: Share2 },
         ] as { id: Tab; label: string; icon: any }[]).map((t) => {
@@ -211,6 +213,10 @@ export default function DailyTaskManager({ glassCard, inputClass, btnPrimary, bt
 
       {tab === "pricing" && (
         <PricingTab glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+      )}
+
+      {tab === "spin" && (
+        <LuckySpinManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
       )}
 
       {tab === "users" && (

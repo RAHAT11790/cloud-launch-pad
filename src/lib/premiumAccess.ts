@@ -6,7 +6,7 @@ import { getLocalUserId } from "@/lib/unlockAccess";
 export interface PremiumStatus {
   active: boolean;
   expiresAt: number;
-  source?: "coin" | "bkash" | "redeem" | "admin";
+  source?: "coin" | "bkash" | "redeem" | "admin" | "spin";
 }
 
 export interface CoinPlan {

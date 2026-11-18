@@ -69,8 +69,8 @@ const lazyWithReload = <T extends React.ComponentType<any>>(factory: () => Promi
 
 const Admin = lazyWithReload(() => import("@/pages/Admin"));
 const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
+const LuckySpinPage = lazyWithReload(() => import("./pages/LuckySpinPage"));
 const DownloadPage = lazyWithReload(() => import("./pages/DownloadPage"));
-const VerifyEmailLink = lazyWithReload(() => import("./pages/VerifyEmailLink"));
 const queryClient = new QueryClient();
 
 /** Standalone pages fade in softly (opacity only, so fixed layouts never shift). */
@@ -97,7 +97,6 @@ const App = () => (
         <Toaster />
         <Sonner />
         <Routes>
-          <Route path="/verify-email/:rid/:token" element={<Suspense fallback={<RouteFallback />}><VerifyEmailLink /></Suspense>} />
           <Route path="/download" element={<Suspense fallback={<RouteFallback />}><DownloadPage /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
           <Route path="/admin/:section" element={<Suspense fallback={<RouteFallback />}><Fade><Admin /></Fade></Suspense>} />
@@ -107,6 +106,7 @@ const App = () => (
           <Route path="/premium-required" element={<Fade><PremiumRequired /></Fade>} />
           <Route path="/premium-buy" element={<Fade><PremiumBuyPage /></Fade>} />
           <Route path="/daily-tasks" element={<Fade><DailyTasksPage /></Fade>} />
+          <Route path="/lucky-spin" element={<Suspense fallback={<RouteFallback />}><Fade><LuckySpinPage /></Fade></Suspense>} />
           <Route path="/adblocker-detected" element={<Fade><AdBlockerDetected /></Fade>} />
           <Route path="/adblocker-removed" element={<Fade><AdBlockerRemoved /></Fade>} />
           
