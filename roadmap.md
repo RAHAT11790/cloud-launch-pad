@@ -9,8 +9,8 @@
 - [ ] Admin Lucky Spin screen not opened in the test (admin PIN not available to me).
 - [ ] Backup copy of the email sender on Lovable Cloud not updated: Cloud is paused (Cloudflare copy is the live one).
 - [ ] Owner: check Gmail for the reset code mail sent in the test (Inbox / Copy code).
-- [ ] Waits for owner: Python email server (asked — default "not needed").
-- [ ] Waits for owner: whole-database Base64 encode (asked; passwords are readable by anyone today).
+- [x] Python email server: owner skipped the question — not built (Cloudflare sender stays).
+- [x] Whole-database Base64: owner skipped the question — not done (Base64 is not protection and could break the site).
 
 ## Email lands in Spam + code screen lost after leaving for Gmail (2026-11-17)
 - [x] Email: outside image host (i.ibb.co) and hidden filler text removed; real EHLO name; button now opens the site's own /verify-email page instead of the workers.dev address. Worker v7 live on Cloudflare (all secrets kept), deep check OK.
