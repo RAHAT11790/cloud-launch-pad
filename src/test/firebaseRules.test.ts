@@ -22,4 +22,22 @@ describe("Firebase database rules", () => {
     expect(rules.emailAuth[".read"]).toBeUndefined();
     expect(rules.emailAuth.tickets).toBeUndefined();
   });
+
+  it("nobody can download the user lists (users.json / appUsers.json) without an admin session", () => {
+    for (const node of ["users", "appUsers"]) {
+      expect(rules[node][".read"]).not.toBe(true);
+      expect(String(rules[node][".read"])).toContain("secure/adminSessions");
+      expect(String(rules[node][".read"])).toContain("> now");
+      expect(rules[node][".write"]).not.toBe(true);
+    }
+  });
+
+  it("the site still reads and saves one account at a time, but can never store a password there", () => {
+    for (const node of ["users", "appUsers"]) {
+      expect(rules[node].$key[".read"]).toBe(true);
+      expect(rules[node].$key[".write"]).toBe(true);
+      expect(rules[node].$key.password[".validate"]).toBe("false");
+      expect(rules[node][".indexOn"]).toEqual(["name", "email"]);
+    }
+  });
 });

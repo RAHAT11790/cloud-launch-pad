@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import AnnouncementsManager from "@/components/admin/AnnouncementsManager";
 import { usePresenceCounts, realAccountKeyCount } from "@/lib/presence";
 import { firebaseRestShallowKeys } from "@/lib/firebaseRest";
+import { ensureAdminDbSession, startAdminDbSession, endAdminDbSession } from "@/lib/adminDbSession";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
@@ -1970,6 +1971,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  } catch {}
  return false;
  });
+ // Locked user lists need a database session (opened by the email server after PIN/Google).
+ const [adminDb, setAdminDb] = useState<"checking" | "ready">("checking");
  const [loginPinInput, setLoginPinInput] = useState("");
  const [loginLoading, setLoginLoading] = useState(false);
  const [pinExists, setPinExists] = useState<boolean | null>(null); // null = loading
@@ -2732,6 +2735,23 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   }
  }, [isAuthenticated]);
 
+ useEffect(() => {
+  if (!isAuthenticated) { setAdminDb("checking"); return; }
+  let alive = true;
+  void ensureAdminDbSession().then((st) => {
+   if (!alive) return;
+   if (st === "relogin") {
+    toast.info("Security update: please enter your admin PIN once more.");
+    localStorage.removeItem("rs_admin_session");
+    setIsAuthenticated(false);
+    return;
+   }
+   if (st === "failed") toast.error("Secure admin session failed — user lists may not load. Check the Email Service server.");
+   setAdminDb("ready");
+  });
+  return () => { alive = false; };
+ }, [isAuthenticated]);
+
  // Subscribe to the global admin-logout marker. If an owner presses
  // "Logout from all devices" in Security Center, every device whose local
  // session was minted BEFORE that timestamp force-clears and reloads.
@@ -2853,7 +2873,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
       "tg-url-changer", "analytics",
     ];
    const needsContent = CONTENT_SECTIONS.includes(activeSection);
-   const needsCounts = activeSection === "dashboard";
+   const needsCounts = activeSection === "dashboard" && adminDb === "ready";
    if (!needsContent && !needsCounts) return;
 
    let cancelled = false;
@@ -2875,14 +2895,14 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
 
     return () => { cancelled = true; };
    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection, loadAdminContentList]);
+  }, [activeSection, loadAdminContentList, adminDb]);
 
  // Load full user records only in user-management sections. Dashboard totals use
  // the shallow cached count above; this avoids downloading every profile on each
  // Admin open. A short session cache also prevents repeat reads while navigating.
  useEffect(() => {
   const needsUsers = ["users", "free-access", "device-limits", "analytics"].includes(activeSection);
- if (!needsUsers) return;
+ if (!needsUsers || adminDb !== "ready") return;
 
   try {
    const cached = JSON.parse(sessionStorage.getItem("rs_admin_users_cache_v1") || "null");
@@ -2910,7 +2930,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
 
 
  return () => unsubs.forEach(u => u());
- }, [activeSection]);
+ }, [activeSection, adminDb]);
 
  // Lazy-load NEW RELEASES data
  useEffect(() => {
@@ -2945,7 +2965,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
 
  // Lazy-load FREE ACCESS USERS data — merges freeAccessUsers + users/*/freeAccess (Mini App)
  useEffect(() => {
- if (activeSection !== "free-access") return;
+ if (activeSection !== "free-access" || adminDb !== "ready") return;
 
  // Instant render from cache
  try {
@@ -3021,7 +3041,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  });
 
  return () => { unsub1(); unsub2(); };
- }, [activeSection]);
+ }, [activeSection, adminDb]);
 
  const clearAllFreeAccess = async () => {
  if (!confirm("Cancel all active free access?")) return;
@@ -4063,7 +4083,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  // Dashboard has no full user list: count real accounts from the users key list (cached for instant paint).
  const [realKeyCount, setRealKeyCount] = useState(() => { try { return Number(localStorage.getItem("rs_admin_real_users_v1")) || 0; } catch { return 0; } });
  useEffect(() => {
-  if (activeSection !== "dashboard" && activeSection !== "users") return;
+  if ((activeSection !== "dashboard" && activeSection !== "users") || adminDb !== "ready") return;
   let alive = true;
   firebaseRestShallowKeys("users").then(keys => {
    const n = realAccountKeyCount(keys);
@@ -4072,7 +4092,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
    try { localStorage.setItem("rs_admin_real_users_v1", String(n)); } catch {}
   }).catch(() => {});
   return () => { alive = false; };
- }, [activeSection]);
+ }, [activeSection, adminDb]);
  const realTotal = Math.max(usersData.length ? usersData.length - guestUidSet.size : realKeyCount, liveCounts.real);
  const guestTotal = Math.max(guestRegistryCount, liveCounts.guest);
  const recentContent = useMemo(() => [
@@ -4934,6 +4954,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
        setLoginPinInput("");
        return;
      }
+     try { await startAdminDbSession({ pin: loginPinInput }); }
+     catch { toast.error("Secure admin session failed — user lists may not load."); }
      setIsAuthenticated(true);
      try {
        sessionStorage.setItem("rs_admin_pin", loginPinInput);
@@ -4963,6 +4985,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  };
 
  const handleLogout = () => {
+ void endAdminDbSession();
  setIsAuthenticated(false);
  localStorage.removeItem("rs_admin_session");
  localStorage.removeItem("rs_admin_google");
@@ -4993,6 +5016,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
   toast.error("❌ This Google account is not authorized as admin");
   return;
   }
+   try { await startAdminDbSession({ idToken: await result.user.getIdToken() }); }
+   catch { toast.error("Secure admin session failed — user lists may not load."); }
    setIsAuthenticated(true);
    setAdminGoogleEmail(email);
    const displayName = result.user.displayName || email.split("@")[0];
@@ -5527,6 +5552,16 @@ ${tgBulkFooter}
  return (
  <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center">
  <div className="w-10 h-10 border-3 border-[#1E1E32] border-t-indigo-500 rounded-full animate-spin" />
+ </div>
+ );
+ }
+
+ // ==================== SECURE SESSION CHECK ====================
+ if (isAuthenticated && adminDb !== "ready") {
+ return (
+ <div className="min-h-screen bg-[#0D0D1A] flex flex-col items-center justify-center gap-3 p-4">
+ <div className="w-8 h-8 rounded-full border-2 border-white/15 border-t-white/80 animate-spin" />
+ <p className="text-sm text-zinc-400">Opening secure admin session…</p>
  </div>
  );
  }

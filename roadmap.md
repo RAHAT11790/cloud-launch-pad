@@ -8,7 +8,9 @@
 - [x] Player pop-unders take turns Adsterra ↔ Mondiad; a silent/blocked one hands over to the other (Direct Link last).
 - [x] Download page shows Mondiad Banner / Native / In-Page Push next to the Adsterra ones.
 - [x] Phone-size test: Mondiad tab opened then Adsterra; silent Mondiad rested and handed back; download page asked Mondiad for all three zones; admin boxes check and save codes.
-- [ ] Owner: paste the real Mondiad codes after verification (real ad fill not checked — sample zones returned "no ad").
+- [x] Mondiad box accepts the real code format `<script async src="https://ds.mrmnd.com/<zone-id>.js"></script>` (also curly quotes / no https / bare link); saved as clean code.
+- [x] Owner's real Popunder code saved through the admin box (phone test: "Correct Mondiad code" → "Mondiad ads saved"); player test: ds.mrmnd.com script loaded (200) on a tap and Mondiad opened a sponsor tab.
+- [ ] Owner: Publish so the live site gets the fixed Mondiad box.
 
 ## Email without links + reset only for real accounts + redeem/lucky spin (2026-11-18)
 - [x] Email: no button, no link, no site/worker address, no "powered by"; only RS ANIME03 name, code, expiry, safety note; code in the subject. Worker v8 live on Cloudflare (all 11 secrets kept). Gmail decides itself whether to show "Copy code".
@@ -303,7 +305,10 @@
 - [x] Step 1: owner-only rules switch inside the email server (old rules backed up, one-step rollback).
 - [x] Step 1: whole-database download from the address closed; email codes and private area locked. Site, guest browsing and video tested on phone.
 - [x] Step 2a: sign-in, sign-up, Google password, forgot/reset and change password checked only by the email server; scrambled copies in a locked place; admin + support chat no longer show passwords. Phone-tested sign-in (wrong/right/username) and change password.
-- [ ] Step 2b (after owner Publishes): scramble every remaining password, delete the plain ones, lock them from visitors.
+- [x] Step 2b: all 1018 remaining passwords scrambled into the locked area, plain ones deleted (0 left), plain fields can no longer be written or used.
+- [x] Step 2c: `/users.json` and `/appUsers.json` (also shallow/query) now say Permission denied; single records still work for the site. Username sign-in checked by the email server (phone test: wrong → "Wrong password!", right → signed in, no list download). Admin user lists open with a secure session after PIN/Google (phone test with a test session: 1984 users listed; without session → asked for PIN again).
+- [ ] Owner: Publish — until then the live site's username sign-in and admin user lists stay on the old build and cannot read the locked lists.
+- [ ] Owner: one real admin PIN login after Publish (the PIN itself was not available to me).
 - [ ] Step 3: every signed-in user gets a silent secure login; users may only change their own data.
 - [ ] Step 4: admin-only writes for catalogue/settings; Cloudflare key, bKash payments, redeem codes hidden from visitors.
 - [ ] Step 5: servers/bot that write the database get the key; coin/premium changes on the server.

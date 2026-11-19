@@ -2,6 +2,7 @@
 // so the player and download page read them instantly. Empty box = no ad.
 import { useEffect, useState } from "react";
 import { db, ref, get, onValue } from "@/lib/firebase";
+import { mondiadHtml } from "@/lib/adNetworks";
 
 export type MondiadConfig = {
   enabled: boolean;
@@ -38,8 +39,9 @@ export function normalizeMondiad(raw: any): MondiadConfig {
 export function mondiadToFirebase(c: MondiadConfig) {
   return {
     enabled: c.enabled,
-    player: { popunder: c.popunder.trim(), inPagePush: c.playerInPagePush.trim() },
-    download: { banner: c.banner.trim(), native: c.native.trim(), inPagePush: c.downloadInPagePush.trim() },
+    // Saved as clean code rebuilt from the paste (only Mondiad links + zone ids).
+    player: { popunder: mondiadHtml("popunder", c.popunder), inPagePush: mondiadHtml("inPagePush", c.playerInPagePush) },
+    download: { banner: mondiadHtml("banner", c.banner), native: mondiadHtml("native", c.native), inPagePush: mondiadHtml("inPagePush", c.downloadInPagePush) },
     updatedAt: Date.now(),
   };
 }

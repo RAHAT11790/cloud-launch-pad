@@ -22,6 +22,36 @@
         ".read": true,
         ".write": true
       }
+    },
+    "users": {
+      ".read": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
+      ".write": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
+      ".indexOn": [
+        "name",
+        "email"
+      ],
+      "$key": {
+        ".read": true,
+        ".write": true,
+        "password": {
+          ".validate": "false"
+        }
+      }
+    },
+    "appUsers": {
+      ".read": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
+      ".write": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
+      ".indexOn": [
+        "name",
+        "email"
+      ],
+      "$key": {
+        ".read": true,
+        ".write": true,
+        "password": {
+          ".validate": "false"
+        }
+      }
     }
   }
 }

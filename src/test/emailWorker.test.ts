@@ -64,6 +64,8 @@ function fakeSmtp() {
   return { readable, writable, close };
 }
 let now = Date.UTC(2026, 10, 8, 14, 0, 0);
+let idtCalls: { path: string; body: any }[] = [];
+let googleUsers: Record<string, any> = {};
 
 const DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 async function fakeFetch(input: any, init: any = {}): Promise<Response> {
@@ -75,6 +77,12 @@ async function fakeFetch(input: any, init: any = {}): Promise<Response> {
     if (method === "GET") {
       let v = getAt(p);
       if (url.searchParams.get("shallow") === "true" && v && typeof v === "object") v = Object.fromEntries(Object.keys(v).map((k) => [k, true]));
+      const ob = url.searchParams.get("orderBy");
+      if (ob && ob !== '"$key"' && v && typeof v === "object") {
+        const field = JSON.parse(ob);
+        const eq = JSON.parse(url.searchParams.get("equalTo") || "null");
+        v = Object.fromEntries(Object.entries(v).filter(([, r]: any) => r && typeof r === "object" && r[field] === eq).slice(0, Number(url.searchParams.get("limitToFirst") || 1e9)));
+      }
       if (url.searchParams.get("orderBy") === '"$key"' && v && typeof v === "object") {
         const end = JSON.parse(url.searchParams.get("endAt") || "null");
         const ents = Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).filter(([k]) => end == null || k <= end);
@@ -95,6 +103,17 @@ async function fakeFetch(input: any, init: any = {}): Promise<Response> {
       return new Response(JSON.stringify(body), { status: 200 });
     }
     if (method === "DELETE") { setAt(p, null); return new Response("null", { status: 200 }); }
+  }
+  if (url.hostname === "identitytoolkit.googleapis.com" || url.hostname === "securetoken.googleapis.com") {
+    const body = init.body ? JSON.parse(init.body) : {};
+    idtCalls.push({ path: url.pathname, body });
+    if (url.pathname.endsWith("accounts:signUp")) return new Response(JSON.stringify({ localId: `LOCAL${idtCalls.length}abcdefgh`, refreshToken: "rt-1", idToken: "id-1" }), { status: 200 });
+    if (url.pathname.endsWith("accounts:lookup")) {
+      const u = googleUsers[body.idToken];
+      return u ? new Response(JSON.stringify({ users: [u] }), { status: 200 }) : new Response("{}", { status: 400 });
+    }
+    if (url.hostname === "securetoken.googleapis.com") return new Response(JSON.stringify({ id_token: "fresh-id" }), { status: 200 });
+    return new Response("{}", { status: 200 });
   }
   throw new Error(`unexpected fetch ${method} ${url.href}`);
 }
@@ -125,7 +144,7 @@ function decodeMail(raw: string) {
 
 beforeEach(() => {
   tree = { settings: { loginAccess: { allowedDomains: ["gmail.com"] } }, appUsers: { "old,user99@gmail,com": { id: "user_old99", name: "Old User", password: "x" }, "stub,user42@gmail,com": { photoUrl: "p.jpg" } } };
-  mails = []; logins = 0; smtpFail = null; pending = [];
+  mails = []; logins = 0; smtpFail = null; pending = []; idtCalls = []; googleUsers = {};
   (globalThis as any).__rsOpenTls = async () => fakeSmtp();
   now = Date.UTC(2026, 10, 8, 14, 0, 0) + Math.floor(Math.random() * 1e6) * 1000;
   vi.spyOn(Date, "now").mockImplementation(() => now);
@@ -419,3 +438,60 @@ describe("passwords checked only by the email worker", () => {
     expect(r.data.error).toBe("use_google");
   });
 });
+
+describe("locked account lists: username sign-in and admin sessions", () => {
+  it("signs in with a username without the site reading any account list", async () => {
+    tree.appUsers["old,user99@gmail,com"].password = "oldpass1";
+    const r = await api("password", { op: "login", name: "old user", password: "oldpass1" });
+    expect(r.data).toMatchObject({ ok: true, node: "appUsers", key: "old,user99@gmail,com" });
+    expect((await api("password", { op: "login", name: "Nobody Here", password: "oldpass1" })).data.error).toBe("not_found");
+    expect((await api("password", { op: "login", name: "Old User", password: "wrongpw9" })).data.error).toBe("wrong_password");
+  });
+
+  it("after the move to hashes a plain password written into a record is deleted, never used", async () => {
+    tree.secure = { authConfig: { stripLegacy: true }, credentials: { appUsers: {} } };
+    const acc = [{ node: "appUsers", key: "old,user99@gmail,com" }];
+    await api("password", { op: "change", refs: acc, oldPassword: "x", newPassword: "realpass1" }).catch(() => null);
+    tree.appUsers["old,user99@gmail,com"].password = "planted1";
+    tree.secure.credentials.appUsers["old,user99@gmail,com"] = { h: "pbkdf2$100000$AAAA$BBBB" };
+    expect((await api("password", { op: "login", refs: acc, password: "planted1" })).data.error).toBe("wrong_password");
+  });
+
+  it("a wrong admin PIN opens no session; the right one opens a 7-day session", async () => {
+    const env = { ...ENV, ADMIN_PIN: "246810" };
+    const bad = await api("admin-session", { pin: "111111" }, { env });
+    expect(bad.data.error).toBe("wrong_pin");
+    expect(tree.secure?.adminSessions).toBeUndefined();
+    const ok = await api("admin-session", { pin: "246810" }, { env });
+    expect(ok.data.ok).toBe(true);
+    expect(ok.data.email).toMatch(/@admin-session\.rsanime03\.app$/);
+    const [uid, sess] = Object.entries(tree.secure.adminSessions)[0] as [string, any];
+    expect(uid).toMatch(/^LOCAL/);
+    expect(sess.exp - now).toBe(7 * 86400_000);
+  });
+
+  it("8 wrong admin PINs in an hour lock the network", async () => {
+    const env = { ...ENV, ADMIN_PIN: "246810" };
+    for (let i = 0; i < 8; i++) await api("admin-session", { pin: `99999${i}` }, { env });
+    expect((await api("admin-session", { pin: "246810" }, { env })).status).toBe(429);
+  });
+
+  it("Google admin sessions only for owner or authorized admin emails", async () => {
+    googleUsers = {
+      own: { localId: "OwnerUid123456", email: "rahatsarker224@gmail.com", emailVerified: true },
+      rnd: { localId: "RandomUid12345", email: "someone@gmail.com", emailVerified: true },
+    };
+    expect((await api("admin-session", { idToken: "rnd" })).data.error).toBe("not_admin");
+    expect((await api("admin-session", { idToken: "own" })).data.ok).toBe(true);
+    expect(tree.secure.adminSessions.OwnerUid123456.by).toBe("google");
+    expect(tree.secure.adminSessions.RandomUid12345).toBeUndefined();
+  });
+
+  it("expired admin sessions are removed together with their throw-away sign-in", async () => {
+    tree.secure = { adminSessions: { OldUid1234567: { exp: now - 1, rt: "old-rt" } } };
+    await api("admin-session", { pin: "246810" }, { env: { ...ENV, ADMIN_PIN: "246810" } });
+    expect(tree.secure.adminSessions.OldUid1234567).toBeUndefined();
+    expect(idtCalls.some((c) => c.path.endsWith("accounts:delete"))).toBe(true);
+  });
+});
+

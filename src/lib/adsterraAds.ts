@@ -24,7 +24,7 @@
 import { db, ref, get, onValue } from "@/lib/firebase";
 import {
   type AdNetworkId, MONDIAD_HOSTS, networkFromStack, pickAdNetwork,
-  readNetCaps, markNetCapped, clearNetCap, readLastNet, writeLastNet,
+  readNetCaps, markNetCapped, clearNetCap, readLastNet, writeLastNet, mondiadHtml,
 } from "@/lib/adNetworks";
 import { getMondiadConfig, mondiadCached, type MondiadConfig } from "@/lib/mondiadAds";
 
@@ -556,13 +556,16 @@ async function injectOnce(cfg: AdsterraConfig) {
   // Mondiad: its pop-under and in-page push are mounted once per page session too.
   const m = mondiadPlayer();
   if (m) {
-    if (!window.__mondiadPushDone && m.playerInPagePush.trim()) {
+    // Only the clean rebuilt code runs (Mondiad script links + zone ids).
+    const push = mondiadHtml("inPagePush", m.playerInPagePush);
+    if (!window.__mondiadPushDone && push) {
       window.__mondiadPushDone = true;
-      pending.push(...injectSnippet(m.playerInPagePush, container, "mondiad"));
+      pending.push(...injectSnippet(push, container, "mondiad"));
     }
-    if (!window.__mondiadPopMounted && m.popunder.trim()) {
+    const pop = mondiadHtml("popunder", m.popunder);
+    if (!window.__mondiadPopMounted && pop) {
       window.__mondiadPopMounted = true;
-      pending.push(...injectSnippet(m.popunder, container, "mondiad"));
+      pending.push(...injectSnippet(pop, container, "mondiad"));
     }
   }
   if (pending.length) {

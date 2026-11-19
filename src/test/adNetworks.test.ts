@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  checkMondiadCode, mondiadParts, networkFromStack, pickAdNetwork, readLastNet,
+  checkMondiadCode, mondiadHtml, mondiadParts, networkFromStack, pickAdNetwork, readLastNet,
   markNetCapped, readNetCaps, NET_RETRY_MS,
 } from "@/lib/adNetworks";
 
@@ -62,5 +62,28 @@ describe("Mondiad ad codes", () => {
   it("native needs its element code", () => {
     expect(checkMondiadCode("native", '<script async src="https://ss.mndsrv.com/native.js"></script>').state).toBe("bad");
     expect(checkMondiadCode("native", '<script async src="https://ss.mndsrv.com/native.js"></script><div data-mndazid="303aacc4-a1cd-467d-b758-23c8335b2454"></div>').state).toBe("ok");
+  });
+
+  // The owner's real Popunder code from Mondiad "Get tag" (2026-11-19).
+  const REAL_POP = '<script async src="https://ds.mrmnd.com/49f23875-200b-4714-9877-6494aefffa44.js"></script>';
+
+  it("accepts the real Mondiad popunder code (ds.mrmnd.com/<zone-id>.js)", () => {
+    expect(checkMondiadCode("popunder", REAL_POP).state).toBe("ok");
+    expect(mondiadHtml("popunder", REAL_POP)).toBe(REAL_POP);
+  });
+
+  it("accepts the same code pasted with curly quotes, without https, or as a bare link", () => {
+    expect(mondiadHtml("popunder", "<script async src=\u201Chttps://ds.mrmnd.com/49f23875-200b-4714-9877-6494aefffa44.js\u201D></script>")).toBe(REAL_POP);
+    expect(mondiadHtml("popunder", '<script async src="//ds.mrmnd.com/49f23875-200b-4714-9877-6494aefffa44.js"></script>')).toBe(REAL_POP);
+    expect(mondiadHtml("popunder", "https://ds.mrmnd.com/49f23875-200b-4714-9877-6494aefffa44.js")).toBe(REAL_POP);
+  });
+
+  it("refuses a script from another site even with a zone id", () => {
+    expect(checkMondiadCode("popunder", '<script src="https://evil.example/49f23875-200b-4714-9877-6494aefffa44.js"></script>').state).toBe("bad");
+    expect(mondiadHtml("popunder", '<script src="https://evil.example/49f23875-200b-4714-9877-6494aefffa44.js"></script>')).toBe("");
+  });
+
+  it("in-page push accepts the ds.mrmnd.com zone script too", () => {
+    expect(checkMondiadCode("inPagePush", REAL_POP).state).toBe("ok");
   });
 });

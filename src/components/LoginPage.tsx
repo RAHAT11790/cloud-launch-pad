@@ -4,7 +4,6 @@ import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowL
 import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
-import { firebaseRestGet } from "@/lib/firebaseRest";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
@@ -15,7 +14,7 @@ import {
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
   resendEmailCode, EmailServiceError, NO_ACCOUNT_TEXT,
   savePendingReset, readPendingReset, clearPendingReset, type PendingRegister,
-  accountRefs, passwordLogin, googlePasswordStatus, googleSetPassword, savePasswordWithCode,
+  accountRefs, passwordLogin, passwordLoginByName, googlePasswordStatus, googleSetPassword, savePasswordWithCode,
 } from "@/lib/emailService";
 import { OtpBoxes, PasteCodeButton, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote, CodeCloseButton, ResumeNote } from "@/components/auth/EmailCodeKit";
 
@@ -612,26 +611,17 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
         }
       }
 
+      // Login by username: the account lists are locked, so the email server finds
+      // the account and checks the password in one step; the site then reads only
+      // that one record.
+      let checkedByName = false;
       if (allMatches.length === 0 && !isRegister) {
-        // Login by username: scan the small appUsers list first and the big
-        // users list only when needed, over plain HTTPS (a multi-MB read on
-        // the live socket froze sign-in on phones).
-        for (const node of nodesToSearch) {
-          if (allMatches.length) break;
-          try {
-            let allData: any = await firebaseRestGet<any>(node).catch(() => undefined);
-            if (allData === undefined) { const allSnap = await get(ref(db, node)); allData = allSnap.exists() ? allSnap.val() : null; }
-            if (allData && typeof allData === "object") {
-              for (const key of Object.keys(allData)) {
-                const u = allData[key];
-                if (u && typeof u === 'object') {
-                  const nameMatch = u.name && u.name.toLowerCase() === inputLower;
-                  const emailMatch = u.email && u.email.toLowerCase() === inputLower;
-                  if (nameMatch || emailMatch) { allMatches.push({ node, key, data: u }); }
-                }
-              }
-            }
-          } catch (e: any) {}
+        try {
+          const found = await passwordLoginByName(input, formPassword);
+          const snap = await get(ref(db, `${found.node}/${found.key}`));
+          if (snap.exists()) { allMatches.push({ node: found.node, key: found.key, data: snap.val() }); checkedByName = true; }
+        } catch (e: any) {
+          if (e?.code !== "not_found") throw e;
         }
       }
 
@@ -662,7 +652,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
       } else {
         if (!anyMatch) { toast.error("User not found!"); setLoading(false); return; }
         // Only the email server checks passwords; the site never reads them.
-        await passwordLogin(accountRefs(allMatches.map((m) => ({ node: m.node, key: m.key }))), formPassword);
+        if (!checkedByName) await passwordLogin(accountRefs(allMatches.map((m) => ({ node: m.node, key: m.key }))), formPassword);
 
         const uid = finalUserId || commaKey;
         const deviceOk = await checkAndRegisterDevice(uid);

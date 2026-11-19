@@ -108,62 +108,101 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 export type CodeCheck = { state: "empty" } | { state: "ok"; note?: string } | { state: "bad"; reason: string };
 
-const mondiadScriptSrcs = (code: string) => {
-  const out: string[] = [];
-  const re = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(code))) {
-    try { const u = new URL(m[1]); if (u.protocol === "https:" && hostMatches(u.hostname, MONDIAD_HOSTS)) out.push(u.href); } catch {}
-  }
-  return out;
-};
+type MondiadScript = { src: string; attrs: Record<string, string> };
 
-/** Is this the code Mondiad gives for that placement? */
-export function checkMondiadCode(slot: MondiadSlot, raw: string): CodeCheck {
-  const code = String(raw || "").trim();
-  if (!code) return { state: "empty" };
-  const srcs = mondiadScriptSrcs(code);
-  if (slot === "popunder") {
-    if (!srcs.some((s) => /popunder\.js/i.test(s))) return { state: "bad", reason: "Popunder code must contain Mondiad's popunder.js script." };
-    if (!new RegExp(`data-mndpopid\\s*=\\s*["']${UUID}["']`, "i").test(code)) return { state: "bad", reason: "data-mndpopid (zone ID) is missing." };
-    return { state: "ok" };
-  }
-  if (slot === "inPagePush") {
-    if (!srcs.some((s) => new RegExp(`/c?static/${UUID}\\.js`, "i").test(s))) return { state: "bad", reason: "In-Page Push code must be Mondiad's …/static/<zone-id>.js script." };
-    return { state: "ok" };
-  }
-  const attr = ELEMENT_ATTR[slot];
-  if (!new RegExp(`${attr}\\s*=\\s*["']${UUID}["']`, "i").test(code)) return { state: "bad", reason: `Element code (<div ${attr}="…">) is missing.` };
-  if (!srcs.some((s) => s.toLowerCase().endsWith(`/${slot}.js`))) return { state: "ok", note: `Delivery script ${slot}.js added automatically.` };
-  return { state: "ok" };
+/** Fixes what phones and chat apps do to pasted code: curly quotes, `//host` links, missing https. */
+function cleanPaste(raw: string) {
+  return String(raw || "")
+    .replace(/[\u201C\u201D\u2033]/g, '"')
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/\u00A0/g, " ")
+    .trim();
 }
+function mondiadUrl(raw: string): string | null {
+  let v = String(raw || "").trim();
+  if (v.startsWith("//")) v = "https:" + v;
+  else if (/^[a-z0-9.-]+\.[a-z]{2,}\//i.test(v)) v = "https://" + v;
+  try {
+    const u = new URL(v);
+    if (u.protocol === "http:") u.protocol = "https:";
+    return u.protocol === "https:" && hostMatches(u.hostname, MONDIAD_HOSTS) ? u.href : null;
+  } catch { return null; }
+}
+const ZONE_PATH = new RegExp(`/${UUID}\\.js(?:$|[?#])`, "i");
 
-/** Pieces the isolated download-ad document is allowed to build from a Mondiad code. */
-export function mondiadParts(slot: MondiadSlot, raw: string): { scripts: { src: string; attrs: Record<string, string> }[]; elements: { attr: string; id: string }[] } {
-  const code = String(raw || "");
-  if (checkMondiadCode(slot, code).state !== "ok") return { scripts: [], elements: [] };
-  const scripts: { src: string; attrs: Record<string, string> }[] = [];
+/** Every Mondiad script in a pasted code (a bare script link counts too), with its data-mnd* ids. */
+function mondiadScripts(code: string): MondiadScript[] {
+  const out: MondiadScript[] = [];
   const re = /<script\b([^>]*)>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code))) {
     const tag = m[1];
-    const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+    const raw = /\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(tag);
+    const src = raw && mondiadUrl(raw[1] || raw[2] || raw[3] || "");
     if (!src) continue;
-    try {
-      const u = new URL(src);
-      if (u.protocol !== "https:" || !hostMatches(u.hostname, MONDIAD_HOSTS)) continue;
-      const attrs: Record<string, string> = {};
-      const pop = new RegExp(`data-mndpopid\\s*=\\s*["'](${UUID})["']`, "i").exec(tag)?.[1];
-      if (pop) attrs["data-mndpopid"] = pop;
-      scripts.push({ src: u.href, attrs });
-    } catch {}
+    const attrs: Record<string, string> = {};
+    const ar = new RegExp(`\\b(data-mnd[a-z]+)\\s*=\\s*["']?(${UUID})["']?`, "gi");
+    let a: RegExpExecArray | null;
+    while ((a = ar.exec(tag))) attrs[a[1].toLowerCase()] = a[2];
+    out.push({ src, attrs });
   }
+  if (!out.length && !code.includes("<")) {
+    const src = mondiadUrl(code);
+    if (src) out.push({ src, attrs: {} });
+  }
+  return out;
+}
+
+const endsWithFile = (src: string, file: string) => src.toLowerCase().split(/[?#]/)[0].endsWith(`/${file}`);
+
+/** Is this the code Mondiad gives for that placement? */
+export function checkMondiadCode(slot: MondiadSlot, raw: string): CodeCheck {
+  const code = cleanPaste(raw);
+  if (!code) return { state: "empty" };
+  const scripts = mondiadScripts(code);
+  const zoneScript = scripts.some((s) => ZONE_PATH.test(s.src));
+  if (!scripts.length && (/<script\b/i.test(code) || /^https?:\/\//i.test(code)))
+    return { state: "bad", reason: "This script is not from Mondiad (mrmnd.com / mndsrv.com)." };
+  if (slot === "popunder") {
+    if (zoneScript) return { state: "ok" };
+    if (scripts.some((s) => endsWithFile(s.src, "popunder.js") && s.attrs["data-mndpopid"])) return { state: "ok" };
+    return { state: "bad", reason: 'Paste the Popunder code from Mondiad "Get tag", like <script async src="https://ds.mrmnd.com/<zone-id>.js"></script>' };
+  }
+  if (slot === "inPagePush") {
+    if (zoneScript) return { state: "ok" };
+    return { state: "bad", reason: 'Paste the In-Page Push code from Mondiad "Get tag", like <script async src="https://ds.mrmnd.com/<zone-id>.js"></script>' };
+  }
+  const attr = ELEMENT_ATTR[slot];
+  if (new RegExp(`${attr}\\s*=\\s*["']?${UUID}`, "i").test(code)) {
+    if (!scripts.some((s) => endsWithFile(s.src, `${slot}.js`))) return { state: "ok", note: `Delivery script ${slot}.js added automatically.` };
+    return { state: "ok" };
+  }
+  if (zoneScript) return { state: "ok" };
+  return { state: "bad", reason: `Paste both ${slot === "banner" ? "Banner" : "Native"} codes from Mondiad (the script and the <div ${attr}="…"> element).` };
+}
+
+/** Pieces the site may build from a Mondiad code — only Mondiad script links and zone-id elements. */
+export function mondiadParts(slot: MondiadSlot, raw: string): { scripts: MondiadScript[]; elements: { attr: string; id: string }[] } {
+  const code = cleanPaste(raw);
+  if (checkMondiadCode(slot, code).state !== "ok") return { scripts: [], elements: [] };
+  const scripts = mondiadScripts(code);
   const elements: { attr: string; id: string }[] = [];
   if (slot === "banner" || slot === "native") {
     const attr = ELEMENT_ATTR[slot];
-    const er = new RegExp(`${attr}\\s*=\\s*["'](${UUID})["']`, "gi");
+    const er = new RegExp(`${attr}\\s*=\\s*["']?(${UUID})`, "gi");
+    let m: RegExpExecArray | null;
     while ((m = er.exec(code))) elements.push({ attr, id: m[1] });
-    if (!scripts.some((s) => s.src.toLowerCase().endsWith(`/${slot}.js`))) scripts.push({ src: MONDIAD_DELIVERY[slot], attrs: {} });
+    if (elements.length && !scripts.some((s) => endsWithFile(s.src, `${slot}.js`))) scripts.push({ src: MONDIAD_DELIVERY[slot], attrs: {} });
   }
   return { scripts, elements };
+}
+
+const escAttr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+/** Clean, safe HTML rebuilt from a Mondiad code ("" when the code is not valid). */
+export function mondiadHtml(slot: MondiadSlot, raw: string): string {
+  const { scripts, elements } = mondiadParts(slot, raw);
+  return [
+    ...scripts.map((s) => `<script async src="${escAttr(s.src)}"${Object.entries(s.attrs).map(([k, v]) => ` ${k}="${escAttr(v)}"`).join("")}></script>`),
+    ...elements.map((e) => `<div ${e.attr}="${escAttr(e.id)}"></div>`),
+  ].join("\n");
 }

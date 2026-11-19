@@ -264,3 +264,13 @@ export async function savePasswordWithCode(op: "reset" | "register", ticket: str
 export async function changePassword(refs: AccountRef[], oldPassword: string, newPassword: string, idToken?: string): Promise<void> {
   await call("password", { op: "change", refs, oldPassword, newPassword, idToken: idToken || undefined });
 }
+/** Username / e-mail-field sign-in: the Worker finds the account (the site never downloads the lists). */
+export async function passwordLoginByName(name: string, password: string): Promise<AccountRef> {
+  const d = await call("password", { op: "login", name: String(name || "").trim().slice(0, 80), password });
+  return { node: d.node, key: String(d.key) };
+}
+/** Opens the admin database session after a PIN or Google admin sign-in (see adminDbSession.ts). */
+export async function openAdminSession(cred: { pin?: string; idToken?: string }): Promise<{ exp: number; email?: string; password?: string }> {
+  const d = await call("admin-session", cred.idToken ? { idToken: cred.idToken } : { pin: String(cred.pin || "") });
+  return { exp: Number(d.exp) || 0, email: d.email ? String(d.email) : undefined, password: d.password ? String(d.password) : undefined };
+}

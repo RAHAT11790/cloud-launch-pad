@@ -942,9 +942,14 @@ async function credState(env, node, key) {
   const [cred, rec] = await Promise.all([dbGet(env, credPath(node, key)).catch(() => null), dbGet(env, `${node}/${key}`, { shallow: "true" }).catch(() => null)]);
   if (cred && cred.h) return { hash: cred.h, rec };
   if (!rec || typeof rec !== "object") return null;
+  // After the bulk move (stripLegacy on) a plain field is never trusted: anyone could
+  // have written it, so it is deleted instead of being used as a password.
   if (rec.password) {
-    const pw = await dbGet(env, `${node}/${key}/password`).catch(() => null);
-    if (pw != null && String(pw)) return { legacy: String(pw), rec };
+    if (await stripLegacy(env)) await dbFetch(env, `${node}/${key}/password`, { method: "DELETE" }).catch(() => null);
+    else {
+      const pw = await dbGet(env, `${node}/${key}/password`).catch(() => null);
+      if (pw != null && String(pw)) return { legacy: String(pw), rec };
+    }
   }
   return { none: true, google: !!rec.googleAuth, rec };
 }
@@ -983,13 +988,45 @@ async function claimVerifiedTicket(env, ctx, ticket, purpose) {
   return { email: normEmail(await unseal(env, out.ec)) };
 }
 const pwOk = (p) => typeof p === "string" && p.length >= PW_MIN && p.length <= PW_MAX && p.trim().length > 0;
+/**
+ * Username (or e-mail field) sign-in: the account lists are locked from visitors,
+ * so the Worker finds matching records with indexed queries (`.indexOn` name/email)
+ * instead of the site downloading every account.
+ */
+async function refsByName(env, raw) {
+  const v = String(raw || "").trim();
+  if (!v || v.length > 80 || hasCtl(v)) return [];
+  const lower = v.toLowerCase();
+  const title = lower.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  const names = [...new Set([v, lower, title, lower.charAt(0).toUpperCase() + lower.slice(1), v.toUpperCase()])];
+  const out = [];
+  const seen = new Set();
+  for (const node of ["appUsers", "users"]) {
+    const asks = [...names.map((n) => ["name", n]), ["email", lower]];
+    for (const [field, val] of asks) {
+      const res = await dbGet(env, node, { orderBy: `"${field}"`, equalTo: JSON.stringify(val), limitToFirst: "5" }).catch(() => null);
+      for (const [key, u] of Object.entries(res && typeof res === "object" ? res : {})) {
+        if (!u || typeof u !== "object" || !KEY_RE.test(key) || seen.has(`${node}/${key}`)) continue;
+        if (String(u.name || "").toLowerCase() !== lower && String(u.email || "").toLowerCase() !== lower) continue;
+        seen.add(`${node}/${key}`);
+        out.push({ node, key });
+      }
+    }
+    if (out.length) break;
+  }
+  return out.slice(0, 8);
+}
 
 async function actPassword(env, ctx, cors, body, ip) {
   const op = String(body.op || "");
   const now = Date.now();
   if (op === "login") {
-    const refs = (Array.isArray(body.refs) ? body.refs : []).filter(validRef).slice(0, 8);
+    let refs = (Array.isArray(body.refs) ? body.refs : []).filter(validRef).slice(0, 8);
     const password = String(body.password || "");
+    if (!refs.length && typeof body.name === "string" && pwOk(password)) {
+      refs = await refsByName(env, body.name);
+      if (!refs.length) return fail(cors, 404, "not_found", "User not found!");
+    }
     if (!refs.length || !pwOk(password)) return fail(cors, 400, "bad_request", "Enter your ID and password.");
     const ipW = await wrongCount(env, "ip", ip, now);
     if (ipW.n >= LOGIN_WRONG_PER_IP) return fail(cors, 429, "too_many", "Too many wrong passwords from this network. Try again in an hour.", { retryAfter: 3600 });
@@ -1070,6 +1107,86 @@ async function actPassword(env, ctx, cors, body, ip) {
   return fail(cors, 400, "bad_action", "Unknown action.");
 }
 
+// ---------------- Admin database session ----------------
+// The account lists (users/appUsers) are readable only with a database session.
+// After a correct admin PIN (this Worker's ADMIN_PIN, or the owner's own
+// verify-admin-pin function) or a Google admin sign-in, the Worker opens a
+// session: `secure/adminSessions/{uid}` = { exp } which the rules check.
+// PIN admins get a throw-away Firebase sign-in made here (random e-mail and
+// password, deleted when the session ends), so nothing has to be set up by hand.
+const ADMIN_SESSION_MS = 7 * DAY;
+const OWNER_EMAILS = ["rahatsarker224@gmail.com", "sarkeremon207@gmail.com"];
+const PIN_HOSTS = ["verify-admin-pin.rahatsarker224.workers.dev", "kqxpzqegtvaiwgdusrin.supabase.co"];
+async function idt(path, body) {
+  const host = path.startsWith("token") ? "https://securetoken.googleapis.com/v1/" : "https://identitytoolkit.googleapis.com/v1/";
+  const r = await fetch(`${host}${path}?key=${FIREBASE_WEB_KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json", Referer: "https://rsanime03.lovable.app/" }, body: JSON.stringify(body),
+  }).catch(() => null);
+  return r && r.ok ? await r.json().catch(() => null) : null;
+}
+async function pinMatches(env, pin) {
+  if (!pin || pin.length < 4 || pin.length > 32) return false;
+  if (env.ADMIN_PIN && safeEq(pin, String(env.ADMIN_PIN).trim())) return true;
+  // The admin page checks PINs with the verify-admin-pin function; ask it too
+  // (only the owner's own servers, never an address someone else saved).
+  const row = await dbGet(env, "settings/functionOverrides/verify-admin-pin").catch(() => null);
+  let url = "";
+  try { const u = new URL(String(row?.customUrl || row?.url || "")); if (u.protocol === "https:" && PIN_HOSTS.includes(u.hostname)) url = u.href; } catch {}
+  if (!url) return false;
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) }).catch(() => null);
+  const j = r && r.ok ? await r.json().catch(() => null) : null;
+  return j?.ok === true;
+}
+async function adminEmailAllowed(env, email) {
+  if (OWNER_EMAILS.includes(email)) return true;
+  const list = await dbGet(env, "admin/authorizedEmails").catch(() => null);
+  return Object.values(list && typeof list === "object" ? list : {}).some((e) => normEmail(e) === email);
+}
+async function cleanupAdminSessions(env, now) {
+  const all = await dbGet(env, "secure/adminSessions").catch(() => null);
+  const old = Object.entries(all && typeof all === "object" ? all : {}).filter(([, v]) => !(Number(v?.exp) > now)).slice(0, 10);
+  for (const [uid, v] of old) {
+    if (v?.rt) {
+      const t = await idt("token", { grant_type: "refresh_token", refresh_token: v.rt });
+      if (t?.id_token) await idt("accounts:delete", { idToken: t.id_token });
+    }
+    await dbFetch(env, `secure/adminSessions/${uid}`, { method: "DELETE" }).catch(() => null);
+  }
+}
+async function actAdminSession(env, ctx, cors, body, ip) {
+  const now = Date.now();
+  const exp = now + ADMIN_SESSION_MS;
+  const later = (p) => { const q = p.catch(() => null); try { ctx?.waitUntil?.(q); } catch {} };
+  if (body.idToken) {
+    const g = await idt("accounts:lookup", { idToken: String(body.idToken).slice(0, 4000) });
+    const u = g?.users?.[0];
+    const email = u && u.emailVerified && u.email ? normEmail(u.email) : "";
+    if (!email || !/^[A-Za-z0-9]{10,64}$/.test(String(u.localId || ""))) return fail(cors, 401, "bad_google", "Google sign-in expired. Please sign in again.");
+    if (!(await adminEmailAllowed(env, email))) return fail(cors, 403, "not_admin", "This Google account is not an admin.");
+    await dbPut(env, `secure/adminSessions/${u.localId}`, { exp, t: now, by: "google" });
+    later(cleanupAdminSessions(env, now));
+    return json(cors, { ok: true, exp });
+  }
+  const ih = await hash(env, "ip", ip);
+  const hb = hourBucket(now);
+  const wp = `${ROOT}/adminWrong/${hb}/${ih}`;
+  const wk = `aw:${hb}:${ih}`;
+  const wrong = Math.max(Number(await dbGet(env, wp).catch(() => 0)) || 0, shadowGet(wk, now));
+  if (wrong >= ADMIN_WRONG_PER_HOUR) return fail(cors, 429, "too_many", "Too many wrong PINs. Try again in an hour.", { retryAfter: 3600 });
+  if (!(await pinMatches(env, String(body.pin || "").trim()))) {
+    const n = await dbTxn(env, wp, (c) => { const v = Math.max(Number(c) || 0, wrong) + 1; return { next: v, result: v }; }).catch(() => wrong + 1);
+    shadowPut(wk, Number(n) || wrong + 1, now + HOUR);
+    return fail(cors, 401, "wrong_pin", "Wrong admin PIN.");
+  }
+  const email = `adm-${b64url(randBytes(9)).toLowerCase().replace(/[^a-z0-9]/g, "x")}@admin-session.rsanime03.app`;
+  const password = b64url(randBytes(24));
+  const acc = await idt("accounts:signUp", { email, password, returnSecureToken: true });
+  if (!acc?.localId) return fail(cors, 502, "session_failed", "Could not open a secure admin session. Try again.");
+  await dbPut(env, `secure/adminSessions/${acc.localId}`, { exp, t: now, by: "pin", rt: String(acc.refreshToken || "") });
+  later(cleanupAdminSessions(env, now));
+  return json(cors, { ok: true, exp, email, password });
+}
+
 // ---------------- Database security gateway (server-to-server) ----------------
 // Lets the owner's tooling read/replace the Realtime Database security rules and
 // run privileged one-off data moves (e.g. moving passwords to a locked path)
@@ -1148,6 +1265,7 @@ const worker = {
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
         case "admin-events": return await actAdminEvents(env, cors, body, ip);
         case "password": return await actPassword(env, ctx, cors, body, ip);
+        case "admin-session": return await actAdminSession(env, ctx, cors, body, ip);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }
     } catch (err) {

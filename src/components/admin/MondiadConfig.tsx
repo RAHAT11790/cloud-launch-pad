@@ -13,11 +13,11 @@ type Field = { key: keyof Omit<Cfg, "enabled">; slot: MondiadSlot; name: string;
 
 const PLAYER_FIELDS: Field[] = [
   { key: "popunder", slot: "popunder", name: "Popunder", icon: <Zap className="w-3.5 h-3.5 text-amber-300" />,
-    help: "Takes turns with the Adsterra popunder on player taps. If one opens nothing, the other one takes over.",
-    placeholder: '<script async src="https://ss.mrmnd.com/popunder.js" data-mndpopid="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></script>' },
+    help: "Paste the whole code from Mondiad \"Get tag\". Takes turns with the Adsterra popunder on player taps; if one opens nothing, the other takes over.",
+    placeholder: '<script async src="https://ds.mrmnd.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.js"></script>' },
   { key: "playerInPagePush", slot: "inPagePush", name: "In-Page Push", icon: <Radio className="w-3.5 h-3.5 text-fuchsia-300" />,
-    help: "Notification-style ad inside the player page, shown once per visit.",
-    placeholder: '<script async src="https://ss.mndsrv.com/static/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.js"></script>' },
+    help: "Paste the whole code from Mondiad \"Get tag\". Notification-style ad inside the player page, shown once per visit.",
+    placeholder: '<script async src="https://ds.mrmnd.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.js"></script>' },
 ];
 const DOWNLOAD_FIELDS: Field[] = [
   { key: "banner", slot: "banner", name: "Banner", icon: <LayoutGrid className="w-3.5 h-3.5 text-sky-300" />,
@@ -27,8 +27,8 @@ const DOWNLOAD_FIELDS: Field[] = [
     help: "Paste both parts (native.js + the <div data-mndazid> element). The element alone also works.",
     placeholder: '<script async src="https://ss.mndsrv.com/native.js"></script>\n<div data-mndazid="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>' },
   { key: "downloadInPagePush", slot: "inPagePush", name: "In-Page Push", icon: <Radio className="w-3.5 h-3.5 text-fuchsia-300" />,
-    help: "Notification-style ad in the download step ad box.",
-    placeholder: '<script async src="https://ss.mndsrv.com/static/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.js"></script>' },
+    help: "Paste the whole code from Mondiad \"Get tag\". Notification-style ad in the download step ad box.",
+    placeholder: '<script async src="https://ds.mrmnd.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.js"></script>' },
 ];
 
 const codeArea =
