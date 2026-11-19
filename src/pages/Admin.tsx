@@ -71,12 +71,10 @@ const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"
 const PremiumUsersManager = lazySection(() => import("@/components/admin/PremiumUsersManager"), "Premium Users");
 const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "Edge Function Manager");
 const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
-const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
-const DownloadAdPlacements = lazySection(() => import("@/components/admin/DownloadAdPlacements"), "Download page ads");
+const AdsNetworkPanel = lazySection(() => import("@/components/admin/AdsNetworkPanel"), "Ads Network");
 const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
 const DownloadManagerPanel = lazySection(() => import("@/components/admin/DownloadManagerPanel"), "Download Manager");
 const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
-const AdsterraAnalytics = lazySection(() => import("@/components/admin/AdsterraAnalytics"), "Adsterra Analytics");
 const BackdropAiReplacer = lazySection(() => import("@/components/admin/BackdropAiReplacer"), "Backdrop AI");
 const ApkDownloadCenter = lazySection(() => import("@/components/admin/ApkDownloadCenter"), "APK Center");
 const FirebaseAnalyzer = lazySection(() => import("@/components/admin/FirebaseAnalyzer"), "Firebase Analyzer");
@@ -3336,7 +3334,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  "egd-manager": "EGD MANAGER",
  "cf-manager": "CLOUDFLARE MANAGER",
  "fb-analytics": "Firebase Analytics",
-  "adsterra": "Adsterra Ads",
+  "adsterra": "Ads Network",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
   "browser-access": "Browser Access",
@@ -5500,7 +5498,7 @@ ${tgBulkFooter}
  
  { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
  { section: "cf-manager", icon: <Cloud size={16} />, label: "CLOUDFLARE MANAGER" },
- { section: "adsterra", icon: <Activity size={16} />, label: "Adsterra Ads" },
+ { section: "adsterra", icon: <Activity size={16} />, label: "Ads Network" },
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
  { section: "tg-download", icon: <Send size={16} />, label: "Telegram Download" },
@@ -9326,13 +9324,9 @@ ${tgBulkFooter}
  )}
 
 
- {/* ==================== ADSTERRA ADS ==================== */}
+ {/* ==================== ADS NETWORK (Adsterra + Mondiad) ==================== */}
  {activeSection === "adsterra" && (
- <div className="space-y-5">
-   <AdsterraAnalytics />
-   <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
-   <DownloadAdPlacements />
- </div>
+ <AdsNetworkPanel glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
  )}
 
  {/* ==================== BACKDROP AI ==================== */}

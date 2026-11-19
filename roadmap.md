@@ -1,5 +1,15 @@
 # Roadmap
 
+## Mondiad ad network + "Ads Network" admin section (2026-11-19)
+- [x] Mondiad domain verification code in the site head.
+- [ ] Owner: Publish, then tap Verify on Mondiad (Insert Code).
+- [x] Admin "Adsterra Ads" renamed to "Ads Network" with an Adsterra box and a Mondiad box.
+- [x] Mondiad box: Video Player (Popunder, In-Page Push) and Download Page (Banner, Native, In-Page Push); empty boxes do nothing.
+- [x] Player pop-unders take turns Adsterra ↔ Mondiad; a silent/blocked one hands over to the other (Direct Link last).
+- [x] Download page shows Mondiad Banner / Native / In-Page Push next to the Adsterra ones.
+- [x] Phone-size test: Mondiad tab opened then Adsterra; silent Mondiad rested and handed back; download page asked Mondiad for all three zones; admin boxes check and save codes.
+- [ ] Owner: paste the real Mondiad codes after verification (real ad fill not checked — sample zones returned "no ad").
+
 ## Email without links + reset only for real accounts + redeem/lucky spin (2026-11-18)
 - [x] Email: no button, no link, no site/worker address, no "powered by"; only RS ANIME03 name, code, expiry, safety note; code in the subject. Worker v8 live on Cloudflare (all 11 secrets kept). Gmail decides itself whether to show "Copy code".
 - [x] Email: only Alwaysdata's names in the mail conversation (no own domain).

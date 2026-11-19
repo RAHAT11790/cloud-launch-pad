@@ -22,6 +22,11 @@
 //   • The app never closes an opened sponsor tab or tears down a live cycle.
 // ============================================
 import { db, ref, get, onValue } from "@/lib/firebase";
+import {
+  type AdNetworkId, MONDIAD_HOSTS, networkFromStack, pickAdNetwork,
+  readNetCaps, markNetCapped, clearNetCap, readLastNet, writeLastNet,
+} from "@/lib/adNetworks";
+import { getMondiadConfig, mondiadCached, type MondiadConfig } from "@/lib/mondiadAds";
 
 declare global {
   interface Window {
@@ -49,6 +54,10 @@ declare global {
     __adsterraTagAskedAt?: number;
     __adsterraLeaveHooked?: boolean;
     __adsNoAdZone?: number;
+    /** Network whose pop-under owns the current player tap (turn taking). */
+    __adTurn?: AdNetworkId;
+    __mondiadPopMounted?: boolean;
+    __mondiadPushDone?: boolean;
   }
 }
 
@@ -101,17 +110,26 @@ export const TAG_VERIFY_MS = 1500;
 export function tagCappedUntil(): number {
   try { return Number(localStorage.getItem(TAG_CAP_KEY)) || 0; } catch { return 0; }
 }
+/** The network that had this tap opened nothing: it rests and the other one takes over. */
 export function markTagCapped(now = Date.now()) {
-  try { localStorage.setItem(TAG_CAP_KEY, String(now + TAG_RETRY_MS)); } catch {}
+  const net: AdNetworkId = (typeof window !== "undefined" && window.__adTurn) || "adsterra";
+  markNetCapped(net, now);
+  if (net === "adsterra") {
+    try { localStorage.setItem(TAG_CAP_KEY, String(now + TAG_RETRY_MS)); } catch {}
+  }
 }
-function clearTagCap() {
-  try { localStorage.removeItem(TAG_CAP_KEY); } catch {}
+function clearTagCap(net: AdNetworkId = "adsterra") {
+  clearNetCap(net);
+  if (net === "adsterra") {
+    try { localStorage.removeItem(TAG_CAP_KEY); } catch {}
+  }
 }
-function noteRealOpen() {
+function noteRealOpen(net: AdNetworkId = "adsterra") {
   if (typeof window === "undefined") return;
   const now = Date.now();
   window.__adsterraTagOpenAt = now;
   window.__adsterraPopFiredAt = now;
+  writeLastNet(net);
 }
 /** Did a real sponsor tab open since `askedAt`? */
 export function tagOpenedSince(askedAt: number): boolean {
@@ -127,8 +145,10 @@ function hookPageLeave() {
   const onLeave = () => {
     const asked = window.__adsterraTagAskedAt || 0;
     if (asked && Date.now() - asked < TAG_VERIFY_MS) {
+      const net = window.__adTurn || "adsterra";
       window.__adsterraTagOpenAt = Date.now();
-      clearTagCap();
+      writeLastNet(net);
+      clearTagCap(net);
     }
   };
   window.addEventListener("blur", onLeave);
@@ -201,8 +221,19 @@ export function setAdsterraPremium(p: boolean) {
   if (typeof window !== "undefined") window.__adsterraPremium = !!p;
 }
 
+function mondiadPlayer(): MondiadConfig | null {
+  const m = mondiadCached();
+  return m && m.enabled ? m : null;
+}
+
 function hasSnippets(cfg: AdsterraConfig) {
-  return !!(cfg.popunder.trim() || cfg.streamLink.trim() || cfg.directLink.trim());
+  const m = mondiadPlayer();
+  return !!(cfg.popunder.trim() || cfg.streamLink.trim() || cfg.directLink.trim() || m?.popunder.trim() || m?.playerInPagePush.trim());
+}
+
+/** Which network's script opened a sponsor tab (null = only our own code, never blocked). */
+function openerNetwork(): AdNetworkId | null {
+  try { return networkFromStack(new Error().stack || "", location.hostname, MONDIAD_HOSTS); } catch { return null; }
 }
 
 function isOwnedNode(node: Node) {
@@ -311,9 +342,11 @@ function installPopunderThrottle() {
   window.open = function (url?: string | URL, target?: string, features?: string): Window | null {
     try {
       const urlStr = String(url ?? "");
-      // Treat empty / same-origin / hash links as legitimate app navigation.
+      // Treat empty / same-origin / hash links as legitimate app navigation —
+      // except an empty window.open from an ad script (Mondiad opens a blank
+      // tab and sends it to the sponsor afterwards).
       const isAppUrl =
-        !urlStr ||
+        (!urlStr && !openerNetwork()) ||
         urlStr.startsWith("#") ||
         urlStr.startsWith("/") ||
         urlStr.startsWith("mailto:") ||
@@ -321,10 +354,19 @@ function installPopunderThrottle() {
         urlStr.startsWith(location.origin);
       // Ad-free zones (Global Chat): no sponsor tab may open from any tag.
       if (!isAppUrl && (window.__adsNoAdZone || 0) > 0) return null;
+      // Mondiad is a player-only network: its tag never opens tabs elsewhere.
+      if (!isAppUrl && !window.__adsterraPlayerScopeActive && window.__mondiadPopMounted && openerNetwork() === "mondiad") return null;
       if (!isAppUrl && window.__adsterraPlayerScopeActive) {
+        // Turn taking: on a tap handed to one network, the other network's
+        // pop-under (it listens to the same tap) may not open a second tab.
+        const net = openerNetwork();
+        const turn = window.__adTurn;
+        const handedOut = Date.now() - (window.__adsterraTagAskedAt || 0) < TAG_VERIFY_MS;
+        if (net && turn && net !== turn && handedOut) return null;
         if (!reserveAdFire()) return null;
-        noteRealOpen();
-        clearTagCap();
+        const owner = net || turn || "adsterra";
+        noteRealOpen(owner);
+        clearTagCap(owner);
       }
     } catch {}
     return origOpen(url as any, target as any, features as any);
@@ -399,7 +441,7 @@ function removeKnownAdResidue() {
   const looksLikeAd = (el: HTMLElement) => {
     const fingerprint = `${el.id || ""} ${el.className || ""} ${el.getAttribute("data-zone") || ""} ${el.getAttribute("data-cfasync") || ""}`.toLowerCase();
     if (/adsterra|social.?bar|popunder|invoke|atcontainer|ads?[-_]/i.test(fingerprint)) return true;
-    if (el.querySelector('script[src*="adsterra"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], iframe[src*="adsterra"], iframe[src*="highperformanceformat"], iframe[src*="profitabledisplaynetwork"]')) return true;
+    if (el.querySelector('script[src*="adsterra"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], script[src*="mndsrv"], script[src*="mrmnd"], iframe[src*="adsterra"], iframe[src*="highperformanceformat"], iframe[src*="profitabledisplaynetwork"], iframe[src*="mndsrv"], iframe[src*="mrmnd"]')) return true;
     try {
       const cs = window.getComputedStyle(el);
       const zi = Number.parseInt(cs.zIndex || "0", 10);
@@ -424,7 +466,7 @@ function clearRefreshTimer() {
   }
 }
 
-function injectSnippet(snippet: string, container: HTMLElement) {
+function injectSnippet(snippet: string, container: HTMLElement, net: AdNetworkId = "adsterra") {
   const trimmed = (snippet || "").trim();
   if (!trimmed) return [] as Promise<void>[];
 
@@ -462,8 +504,9 @@ function injectSnippet(snippet: string, container: HTMLElement) {
         resolve();
       };
       if (s.src) {
-        s.addEventListener("load", () => { window.__adsterraScriptOk = true; finish(); }, { once: true });
-        s.addEventListener("error", () => { window.__adsterraScriptOk = false; finish(); }, { once: true });
+        s.addEventListener("load", () => { if (net === "adsterra") window.__adsterraScriptOk = true; finish(); }, { once: true });
+        // A blocked Mondiad script rests that network; Adsterra keeps its old flag.
+        s.addEventListener("error", () => { if (net === "adsterra") window.__adsterraScriptOk = false; else markNetCapped(net); finish(); }, { once: true });
         window.setTimeout(finish, 8000);
       } else {
         queueMicrotask(finish);
@@ -506,9 +549,21 @@ async function injectOnce(cfg: AdsterraConfig) {
   // same tag every cycle stacks those listeners and makes one tap open many
   // ads. Mount it exactly once per page session and let the network's own tag
   // handle subsequent eligible clicks/frequency capping.
-  if (!window.__adsterraPopunderMounted) {
+  if (!window.__adsterraPopunderMounted && cfg.popunder.trim()) {
     window.__adsterraPopunderMounted = true;
     pending.push(...injectSnippet(cfg.popunder, container));
+  }
+  // Mondiad: its pop-under and in-page push are mounted once per page session too.
+  const m = mondiadPlayer();
+  if (m) {
+    if (!window.__mondiadPushDone && m.playerInPagePush.trim()) {
+      window.__mondiadPushDone = true;
+      pending.push(...injectSnippet(m.playerInPagePush, container, "mondiad"));
+    }
+    if (!window.__mondiadPopMounted && m.popunder.trim()) {
+      window.__mondiadPopMounted = true;
+      pending.push(...injectSnippet(m.popunder, container, "mondiad"));
+    }
   }
   if (pending.length) {
     await Promise.allSettled(pending);
@@ -601,6 +656,14 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastConfigJson = undefined;
 }
 
+/** Pop-under tags that are configured but not yet mounted this page session. */
+function unmountedTags(cfg: AdsterraConfig): AdNetworkId[] {
+  const out: AdNetworkId[] = [];
+  if (cfg.popunder.trim() && !window.__adsterraPopunderMounted) out.push("adsterra");
+  if (mondiadPlayer()?.popunder.trim() && !window.__mondiadPopMounted) out.push("mondiad");
+  return out;
+}
+
 /**
  * Release ONE ad cycle. Pacing (how often this may be called) is owned by
  * `src/lib/adPacing.ts` — this function no longer keeps its own cool-down,
@@ -612,8 +675,8 @@ async function loadAdsterraSlots(): Promise<boolean> {
   if (window.__adsterraPremium) return false;
 
   const cfg = await getAdsterraConfig();
-  if (!cfg.enabled || !cfg.popunder.trim()) return false;
-  if (window.__adsterraPopunderMounted) return false;
+  if (!cfg.enabled) return false;
+  if (!unmountedTags(cfg).length) return false;
   const json = JSON.stringify(cfg);
 
   if (!window.__adsterraConfigUnsub) {
@@ -702,37 +765,47 @@ export async function releaseAd(): Promise<AdRelease> {
 
   const cfg = cached || (await getAdsterraConfig());
   if (!cfg.enabled) return "none";
+  const mcfg = mondiadCached() || (await getMondiadConfig());
+  const mondiadScript = mcfg.enabled ? (mcfg.popunder || "").trim() : "";
 
   const direct = (cfg.directLink || "").trim();
   const script = (cfg.popunder || "").trim();
-  if (!direct && !script) return "none";
+  if (!direct && !script && !mondiadScript) return "none";
 
   const now = Date.now();
   const lastPop = window.__adsterraPopFiredAt || 0;
   if (now - lastPop < getAdGapMs()) return "none";
 
-  const mounted = !!window.__adsterraPopunderMounted;
-  const scriptBlocked = window.__adsterraScriptOk === false;
-  const tagCapped = now < tagCappedUntil();
+  // Mounted pop-under tags that can take this tap (Adsterra drops out while its script is blocked).
+  const mountedTags: AdNetworkId[] = [];
+  if (script && window.__adsterraPopunderMounted && window.__adsterraScriptOk !== false) mountedTags.push("adsterra");
+  if (mondiadScript && window.__mondiadPopMounted) mountedTags.push("mondiad");
+  const anyMounted = !!window.__adsterraPopunderMounted || !!window.__mondiadPopMounted;
+  const turn = pickAdNetwork(mountedTags, readLastNet(), readNetCaps(), now);
+  const allResting = anyMounted && turn === null;
   const cycle = (window.__adsterraCycleCount ?? 0) + 1;
 
   // Direct-link path — must run synchronously inside the user gesture.
-  const useDirect = !!direct && (scriptBlocked || !script || tagCapped || (mounted && cycle % 3 === 0));
+  const useDirect = !!direct && (!script && !mondiadScript || allResting || (anyMounted && cycle % 3 === 0));
   if (useDirect) {
     if (!reserveAdFire()) return "none";
     window.__adsterraCycleCount = cycle;
+    window.__adTurn = "adsterra";
     const opener = window.__adsterraOpenOriginal || window.open;
     try { opener?.(direct, "_blank", "noopener,noreferrer"); } catch { return "none"; }
-    noteRealOpen();
+    noteRealOpen("adsterra");
     return "direct";
   }
 
-  if (!script) return "none";
+  if (!script && !mondiadScript) return "none";
   window.__adsterraCycleCount = cycle;
-  if (mounted) {
+  if (turn) {
     // The tag's own click listener runs right after this one; the caller
     // verifies with tagOpenedSince() whether it really opened a tab.
+    window.__adTurn = turn;
     window.__adsterraTagAskedAt = now;
+    // A network added mid-session joins the rotation from the next tap.
+    if (unmountedTags(cfg).length) void loadAdsterraSlots();
     return "tag";
   }
   return (await loadAdsterraSlots()) ? "mounted" : "none";
