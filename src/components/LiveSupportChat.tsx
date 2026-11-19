@@ -80,10 +80,6 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       if (appUserData) {
         ctx += `ইউজার নাম: ${appUserData.name || "অজানা"}\n`;
         ctx += `ইমেইল: ${appUserData.email || commaKey.replace(/,/g, ".")}\n`;
-        ctx += `পাসওয়ার্ড সেট আছে: ${appUserData.password ? "হ্যাঁ" : "না"}\n`;
-        if (appUserData.password) {
-          ctx += `বর্তমান পাসওয়ার্ড: ${appUserData.password}\n`;
-        }
         ctx += `লগইন পদ্ধতি: ${appUserData.googleUid ? "Google" : "Email/Password"}\n`;
       }
       if (premiumData) {
@@ -241,17 +237,16 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
 
       const name = extractField("ইউজার নাম") || "আপনি";
       const email = extractField("ইমেইল");
-      const password = extractField("বর্তমান পাসওয়ার্ড");
       const premiumStatus = extractField("প্রিমিয়াম স্ট্যাটাস");
       const premiumExpiry = extractField("প্রিমিয়াম মেয়াদ");
       const deviceLimit = extractField("ডিভাইস লিমিট");
       const activeDevices = extractField("সক্রিয় ডিভাইস");
 
       if (asksPassword && asksEmail) {
-        return `${name}, আপনার লগইন তথ্য:\n• ইমেইল/আইডি: ${email || "পাওয়া যায়নি"}\n• পাসওয়ার্ড: ${password || "সেট করা নেই"} 🔐`;
+        return `${name}, আপনার লগইন ইমেইল/আইডি: ${email || "পাওয়া যায়নি"}\n• পাসওয়ার্ড নিরাপত্তার জন্য লুকানো থাকে, কেউ দেখতে পারে না। ভুলে গেলে লগইন পাতায় "Forgot Password?" চেপে নতুন পাসওয়ার্ড দিন। 🔐`;
       }
       if (asksPassword) {
-        return password ? `${name}, আপনার বর্তমান পাসওয়ার্ড: ${password} 🔐` : `${name}, আপনার অ্যাকাউন্টে কোনো পাসওয়ার্ড সেট করা নেই।`;
+        return `${name}, পাসওয়ার্ড নিরাপত্তার জন্য লুকানো থাকে, কেউ দেখতে পারে না। ভুলে গেলে লগইন পাতায় "Forgot Password?" চেপে নতুন পাসওয়ার্ড দিন। 🔐`;
       }
       if (asksEmail) {
         return email ? `${name}, আপনার লগইন ইমেইল/আইডি: ${email} 📩` : `${name}, আপনার লগইন ইমেইল/আইডি পাওয়া যায়নি।`;

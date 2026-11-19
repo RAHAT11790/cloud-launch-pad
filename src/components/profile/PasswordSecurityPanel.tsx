@@ -2,16 +2,18 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, ArrowLeft, Check, Eye, EyeOff, KeyRound, Lock, Mail, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { db, get, ref, set, update } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import {
   cooldownLeftMs, EmailServiceError, normalizeEmail, resendEmailCode, sendEmailCode, verifyEmailCode,
   savePendingProfileReset, readPendingProfileReset, clearPendingProfileReset,
+  accountRefs, passwordStatus, changePassword, savePasswordWithCode,
 } from "@/lib/emailService";
 import { CodeCloseButton, CodeTimer, DailyPips, OtpBoxes, PasteCodeButton, PasswordStrength, ResendButton, ResumeNote, SecureNote, SentToCard, StepDots } from "@/components/auth/EmailCodeKit";
 
 const keyOf = (email: string) => email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
 const legacyKeyOf = (email: string) => email.toLowerCase().replace(/[^a-z0-9]/g, "_");
 const MIN = 6;
+const refsOf = (email: string) => accountRefs([{ node: "appUsers", key: keyOf(email) }, { node: "appUsers", key: legacyKeyOf(email) }]);
 
 function PwInput({ value, onChange, placeholder, show, onToggle, autoFocus, onEnter, mark }: {
   value: string; onChange: (v: string) => void; placeholder: string; show: boolean; onToggle?: () => void; autoFocus?: boolean; onEnter?: () => void; mark?: "ok" | "bad" | null;
@@ -73,11 +75,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
           setMeta({ expiresAt: saved.expiresAt, totalMs: Math.max(60_000, Number(saved.totalMs) || 5 * 60_000), dailyLeft: saved.dailyLeft ?? null, dailyMax: saved.dailyMax ?? null });
         }
         if (!e) { setHasPassword(false); return; }
-        for (const k of [keyOf(e), legacyKeyOf(e)]) {
-          const s = await get(ref(db, `appUsers/${k}`));
-          if (s.exists() && s.val().password) { setHasPassword(true); return; }
-        }
-        setHasPassword(false);
+        setHasPassword(await passwordStatus(refsOf(e)));
       } catch { setHasPassword(false); }
     })();
   }, []);
@@ -93,16 +91,6 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
   const pwMatch = confirmPw ? (newPw === confirmPw ? "ok" : "bad") : null;
   const pwReady = newPw.length >= MIN && newPw === confirmPw;
 
-  const writePassword = async (pw: string) => {
-    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-    for (const k of [keyOf(email), legacyKeyOf(email)]) {
-      const s = await get(ref(db, `appUsers/${k}`));
-      if (s.exists()) { await update(ref(db, `appUsers/${k}`), { password: pw }); return s.val(); }
-    }
-    await set(ref(db, `appUsers/${keyOf(email)}`), { id: u.id, name: u.name, email, createdAt: Date.now(), password: pw });
-    return null;
-  };
-
   const submitChange = async () => {
     setError("");
     if (hasPassword && !oldPw) { setError("Enter your current password"); return; }
@@ -112,15 +100,9 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     if (!email) { setError("This account has no email"); return; }
     setBusy(true);
     try {
-      if (hasPassword) {
-        let current: any = null;
-        for (const k of [keyOf(email), legacyKeyOf(email)]) {
-          const s = await get(ref(db, `appUsers/${k}`));
-          if (s.exists()) { current = s.val(); break; }
-        }
-        if (!current || current.password !== oldPw) { setError("Current password is incorrect"); setBusy(false); return; }
-      }
-      await writePassword(newPw);
+      // The email server checks the current password (or the Google sign-in) and saves the new one.
+      const idToken = hasPassword ? "" : await auth.currentUser?.getIdToken().catch(() => "");
+      await changePassword(refsOf(email), hasPassword ? oldPw : "", newPw, idToken || undefined);
       toast.success(hasPassword ? "Password changed" : "Password set");
       onBack();
     } catch (e: any) { setError(e?.message || "Could not save the password"); }
@@ -164,7 +146,7 @@ export default function PasswordSecurityPanel({ onBack }: { onBack: () => void }
     if (!pwReady) { setError(newPw.length < MIN ? `New password needs at least ${MIN} characters` : "Passwords don't match"); return; }
     setBusy(true);
     try {
-      await writePassword(newPw);
+      await savePasswordWithCode("reset", ticket, newPw);
       clearPendingProfileReset();
       toast.success("New password saved");
       onBack();

@@ -368,3 +368,54 @@ describe("SMTP email worker", () => {
     expect(body.trimEnd()).toBe(cf.replace("export default {", "const worker = {").trimEnd());
   });
 });
+
+describe("passwords checked only by the email worker", () => {
+  const acc = [{ node: "appUsers", key: "old,user99@gmail,com" }];
+  it("accepts an old plain password once and stores a hash in the locked area", async () => {
+    const r = await api("password", { op: "login", refs: acc, password: "x".repeat(4).slice(0, 1) + "xxx" });
+    expect(r.data.error).toBe("wrong_password"); // stored password is "x", "xxxx" is wrong
+    tree.appUsers["old,user99@gmail,com"].password = "oldpass1";
+    const ok = await api("password", { op: "login", refs: acc, password: "oldpass1" });
+    expect(ok.data).toMatchObject({ ok: true, node: "appUsers", key: "old,user99@gmail,com" });
+    expect(String(tree.secure.credentials.appUsers["old,user99@gmail,com"].h)).toMatch(/^pbkdf2\$100000\$/);
+    expect(String(tree.secure.credentials.appUsers["old,user99@gmail,com"].h)).not.toContain("oldpass1");
+    // after migration the hash decides, even if the plain field is edited
+    tree.appUsers["old,user99@gmail,com"].password = "hacked";
+    expect((await api("password", { op: "login", refs: acc, password: "hacked" })).data.error).toBe("wrong_password");
+    expect((await api("password", { op: "login", refs: acc, password: "oldpass1" })).data.ok).toBe(true);
+  });
+
+  it("locks an account after 10 wrong passwords in an hour", async () => {
+    tree.appUsers["old,user99@gmail,com"].password = "rightpw1";
+    for (let i = 0; i < 10; i++) await api("password", { op: "login", refs: acc, password: `wrong${i}x` });
+    const r = await api("password", { op: "login", refs: acc, password: "rightpw1" });
+    expect(r.status).toBe(429);
+  });
+
+  it("deletes the plain password field once strip mode is on", async () => {
+    tree.secure = { authConfig: { stripLegacy: true } };
+    tree.appUsers["old,user99@gmail,com"].password = "oldpass1";
+    await api("password", { op: "login", refs: acc, password: "oldpass1" });
+    const r = await api("password", { op: "change", refs: acc, oldPassword: "oldpass1", newPassword: "newpass22" });
+    expect(r.data.ok).toBe(true);
+    expect(tree.appUsers["old,user99@gmail,com"].password).toBeUndefined();
+    expect((await api("password", { op: "login", refs: acc, password: "newpass22" })).data.ok).toBe(true);
+  });
+
+  it("a reset needs a verified code, and that code saves a password only once", async () => {
+    const s = await api("send", { email: "old.user99@gmail.com", purpose: "reset" });
+    const ticket = s.data.ticket;
+    expect((await api("password", { op: "reset", ticket, password: "brandnew1" })).data.error).toBe("not_found");
+    const code = decodeMail(mails[0]).code;
+    expect((await api("verify", { ticket, code })).data.ok).toBe(true);
+    expect((await api("password", { op: "reset", ticket, password: "brandnew1" })).data.ok).toBe(true);
+    expect((await api("password", { op: "reset", ticket, password: "another22" })).data.error).toBe("already_used");
+    expect((await api("password", { op: "login", refs: acc, password: "brandnew1" })).data.ok).toBe(true);
+  });
+
+  it("an account without any password cannot be claimed when it uses Google", async () => {
+    tree.appUsers["g,user7@gmail,com"] = { id: "u7", googleAuth: true };
+    const r = await api("password", { op: "login", refs: [{ node: "appUsers", key: "g,user7@gmail,com" }], password: "anything1" });
+    expect(r.data.error).toBe("use_google");
+  });
+});

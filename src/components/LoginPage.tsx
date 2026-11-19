@@ -15,6 +15,7 @@ import {
   savePendingRegister, readPendingRegister, clearPendingRegister, cooldownLeftMs,
   resendEmailCode, EmailServiceError, NO_ACCOUNT_TEXT,
   savePendingReset, readPendingReset, clearPendingReset, type PendingRegister,
+  accountRefs, passwordLogin, googlePasswordStatus, googleSetPassword, savePasswordWithCode,
 } from "@/lib/emailService";
 import { OtpBoxes, PasteCodeButton, CodeTimer, DailyPips, ResendButton, SentToCard, PasswordStrength, StepDots, SecureNote, CodeCloseButton, ResumeNote } from "@/components/auth/EmailCodeKit";
 
@@ -247,9 +248,10 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
       }
 
       const uid = existingData?.id || "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+      const idToken = await user.getIdToken();
 
-      // Check if user already has a password set
-      if (existingData?.password) {
+      // Check if user already has a password set (only the email server can tell)
+      if (await googlePasswordStatus(idToken)) {
         // User already has password, proceed normally
         const deviceOk = await checkAndRegisterDevice(uid);
         if (!deviceOk) { setLoading(false); return; }
@@ -284,7 +286,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
       } else {
         // No password set - show password set screen
         setGooglePendingData({
-          uid, gName, gEmail, gPhoto, commaKey, existingData,
+          uid, gName, gEmail, gPhoto, commaKey, existingData, idToken,
         });
         setGoogleSetPwMode(true);
       }
@@ -309,9 +311,11 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
 
       await set(ref(db, `appUsers/${commaKey}`), {
         id: uid, name: gName, email: gEmail, googleAuth: true,
-        password: googlePw,
         createdAt: existingData?.createdAt || Date.now(),
       });
+      // Google proof may be an hour old by now — refresh it before saving the password.
+      const freshToken = (await auth.currentUser?.getIdToken().catch(() => "")) || googlePendingData.idToken;
+      await googleSetPassword(freshToken, googlePw);
       try {
         await syncCanonicalUserNode(uid, {
           name: gName,
@@ -445,7 +449,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists() || !snap.val()?.id) { setForgotError(NO_ACCOUNT_TEXT); setForgotLoading(false); return; }
 
-      await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
+      await savePasswordWithCode("reset", forgotToken, forgotNewPw.trim());
       await set(ref(db, `passwordResets/${emailKey}_${Date.now()}`), {
         email: fEmail, name: snap.val()?.name || "", timestamp: Date.now(), method: "email-service",
       });
@@ -462,7 +466,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
   };
 
   /** Creates the account — only ever called after the email code was verified. */
-  const createVerifiedAccount = async (formName: string, formEmailRaw: string, formPassword: string) => {
+  const createVerifiedAccount = async (formName: string, formEmailRaw: string, formPassword: string, ticket: string) => {
     const formEmail = normalizeEmail(formEmailRaw);
     const emailKey = formEmail.replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
     const canonical = emailCanonicalKey(formEmail);
@@ -474,8 +478,15 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
     const userId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
     await registerDeviceAfterLogin(userId);
     await set(ref(db, `appUsers/${emailKey}`), {
-      id: userId, name: formName, email: formEmail, password: formPassword, createdAt: Date.now(), emailVerified: true,
+      id: userId, name: formName, email: formEmail, createdAt: Date.now(), emailVerified: true,
     });
+    try {
+      // The password is saved only by the email server, with the code just verified.
+      await savePasswordWithCode("register", ticket, formPassword);
+    } catch (err) {
+      await remove(ref(db, `appUsers/${emailKey}`)).catch(() => {});
+      throw err;
+    }
     await set(ref(db, `gmailRegistry/${canonical}`), userId).catch(() => {});
     await syncCanonicalUserNode(userId, {
       id: userId, name: formName, email: formEmail, createdAt: Date.now(),
@@ -511,7 +522,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
     try {
       const r = await verifyEmailCode(pending.token, code);
       if (r.email !== normalizeEmail(pending.email) || r.purpose !== "register") throw new Error("Incorrect code.");
-      await createVerifiedAccount(pending.name, pending.email, pending.password);
+      await createVerifiedAccount(pending.name, pending.email, pending.password, pending.token);
     } catch (err: any) {
       if (!dropDeadRequest(err)) setVerifyError(err.message || "Incorrect code.");
       setVerifyCode("");
@@ -606,7 +617,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
         // users list only when needed, over plain HTTPS (a multi-MB read on
         // the live socket froze sign-in on phones).
         for (const node of nodesToSearch) {
-          if (allMatches.some((m) => m.data?.password)) break;
+          if (allMatches.length) break;
           try {
             let allData: any = await firebaseRestGet<any>(node).catch(() => undefined);
             if (allData === undefined) { const allSnap = await get(ref(db, node)); allData = allSnap.exists() ? allSnap.val() : null; }
@@ -624,7 +635,6 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
         }
       }
 
-      const withPassword = allMatches.find(m => m.data?.password);
       const withId = allMatches.find(m => m.data?.id);
       const anyMatch = allMatches[0];
       let finalUserData: any = null;
@@ -632,7 +642,6 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
 
       if (anyMatch) {
         finalUserData = { ...anyMatch.data };
-        if (withPassword) finalUserData.password = withPassword.data.password;
         if (withId) finalUserData.id = withId.data.id;
         if (!finalUserData.name && anyMatch.data.name) finalUserData.name = anyMatch.data.name;
         finalUserId = finalUserData.id || "";
@@ -652,7 +661,8 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
         toast.success(`📧 Verification code sent to ${pending.email}`);
       } else {
         if (!anyMatch) { toast.error("User not found!"); setLoading(false); return; }
-        if (finalUserData.password && finalUserData.password !== formPassword) { toast.error("Wrong password!"); setLoading(false); return; }
+        // Only the email server checks passwords; the site never reads them.
+        await passwordLogin(accountRefs(allMatches.map((m) => ({ node: m.node, key: m.key }))), formPassword);
 
         const uid = finalUserId || commaKey;
         const deviceOk = await checkAndRegisterDevice(uid);
@@ -661,14 +671,6 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
           return;
         }
 
-        if (!finalUserData.password) {
-          try {
-            await set(ref(db, `appUsers/${commaKey}`), {
-              id: finalUserId || commaKey, name: finalUserData.name || input,
-              password: formPassword, createdAt: finalUserData.createdAt || Date.now(),
-            });
-          } catch (e) {}
-        }
         const displayName = finalUserData.name || input;
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
         try { const prev = JSON.parse(localStorage.getItem("rsanime_user") || "null"); if (prev?.id && prev.id !== uid) { const r = await transferGuestCoinsToUser(prev.id, uid); if (r.transferred > 0) toast.success(`✨ ${r.transferred} guest coins transferred to your account`); } } catch {}

@@ -10088,23 +10088,7 @@ const UserPasswordLookup = ({ inputClass, btnPrimary }: { inputClass: string; bt
  </div>
  <div className="flex justify-between items-center">
  <span className="text-[11px] text-[#957DAD]">Password:</span>
- {searchResult.password ? (
- <div className="flex items-center gap-2">
- <span className="text-[13px] font-mono font-bold text-green-400">
- {showPassword ? searchResult.password : "••••••••"}
- </span>
- <button onClick={() => setShowPassword(!showPassword)}
- className="text-purple-500 hover:text-purple-400 transition-colors">
- {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
- </button>
- <button onClick={() => { navigator.clipboard.writeText(searchResult.password); toast.success("Copied!"); }}
- className="text-[10px] bg-purple-500/20 px-2 py-1 rounded-full hover:bg-purple-500/40 transition-all">Copy</button>
- </div>
- ) : (
- <span className="text-[13px] text-yellow-400">
- {searchResult.googleAuth ? "Google Login (No password)" : "Password not set"}
- </span>
- )}
+ <span className="text-[13px] text-yellow-400">🔒 Encrypted (only the user knows it)</span>
  </div>
  <div className="flex justify-between">
  <span className="text-[11px] text-[#957DAD]">ID:</span>

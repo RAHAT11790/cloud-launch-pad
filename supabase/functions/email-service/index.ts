@@ -40,7 +40,7 @@
 // conditional (ETag) write, so a code works exactly once.
 // ============================================================
 
-const VERSION = "email-service-smtp-v9";
+const VERSION = "email-service-smtp-v10";
 const BRAND = "RS ANIME03";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -902,6 +902,174 @@ async function actAdminEvents(env, cors, body, ip) {
   return json(cors, { ok: true, events: rows });
 }
 
+// ---------------- Passwords (never readable by visitors) ----------------
+// Passwords live only as PBKDF2 hashes in the locked `secure/credentials/{node}/{key}`
+// path and are checked here. Old plain-text `password` fields on account records are
+// accepted once and moved to a hash. While `secure/authConfig/stripLegacy` is not true
+// (the published site may still be the old build) the plain field is kept in sync;
+// once true it is deleted on every write.
+const PW_ITER = 100000;
+const PW_MIN = 4, PW_MAX = 128;
+const LOGIN_WRONG_PER_ACCOUNT = 10, LOGIN_WRONG_PER_IP = 40;
+const NODE_RE = /^(appUsers|users)$/;
+const KEY_RE = /^[A-Za-z0-9_\-,@%]{1,160}$/;
+const FIREBASE_WEB_KEY = "AIzaSyASjrQM27mfAbHXA9ZqYv3YbubZPUxOR50";
+async function pwHash(password, saltB64) {
+  const salt = saltB64 ? b64urlToBytes(saltB64) : randBytes(16);
+  const base = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PW_ITER }, base, 256));
+  return `pbkdf2$${PW_ITER}$${b64url(salt)}$${b64url(bits)}`;
+}
+async function pwCheck(password, stored) {
+  const [kind, iter, salt, want] = String(stored || "").split("$");
+  if (kind !== "pbkdf2" || Number(iter) !== PW_ITER || !salt || !want) return false;
+  return safeEq((await pwHash(password, salt)).split("$")[3], want);
+}
+const credPath = (node, key) => `secure/credentials/${node}/${key}`;
+const validRef = (r) => r && typeof r === "object" && NODE_RE.test(String(r.node || "")) && KEY_RE.test(String(r.key || ""));
+async function stripLegacy(env) { return (await dbGet(env, "secure/authConfig/stripLegacy").catch(() => null)) === true; }
+/** Saves a new password hash and keeps/deletes the old plain field per transition mode. */
+async function storePassword(env, node, key, password) {
+  await dbPut(env, credPath(node, key), { h: await pwHash(password), t: Date.now() });
+  const rec = await dbGet(env, `${node}/${key}`, { shallow: "true" }).catch(() => null);
+  if (rec && typeof rec === "object") {
+    if (await stripLegacy(env)) { if (rec.password) await dbFetch(env, `${node}/${key}/password`, { method: "DELETE" }); }
+    else await dbPut(env, `${node}/${key}/password`, password);
+  }
+}
+/** state of one account: { hash } | { legacy } | { none, google } | null (no record) */
+async function credState(env, node, key) {
+  const [cred, rec] = await Promise.all([dbGet(env, credPath(node, key)).catch(() => null), dbGet(env, `${node}/${key}`, { shallow: "true" }).catch(() => null)]);
+  if (cred && cred.h) return { hash: cred.h, rec };
+  if (!rec || typeof rec !== "object") return null;
+  if (rec.password) {
+    const pw = await dbGet(env, `${node}/${key}/password`).catch(() => null);
+    if (pw != null && String(pw)) return { legacy: String(pw), rec };
+  }
+  return { none: true, google: !!rec.googleAuth, rec };
+}
+async function wrongCount(env, kind, id, now) {
+  const p = `secure/loginWrong/${hourBucket(now)}/${kind}/${await hash(env, "lw", kind, id)}`;
+  return { p, n: Math.max(Number(await dbGet(env, p).catch(() => 0)) || 0, shadowGet(`lw:${p}`, now)) };
+}
+async function bumpWrong(env, w, now) {
+  const n = await dbTxn(env, w.p, (c) => { const v = Math.max(Number(c) || 0, w.n) + 1; return { next: v, result: v }; }).catch(() => w.n + 1);
+  shadowPut(`lw:${w.p}`, Number(n) || w.n + 1, now + HOUR);
+}
+/** Google sign-in proof: the Firebase ID token's verified email. */
+async function googleEmail(idToken) {
+  if (!idToken || typeof idToken !== "string" || idToken.length > 4000) return "";
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_WEB_KEY}`, {
+    method: "POST", headers: { "Content-Type": "application/json", Referer: "https://rsanime03.lovable.app/" }, body: JSON.stringify({ idToken }),
+  }).catch(() => null);
+  if (!r || !r.ok) return "";
+  const u = (await r.json().catch(() => ({})))?.users?.[0];
+  return u && u.emailVerified && u.email ? normEmail(u.email) : "";
+}
+/** A finished (verified) code that has not yet been used to save a password. */
+async function claimVerifiedTicket(env, ctx, ticket, purpose) {
+  const t = parseTicket(ticket);
+  if (!t) return { err: [400, "bad_ticket", "This request is invalid. Please start again."] };
+  const sessHash = await hash(env, "sess", t.rid, t.session);
+  const now = Date.now();
+  const out = await ticketTxn(env, ctx, t.rid, (cur) => {
+    if (!cur || !safeEq(cur.s, sessHash)) return { result: { e: "not_found" } };
+    if (cur.st !== "consumed" || cur.p !== purpose) return { result: { e: "state" } };
+    if (cur.claimed) return { result: { e: "used" } };
+    if (now - (Number(cur.v) || 0) > 30 * 60_000) return { result: { e: "expired" } };
+    return { next: { ...cur, claimed: now }, result: { ok: true, ec: cur.ec } };
+  });
+  if (!out.ok) return { err: out.e === "expired" ? [410, "expired", "This code has expired. Please ask for a new one."] : out.e === "used" ? [409, "already_used", "This code was already used. Please ask for a new one."] : [404, "not_found", "This request was not found. Please start again."] };
+  return { email: normEmail(await unseal(env, out.ec)) };
+}
+const pwOk = (p) => typeof p === "string" && p.length >= PW_MIN && p.length <= PW_MAX && p.trim().length > 0;
+
+async function actPassword(env, ctx, cors, body, ip) {
+  const op = String(body.op || "");
+  const now = Date.now();
+  if (op === "login") {
+    const refs = (Array.isArray(body.refs) ? body.refs : []).filter(validRef).slice(0, 8);
+    const password = String(body.password || "");
+    if (!refs.length || !pwOk(password)) return fail(cors, 400, "bad_request", "Enter your ID and password.");
+    const ipW = await wrongCount(env, "ip", ip, now);
+    if (ipW.n >= LOGIN_WRONG_PER_IP) return fail(cors, 429, "too_many", "Too many wrong passwords from this network. Try again in an hour.", { retryAfter: 3600 });
+    const states = [];
+    for (const r of refs) { const st = await credState(env, r.node, r.key); if (st) states.push({ r, st }); }
+    if (!states.length) return fail(cors, 404, "not_found", "User not found!");
+    const withPw = states.find((x) => x.st.hash || x.st.legacy);
+    if (!withPw) {
+      // Old accounts that never had a password: the first password typed becomes theirs
+      // (same as before), except Google accounts, which must use Google.
+      const target = states[0];
+      if (states.some((x) => x.st.google)) return fail(cors, 403, "use_google", "This account uses Google. Tap Continue with Google.");
+      await storePassword(env, target.r.node, target.r.key, password);
+      return json(cors, { ok: true, node: target.r.node, key: target.r.key, claimed: true });
+    }
+    const accW = await wrongCount(env, "acc", `${withPw.r.node}/${withPw.r.key}`, now);
+    if (accW.n >= LOGIN_WRONG_PER_ACCOUNT) return fail(cors, 429, "too_many", "Too many wrong passwords for this account. Try again in an hour, or reset it by email.", { retryAfter: 3600 });
+    const good = withPw.st.hash ? await pwCheck(password, withPw.st.hash) : safeEq(password, withPw.st.legacy);
+    if (!good) { await Promise.all([bumpWrong(env, ipW, now), bumpWrong(env, accW, now)]); return fail(cors, 401, "wrong_password", "Wrong password!"); }
+    if (!withPw.st.hash) {
+      await dbPut(env, credPath(withPw.r.node, withPw.r.key), { h: await pwHash(password), t: now });
+      if (await stripLegacy(env)) await dbFetch(env, `${withPw.r.node}/${withPw.r.key}/password`, { method: "DELETE" });
+    }
+    return json(cors, { ok: true, node: withPw.r.node, key: withPw.r.key });
+  }
+  if (op === "status") {
+    const refs = (Array.isArray(body.refs) ? body.refs : []).filter(validRef).slice(0, 8);
+    for (const r of refs) { const st = await credState(env, r.node, r.key); if (st && (st.hash || st.legacy)) return json(cors, { ok: true, hasPassword: true }); }
+    return json(cors, { ok: true, hasPassword: false });
+  }
+  if (op === "google-status" || op === "google-set") {
+    const email = await googleEmail(body.idToken);
+    if (!email) return fail(cors, 401, "bad_google", "Google sign-in expired. Please tap Continue with Google again.");
+    const key = appUserKey(email);
+    const st = await credState(env, "appUsers", key);
+    const has = !!(st && (st.hash || st.legacy));
+    if (op === "google-status") return json(cors, { ok: true, hasPassword: has });
+    if (has) return fail(cors, 409, "already_set", "This account already has a password.");
+    if (!pwOk(String(body.password || ""))) return fail(cors, 400, "weak_password", `Password must be at least ${PW_MIN} characters.`);
+    await storePassword(env, "appUsers", key, String(body.password));
+    return json(cors, { ok: true });
+  }
+  if (op === "reset" || op === "register") {
+    const password = String(body.password || "");
+    if (!pwOk(password) || password.length < 6) return fail(cors, 400, "weak_password", "Password must be at least 6 characters.");
+    const c = await claimVerifiedTicket(env, ctx, body.ticket, op);
+    if (c.err) return fail(cors, c.err[0], c.err[1], c.err[2]);
+    const key = appUserKey(c.email);
+    if (op === "reset") {
+      const rec = await dbGet(env, `appUsers/${key}`, { shallow: "true" }).catch(() => null);
+      if (!(rec && typeof rec === "object" && rec.id)) return fail(cors, 404, "no_account", NO_ACCOUNT);
+    } else {
+      const cred = await dbGet(env, credPath("appUsers", key)).catch(() => null);
+      if (cred && cred.h) return fail(cors, 409, "already_registered", "This email already has an account. Please sign in.");
+    }
+    await storePassword(env, "appUsers", key, password);
+    return json(cors, { ok: true, email: c.email });
+  }
+  if (op === "change") {
+    const refs = (Array.isArray(body.refs) ? body.refs : []).filter(validRef).slice(0, 4);
+    const oldPw = String(body.oldPassword || ""), newPw = String(body.newPassword || "");
+    if (!refs.length || !pwOk(newPw) || newPw.length < 6) return fail(cors, 400, "weak_password", "New password needs at least 6 characters.");
+    let target = null;
+    for (const r of refs) { const st = await credState(env, r.node, r.key); if (st) { target = { r, st }; if (st.hash || st.legacy) break; } }
+    if (!target) return fail(cors, 404, "not_found", "Account not found.");
+    if (target.st.hash || target.st.legacy) {
+      const w = await wrongCount(env, "acc", `${target.r.node}/${target.r.key}`, now);
+      if (w.n >= LOGIN_WRONG_PER_ACCOUNT) return fail(cors, 429, "too_many", "Too many wrong passwords. Try again in an hour, or reset it by email.", { retryAfter: 3600 });
+      const good = target.st.hash ? await pwCheck(oldPw, target.st.hash) : safeEq(oldPw, target.st.legacy);
+      if (!good) { await bumpWrong(env, w, now); return fail(cors, 401, "wrong_password", "Current password is incorrect"); }
+    } else {
+      const email = await googleEmail(body.idToken);
+      if (!email || appUserKey(email) !== target.r.key) return fail(cors, 403, "need_reset", "Use “Reset by email” to set a password for this account.");
+    }
+    await storePassword(env, target.r.node, target.r.key, newPw);
+    return json(cors, { ok: true });
+  }
+  return fail(cors, 400, "bad_action", "Unknown action.");
+}
+
 // ---------------- Database security gateway (server-to-server) ----------------
 // Lets the owner's tooling read/replace the Realtime Database security rules and
 // run privileged one-off data moves (e.g. moving passwords to a locked path)
@@ -944,7 +1112,7 @@ async function actDbRules(env, req) {
 
 const worker = {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
+  _internals: { pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const cors = corsFor(req, env);
@@ -979,6 +1147,7 @@ const worker = {
         case "resend": return await actResend(env, ctx, cors, body, origin, ip);
         case "verify": case "verify-otp": return await actVerify(env, ctx, cors, body, ip);
         case "admin-events": return await actAdminEvents(env, cors, body, ip);
+        case "password": return await actPassword(env, ctx, cors, body, ip);
         default: return fail(cors, 400, "bad_action", "Unknown action.");
       }
     } catch (err) {

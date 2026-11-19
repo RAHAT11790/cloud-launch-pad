@@ -302,7 +302,8 @@
 ## Database security, step by step (2026-11-19)
 - [x] Step 1: owner-only rules switch inside the email server (old rules backed up, one-step rollback).
 - [x] Step 1: whole-database download from the address closed; email codes and private area locked. Site, guest browsing and video tested on phone.
-- [ ] Step 2: passwords moved to a locked place, scrambled, checked by the email server; sign-in/sign-up/reset/change-password through it.
+- [x] Step 2a: sign-in, sign-up, Google password, forgot/reset and change password checked only by the email server; scrambled copies in a locked place; admin + support chat no longer show passwords. Phone-tested sign-in (wrong/right/username) and change password.
+- [ ] Step 2b (after owner Publishes): scramble every remaining password, delete the plain ones, lock them from visitors.
 - [ ] Step 3: every signed-in user gets a silent secure login; users may only change their own data.
 - [ ] Step 4: admin-only writes for catalogue/settings; Cloudflare key, bKash payments, redeem codes hidden from visitors.
 - [ ] Step 5: servers/bot that write the database get the key; coin/premium changes on the server.

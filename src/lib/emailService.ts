@@ -227,3 +227,40 @@ const ENTRY_KEY = "rs_entry_done";
 export const entryChosen = () => { try { return localStorage.getItem(ENTRY_KEY) === "1"; } catch { return true; } };
 export const markEntryChosen = () => { try { localStorage.setItem(ENTRY_KEY, "1"); } catch {} };
 export const clearEntryChosen = () => { try { localStorage.removeItem(ENTRY_KEY); } catch {} };
+
+// ---- Passwords: checked and saved only by the email Worker (never read by the site) ----
+export type AccountRef = { node: "appUsers" | "users"; key: string };
+const ACCOUNT_KEY_RE = /^[A-Za-z0-9_\-,@%]{1,160}$/;
+/** Account records the Worker may check (max 8, safe keys only). */
+export function accountRefs(list: { node: string; key: string }[]): AccountRef[] {
+  const seen = new Set<string>();
+  const out: AccountRef[] = [];
+  for (const r of list) {
+    if ((r.node !== "appUsers" && r.node !== "users") || !ACCOUNT_KEY_RE.test(r.key)) continue;
+    const id = `${r.node}/${r.key}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ node: r.node, key: r.key });
+  }
+  return out.slice(0, 8);
+}
+export async function passwordLogin(refs: AccountRef[], password: string): Promise<AccountRef> {
+  const d = await call("password", { op: "login", refs, password });
+  return { node: d.node, key: String(d.key) };
+}
+export async function passwordStatus(refs: AccountRef[]): Promise<boolean> {
+  return !!(await call("password", { op: "status", refs })).hasPassword;
+}
+export async function googlePasswordStatus(idToken: string): Promise<boolean> {
+  return !!(await call("password", { op: "google-status", idToken })).hasPassword;
+}
+export async function googleSetPassword(idToken: string, password: string): Promise<void> {
+  await call("password", { op: "google-set", idToken, password });
+}
+/** Saves a password with an email code that was already verified (one use). */
+export async function savePasswordWithCode(op: "reset" | "register", ticket: string, password: string): Promise<void> {
+  await call("password", { op, ticket, password });
+}
+export async function changePassword(refs: AccountRef[], oldPassword: string, newPassword: string, idToken?: string): Promise<void> {
+  await call("password", { op: "change", refs, oldPassword, newPassword, idToken: idToken || undefined });
+}
