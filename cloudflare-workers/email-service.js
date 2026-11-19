@@ -37,7 +37,7 @@
 // conditional (ETag) write, so a code works exactly once.
 // ============================================================
 
-const VERSION = "email-service-smtp-v8";
+const VERSION = "email-service-smtp-v9";
 const BRAND = "RS ANIME03";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -899,6 +899,46 @@ async function actAdminEvents(env, cors, body, ip) {
   return json(cors, { ok: true, events: rows });
 }
 
+// ---------------- Database security gateway (server-to-server) ----------------
+// Lets the owner's tooling read/replace the Realtime Database security rules and
+// run privileged one-off data moves (e.g. moving passwords to a locked path)
+// using this Worker's FIREBASE_DB_SECRET. Protected by the RULES_KEY secret
+// (never stored in the database). Every rules change first saves the previous
+// rules under the locked `secure/rulesBackups` path so a lock can be rolled back.
+const RULES_MAX_BYTES = 262144;
+async function actDbRules(env, req) {
+  const out = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...baseHeaders, "Content-Type": "application/json" } });
+  if (!env.RULES_KEY || !env.FIREBASE_DB_SECRET) return out({ ok: false, error: "not_configured" }, 503);
+  if (!safeEq(String(req.headers.get("x-rules-key") || ""), String(env.RULES_KEY))) return out({ ok: false, error: "forbidden" }, 403);
+  if (Number(req.headers.get("content-length") || 0) > RULES_MAX_BYTES) return out({ ok: false, error: "too_large" }, 413);
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") return out({ ok: false, error: "bad_json" }, 400);
+  const rulesUrl = `${dbBase(env)}/.settings/rules.json?auth=${encodeURIComponent(env.FIREBASE_DB_SECRET)}`;
+  if (body.action === "get" || body.action === "put") {
+    const cur = await fetch(rulesUrl);
+    const curText = await cur.text();
+    if (!cur.ok) return out({ ok: false, error: "read_failed", status: cur.status }, 502);
+    if (body.action === "get") return out({ ok: true, rules: curText });
+    if (typeof body.rules !== "string" || !body.rules.trim()) return out({ ok: false, error: "rules_missing" }, 400);
+    await dbPut(env, `secure/rulesBackups/${Date.now()}`, curText);
+    const r = await fetch(rulesUrl, { method: "PUT", headers: { "Content-Type": "application/json" }, body: body.rules });
+    const t = await r.text();
+    return out({ ok: r.ok, status: r.status, result: t.slice(0, 1000) }, r.ok ? 200 : 400);
+  }
+  if (body.action === "db") {
+    const method = String(body.method || "GET").toUpperCase();
+    const path = String(body.path || "").replace(/^\/+|\/+$/g, "");
+    if (!["GET", "PUT", "PATCH", "DELETE"].includes(method) || !/^[A-Za-z0-9_\-.,@%$/]+$/.test(path) || path.includes("..")) return out({ ok: false, error: "bad_request" }, 400);
+    const q = body.query && typeof body.query === "object" ? body.query : {};
+    const init = method === "GET" || method === "DELETE" ? { method } : jsonInit(method, body.value ?? null);
+    const r = await fetch(dbUrl(env, path, q), init);
+    const t = await r.text();
+    let v = null; try { v = JSON.parse(t); } catch { v = t; }
+    return out({ ok: r.ok, status: r.status, value: v }, r.ok ? 200 : 400);
+  }
+  return out({ ok: false, error: "bad_action" }, 400);
+}
+
 export default {
   // Exposed for the project's unit tests only (not routes).
   _internals: { buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
@@ -908,6 +948,7 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const path = url.pathname.replace(/\/+$/, "") || "/";
     try {
+      if (path === "/db-rules" && req.method === "POST") return await actDbRules(env, req);
       if (req.method === "GET") {
         if (path === "/preview") {
           const type = url.searchParams.get("type") === "reset" ? "reset" : "register";

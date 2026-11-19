@@ -298,3 +298,11 @@
 - [x] E-AC3/AC3/DTS/TrueHD audio decoded in-app (WASM) and played beside native video; real Chinese E-AC3 track measured audible, ~50–80 ms sync, follows seeks.
 - [ ] Full player test on a real phone: every Dolby file on the site is HEVC video, which the test browser cannot show — needs the owner's Android phone.
 - [ ] Data: The Remarried Empress Ep 4 "Default" link points to a Love Me Love My Voice file (owner must fix the link in admin).
+
+## Database security, step by step (2026-11-19)
+- [x] Step 1: owner-only rules switch inside the email server (old rules backed up, one-step rollback).
+- [x] Step 1: whole-database download from the address closed; email codes and private area locked. Site, guest browsing and video tested on phone.
+- [ ] Step 2: passwords moved to a locked place, scrambled, checked by the email server; sign-in/sign-up/reset/change-password through it.
+- [ ] Step 3: every signed-in user gets a silent secure login; users may only change their own data.
+- [ ] Step 4: admin-only writes for catalogue/settings; Cloudflare key, bKash payments, redeem codes hidden from visitors.
+- [ ] Step 5: servers/bot that write the database get the key; coin/premium changes on the server.

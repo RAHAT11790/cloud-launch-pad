@@ -1,0 +1,27 @@
+{
+  "rules": {
+    ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
+    ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
+    "$top": {
+      ".read": true,
+      ".write": true
+    },
+    "secure": {
+      ".read": false,
+      ".write": false
+    },
+    "otpCodes": {
+      ".read": false,
+      ".write": false
+    },
+    "emailAuth": {
+      "stats": {
+        ".read": true
+      },
+      "events": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

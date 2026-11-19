@@ -1,0 +1,106 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "active_users": {
+      ".read": true,
+      ".write": true
+    },
+    "admin": {
+      ".read": true,
+      ".write": true
+    },
+    "admin_credentials": {
+      ".read": true,
+      ".write": true
+    },
+    "admin_notifications": {
+      ".read": true,
+      ".write": true
+    },
+    "categories": {
+      ".read": true,
+      ".write": true
+    },
+    "comments": {
+      ".read": true,
+      ".write": true
+    },
+    "movies": {
+      ".read": true,
+      ".write": true
+    },
+    "webseries": {
+      ".read": true,
+      ".write": true
+    },
+    "users": {
+      ".read": true,
+      ".write": true,
+      "$uid": {
+        ".read": true,
+        ".write": true,
+        "premium": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "notifications": {
+      ".read": true,
+      ".write": true
+    },
+    "newEpisodeReleases": {
+      ".read": true,
+      ".write": true
+    },
+    "redeemCodes": {
+      ".read": true,
+      ".write": true
+    },
+    "appUsers": {
+      ".read": true,
+      ".write": true
+    },
+    "maintenance": {
+      ".read": true,
+      ".write": true
+    },
+    "freeAccessUsers": {
+      ".read": true,
+      ".write": true
+    },
+    "settings": {
+      ".read": true,
+      ".write": true
+    },
+    "fcmTokens": {
+      ".read": true,
+      ".write": true
+    },
+    "globalFreeAccess": {
+      ".read": true,
+      ".write": true
+    },
+    "analytics": {
+      ".read": true,
+      ".write": true
+    },
+    "continueWatching": {
+      ".read": true,
+      ".write": true
+    },
+    "animesaltSelected": {
+      ".read": true,
+      ".write": true
+    },
+    "bkashPayments": {
+      ".read": true,
+      ".write": true
+    },
+    "bkashConfig": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
