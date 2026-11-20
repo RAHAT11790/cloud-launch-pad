@@ -52,6 +52,10 @@
           ".validate": "false"
         }
       }
+    },
+    "cfManager": {
+      ".read": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
+      ".write": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now"
     }
   }
 }

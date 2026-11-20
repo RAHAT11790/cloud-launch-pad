@@ -9354,9 +9354,12 @@ ${tgBulkFooter}
  )}
 
  {/* ==================== CLOUDFLARE MANAGER ==================== */}
- {activeSection === "cf-manager" && (
+ {/* The Cloudflare key is locked to the secure admin session — mount only once it is open. */}
+ {activeSection === "cf-manager" && (adminDb === "ready" ? (
  <CloudflareManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
- )}
+ ) : (
+ <div className={`${glassCard} p-6 text-center text-sm text-muted-foreground`}>Opening secure admin session…</div>
+ ))}
 
 
  {/* ==================== ADS NETWORK (Adsterra + Mondiad) ==================== */}
