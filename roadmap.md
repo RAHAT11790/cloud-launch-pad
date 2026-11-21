@@ -312,3 +312,11 @@
 - [ ] Step 3: every signed-in user gets a silent secure login; users may only change their own data.
 - [ ] Step 4: admin-only writes for catalogue/settings; Cloudflare key, bKash payments, redeem codes hidden from visitors.
 - [ ] Step 5: servers/bot that write the database get the key; coin/premium changes on the server.
+
+## Player ads: Popunder + Smartlink (2026-11-21)
+- [x] First ad turn in the player no longer wasted: the popunder script loads just before it (phone test: first turn after the 20 s wait opened an ad).
+- [x] Smartlink takes over when the popunder opens nothing (phone test: 4 turns, 4 ads opened, no site errors).
+- [ ] Popunder itself can't be opened from the test computer (Adsterra refuses it, 403); Adsterra stats show it does work for real visitors.
+- [ ] Owner: choose old Smartlink (earning) or the new rsanime03 Smartlink (0 views so far) for the player.
+- [ ] Paused by owner (ads first): Cloudflare manager key lock (rules written, not applied live yet).
+

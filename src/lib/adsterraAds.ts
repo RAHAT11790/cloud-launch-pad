@@ -700,6 +700,15 @@ async function loadAdsterraSlots(): Promise<boolean> {
 }
 
 /**
+ * Mount the pop-under tags shortly before the first ad slot opens. A tag
+ * injected during the tap itself loads too late for that tap, so the first
+ * slot used to open nothing; mounted ahead, the first eligible tap opens an ad.
+ */
+export async function preloadAdTags(): Promise<boolean> {
+  try { return await loadAdsterraSlots(); } catch { return false; }
+}
+
+/**
  * Fire a standalone Adsterra pop-under ad (no player scope needed).
  * Safe for use inside a user-gesture handler (e.g. Claim button).
  *   • Direct URL → open new tab.

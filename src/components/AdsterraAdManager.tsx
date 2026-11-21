@@ -3,6 +3,7 @@ import {
   enterAdsterraPlayerScope,
   exitAdsterraPlayerScope,
   markTagCapped,
+  preloadAdTags,
   releaseAd,
   setAdsterraPremium,
   tagOpenedSince,
@@ -10,7 +11,7 @@ import {
   subscribeAdsterraConfig,
 } from "@/lib/adsterraAds";
 import { stopAdGuard } from "@/lib/adGuard";
-import { adSlotReady, noteAdShown, startAdSession, stopAdSession } from "@/lib/adPacing";
+import { adSlotReady, msUntilAdSlot, noteAdShown, startAdSession, stopAdSession } from "@/lib/adPacing";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
 
@@ -41,6 +42,9 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     stopAdGuard();
     if (isPremium) return;
 
+    // Tags are mounted ~1.5 s before the first slot, so that slot really opens an ad.
+    const preload = window.setTimeout(() => { void preloadAdTags(); }, Math.max(0, msUntilAdSlot() - 1500));
+
     const release = async () => {
       if (busy.current) return;
       if (!adSlotReady()) return;
@@ -68,6 +72,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     const onClick = () => { void release(); };
     document.addEventListener("click", onClick, { capture: true });
     return () => {
+      window.clearTimeout(preload);
       document.removeEventListener("click", onClick, { capture: true } as EventListenerOptions);
     };
   }, [isPremium, videoEl]);

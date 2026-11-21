@@ -233,6 +233,15 @@ export function adSlotReady() {
   return true;
 }
 
+/** Milliseconds until the next ad slot may open (0 = open now). Starts the warm-up like a tap would. */
+export function msUntilAdSlot(): number {
+  if (adSlotReady()) return 0;
+  const slots = readSlots();
+  const last = slots.ts.length ? slots.ts[slots.ts.length - 1] : 0;
+  const at = Math.max(slots.nextAt || 0, last ? last + adminGapSec() * 1000 : 0);
+  return Math.max(0, at - Date.now());
+}
+
 export function noteAdShown() {
   const now = Date.now();
   S.adsShown += 1;
