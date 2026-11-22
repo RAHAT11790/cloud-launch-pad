@@ -6,7 +6,7 @@
 - [x] Phone storage full (seen on many phones): re-downloadable caches are dropped automatically so saves keep working; hand-over no longer carries caches.
 - [x] www.rsanime03.online → rsanime03.online keeps logins (hand-over accepted from www).
 - [x] Admin: all 49 screens opened with the PIN (phone size); database screen fixed (admins may read the overview); email screen's wrong "server is older" note fixed.
-- [ ] Email from @rsanime03.online: waiting for owner's choice (Alwaysdata with own domain vs Lovable email).
+- [x] Email from @rsanime03.online: Lovable email on the own domain (domain active), Alwaysdata as automatic backup; two real reset codes sent via Lovable (phone test).
 - [ ] Second function server (EGD deploy target) blocked by its own usage limit — owner must raise that plan; not fixable from here.
 - [ ] Owner: Publish so the fixes reach the live site.
 
@@ -41,7 +41,7 @@
 - [x] Redeem: bKash opens the bKash plans, Redeem Code opens the code box (phone test).
 - [x] Lucky Spin: admin tab (on/off, coins per spin, spins per N days, prizes with chance), golden Profile + Premium page button with timer, 3D wheel with logo (phone test: 3 spins, 60→0 coins, 2 days Premium won, locked 6d 23h). Left OFF for owner to switch on.
 - [ ] Admin Lucky Spin screen not opened in the test (admin PIN not available to me).
-- [ ] Backup copy of the email sender on Lovable Cloud not updated: Cloud is paused (Cloudflare copy is the live one).
+- [x] Backup copy of the email sender on Lovable Cloud updated to the same version (v12).
 - [ ] Owner: check Gmail for the reset code mail sent in the test (Inbox / Copy code).
 - [x] Python email server: owner skipped the question — not built (Cloudflare sender stays).
 - [x] Whole-database Base64: owner skipped the question — not done (Base64 is not protection and could break the site).
