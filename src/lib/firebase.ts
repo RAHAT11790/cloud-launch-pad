@@ -1,12 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue as remoteOnValue, push as remotePush, set as remoteSet, remove as remoteRemove, update as remoteUpdate, query, orderByChild, equalTo, get as remoteGet, runTransaction as remoteTransaction, limitToLast, type DataSnapshot } from "firebase/database";
 import { currentGuestId, localGuestPath, readGuestPath, writeGuestPath } from "@/lib/guestPersistence";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
+import { pickAuthDomain } from "@/lib/googleAuthDomain";
 import { startAppCheck } from "@/lib/appCheck";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyASjrQM27mfAbHXA9ZqYv3YbubZPUxOR50",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "animeverse-d7b79.firebaseapp.com",
+  // The site's own address once Google sign-in is confirmed to return there (see googleAuthDomain.ts).
+  authDomain: pickAuthDomain(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "animeverse-d7b79.firebaseapp.com"),
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "animeverse-d7b79",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "animeverse-d7b79.firebasestorage.app",
@@ -97,4 +99,4 @@ export async function registerGuestId(id: string) {
   try { await remoteSet(ref(db, `guestRegistry/${id}`), true); }
   catch (error) { registeredGuests.delete(id); throw error; }
 }
-export { ref, query, orderByChild, equalTo, limitToLast, signInWithPopup };
+export { ref, query, orderByChild, equalTo, limitToLast, signInWithPopup, signInWithRedirect, getRedirectResult };

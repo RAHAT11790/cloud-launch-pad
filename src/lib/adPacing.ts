@@ -21,10 +21,11 @@
 //      instantly bouncing back shortens it slightly (never below the floor).
 //
 // Activity is persisted to localStorage and mirrored to Firebase
-// (analytics/userActivity/<device>/<date>). Nothing of this is shown in UI.
+// (analytics/userActivity/<device>/<date>) for signed-in accounts only. Nothing of this is shown in UI.
 // ============================================
 import { db, ref, update, runTransaction } from "@/lib/firebase";
 import { getAdGapMs } from "@/lib/adsterraAds";
+import { signedInAccountId } from "@/lib/guestPersistence";
 
 /** Admin-panel cool-down (seconds) — falls back to the hard floor. */
 const adminGapSec = () => Math.max(10, Math.round(getAdGapMs() / 1000));
@@ -141,6 +142,8 @@ function flush() {
   const keys = Object.keys(p.days).sort();
   while (keys.length > 14) { delete p.days[keys.shift()!]; }
   writeProfile(p);
+  // Guests keep this on the phone only; nothing of a guest goes to Firebase.
+  if (!signedInAccountId()) return;
   try {
     void update(ref(db, `analytics/userActivity/${deviceId()}/${key}`), {
       seconds: p.days[key],

@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
+import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup, signInWithRedirect, getRedirectResult } from "@/lib/firebase";
+import type { User as FirebaseUser } from "firebase/auth";
+import { googleSignInMode, markGoogleRedirect, clearGoogleRedirect, googleRedirectPending, markGoogleAutoStart, takeGoogleAutoStart } from "@/lib/googleAuthDomain";
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
-import { liveSiteHost } from "@/lib/siteDomain";
+import { liveSiteHost, readCachedSiteDomain } from "@/lib/siteDomain";
 import { useBranding } from "@/hooks/useBranding";
 import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import {
@@ -213,12 +215,8 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setDeviceLimitError(null);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
+  /** Everything after Google said who the visitor is (small window or full-page sign-in). */
+  const finishGoogleSignIn = async (user: FirebaseUser) => {
       const gEmail = user.email || "";
       if (!isAllowedEmail(gEmail, access.allowedDomains)) {
         try { await auth.signOut(); } catch {}
@@ -290,12 +288,54 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
         });
         setGoogleSetPwMode(true);
       }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setDeviceLimitError(null);
+    try {
+      const mode = googleSignInMode({
+        host: window.location.hostname,
+        authDomain: String(auth.config.authDomain || ""),
+        state: readCachedSiteDomain(),
+        ua: navigator.userAgent,
+        standalone: window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true,
+      });
+      if (mode === "reload") { markGoogleAutoStart(); window.location.reload(); return; }
+      if (mode === "redirect") { markGoogleRedirect(); await signInWithRedirect(auth, googleProvider); return; }
+      const result = await signInWithPopup(auth, googleProvider);
+      await finishGoogleSignIn(result.user);
     } catch (err: any) {
+      clearGoogleRedirect();
       const msg = googleErrorText(err?.code, err?.message);
       if (msg) toast.error(msg, { duration: 7000 });
     }
     setLoading(false);
   };
+
+  // Back from Google's full-page sign-in (or the one-time reload before it).
+  const googleReturnRan = useRef(false);
+  useEffect(() => {
+    if (googleReturnRan.current) return;
+    googleReturnRan.current = true;
+    if (takeGoogleAutoStart()) { void handleGoogleSignIn(); return; }
+    if (!googleRedirectPending()) return;
+    setLoading(true);
+    (async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        clearGoogleRedirect();
+        if (result?.user) await finishGoogleSignIn(result.user);
+        else toast.error("Google sign-in was not finished. Tap Continue with Google to try again.", { duration: 6000 });
+      } catch (err: any) {
+        clearGoogleRedirect();
+        const msg = googleErrorText(err?.code, err?.message);
+        if (msg) toast.error(msg, { duration: 7000 });
+      }
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleGooglePasswordSet = async () => {
     if (!googlePw.trim()) { toast.error("Please enter a password"); return; }

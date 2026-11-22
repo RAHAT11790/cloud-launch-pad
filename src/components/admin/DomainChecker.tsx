@@ -60,6 +60,19 @@ export default function DomainChecker({ glassCard, btnPrimary }: Props) {
           Domains come from Firebase → Authentication → Authorized domains. A new domain or subdomain appears here by itself after you add it there and connect it to the site.
         </p>
       </div>
+      <div className={`${glassCard} p-5 space-y-2`}>
+        <div className="text-sm font-bold">Google sign-in on phones</div>
+        <p className="text-xs text-muted-foreground">
+          A domain marked "Needs setup" still uses Firebase's own sign-in page, which phones and the installed app can't finish. Add its line below in Google Cloud → APIs &amp; Services → Credentials → "Web client (auto created by Google Service)" → Authorized redirect URIs → Save, then tap Check now.
+        </p>
+        {hosts.filter((h) => h.serving).map((h) => (
+          <div key={h.host} className="flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-[12px] min-w-0">
+            {h.google ? <CheckCircle2 size={15} className="shrink-0 text-primary" /> : <XCircle size={15} className="shrink-0 text-destructive" />}
+            <span className="font-mono break-all select-all">{`https://${h.host}/__/auth/handler`}</span>
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">{h.google ? "Ready" : "Needs setup"}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

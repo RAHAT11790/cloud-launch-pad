@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { isGuestRecord, isLegacyGuestCleanupCandidate, localGuestPath, guestCleanupBatches, writeGuestPath, readGuestPath } from "@/lib/guestPersistence";
+import { signedInAccountId, isGuestRecord, isLegacyGuestCleanupCandidate, localGuestPath, guestCleanupBatches, writeGuestPath, readGuestPath } from "@/lib/guestPersistence";
 describe("Guest-only persistence", () => {
   beforeEach(() => localStorage.clear());
   it("keeps guest personal and device coin data on device", () => {
@@ -24,5 +24,12 @@ describe("Guest-only persistence", () => {
     expect(isLegacyGuestCleanupCandidate("real_uid", { guest: true })).toBe(false);
     expect(isLegacyGuestCleanupCandidate("guest_123", { email: "real@example.com", guest: true })).toBe(false);
     expect(isLegacyGuestCleanupCandidate("guest_123", { guest: true })).toBe(true);
+  });
+  it("only a real signed-in account counts as an account (guests stay on the phone)", () => {
+    expect(signedInAccountId()).toBeNull();
+    localStorage.setItem("rsanime_user", JSON.stringify({ id: "guest_dev_1", name: "Guest User" }));
+    expect(signedInAccountId()).toBeNull();
+    localStorage.setItem("rsanime_user", JSON.stringify({ id: "user_1_abc", name: "Rahat", email: "r@gmail.com" }));
+    expect(signedInAccountId()).toBe("user_1_abc");
   });
 });

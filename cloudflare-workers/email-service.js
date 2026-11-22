@@ -1322,8 +1322,30 @@ async function probeSiteHost(host) {
     }
     if (!r.ok) return { host, serving: false };
     const html = (await r.text()).slice(0, 200000);
-    return { host, serving: SITE_MARKS.some((rx) => rx.test(html)) };
+    const serving = SITE_MARKS.some((rx) => rx.test(html));
+    return serving ? { host, serving, google: await googleReturnReady(host) } : { host, serving };
   } catch { return { host, serving: false }; }
+}
+
+// Google sign-in can finish on the site's own address (no third-party storage,
+// so it works in phone browsers and the installed app) only when that address
+// serves Firebase's sign-in helper at /__/auth/ AND the owner registered
+// https://<host>/__/auth/handler in the Google login settings. Both are checked
+// live; until then the site keeps using Firebase's own sign-in page.
+async function googleReturnReady(host) {
+  try {
+    const js = await fetch(`https://${host}/__/auth/handler.js`, { signal: AbortSignal.timeout(6000) });
+    if (!js.ok || !/javascript/i.test(js.headers.get("Content-Type") || "") || !(await js.text()).includes("fireauth")) return false;
+    const c = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${FIREBASE_WEB_KEY}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Referer: `https://${host}/` },
+      body: JSON.stringify({ providerId: "google.com", continueUri: `https://${host}/__/auth/handler` }), signal: AbortSignal.timeout(6000),
+    });
+    const authUri = c.ok ? (await c.json()).authUri : "";
+    if (!authUri) return false;
+    const g = await fetch(authUri, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 13) Chrome/131 Mobile" }, signal: AbortSignal.timeout(6000) });
+    const to = g.headers.get("Location") || "";
+    return g.status >= 300 && g.status < 400 && !!to && !/\/signin\/oauth\/error|redirect_uri_mismatch/i.test(to);
+  } catch { return false; }
 }
 
 async function ownerDomains() {
@@ -1345,7 +1367,7 @@ async function checkSiteDomains(env, prev) {
   const live = decideLiveHost(results, SITE_DEFAULT_HOST, prevLive);
   if (!live) return null;
   const map = {};
-  for (const r of results) map[r.host.replace(/\./g, ",")] = { host: r.host, serving: !!r.serving, ...(r.redirect ? { redirect: r.redirect } : {}), checkedAt: now };
+  for (const r of results) map[r.host.replace(/\./g, ",")] = { host: r.host, serving: !!r.serving, ...(r.redirect ? { redirect: r.redirect } : {}), ...(r.serving ? { google: r.google === true } : {}), checkedAt: now };
   return { live: `https://${live}`, hosts: map, checkedAt: now };
 }
 

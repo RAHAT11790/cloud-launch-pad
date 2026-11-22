@@ -575,6 +575,7 @@ import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { entryChosen, markEntryChosen, clearEntryChosen, loginAccessNow, subscribeLoginAccess, pendingSignInCode } from "@/lib/emailService";
+import { googleRedirectPending, googleAutoStartPending } from "@/lib/googleAuthDomain";
 import { currentGuestId } from "@/lib/guestPersistence";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
@@ -3368,7 +3369,8 @@ const Index = () => {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
       if (u?.id && !currentGuestId()) return false;
     } catch {}
-    return !!pendingSignInCode();
+    // Back from Google's full-page sign-in: reopen the sign-in screen to finish it.
+    return !!pendingSignInCode() || googleRedirectPending() || googleAutoStartPending();
   });
 
   const handleNavigate = useCallback((page: string) => {

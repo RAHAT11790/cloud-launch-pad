@@ -19,7 +19,7 @@ export const STATE_MAX_AGE_MS = 24 * 3600_000;
 /** Visitors ask the server to re-check when the saved check is older than this. */
 export const STATE_REFRESH_MS = 30 * 60_000;
 
-export type SiteHostState = { host: string; serving: boolean; redirect?: string; checkedAt?: number };
+export type SiteHostState = { host: string; serving: boolean; redirect?: string; checkedAt?: number; /** Google sign-in can finish on this address itself (server-checked). */ google?: boolean };
 export type SiteDomainState = { live: string; hosts: Record<string, SiteHostState>; checkedAt: number };
 
 /** Hosts that are never "the site": previews, local dev and Firebase's own pages. */
@@ -51,7 +51,7 @@ export function parseSiteDomainState(raw: unknown): SiteDomainState | null {
       const h = v as Record<string, unknown>;
       const host = String(h.host || "").toLowerCase();
       if (!host) continue;
-      hosts[k] = { host, serving: h.serving === true, redirect: typeof h.redirect === "string" ? h.redirect : undefined, checkedAt: Number(h.checkedAt) || 0 };
+      hosts[k] = { host, serving: h.serving === true, redirect: typeof h.redirect === "string" ? h.redirect : undefined, checkedAt: Number(h.checkedAt) || 0, ...(h.google === true ? { google: true } : {}) };
     }
   }
   return { live, hosts, checkedAt };

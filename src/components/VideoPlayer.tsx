@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, get } from "@/lib/firebase";
+import { signedInAccountId } from "@/lib/guestPersistence";
 import { firebaseRestGet } from "@/lib/firebaseRest";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
@@ -1636,10 +1637,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // ===== VIDEO VIEW TRACKING =====
   useEffect(() => {
     if (!animeId) return;
-    const getUserId = (): string | null => {
-      try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
-    };
-    const uid = getUserId();
+    // Guests are counted in the totals only; their locks/entries stay on the phone.
+    const accountId = signedInAccountId();
     const deviceKey = getDeviceId().replace(/[.#$[\]/]/g, "_");
 
     // 1. One view per device per series every 24h, counted after the viewer
@@ -1652,15 +1651,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       counted = true;
       const now = Date.now();
       let last = Number(localStorage.getItem(lockKey) || 0);
-      try {
-        const { get } = await import("@/lib/firebase");
-        const snap = await get(ref(db, `analytics/viewLocks/${animeId}/${deviceKey}`));
-        last = Math.max(last, Number(snap.val() || 0));
-      } catch {}
+      if (accountId) {
+        try {
+          const { get } = await import("@/lib/firebase");
+          const snap = await get(ref(db, `analytics/viewLocks/${animeId}/${deviceKey}`));
+          last = Math.max(last, Number(snap.val() || 0));
+        } catch {}
+      }
       if (!canCountView(last, now)) return;
       try { localStorage.setItem(lockKey, String(now)); } catch {}
-      set(ref(db, `analytics/viewLocks/${animeId}/${deviceKey}`), now).catch(() => {});
-      set(ref(db, `analytics/views/${animeId}/${today}/${uid || deviceKey}`), { timestamp: now, title: title || "", device: deviceKey }).catch(() => {});
+      if (accountId) {
+        set(ref(db, `analytics/viewLocks/${animeId}/${deviceKey}`), now).catch(() => {});
+        set(ref(db, `analytics/views/${animeId}/${today}/${accountId}`), { timestamp: now, title: title || "", device: deviceKey }).catch(() => {});
+      }
       import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
         runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
           const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
@@ -1676,17 +1679,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hasWatchedEnough(stayed)) void countView();
     }, 1000);
 
-    if (!uid) return () => window.clearInterval(viewTick);
+    if (!accountId) return () => window.clearInterval(viewTick);
 
     // 2. Track as active viewer (presence)
-    const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
+    const activeRef = ref(db, `analytics/activeViewers/${animeId}/${accountId}`);
     const userName = (() => {
       try { return localStorage.getItem("rs_display_name") || JSON.parse(localStorage.getItem("rsanime_user") || "{}").name || "User"; } catch { return "User"; }
     })();
     set(activeRef, { title: title || "", userName, startedAt: Date.now() }).catch(() => {});
 
     // 3. Log to daily aggregate
-    const dailyRef = ref(db, `analytics/dailyActive/${today}/${uid}`);
+    const dailyRef = ref(db, `analytics/dailyActive/${today}/${accountId}`);
     set(dailyRef, { lastSeen: Date.now(), userName }).catch(() => {});
 
     return () => {

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<!-- Firebase's sign-in relay frame, served from the site's own address (see handler.html). -->
+<script>
+(function () {
+  try {
+    var p = location.pathname.replace(/\.html$/, "");
+    if (p !== location.pathname) history.replaceState(history.state, "", p + location.search + location.hash);
+  } catch (e) {}
+})();
+</script>
+<script type="text/javascript" src="/__/auth/iframe.js"></script>
+<script type="text/javascript" nonce="firebase-auth-helper">
+if (window.fireauth && fireauth.iframe && fireauth.iframe.AuthRelay) {
+  fireauth.iframe.AuthRelay.initialize();
+}
+</script>
+</head>
+<body>
+</body>
+</html>

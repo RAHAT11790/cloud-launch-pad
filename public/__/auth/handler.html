@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Signing in…</title>
+<!-- Firebase's Google sign-in helper, served from the site's own address so the
+     sign-in result stays in this site's storage (phone browsers and the installed
+     app block Firebase's own page from handing it over). The site's start page
+     sends /__/auth/handler here; the address is put back before the helper runs. -->
+<script>
+(function () {
+  try {
+    var p = location.pathname.replace(/\.html$/, "");
+    if (p !== location.pathname) history.replaceState(history.state, "", p + location.search + location.hash);
+  } catch (e) {}
+})();
+</script>
+<script type="text/javascript" src="/__/auth/experiments.js"></script>
+<script type="text/javascript" src="/__/auth/handler.js"></script>
+<script type="text/javascript" nonce="firebase-auth-helper">
+var POST_BODY = '';
+fireauth.oauthhelper.widget.initialize();
+</script>
+</head>
+<body>
+</body>
+</html>

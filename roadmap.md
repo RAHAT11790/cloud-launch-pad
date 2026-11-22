@@ -1,5 +1,15 @@
 # Roadmap
 
+## Google login on phones + guest data out of Firebase (2026-11-22, evening)
+- [x] Cause found: Google's return goes through Firebase's own page (firebaseapp.com); phones and the installed app keep that page's storage apart from the site, so the result is lost (pick account → back on site → not signed in, no error).
+- [x] Fix built: Firebase's sign-in helper now lives on the site's own address (/__/auth/); phones and the installed app use a full-page sign-in there; computers keep the small window. Switches on per domain only after the server confirms it works.
+- [x] Admin Domain Checker shows each domain's Google sign-in status and the exact line to add.
+- [ ] Owner: add `https://rsanime03.online/__/auth/handler` (and `https://rsanime03.lovable.app/__/auth/handler`, `https://www.rsanime03.online/__/auth/handler`) in Google Cloud → Credentials → Web client → Authorized redirect URIs. Until then Google still shows its "redirect_uri_mismatch" check result as not ready and the old way is used.
+- [ ] Real Google account sign-in on a phone: not tested (no Google test account) — owner tests after the step above.
+- [x] Guest data deleted from Firebase by a script (batches of 100): 35 guest records, 15,494 viewer entries, 1,001 daily entries, 1,335 view entries, 8,042 old view locks, 4,929 device visit-time records, 144 guest comments/likes. Guest count list kept.
+- [x] Database now refuses any guest record (live test: guest writes 401, normal writes 200); site no longer sends guest view locks, visit time or comments.
+- [x] Cloudflare manager login was readable by anyone in the live database — locked again (admin session only).
+
 ## New domain live + full recheck (2026-11-22, afternoon)
 - [x] rsanime03.online and www are connected and serving; old address and www move visitors to rsanime03.online (live check).
 - [x] Google sign-in on rsanime03.online opens Google's account page (domain accepted); finishing with a real Google account not tested (no Google test account).
