@@ -1,5 +1,15 @@
 # Roadmap
 
+## New domain live + full recheck (2026-11-22, afternoon)
+- [x] rsanime03.online and www are connected and serving; old address and www move visitors to rsanime03.online (live check).
+- [x] Google sign-in on rsanime03.online opens Google's account page (domain accepted); finishing with a real Google account not tested (no Google test account).
+- [x] Phone storage full (seen on many phones): re-downloadable caches are dropped automatically so saves keep working; hand-over no longer carries caches.
+- [x] www.rsanime03.online → rsanime03.online keeps logins (hand-over accepted from www).
+- [x] Admin: all 49 screens opened with the PIN (phone size); database screen fixed (admins may read the overview); email screen's wrong "server is older" note fixed.
+- [ ] Email from @rsanime03.online: waiting for owner's choice (Alwaysdata with own domain vs Lovable email).
+- [ ] Second function server (EGD deploy target) blocked by its own usage limit — owner must raise that plan; not fixable from here.
+- [ ] Owner: Publish so the fixes reach the live site.
+
 ## Only Adsterra + live domain checker + keep logins on the new domain (2026-11-22)
 - [x] Mondiad removed everywhere; admin section named "Adsterra Ads" again (old Adsterra boxes back, later player-ad fixes kept).
 - [x] Domain checker: the email server checks every owner domain (Firebase authorized domains + Lovable redirect) and saves the live one in `settings/siteDomain` (only the server may write it — live rule tested).

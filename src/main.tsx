@@ -1,3 +1,5 @@
+// First: frees re-downloadable caches when phone storage is full.
+import "@/lib/storageGuard";
 import "@/lib/historyBoot";
 // Must stay before App: unpacks a login hand-over before anything reads storage.
 import { startDomainBoot } from "@/lib/domainBoot";

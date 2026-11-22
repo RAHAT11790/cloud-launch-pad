@@ -1,6 +1,6 @@
 {
   "rules": {
-    ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
+    ".read": "(auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')) || (auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now)",
     ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
     "$top": {
       ".read": true,

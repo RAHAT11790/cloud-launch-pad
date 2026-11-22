@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { db, ref, onValue, set, remove, query, limitToLast } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { emailWorkerOutdated } from "@/lib/emailStats";
 import {
   summarizeEmailStats, lastDayKeys, emailDayKey, clampEmailSettings, EMAIL_SETTING_BOUNDS,
   type EmailDayStats, type EmailServiceSettings,
@@ -236,7 +237,7 @@ const EmailServiceManager = ({ glassCard, inputClass, btnPrimary, btnSecondary }
           );
         })()}
         {health?.last?.lastErrMsg && !health.last.ok && <p className="text-[9.5px] text-red-300/80 break-words">{health.last.lastErrMsg}</p>}
-        {health?.service && !health.service.endsWith("v5") && <p className="text-[9.5px] text-amber-300/90">The live Worker is older than this panel. Redeploy <b>email-service</b> from Cloudflare Manager to get the new limits and protection.</p>}
+        {emailWorkerOutdated(health?.service) && <p className="text-[9.5px] text-amber-300/90">The live Worker is older than this panel. Redeploy <b>email-service</b> from Cloudflare Manager to get the new limits and protection.</p>}
         {health?.smtp?.checkedAt && <p className="text-[9px] text-zinc-600">Checked {ago(health.smtp.checkedAt)} (cached 1 min on the server)</p>}
       </div>
 

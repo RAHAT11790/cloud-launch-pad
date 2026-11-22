@@ -8,6 +8,7 @@
  * unpacks it synchronously here — imported first in `main.tsx`, before Firebase
  * or any app module reads storage — then removes it from the address bar.
  */
+import { isDisposableKey } from "@/lib/storageGuard";
 import {
   DEFAULT_SITE_ORIGIN, STATE_REFRESH_MS, fetchSiteDomainState, isPreviewHost, readCachedSiteDomain, stateTrusted,
 } from "@/lib/siteDomain";
@@ -55,7 +56,7 @@ export function pickEntries(all: Array<[string, string]>): Record<string, string
   const out: Record<string, string> = {};
   let total = 0;
   const firstRank = (k: string) => (FIRST.includes(k) || k.startsWith(AUTH_PREFIX) ? 0 : 1);
-  const list = all.filter(([k, v]) => !SKIP.has(k) && typeof v === "string")
+  const list = all.filter(([k, v]) => !SKIP.has(k) && !isDisposableKey(k) && typeof v === "string")
     .sort((a, b) => firstRank(a[0]) - firstRank(b[0]) || a[1].length - b[1].length);
   for (const [k, v] of list) {
     const size = k.length + v.length;
@@ -83,6 +84,8 @@ export function trustedReferrer(referrer: string, hereHost: string, knownHosts: 
     const host = new URL(referrer).hostname.toLowerCase();
     if (!host || host === hereHost) return false;
     if (isPreviewHost(hereHost)) return isPreviewHost(host);
+    // www.<domain> and <domain> are the same site.
+    if (host === `www.${hereHost}` || hereHost === `www.${host}`) return true;
     return host === new URL(DEFAULT_SITE_ORIGIN).hostname || knownHosts.includes(host);
   } catch { return false; }
 }
