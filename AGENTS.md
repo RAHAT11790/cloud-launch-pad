@@ -26,4 +26,4 @@
 - Global chat (`src/lib/communityChat.ts`) is one public RTDB room keyed by the app's own account IDs (guests read only); `buildMessage` is the single gate for allowed kinds (text/image/voice/sticker, never video), voice notes are stored separately and fetched over REST — no private rooms exist because the RTDB is publicly readable.
 - Custom download servers (`settings/downloadManager/customServers`) join the Video Servers list and share its HTTP/HTTPS switch — one URL rewrite path.
 - Cloudflare Manager redeploys pass existing Worker secrets as `inherit` bindings, or an older live manager wipes them.
-- Live site domain: decided only by email-service `/site-domain` (Firebase `settings/siteDomain`, server-write only), read via `src/lib/siteDomain.ts`; old hosts move visitors with a one-time `#rs_handoff` storage copy (`src/lib/domainBoot.ts`) — server redirects cannot carry logins.
+- Live domain: only email-service `/site-domain` decides it (`settings/siteDomain`, server-write), read via `src/lib/siteDomain.ts`; old hosts hand over storage once via `src/lib/domainBoot.ts` — redirects lose logins.
