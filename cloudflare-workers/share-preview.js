@@ -7,6 +7,24 @@
 // to <site origin>/watch/<animeId>?s&e.
 // ============================================================
 
+
+// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
+const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
+let rsSiteMemo = { live: "", hosts: [], exp: 0 };
+async function rsSiteDomain() {
+  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
+  rsSiteMemo.exp = Date.now() + 60000;
+  try {
+    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
+    const d = r.ok ? await r.json() : null;
+    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h) => h && h.serving && typeof h.host === "string").map((h) => h.host.toLowerCase()) : [];
+    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
+    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
+  } catch { /* keep the previous answer */ }
+  return rsSiteMemo;
+}
+const rsSiteHostOk = (u) => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
+
 const FIREBASE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
 const FALLBACK_ORIGIN = "https://rsanime03.lovable.app";
 const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com)$|^http:\/\/localhost(:\d+)?$/i;
@@ -47,7 +65,8 @@ async function handler(req) {
   const m = url.pathname.match(/\/watch\/([^/?#]+)/);
   const id = m ? decodeURIComponent(m[1]) : (url.searchParams.get("id") || "");
   const o = String(url.searchParams.get("o") || "").replace(/\/+$/, "");
-  const origin = ALLOWED_ORIGIN.test(o) ? o : FALLBACK_ORIGIN;
+  // Always the live domain when known, so old share links open the current address.
+  const origin = (await rsSiteDomain()).live || (ALLOWED_ORIGIN.test(o) || rsSiteHostOk(o) ? o : FALLBACK_ORIGIN);
   const qs = new URLSearchParams();
   for (const k of ["s", "e", "ep"]) { const v = url.searchParams.get(k); if (v && /^\d+$/.test(v)) qs.set(k, v); }
   const target = id ? `${origin}/watch/${encodeURIComponent(id)}${qs.toString() ? `?${qs}` : ""}` : origin;

@@ -9,6 +9,7 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 type AnNativeResolvedData = {
   streams: { url: string; label: string; height: number; resolution: string; bandwidth: number; codecs?: string }[];
   audio: { language: string; name: string; uri: string }[];
@@ -29,10 +30,10 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
   else if (epIdx !== undefined) params.set("e", String(epIdx + 1));
   const qs = params.toString();
   if (sharePreviewBase) {
-    params.set("o", window.location.origin);
+    params.set("o", liveSiteOrigin());
     return `${sharePreviewBase}/watch/${encodeURIComponent(animeId)}?${params.toString()}`;
   }
-  return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+  return `${liveSiteOrigin()}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
 const parseWatchRouteIndices = (search: string) => {
@@ -4011,7 +4012,7 @@ const Index = () => {
           source: a.source || "firebase",
           id: a.id,
           slug: a.slug,
-          shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
+          shareLink: `${liveSiteOrigin()}/watch/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + countRealEpisodes(s.episodes || []), 0),
         }))}

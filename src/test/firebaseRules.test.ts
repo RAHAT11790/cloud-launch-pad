@@ -40,4 +40,10 @@ describe("Firebase database rules", () => {
       expect(rules[node][".indexOn"]).toEqual(["name", "email"]);
     }
   });
+  it("only the server (domain checker) can change the live domain; other settings stay editable", () => {
+    expect(rules.settings[".read"]).toBe(true);
+    expect(rules.settings.siteDomain[".write"]).toBe(false);
+    expect(rules.settings.$key[".write"]).toBe(true);
+    expect(rules.settings[".write"]).toBeUndefined();
+  });
 });

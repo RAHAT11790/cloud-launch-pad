@@ -37,7 +37,7 @@
 // conditional (ETag) write, so a code works exactly once.
 // ============================================================
 
-const VERSION = "email-service-smtp-v10";
+const VERSION = "email-service-smtp-v11";
 const BRAND = "RS ANIME03";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -556,6 +556,7 @@ function originAllowed(origin, env) {
   try { if (o === new URL(siteUrl(env)).origin) return true; } catch {}
   const h = u.hostname;
   if (h === "localhost" || h === "127.0.0.1") return true;
+  if (u.protocol === "https:" && siteMemo.hosts.includes(h.toLowerCase())) return true;
   return u.protocol === "https:" && (h.endsWith(".lovable.app") || h.endsWith(".lovableproject.com")) && (h.includes(PROJECT_TAG) || /^(?:[a-z0-9-]+--)?rsanime03\./.test(h));
 }
 function corsFor(req, env) {
@@ -1184,6 +1185,103 @@ async function actAdminSession(env, ctx, cors, body, ip) {
   return json(cors, { ok: true, exp, email, password });
 }
 
+// ---------------- Live site domain checker ----------------
+// Finds the address the site lives on and saves it in `settings/siteDomain`
+// (only this Worker writes it; the database rule blocks everyone else). The
+// candidates are domains only the owner controls — Firebase Auth authorized
+// domains and wherever the Lovable address redirects — and a candidate counts
+// only when it serves the site's own page (site marker) itself. The site, the
+// other servers and the old address's login hand-over all read this one record.
+const SITE_MARKS = [/<meta\s+name=["']rs-site-id["']\s+content=["']rsanime03["']/i, /google-site-verification["']?\s+content=["']_UnFPzj4AsCOrKaHjUmXvSW5g/i];
+const SITE_STATE_PATH = "settings/siteDomain";
+const SITE_CHECK_GAP = 120_000;
+const SITE_DEFAULT_HOST = new URL(DEFAULT_SITE).hostname;
+const isPreviewHost = (host) => {
+  const h = String(host || "").toLowerCase();
+  return !h || h === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.endsWith(".lovableproject.com")
+    || h.endsWith(".lovableproject-dev.com") || h.endsWith(".lovable.dev") || h.endsWith(".firebaseapp.com")
+    || h.endsWith(".web.app") || (h.endsWith(".lovable.app") && h.includes("--"));
+};
+const HOST_RE = /^(?=.{3,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+let siteMemo = { hosts: [], live: "", exp: 0 };
+let siteCheckRun = null;
+
+/** Live host from probe results: Lovable's own redirect first, then a serving custom domain, then the Lovable address. */
+function decideLiveHost(results, defaultHost, prevLive) {
+  const serving = results.filter((r) => r.serving);
+  const isServing = (h) => serving.some((r) => r.host === h);
+  const def = results.find((r) => r.host === defaultHost);
+  if (def && def.redirect && isServing(def.redirect)) return def.redirect;
+  const custom = serving.filter((r) => !r.host.endsWith(".lovable.app"));
+  if (custom.length) {
+    const target = custom.find((c) => results.some((r) => r.redirect === c.host));
+    if (target) return target.host;
+    return custom.map((c) => c.host).sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+  }
+  if (isServing(defaultHost)) return defaultHost;
+  if (prevLive && isServing(prevLive)) return prevLive;
+  return serving.length ? serving[0].host : "";
+}
+
+async function probeSiteHost(host) {
+  try {
+    const r = await fetch(`https://${host}/`, { redirect: "manual", headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; RS-ANIME03-domain-check)" }, signal: AbortSignal.timeout(7000) });
+    if (r.status >= 300 && r.status < 400) {
+      let to = "";
+      try { to = new URL(r.headers.get("Location") || "", `https://${host}/`).hostname.toLowerCase(); } catch { /* bad header */ }
+      return { host, serving: false, redirect: to && to !== host ? to : "" };
+    }
+    if (!r.ok) return { host, serving: false };
+    const html = (await r.text()).slice(0, 200000);
+    return { host, serving: SITE_MARKS.some((rx) => rx.test(html)) };
+  } catch { return { host, serving: false }; }
+}
+
+async function ownerDomains() {
+  try {
+    const r = await fetch(`https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=${FIREBASE_WEB_KEY}`, { headers: { Referer: DEFAULT_SITE + "/" }, signal: AbortSignal.timeout(6000) });
+    const d = r.ok ? await r.json() : null;
+    return (Array.isArray(d?.authorizedDomains) ? d.authorizedDomains : []).map((h) => String(h).toLowerCase()).filter((h) => HOST_RE.test(h) && !isPreviewHost(h));
+  } catch { return []; }
+}
+
+async function checkSiteDomains(env, prev) {
+  const now = Date.now();
+  const hosts = [...new Set([SITE_DEFAULT_HOST, ...(await ownerDomains())])].slice(0, 12);
+  const results = await Promise.all(hosts.map(probeSiteHost));
+  // One hop further: where an owner domain redirects (e.g. Lovable's primary domain).
+  const extra = [...new Set(results.map((r) => r.redirect).filter((h) => h && HOST_RE.test(h) && !isPreviewHost(h) && !hosts.includes(h)))].slice(0, 4);
+  results.push(...(await Promise.all(extra.map(probeSiteHost))));
+  const prevLive = (() => { try { return new URL(prev?.live || "").hostname; } catch { return ""; } })();
+  const live = decideLiveHost(results, SITE_DEFAULT_HOST, prevLive);
+  if (!live) return null;
+  const map = {};
+  for (const r of results) map[r.host.replace(/\./g, ",")] = { host: r.host, serving: !!r.serving, ...(r.redirect ? { redirect: r.redirect } : {}), checkedAt: now };
+  return { live: `https://${live}`, hosts: map, checkedAt: now };
+}
+
+function rememberSite(state) {
+  const hosts = state && state.hosts && typeof state.hosts === "object" ? Object.values(state.hosts).filter((h) => h && h.serving && typeof h.host === "string").map((h) => h.host.toLowerCase()) : [];
+  siteMemo = { hosts, live: typeof state?.live === "string" ? state.live : "", exp: Date.now() + 300_000 };
+}
+async function loadSiteHosts(env) {
+  if (siteMemo.exp > Date.now()) return;
+  siteMemo.exp = Date.now() + 60_000;
+  try { rememberSite(await dbGet(env, SITE_STATE_PATH)); } catch { /* keep previous */ }
+}
+
+async function actSiteDomain(env, url) {
+  const cur = await dbGet(env, SITE_STATE_PATH).catch(() => null);
+  const gap = url.searchParams.get("force") === "1" ? 30_000 : SITE_CHECK_GAP;
+  if (cur && Date.now() - (Number(cur.checkedAt) || 0) < gap) { rememberSite(cur); return { ok: true, state: cur, cached: true }; }
+  if (!siteCheckRun) siteCheckRun = checkSiteDomains(env, cur).finally(() => { siteCheckRun = null; });
+  const next = await siteCheckRun;
+  if (!next) return { ok: true, state: cur, cached: true };
+  if (env.FIREBASE_DB_SECRET) await dbPut(env, SITE_STATE_PATH, next);
+  rememberSite(next);
+  return { ok: true, state: next };
+}
+
 // ---------------- Database security gateway (server-to-server) ----------------
 // Lets the owner's tooling read/replace the Realtime Database security rules and
 // run privileged one-off data moves (e.g. moving passwords to a locked path)
@@ -1226,9 +1324,10 @@ async function actDbRules(env, req) {
 
 export default {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
+  _internals: { pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, decideLiveHost, rememberSite, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; siteMemo = { hosts: [], live: "", exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
+    await loadSiteHosts(env);
     const cors = corsFor(req, env);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -1242,6 +1341,7 @@ export default {
           if (url.searchParams.get("format") === "text") return new Response(tpl.text, { headers: { ...cors, ...baseHeaders, "Content-Type": "text/plain; charset=utf-8" } });
           return new Response(tpl.html, { headers: { ...cors, ...baseHeaders, "Content-Type": "text/html; charset=utf-8" } });
         }
+        if (path === "/site-domain") return json({ ...cors, "Access-Control-Allow-Origin": "*" }, await actSiteDomain(env, url));
         if (path === "/" || path === "/health") return json({ ...cors, "Access-Control-Allow-Origin": "*" }, await health(env, url.searchParams.get("deep") === "1"));
         return fail(cors, 404, "not_found", "Unknown route.");
       }

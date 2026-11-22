@@ -22,7 +22,8 @@ import {
  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, Database, Crown, Cloud, GripVertical, Layers, ScanFace, FolderDown
 } from "lucide-react";
 
-import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
+import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, normalizeFunctionEndpointUrl } from "@/lib/edgeFunctionRouter";
 import { toOpaqueUrlToken } from "@/lib/anPlaybackProxy";
 import { episodeLockRemainingMs, formatLockRemaining, isEpisodeTimeLocked, lockUntilFromDays, PERMANENT_LOCK_UNTIL, isPermanentLockValue, seriesLockRemainingMs } from "@/lib/contentGating";
@@ -72,10 +73,13 @@ const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"
 const PremiumUsersManager = lazySection(() => import("@/components/admin/PremiumUsersManager"), "Premium Users");
 const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "Edge Function Manager");
 const CloudflareManager = lazySection(() => import("@/components/admin/CloudflareManager"), "Cloudflare Manager");
-const AdsNetworkPanel = lazySection(() => import("@/components/admin/AdsNetworkPanel"), "Ads Network");
+const AdsterraConfig = lazySection(() => import("@/components/admin/AdsterraConfig"), "Adsterra Config");
+const DownloadAdPlacements = lazySection(() => import("@/components/admin/DownloadAdPlacements"), "Download page ads");
 const TelegramDownloadConfig = lazySection(() => import("@/components/admin/TelegramDownloadConfig"), "Telegram Download");
 const DownloadManagerPanel = lazySection(() => import("@/components/admin/DownloadManagerPanel"), "Download Manager");
 const ProfileShopManager = lazySection(() => import("@/components/admin/ProfileShopManager"), "Profile Shop");
+const AdsterraAnalytics = lazySection(() => import("@/components/admin/AdsterraAnalytics"), "Adsterra Analytics");
+const DomainChecker = lazySection(() => import("@/components/admin/DomainChecker"), "Domain Checker");
 const BackdropAiReplacer = lazySection(() => import("@/components/admin/BackdropAiReplacer"), "Backdrop AI");
 const ApkDownloadCenter = lazySection(() => import("@/components/admin/ApkDownloadCenter"), "APK Center");
 const FirebaseAnalyzer = lazySection(() => import("@/components/admin/FirebaseAnalyzer"), "Firebase Analyzer");
@@ -96,7 +100,7 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
  if (seasonIdx !== undefined) params.set("s", String(Math.max(0, seasonIdx) + 1));
  if (epIdx !== undefined) params.set("e", String(Math.max(0, epIdx) + 1));
  const qs = params.toString();
- return `${SITE_URL}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+ return `${liveSiteOrigin()}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
 const getEpisodeIndexForShare = (season: any, episodeNumber: unknown, fallbackIdx = 0) => {
@@ -211,7 +215,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "backdrop-ai" | "security-center" | "browser-access" | "task-manager" | "tg-download" | "download-manager" | "profile-shop" | "global-chat";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "domain-checker" | "backdrop-ai" | "security-center" | "browser-access" | "task-manager" | "tg-download" | "download-manager" | "profile-shop" | "global-chat";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -1993,7 +1997,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "telegram-post", "tg-url-changer", "live-support", "ui-themes", "hero-pinned",
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
     "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
-    "egd-manager", "cf-manager", "fb-analytics", "adsterra", "backdrop-ai",
+    "egd-manager", "cf-manager", "fb-analytics", "adsterra", "domain-checker", "backdrop-ai",
     "security-center", "browser-access", "task-manager", "tg-download", "download-manager", "profile-shop", "global-chat"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
@@ -2683,7 +2687,7 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
    hashtags: sanitizeTelegramHashtags(normalizeTelegramBaseHashtags(tgHashtags), tgTitle),
    footerLinks: footerLinksHtml,
    divider: TG_DIVIDER,
-   watchUrl: tgButtonLink || SITE_URL,
+   watchUrl: tgButtonLink || liveSiteOrigin(),
    owner: `@${(tgOwnerUsername || DEFAULT_TG_OWNER_USERNAME).replace(/^@/, "")}`,
   };
   const template = tgContentKind === "movie" ? tgTemplateMovie : tgTemplateSeries;
@@ -3354,7 +3358,8 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  "egd-manager": "EGD MANAGER",
  "cf-manager": "CLOUDFLARE MANAGER",
  "fb-analytics": "Firebase Analytics",
-  "adsterra": "Ads Network",
+  "adsterra": "Adsterra Ads",
+  "domain-checker": "Domain Checker",
   "backdrop-ai": "Backdrop AI Replacer",
   "security-center": "Security & Access",
   "browser-access": "Browser Access",
@@ -5196,7 +5201,7 @@ ${boxes}
 
 ━━━━━━━━━━━━━━━━━━━
 ${tgBulkFooter}
-🌐 <a href="${SITE_URL}"><b>${SITE_URL.replace(/^https?:\/\//, "")}</b></a>`;
+🌐 <a href="${liveSiteOrigin()}"><b>${liveSiteOrigin().replace(/^https?:\/\//, "")}</b></a>`;
 
  const channelIds = tgChannelId.split(/[,\n]+/).map(id => id.trim()).filter(Boolean);
  if (channelIds.length === 0) { toast.error("Enter at least one channel ID"); return; }
@@ -5523,7 +5528,8 @@ ${tgBulkFooter}
  
  { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
  { section: "cf-manager", icon: <Cloud size={16} />, label: "CLOUDFLARE MANAGER" },
- { section: "adsterra", icon: <Activity size={16} />, label: "Ads Network" },
+ { section: "adsterra", icon: <Activity size={16} />, label: "Adsterra Ads" },
+ { section: "domain-checker", icon: <Activity size={16} />, label: "Domain Checker" },
  { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
  { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
  { section: "tg-download", icon: <Send size={16} />, label: "Telegram Download" },
@@ -8638,7 +8644,7 @@ ${tgBulkFooter}
  </div>
  <div>
  <label className="block text-xs text-zinc-400 mb-1.5">Watch / Download link (optional)</label>
- <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={SITE_URL} />
+ <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={liveSiteOrigin()} />
  </div>
  {tgButtonLink && (
  <div>
@@ -9362,9 +9368,16 @@ ${tgBulkFooter}
  ))}
 
 
- {/* ==================== ADS NETWORK (Adsterra + Mondiad) ==================== */}
+ {/* ==================== DOMAIN CHECKER ==================== */}
+ {activeSection === "domain-checker" && <DomainChecker glassCard={glassCard} btnPrimary={btnPrimary} />}
+
+ {/* ==================== ADSTERRA ADS ==================== */}
  {activeSection === "adsterra" && (
- <AdsNetworkPanel glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+ <div className="space-y-5">
+   <AdsterraAnalytics />
+   <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+   <DownloadAdPlacements />
+ </div>
  )}
 
  {/* ==================== BACKDROP AI ==================== */}

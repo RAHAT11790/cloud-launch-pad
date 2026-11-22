@@ -172,7 +172,7 @@ const AdsterraAnalytics = () => {
         // Site name too — Adsterra can hold two placements with the same title (e.g. Smartlink_1 on two sites).
         metric: silent.map((s) => placementName(s.id)).join(", "),
         detail: "These placements exist in your Adsterra account but got no traffic in this period — the ad code is missing from the app, blocked before it loads, or only used on a screen users rarely open (Daily Task coin ads load only when a user taps \"Watch ad\").",
-        fix: "Paste each placement's script into Ads Network → Adsterra, and make sure the slot renders for non-premium users (premium users bypass ads by design).",
+        fix: "Paste each placement's script into Adsterra Ads → settings, and make sure the slot renders for non-premium users (premium users bypass ads by design).",
       });
     }
 

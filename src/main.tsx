@@ -1,4 +1,7 @@
 import "@/lib/historyBoot";
+// Must stay before App: unpacks a login hand-over before anything reads storage.
+import { startDomainBoot } from "@/lib/domainBoot";
+import { refreshSiteDomain } from "@/lib/siteDomain";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
@@ -44,5 +47,11 @@ window.addEventListener("vite:preloadError", event => {
   sessionStorage.setItem("rs_chunk_reload_at", String(Date.now()));
   window.location.reload();
 });
-const root = document.getElementById("root");
-if (root) createRoot(root).render(<App />);
+// An old address moves to the live domain (with the login) before rendering.
+void startDomainBoot().catch(() => false).then((leaving) => {
+  if (leaving) return;
+  const root = document.getElementById("root");
+  if (root) createRoot(root).render(<App />);
+  // Keep the live-domain check fresh (the server re-checks at most every 2 min).
+  window.setTimeout(() => { void refreshSiteDomain(); }, 8000);
+});

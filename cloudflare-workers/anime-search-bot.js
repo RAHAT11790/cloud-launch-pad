@@ -14,12 +14,30 @@
 // auto-register the Telegram webhook to itself. No manual setup.
 // ============================================================
 
+
+// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
+const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
+let rsSiteMemo = { live: "", hosts: [], exp: 0 };
+async function rsSiteDomain() {
+  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
+  rsSiteMemo.exp = Date.now() + 60000;
+  try {
+    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
+    const d = r.ok ? await r.json() : null;
+    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h) => h && h.serving && typeof h.host === "string").map((h) => h.host.toLowerCase()) : [];
+    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
+    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
+  } catch { /* keep the previous answer */ }
+  return rsSiteMemo;
+}
+const rsSiteHostOk = (u) => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
+
 const TMDB_KEY = "37f4b185e3dc487e4fd3e56e2fab2307";
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p/original";
 const BRAND_IMG = "https://i.ibb.co.com/4w72zhGs/IMG-20260417-065611-339.jpg";
 const SITE_NAME = "RS ANIME";
-const SITE_URL = "https://rsanime03.lovable.app";
+let SITE_URL = "https://rsanime03.lovable.app"; // replaced by the live domain on each request
 
 // ---------- helpers ---------------------------------------------------------
 const j = (o, s = 200) =>
@@ -393,6 +411,7 @@ async function sendAllAssets(token, chatId, a, opts = {}) {
 // ---------- entry -----------------------------------------------------------
 export default {
   async fetch(req, env) {
+    SITE_URL = (await rsSiteDomain()).live || SITE_URL;
     const url = new URL(req.url);
     const workerUrl = `${url.protocol}//${url.host}`;
     const token = env.TELEGRAM_BOT_TOKEN;

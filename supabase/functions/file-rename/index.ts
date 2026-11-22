@@ -1,4 +1,22 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+
+// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
+const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
+let rsSiteMemo: { live: string; hosts: string[]; exp: number } = { live: "", hosts: [], exp: 0 };
+async function rsSiteDomain() {
+  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
+  rsSiteMemo.exp = Date.now() + 60000;
+  try {
+    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
+    const d = r.ok ? await r.json() : null;
+    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h: any) => h && h.serving && typeof h.host === "string").map((h: any) => String(h.host).toLowerCase()) : [];
+    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
+    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
+  } catch { /* keep the previous answer */ }
+  return rsSiteMemo;
+}
+const rsSiteHostOk = (u: unknown): boolean => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
+
 // File Rename — single upstream streaming connection; HTTP/HTTPS + Range.
 // Deploy in Cloudflare Manager, then set EGD Router → file-rename.
 const cors = {
@@ -26,7 +44,7 @@ Deno.serve(async (req: Request) => {
     if (!["GET", "HEAD"].includes(req.method)) return reply("Method not allowed", 405);
     const origin = req.headers.get("origin") || req.headers.get("referer");
     if (origin) {
-      try { if (!/^(rsanime03\.lovable\.app|id-preview--d9496f6f-add2-411c-96f8-fb97b0c234a7\.lovable\.app|localhost|127\.0\.0\.1)$/.test(new URL(origin).hostname)) return reply("Access denied", 403); }
+      try { if (!/^(rsanime03\.lovable\.app|id-preview--d9496f6f-add2-411c-96f8-fb97b0c234a7\.lovable\.app|localhost|127\.0\.0\.1)$/.test(new URL(origin).hostname) && !(await rsSiteDomain(), rsSiteHostOk(origin))) return reply("Access denied", 403); }
       catch { return reply("Access denied", 403); }
     }
     const params = new URL(req.url).searchParams;

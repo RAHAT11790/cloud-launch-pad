@@ -20,6 +20,7 @@ import {
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
 import { firePopunderAd } from "@/lib/adsterraAds";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 import InviteFriendCard from "@/components/InviteFriendCard";
 
 const ICONS: Record<string, any> = {
@@ -80,8 +81,7 @@ export default function DailyTasksPage() {
 
   const shareUrl = useMemo(() => {
     const me = getLocalUserId() || ensureGuestUser() || "";
-    const base =
-      typeof window !== "undefined" ? window.location.origin : "https://rsanime03.lovable.app";
+    const base = liveSiteOrigin();
     return `${base}/?ref=${encodeURIComponent(me)}`;
   }, []);
 

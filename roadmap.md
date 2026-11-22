@@ -1,6 +1,18 @@
 # Roadmap
 
-## Mondiad ad network + "Ads Network" admin section (2026-11-19)
+## Only Adsterra + live domain checker + keep logins on the new domain (2026-11-22)
+- [x] Mondiad removed everywhere; admin section named "Adsterra Ads" again (old Adsterra boxes back, later player-ad fixes kept).
+- [x] Domain checker: the email server checks every owner domain (Firebase authorized domains + Lovable redirect) and saves the live one in `settings/siteDomain` (only the server may write it — live rule tested).
+- [x] Site: every link (share, Telegram, invite, install) uses the live domain.
+- [x] Old address moves visitors to the live domain WITH their login, guest coins and settings (phone test: signed in on old address → moved to new domain → same account on Profile, same device; crafted links ignored).
+- [x] Servers accept the live domain automatically (email/login, file names, Telegram post, share bot, backdrop, video…).
+- [x] Admin "Domain Checker" screen built (not opened in a test: admin PIN needed).
+- [x] Deployed: Cloudflare workers (all secrets kept) + backend functions.
+- [ ] Second function server (Live TV / APK download copies) is blocked by its own usage limit — not updated.
+- [ ] Password sign-in on the real new domain: waits until rsanime03.online is serving the site.
+- [ ] Owner: in Lovable domain settings, "Unset as primary" so the old address runs the site's own move (the server redirect cannot carry logins), then Publish.
+
+## Mondiad ad network + "Ads Network" admin section (2026-11-19) — REPLACED 2026-11-22: owner wants Adsterra only, Mondiad removed
 - [x] Mondiad domain verification code in the site head.
 - [ ] Owner: Publish, then tap Verify on Mondiad (Insert Code).
 - [x] Admin "Adsterra Ads" renamed to "Ads Network" with an Adsterra box and a Mondiad box.

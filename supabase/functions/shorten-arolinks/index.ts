@@ -1,3 +1,21 @@
+
+// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
+const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
+let rsSiteMemo: { live: string; hosts: string[]; exp: number } = { live: "", hosts: [], exp: 0 };
+async function rsSiteDomain() {
+  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
+  rsSiteMemo.exp = Date.now() + 60000;
+  try {
+    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
+    const d = r.ok ? await r.json() : null;
+    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h: any) => h && h.serving && typeof h.host === "string").map((h: any) => String(h.host).toLowerCase()) : [];
+    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
+    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
+  } catch { /* keep the previous answer */ }
+  return rsSiteMemo;
+}
+const rsSiteHostOk = (u: unknown): boolean => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -12,10 +30,11 @@ const ALLOWED_HOST_RX = [
 ];
 const matchesAllowedHost = (u: string | null) => {
   if (!u) return false;
-  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(u).host)); } catch { return false; }
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(u).host)) || rsSiteHostOk(u); } catch { return false; }
 };
 
 Deno.serve(async (req) => {
+  await rsSiteDomain();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

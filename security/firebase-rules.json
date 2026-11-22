@@ -6,6 +6,15 @@
       ".read": true,
       ".write": true
     },
+    "settings": {
+      ".read": true,
+      "$key": {
+        ".write": true
+      },
+      "siteDomain": {
+        ".write": false
+      }
+    },
     "secure": {
       ".read": false,
       ".write": false
