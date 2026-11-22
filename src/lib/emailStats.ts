@@ -18,7 +18,7 @@ export type EmailSummary = {
 };
 
 /** Version of `cloudflare-workers/email-service.js` this admin panel was built for (a test keeps them equal). */
-export const EMAIL_WORKER_VERSION = 11;
+export const EMAIL_WORKER_VERSION = 12;
 /** True when the live Worker reports an older version than this panel expects. */
 export function emailWorkerOutdated(service: string | undefined | null): boolean {
   const m = String(service || "").match(/-v(\d+)$/);

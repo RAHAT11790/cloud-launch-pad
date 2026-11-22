@@ -27,6 +27,12 @@
 //     resend                         { ticket }
 //     verify | verify-otp            { ticket, code }
 //
+// Delivery: first through Lovable's email service from the site's own domain
+// (EGD Router row `lovable-email`, which confirms each request back at
+// POST /relay-check), and over SMTP whenever that row is missing, the relay is
+// down, or it does not confirm a real send — so codes keep working when
+// Lovable Cloud is down.
+//
 // Inbox placement: the email is code-only — no links, no buttons, no images,
 // no web addresses — and the whole SMTP conversation uses only Alwaysdata's
 // own names (EHLO = the account's alwaysdata.net host, From/Message-ID on
@@ -37,7 +43,7 @@
 // conditional (ETag) write, so a code works exactly once.
 // ============================================================
 
-const VERSION = "email-service-smtp-v11";
+const VERSION = "email-service-smtp-v12";
 const BRAND = "RS ANIME03";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -420,6 +426,62 @@ function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
 }
 const sendMail = (env, msg) => smtpSession(env, msg);
 
+// ---------------- Lovable email relay (own domain) ----------------
+// After a relay failure the Worker uses SMTP only for LOVABLE_PAUSE_MS, so a
+// broken relay costs at most one slow send per pause window.
+const LOVABLE_PAUSE_MS = 10 * 60_000;
+const LOVABLE_TIMEOUT_MS = 26_000;
+const LOVABLE_STATE_PATH = `${ROOT}/lovable`;
+let lovableMemo = { url: "", exp: 0, downUntil: 0 };
+async function lovableRelay(env) {
+  const now = Date.now();
+  if (lovableMemo.exp > now) return lovableMemo;
+  let url = "";
+  let downUntil = lovableMemo.downUntil;
+  try {
+    const [row, st] = await Promise.all([
+      dbGet(env, "settings/functionOverrides/lovable-email"),
+      dbGet(env, LOVABLE_STATE_PATH).catch(() => null),
+    ]);
+    const u = row && row.enabled !== false && typeof row.customUrl === "string" ? row.customUrl.trim().replace(/\/+$/, "") : "";
+    url = /^https:\/\//i.test(u) ? u : "";
+    downUntil = Math.max(downUntil, Number(st?.downUntil) || 0);
+  } catch { /* database unreachable: SMTP only */ }
+  lovableMemo = { url, exp: now + 60_000, downUntil };
+  return lovableMemo;
+}
+function noteLovable(env, ctx, patch) {
+  if (patch.downUntil != null) lovableMemo.downUntil = patch.downUntil;
+  if (!env.FIREBASE_DB_SECRET) return;
+  const p = dbPatch(env, LOVABLE_STATE_PATH, patch).catch(() => {});
+  try { ctx?.waitUntil?.(p); } catch {}
+}
+/** Lovable email first, SMTP fallback. Resolves to the provider that sent it. */
+async function deliverCode(env, ctx, { rid, to, purpose, code, name, otpMinutes, tpl }) {
+  const relay = await lovableRelay(env);
+  let lovableErr = "";
+  if (relay.url && relay.downUntil <= Date.now()) {
+    try {
+      const r = await withTimeout(fetch(relay.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rid, to, purpose, code, name: name || "", otpMinutes }),
+      }), LOVABLE_TIMEOUT_MS, "lovable_timeout", "Lovable email");
+      const j = await r.json().catch(() => null);
+      if (r.ok && j?.ok) {
+        noteLovable(env, ctx, { ok: true, lastOkAt: Date.now(), downUntil: 0 });
+        return "lovable";
+      }
+      lovableErr = String(j?.error || `http_${r.status}`).slice(0, 60);
+    } catch (e) {
+      lovableErr = String(e?.code || e?.message || "lovable_error").slice(0, 60);
+    }
+    noteLovable(env, ctx, { ok: false, lastErrAt: Date.now(), lastErr: lovableErr, downUntil: Date.now() + LOVABLE_PAUSE_MS });
+  }
+  await sendMail(env, { to, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
+  return "smtp";
+}
+
 // ---------------- templates ----------------
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "'SF Mono',SFMono-Regular,Menlo,Consolas,'Roboto Mono','Courier New',monospace";
@@ -691,8 +753,9 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
 
   const tpl = emailTemplate({ purpose, code: otp, name, otpMinutes: cfg.otpMinutes, requestedAt: now });
   const t0 = Date.now();
+  let via = "smtp";
   try {
-    await sendMail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
+    via = await deliverCode(env, ctx, { rid, to: email, purpose, code: otp, name, otpMinutes: cfg.otpMinutes, tpl });
   } catch (err) {
     const ms = Date.now() - t0;
     const codeErr = String(err?.code || "send_failed");
@@ -712,7 +775,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
       ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 })).catch(() => 0);
   }
   shadowPut(`g:${day}`, sentToday + 1, dayExp);
-  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, mail_ms: ms, mail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
+  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, [`via_${via}`]: 1, mail_ms: ms, mail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid), via }));
   noteHealth(env, ctx, { ok: true, lastOkAt: Date.now(), lastMs: ms });
   const dailyLeft = Math.max(0, cfg.perEmailDaily - gate.n);
   return json(cors, {
@@ -829,6 +892,30 @@ async function actVerify(env, ctx, cors, body, ip) {
 }
 
 let deepMemo = { at: 0, v: null };
+/**
+ * The Lovable relay confirms a send request here before mailing anything: the
+ * ticket must still be "sending", recent, for the same purpose, email and code,
+ * and each ticket can be confirmed only once. Reveals nothing but yes/no.
+ */
+async function actRelayCheck(env, ctx, req) {
+  const out = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...baseHeaders, "Content-Type": "application/json" } });
+  if (Number(req.headers.get("content-length") || 0) > 1024) return out({ ok: false }, 413);
+  const body = await req.json().catch(() => null);
+  const rid = String(body?.rid || "");
+  const to = normEmail(body?.to);
+  const code = String(body?.code || "");
+  const purpose = body?.purpose === "reset" ? "reset" : "register";
+  if (!RID_RE.test(rid) || !to || !/^\d{6}$/.test(code)) return out({ ok: false }, 400);
+  const [eh, oh] = await Promise.all([hash(env, "email", to), hash(env, "otp", rid, code)]);
+  const ok = await ticketTxn(env, ctx, rid, (cur) => {
+    if (!cur || cur.st !== "sending" || cur.rl || cur.p !== purpose) return { result: false };
+    if (Date.now() - (Number(cur.c) || 0) > 120_000) return { result: false };
+    if (!safeEq(String(cur.e || ""), eh) || !safeEq(String(cur.o || ""), oh)) return { result: false };
+    return { next: { ...cur, rl: 1 }, result: true };
+  }).catch(() => false);
+  return out({ ok: !!ok }, ok ? 200 : 403);
+}
+
 async function health(env, deep) {
   const missing = MISSING(env);
   const now = Date.now();
@@ -839,12 +926,14 @@ async function health(env, deep) {
     dbGet(env, `${ROOT}/health`).catch(() => null),
   ]);
   const sent = Math.max(Number(sentRaw) || 0, shadowGet(`g:${day}`, now));
+  const relay = await lovableRelay(env);
   const out = {
     ok: true, service: VERSION, provider: "smtp", ready: missing.length === 0, missing,
     optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET, ADMIN_PIN: !!env.ADMIN_PIN },
     sender: smtpConf(env).from,
     senderValid: SENDER_RE.test(smtpConf(env).from),
     smtpHost: `${smtpConf(env).host}:${smtpConf(env).port}`,
+    lovable: { configured: !!relay.url, pausedUntil: relay.downUntil > now ? relay.downUntil : 0 },
     settings: cfg,
     today: { day, sent, limit: cfg.dailyLimit, left: Math.max(0, cfg.dailyLimit - sent), resetsInSec: Math.ceil(msToDayEnd(now) / 1000) },
     last: last && typeof last === "object" ? {
@@ -1324,7 +1413,7 @@ async function actDbRules(env, req) {
 
 export default {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, decideLiveHost, rememberSite, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; siteMemo = { hosts: [], live: "", exp: 0 }; } },
+  _internals: { deliverCode, actRelayCheck, pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, decideLiveHost, rememberSite, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; lovableMemo = { url: "", exp: 0, downUntil: 0 }; siteMemo = { hosts: [], live: "", exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     await loadSiteHosts(env);
@@ -1333,6 +1422,7 @@ export default {
     const path = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (path === "/db-rules" && req.method === "POST") return await actDbRules(env, req);
+      if (path === "/relay-check" && req.method === "POST") return await actRelayCheck(env, ctx, req);
       if (req.method === "GET") {
         if (path === "/preview") {
           const type = url.searchParams.get("type") === "reset" ? "reset" : "register";
