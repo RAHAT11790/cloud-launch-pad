@@ -3,7 +3,6 @@ import { db, ref, onValue, set, remove, push, update, get } from "@/lib/firebase
 import { MessageCircle, Send, Trash2, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { readProfilePhoto } from "@/lib/localUser";
-import { signedInAccountId } from "@/lib/guestPersistence";
 
 /**
  * YouTube-style comment section with nested replies + per-comment reactions.
@@ -170,8 +169,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   }, [allComments]);
 
   const ensureUser = (): boolean => {
-    // Guests may read comments; writing needs a real account (nothing of a guest goes to Firebase).
-    if (!user || !signedInAccountId()) {
+    if (!user) {
       toast.error("Please log in to continue");
       return false;
     }
@@ -535,7 +533,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
                 postComment();
               }
             }}
-            placeholder={user && signedInAccountId() ? "Add a comment..." : "Log in to comment"}
+            placeholder={user ? "Add a comment..." : "Log in to comment"}
             disabled={!user || sending}
             maxLength={500}
             className="min-w-0 flex-1 border-b border-border bg-transparent px-1 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"

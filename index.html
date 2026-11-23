@@ -2,19 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // Google sign-in returns to /__/auth/handler (and uses /__/auth/iframe) on the
-      // site's own address; the host answers those with this page, so hand over to
-      // Firebase's helper page right away and stop loading the site here.
-      (function () {
-        var p = location.pathname;
-        if (p === "/__/auth/handler" || p === "/__/auth/iframe") {
-          location.replace(p + ".html" + location.search + location.hash);
-          // Everything after this becomes plain text: no site script starts here.
-          document.write('<plaintext style="display:none">');
-        }
-      })();
-    </script>
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0b14" />
@@ -26,7 +13,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="shortcut icon" type="image/png" href="/android-chrome-192x192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://rsanime03.online/" />
+    <link rel="canonical" href="https://rsanime03.lovable.app/" />
 
     <title>RS Anime 03 - Watch Anime Online in HD</title>
     <meta name="description" content="RS Anime 03 is an anime streaming platform where you can discover anime series, movies, donghua and cartoons with HD video, Hindi dubbed, English subtitles and multiple audio options." />
@@ -34,15 +21,15 @@
     <meta name="application-name" content="RS ANIME03" />
     <meta name="apple-mobile-web-app-title" content="RS Anime 03" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <meta name="rs-site-id" content="rsanime03" />
     <meta name="googlebot" content="index, follow" />
     <meta name="google-site-verification" content="_UnFPzj4AsCOrKaHjUmXvSW5g-Cdk67gomB4gQDXReM" />
     <meta name="google-site-verification" content="google-site-verification=_UnFPzj4AsCOrKaHjUmXvSW5g-Cdk67gomB4gQDXReM" />
-    <meta name="keywords" content="rs anime, rsanime, rs anime03, rsanime03, rs anime 03, rsanime03.online, rsanime03.lovable.app, rs anime app, rs anime website, rs anime online, rs anime free, rs anime hindi, rs anime dubbed, rs anime hindi dubbed, rs anime download, watch rs anime, rs anime streaming, anime, anime online, anime free, watch anime, watch anime online, anime streaming, anime app, anime website, anime hindi dubbed, anime hindi sub, anime english sub, anime dual audio, anime hd, anime 1080p, anime 4k, anime movies, anime series, anime episodes, new anime, latest anime, ongoing anime, completed anime, popular anime, trending anime, top anime, anime download, anime free download, anime mkv, anime mp4, cartoon online, donghua, chinese anime, japanese anime, korean anime, naruto, one piece, dragon ball, bleach, attack on titan, demon slayer, jujutsu kaisen, my hero academia, solo leveling, anime web series, free anime streaming, anime watch app, best anime site, rs anime telegram, rs anime channel" />
+    <meta name="mnd-ver" content="h2rplj155e59g7iwkltw" />
+    <meta name="keywords" content="rs anime, rsanime, rs anime03, rsanime03, rs anime 03, rsanime03.lovable.app, rs anime app, rs anime website, rs anime online, rs anime free, rs anime hindi, rs anime dubbed, rs anime hindi dubbed, rs anime download, watch rs anime, rs anime streaming, anime, anime online, anime free, watch anime, watch anime online, anime streaming, anime app, anime website, anime hindi dubbed, anime hindi sub, anime english sub, anime dual audio, anime hd, anime 1080p, anime 4k, anime movies, anime series, anime episodes, new anime, latest anime, ongoing anime, completed anime, popular anime, trending anime, top anime, anime download, anime free download, anime mkv, anime mp4, cartoon online, donghua, chinese anime, japanese anime, korean anime, naruto, one piece, dragon ball, bleach, attack on titan, demon slayer, jujutsu kaisen, my hero academia, solo leveling, anime web series, free anime streaming, anime watch app, best anime site, rs anime telegram, rs anime channel" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="RS ANIME03" />
-    <meta property="og:url" content="https://rsanime03.online/" />
+    <meta property="og:url" content="https://rsanime03.lovable.app/" />
     <meta property="og:title" content="RS Anime 03 - Watch Anime Online in HD" />
     <meta property="og:description" content="RS Anime 03 is an anime streaming platform where you can discover anime series, movies, donghua and cartoons with HD video, Hindi dubbed, English subtitles and multiple audio options." />
     <meta property="og:image" content="https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png" />
@@ -62,8 +49,8 @@
   "@graph": [
     {
       "@type": "WebSite",
-      "@id": "https://rsanime03.online/#website",
-      "url": "https://rsanime03.online/",
+      "@id": "https://rsanime03.lovable.app/#website",
+      "url": "https://rsanime03.lovable.app/",
       "name": "RS Anime 03",
       "alternateName": [
         "RS Anime03",
@@ -73,30 +60,30 @@
       "description": "Watch anime series, movies, donghua & cartoons free in HD \u2014 Hindi dubbed, English sub, multi-audio.",
       "inLanguage": "en",
       "publisher": {
-        "@id": "https://rsanime03.online/#org"
+        "@id": "https://rsanime03.lovable.app/#org"
       },
       "potentialAction": {
         "@type": "SearchAction",
-        "target": "https://rsanime03.online/search?q={search_term_string}",
+        "target": "https://rsanime03.lovable.app/search?q={search_term_string}",
         "query-input": "required name=search_term_string"
       }
     },
     {
       "@type": "Organization",
-      "@id": "https://rsanime03.online/#org",
+      "@id": "https://rsanime03.lovable.app/#org",
       "name": "RS Anime 03",
       "alternateName": "RS Anime03",
-      "url": "https://rsanime03.online/",
+      "url": "https://rsanime03.lovable.app/",
       "logo": "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
       "sameAs": [
         "https://t.me/cartoonfunny03",
-        "https://rsanime03.online/"
+        "https://rsanime03.lovable.app/"
       ]
     },
     {
       "@type": "WebApplication",
       "name": "RS Anime 03",
-      "url": "https://rsanime03.online/",
+      "url": "https://rsanime03.lovable.app/",
       "applicationCategory": "EntertainmentApplication",
       "operatingSystem": "Web, Android",
       "offers": {

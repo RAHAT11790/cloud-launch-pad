@@ -17,14 +17,6 @@ export type EmailSummary = {
   avgMs: number | null;
 };
 
-/** Version of `cloudflare-workers/email-service.js` this admin panel was built for (a test keeps them equal). */
-export const EMAIL_WORKER_VERSION = 12;
-/** True when the live Worker reports an older version than this panel expects. */
-export function emailWorkerOutdated(service: string | undefined | null): boolean {
-  const m = String(service || "").match(/-v(\d+)$/);
-  return !!m && Number(m[1]) < EMAIL_WORKER_VERSION;
-}
-
 const n = (v: unknown) => (Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : 0);
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
 

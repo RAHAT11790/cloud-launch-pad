@@ -1,5 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
-import { sendLovableEmail } from 'npm:@lovable.dev/email-js'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const MAX_RETRIES = 5
@@ -18,8 +16,8 @@ function isRateLimited(error: unknown): boolean {
   return error instanceof Error && error.message.includes('429')
 }
 
-// Check if an error is a forbidden (403) response. Retrying won't help.
-// Move straight to DLQ.
+// Check if an error is a forbidden (403) response, which means emails are
+// disabled for this project. Retrying won't help — move straight to DLQ.
 function isForbidden(error: unknown): boolean {
   if (error && typeof error === 'object' && 'status' in error) {
     return (error as { status: number }).status === 403
@@ -53,20 +51,60 @@ function parseJwtClaims(token: string): Record<string, unknown> | null {
   }
 }
 
-// Digests give timingSafeEqual the equal-length inputs it requires.
-function keyMatches(provided: string, expected: string): boolean {
-  if (!provided) {
-    return false
+async function sendResendEmail(payload: EmailPayload, apiKey: string): Promise<void> {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: payload.from,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+      headers: payload.idempotency_key ? { 'Idempotency-Key': payload.idempotency_key } : undefined,
+    }),
+  })
+  if (!res.ok) {
+    const error = new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 500)}`) as Error & { status?: number; retryAfterSeconds?: number | null }
+    error.status = res.status
+    const retryAfter = Number(res.headers.get('retry-after') || 0)
+    error.retryAfterSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null
+    throw error
   }
-  const digest = (value: string) => createHash('sha256').update(value).digest()
-  return timingSafeEqual(digest(provided), digest(expected))
+}
+
+type EmailPayload = {
+  message_id?: string
+  to?: string
+  from?: string
+  sender_domain?: string
+  subject?: string
+  html?: string
+  text?: string
+  purpose?: string
+  label?: string
+  idempotency_key?: string
+  unsubscribe_token?: string
+  run_id?: string
+  queued_at?: string
+  [key: string]: unknown
+}
+
+type QueueMessage = {
+  msg_id: number
+  read_ct?: number
+  enqueued_at?: string
+  message: EmailPayload
 }
 
 // Move a message to the dead letter queue and log the reason.
 async function moveToDlq(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   queue: string,
-  msg: { msg_id: number; message: Record<string, unknown> },
+  msg: QueueMessage,
   reason: string
 ): Promise<void> {
   const payload = msg.message
@@ -84,12 +122,12 @@ async function moveToDlq(
     payload,
   })
   if (error) {
-    console.error('Failed to move message to DLQ', { queue, msg_id: msg.msg_id, reason, code: error.code, message: error.message })
+    console.error('Failed to move message to DLQ', { queue, msg_id: msg.msg_id, reason, error })
   }
 }
 
 Deno.serve(async (req) => {
-  const apiKey = Deno.env.get('LOVABLE_API_KEY')
+  const apiKey = Deno.env.get('RESEND_API_KEY')
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -102,24 +140,23 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get('Authorization')
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : ''
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 
-  // verify_jwt=true also lets the new API keys through the gateway. Accept only the service role
-  // key as the Bearer (Cloud Proxy puts its own secret key in apikey) or a service_role JWT.
-  if (!keyMatches(token, supabaseServiceKey)) {
-    if (!token) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-    const claims = parseJwtClaims(token)
-    if (claims?.role !== 'service_role') {
-      return new Response(
-        JSON.stringify({ error: 'Forbidden' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+  // Defense in depth: verify_jwt=true already requires a valid JWT at the
+  // gateway layer. This adds an explicit role check so only service-role
+  // callers can trigger queue processing.
+  const token = authHeader.slice('Bearer '.length).trim()
+  const claims = parseJwtClaims(token)
+  if (claims?.role !== 'service_role') {
+    return new Response(
+      JSON.stringify({ error: 'Forbidden' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    )
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -155,24 +192,26 @@ Deno.serve(async (req) => {
     })
 
     if (readError) {
-      console.error('Failed to read email batch', { queue, code: readError.code, message: readError.message })
+      console.error('Failed to read email batch', { queue, error: readError })
       continue
     }
 
-    if (!messages?.length) continue
+    const queueMessages = (messages ?? []) as QueueMessage[]
+
+    if (!queueMessages.length) continue
 
     // Retry budget is based on real send failures, not pgmq read_ct.
     // read_ct increments for every message in a claimed batch, including
     // messages not attempted when a 429 stops processing early.
     const messageIds = Array.from(
       new Set(
-        messages
-          .map((msg) =>
+        queueMessages
+          .map((msg: QueueMessage) =>
             msg?.message?.message_id && typeof msg.message.message_id === 'string'
               ? msg.message.message_id
               : null
           )
-          .filter((id): id is string => Boolean(id))
+          .filter((id: string | null): id is string => Boolean(id))
       )
     )
     const failedAttemptsByMessageId = new Map<string, number>()
@@ -186,8 +225,7 @@ Deno.serve(async (req) => {
       if (failedRowsError) {
         console.error('Failed to load failed-attempt counters', {
           queue,
-          code: failedRowsError.code,
-          message: failedRowsError.message,
+          error: failedRowsError,
         })
       } else {
         for (const row of failedRows ?? []) {
@@ -201,8 +239,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i]
+    for (let i = 0; i < queueMessages.length; i++) {
+      const msg = queueMessages[i]
       const payload = msg.message
       const failedAttempts =
         payload?.message_id && typeof payload.message_id === 'string'
@@ -254,33 +292,19 @@ Deno.serve(async (req) => {
             message_id: msg.msg_id,
           })
           if (dupDelError) {
-            console.error('Failed to delete duplicate message from queue', { queue, msg_id: msg.msg_id, code: dupDelError.code, message: dupDelError.message })
+            console.error('Failed to delete duplicate message from queue', { queue, msg_id: msg.msg_id, error: dupDelError })
           }
           continue
         }
       }
 
       try {
-        await sendLovableEmail(
-          {
-            run_id: payload.run_id,
-            to: payload.to,
-            from: payload.from,
-            sender_domain: payload.sender_domain,
-            subject: payload.subject,
-            html: payload.html,
-            text: payload.text,
-            purpose: payload.purpose,
-            label: payload.label,
-            idempotency_key: payload.idempotency_key,
-            unsubscribe_token: payload.unsubscribe_token,
-            message_id: payload.message_id,
-          },
-          // sendUrl is optional — when LOVABLE_SEND_URL is not set, the library
-          // falls back to the default Lovable API endpoint (https://api.lovable.dev).
-          // Set LOVABLE_SEND_URL as a Supabase secret to override (e.g. for local dev).
-          { apiKey, sendUrl: Deno.env.get('LOVABLE_SEND_URL') }
-        )
+        if (!payload.to || !payload.from || !payload.subject || !payload.html || !payload.text) {
+          await moveToDlq(supabase, queue, msg, 'Missing required email fields')
+          continue
+        }
+
+        await sendResendEmail(payload, apiKey)
 
         // Log success
         await supabase.from('email_send_log').insert({
@@ -296,7 +320,7 @@ Deno.serve(async (req) => {
           message_id: msg.msg_id,
         })
         if (delError) {
-          console.error('Failed to delete sent message from queue', { queue, msg_id: msg.msg_id, code: delError.code, message: delError.message })
+          console.error('Failed to delete sent message from queue', { queue, msg_id: msg.msg_id, error: delError })
         }
         totalProcessed++
       } catch (error) {
@@ -336,12 +360,12 @@ Deno.serve(async (req) => {
           )
         }
 
-        // 403s are permanent configuration or authorization failures for this
-        // message, so move straight to DLQ and stop processing the rest of the batch.
+        // 403 means emails are disabled for this project — retrying won't help.
+        // Move straight to DLQ and stop processing the rest of the batch.
         if (isForbidden(error)) {
-          await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
+          await moveToDlq(supabase, queue, msg, 'Emails disabled for this project')
           return new Response(
-            JSON.stringify({ processed: totalProcessed, stopped: 'forbidden' }),
+            JSON.stringify({ processed: totalProcessed, stopped: 'emails_disabled' }),
             { headers: { 'Content-Type': 'application/json' } }
           )
         }
@@ -362,7 +386,7 @@ Deno.serve(async (req) => {
       }
 
       // Small delay between sends to smooth bursts
-      if (i < messages.length - 1) {
+      if (i < queueMessages.length - 1) {
         await new Promise((r) => setTimeout(r, sendDelayMs))
       }
     }

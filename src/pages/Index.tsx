@@ -9,7 +9,6 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
-import { liveSiteOrigin } from "@/lib/siteDomain";
 type AnNativeResolvedData = {
   streams: { url: string; label: string; height: number; resolution: string; bandwidth: number; codecs?: string }[];
   audio: { language: string; name: string; uri: string }[];
@@ -30,10 +29,10 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
   else if (epIdx !== undefined) params.set("e", String(epIdx + 1));
   const qs = params.toString();
   if (sharePreviewBase) {
-    params.set("o", liveSiteOrigin());
+    params.set("o", window.location.origin);
     return `${sharePreviewBase}/watch/${encodeURIComponent(animeId)}?${params.toString()}`;
   }
-  return `${liveSiteOrigin()}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+  return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
 const parseWatchRouteIndices = (search: string) => {
@@ -575,7 +574,6 @@ import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { entryChosen, markEntryChosen, clearEntryChosen, loginAccessNow, subscribeLoginAccess, pendingSignInCode } from "@/lib/emailService";
-import { googleRedirectPending, googleAutoStartPending } from "@/lib/googleAuthDomain";
 import { currentGuestId } from "@/lib/guestPersistence";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
@@ -3369,8 +3367,7 @@ const Index = () => {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "null");
       if (u?.id && !currentGuestId()) return false;
     } catch {}
-    // Back from Google's full-page sign-in: reopen the sign-in screen to finish it.
-    return !!pendingSignInCode() || googleRedirectPending() || googleAutoStartPending();
+    return !!pendingSignInCode();
   });
 
   const handleNavigate = useCallback((page: string) => {
@@ -4014,7 +4011,7 @@ const Index = () => {
           source: a.source || "firebase",
           id: a.id,
           slug: a.slug,
-          shareLink: `${liveSiteOrigin()}/watch/${encodeURIComponent(a.id)}`,
+          shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + countRealEpisodes(s.episodes || []), 0),
         }))}

@@ -9,6 +9,8 @@ import { markRouteDead, isDeadStatus } from "@/lib/routeHealth";
 import { checkDownloadBlocker, type DownloadBlockState } from "@/lib/downloadBlockCheck";
 import { filenameRelayCandidates, getFilenameRelayBase, relayFailureReason } from "@/lib/filenameRelay";
 import { getAdsterraConfig } from "@/lib/adsterraAds";
+import { useMondiadConfig } from "@/lib/mondiadAds";
+import { mondiadParts } from "@/lib/adNetworks";
 import { toast } from "sonner";
 
 function readRequest(): DownloadFlowRequest | null {
@@ -17,22 +19,26 @@ function readRequest(): DownloadFlowRequest | null {
     return value && Array.isArray(value.episodes) ? value : null;
   } catch { return null; }
 }
-function StepAds({ socialBar, banner }: { socialBar: string; banner: string }) {
+type MondiadDownloadParts = ReturnType<typeof mondiadParts>[];
+function StepAds({ socialBar, banner, mondiad }: { socialBar: string; banner: string; mondiad: MondiadDownloadParts }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const mondiadKey = JSON.stringify(mondiad);
   useEffect(() => {
-    const send = () => frame.current?.contentWindow?.postMessage({ type: "download-placements", socialBar, banner }, location.origin);
+    const send = () => frame.current?.contentWindow?.postMessage({ type: "download-placements", socialBar, banner, mondiad: JSON.parse(mondiadKey) }, location.origin);
     const ready = (event: MessageEvent) => {
       if (event.origin === location.origin && event.source === frame.current?.contentWindow && event.data?.type === "download-ads-ready") send();
     };
     window.addEventListener("message", ready); send();
     return () => window.removeEventListener("message", ready);
-  }, [socialBar, banner]);
+  }, [socialBar, banner, mondiadKey]);
   return <iframe ref={frame} title="Download advertisements" src="/download-ads.html" className="h-full min-h-0 w-full border-0" />;
 }
 
 export default function DownloadPage() {
   const config = useDownloadManagerConfig();
   const configReady = useDownloadConfigReady();
+  const mondiad = useMondiadConfig();
+  const mondiadDownload = mondiad.enabled ? [mondiadParts("banner", mondiad.banner), mondiadParts("native", mondiad.native), mondiadParts("inPagePush", mondiad.downloadInPagePush)] : [];
   const [steps, setSteps] = useState<number[] | null>(null);
   // Continue-button (sponsor) timer is its own admin setting, snapshotted with the steps.
   const [sponsorSeconds, setSponsorSeconds] = useState(10);
@@ -278,7 +284,7 @@ export default function DownloadPage() {
           </span>
           <div className="min-w-0"><h2 className="text-sm font-semibold">{sponsorPending ? "Sponsor page opened" : wait ? "Preparing your links" : "Ready to continue"}</h2><p className="mt-1 text-xs leading-snug text-muted-foreground">{sponsorPending ? `Stay on the sponsor page for ${visitSecs} seconds, then come back. This step finishes by itself.` : `Tap Continue, stay on the sponsor page for ${sponsorSeconds} seconds, then return here.`}</p></div>
         </div>
-        <div className="relative flex min-h-0 flex-1 flex-col"><div className="download-ad-slot">{guard === "clear" ? <StepAds key={step} socialBar={config.socialBar} banner={config.banner} /> : <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">{guard === "checking" ? <Loader2 className="animate-spin text-primary" /> : <ShieldAlert className="text-destructive" />}<h2 className="text-sm font-semibold">{guard === "checking" ? "Checking ad access…" : guard === "blocked" ? "Ad blocker detected" : "Unable to verify ad access"}</h2><p className="max-w-xs text-xs text-muted-foreground">{guard === "blocked" ? "Turn off ad blocking or filtering DNS, then retry." : "Check your connection and retry."}</p>{guard !== "checking" && <Button variant="outline" onClick={() => void verify()}><RefreshCw />Check again</Button>}</div>}</div>
+        <div className="relative flex min-h-0 flex-1 flex-col"><div className="download-ad-slot">{guard === "clear" ? <StepAds key={step} socialBar={config.socialBar} banner={config.banner} mondiad={mondiadDownload} /> : <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">{guard === "checking" ? <Loader2 className="animate-spin text-primary" /> : <ShieldAlert className="text-destructive" />}<h2 className="text-sm font-semibold">{guard === "checking" ? "Checking ad access…" : guard === "blocked" ? "Ad blocker detected" : "Unable to verify ad access"}</h2><p className="max-w-xs text-xs text-muted-foreground">{guard === "blocked" ? "Turn off ad blocking or filtering DNS, then retry." : "Check your connection and retry."}</p>{guard !== "checking" && <Button variant="outline" onClick={() => void verify()}><RefreshCw />Check again</Button>}</div>}</div>
           {guard === "clear" && steps !== null && wait === 0 && !sponsorPending && hintClosed !== `${step}:${waitAttempt}` && <div role="dialog" aria-label="How to continue" className="download-hint absolute inset-x-0 bottom-2 z-10 mx-auto w-full max-w-sm rounded-xl border border-primary/40 bg-secondary p-4 pr-10 text-foreground shadow-lg">
             <button type="button" aria-label="Close message" className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground" onClick={() => setHintClosed(`${step}:${waitAttempt}`)}><X size={18} /></button>
             <p className="flex items-center gap-2 text-sm font-bold"><Info size={18} className="shrink-0 text-primary" />Your step is ready</p>

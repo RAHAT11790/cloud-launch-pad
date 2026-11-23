@@ -8,4 +8,4 @@ Disallow: /premium-required
 Disallow: /adblocker-detected
 Disallow: /adblocker-removed
 
-Sitemap: https://rsanime03.online/sitemap.xml
+Sitemap: https://rsanime03.lovable.app/sitemap.xml

@@ -15,24 +15,6 @@
 // Open the worker URL once in a browser → webhook auto-registers.
 // ============================================================
 
-
-// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
-const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
-let rsSiteMemo = { live: "", hosts: [], exp: 0 };
-async function rsSiteDomain() {
-  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
-  rsSiteMemo.exp = Date.now() + 60000;
-  try {
-    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
-    const d = r.ok ? await r.json() : null;
-    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h) => h && h.serving && typeof h.host === "string").map((h) => h.host.toLowerCase()) : [];
-    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
-    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
-  } catch { /* keep the previous answer */ }
-  return rsSiteMemo;
-}
-const rsSiteHostOk = (u) => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
-
 const CONFIG = {
   FIREBASE_DB_URL: "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app",
   FIREBASE_DB_SECRET: "", // only if RTDB rules are locked
@@ -311,7 +293,7 @@ table{width:100%;border-collapse:collapse;margin:12px 0}td{border-bottom:1px sol
     if (!body?.animeId || !body?.commentId || !body?.text) {
       return json({ error: "animeId, commentId and text are required" }, 400);
     }
-    const pageUrl = body.pageUrl || `${(await rsSiteDomain()).live || cfg(env, "SITE_URL")}/?anime=${encodeURIComponent(body.animeId)}#comments`;
+    const pageUrl = body.pageUrl || `${cfg(env, "SITE_URL")}/?anime=${encodeURIComponent(body.animeId)}#comments`;
     const tag = b64uEncode({
       a: String(body.animeId),
       c: String(body.commentId),

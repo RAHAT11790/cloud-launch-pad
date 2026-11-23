@@ -10,13 +10,6 @@ export function currentGuestId(): string | null {
     return user?.id && isGuestRecord(String(user.id), user) ? String(user.id) : null;
   } catch { return null; }
 }
-/** The signed-in real account ID, or null for guests and signed-out visitors (they keep data on the phone only). */
-export function signedInAccountId(): string | null {
-  try {
-    const user = JSON.parse(localStorage.getItem("rsanime_user") || "null");
-    return user?.id && !isGuestRecord(String(user.id), user) ? String(user.id) : null;
-  } catch { return null; }
-}
 /** Destructive cleanup requires an explicit marker, never just an absent email. */
 export function isLegacyGuestCleanupCandidate(id: string, value: { email?: string; guest?: boolean } = {}) {
   const email = String(value.email || "").trim().toLowerCase();

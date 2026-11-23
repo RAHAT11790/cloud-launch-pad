@@ -26,13 +26,6 @@ describe("admin email statistics", () => {
     expect(EMAIL_SETTING_DEFAULTS).toEqual(worker._internals.DEFAULTS);
     expect(EMAIL_SETTING_BOUNDS).toEqual(worker._internals.BOUNDS);
   });
-  it("expects the same email Worker version the repository ships", async () => {
-    const { EMAIL_WORKER_VERSION, emailWorkerOutdated } = await import("@/lib/emailStats");
-    const src = (await import("../../cloudflare-workers/email-service.js?raw")).default as string;
-    expect(Number(src.match(/const VERSION = "email-service-smtp-v(\d+)"/)?.[1])).toBe(EMAIL_WORKER_VERSION);
-    expect(emailWorkerOutdated(`email-service-smtp-v${EMAIL_WORKER_VERSION}`)).toBe(false);
-    expect(emailWorkerOutdated(`email-service-smtp-v${EMAIL_WORKER_VERSION - 1}`)).toBe(true);
-  });
   it("lists the last 7 Bangladesh days ending today", () => {
     const keys = lastDayKeys(7, Date.UTC(2026, 10, 8, 20, 0)); // 02:00 on 9 Nov in Dhaka
     expect(keys[6]).toBe("2026-11-09");

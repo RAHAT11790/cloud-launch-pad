@@ -99,7 +99,6 @@ const KNOWN_FUNCTION_NAMES = new Set([
   "lovable-backdrop",
   "send-otp-email",
   "process-email-queue",
-  "lovable-email",
 ]);
 
 export function normalizeFunctionEndpointUrl(fnName: string, rawUrl: string): string {

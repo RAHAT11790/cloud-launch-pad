@@ -9,24 +9,6 @@
 // the bot or this function is wiped, you can re-deploy and instantly
 // recover every channel from Firebase backup.
 
-
-// ---- Live site domain: `settings/siteDomain`, written only by the email-service domain checker ----
-const RS_SITE_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
-let rsSiteMemo: { live: string; hosts: string[]; exp: number } = { live: "", hosts: [], exp: 0 };
-async function rsSiteDomain() {
-  if (rsSiteMemo.exp > Date.now()) return rsSiteMemo;
-  rsSiteMemo.exp = Date.now() + 60000;
-  try {
-    const r = await fetch(`${RS_SITE_DB}/settings/siteDomain.json`, { signal: AbortSignal.timeout(2500) });
-    const d = r.ok ? await r.json() : null;
-    const hosts = d && d.hosts && typeof d.hosts === "object" ? Object.values(d.hosts).filter((h: any) => h && h.serving && typeof h.host === "string").map((h: any) => String(h.host).toLowerCase()) : [];
-    const live = d && typeof d.live === "string" && /^https:\/\/[a-z0-9.-]+$/i.test(d.live) ? d.live : "";
-    rsSiteMemo = { live, hosts, exp: Date.now() + 300000 };
-  } catch { /* keep the previous answer */ }
-  return rsSiteMemo;
-}
-const rsSiteHostOk = (u: unknown): boolean => { try { const x = new URL(String(u)); return x.protocol === "https:" && rsSiteMemo.hosts.includes(x.hostname.toLowerCase()); } catch { return false; } };
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -464,7 +446,7 @@ async function verifyKeyboard(user_id: number, returnPayload = "") {
     });
   } catch (e) { console.error("[verifyToken]", e); }
 
-  const SITE_URL = rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   const callbackUrl = `${SITE_URL}/unlock?botv=${token}`;
 
   let finalUrl = callbackUrl;
@@ -549,7 +531,7 @@ function fsubMarkup(notJoined: FsubChannel[], retryCb: string) {
 
 // ============== MAIN MENU ==============
 function mainMenu() {
-  const siteUrl = rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   return {
     inline_keyboard: [
       [{ text: "🌐 OPEN WEBSITE", url: `${siteUrl}/unlock-required` }],
@@ -797,7 +779,7 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   }
   const profile = await getUserProfileCached(tgUserId);
   const hours = Math.max(1, Math.round(grantMs / 3600000));
-  const siteUrl = rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   const identity = formatTelegramIdentity(profile, tgUserId);
   const safeName = escapeHtml(identity.label);
   const safeTelegramId = escapeHtml(String(tgUserId));
@@ -895,7 +877,7 @@ ${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 
   const reply_markup = {
     inline_keyboard: [
       [{ text: "✅ Verify & Get Access Token", url: shortenerUrl }],
-      [{ text: "🌐 Open Website Unlock Box", url: `${rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock-required` }],
+      [{ text: "🌐 Open Website Unlock Box", url: `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock-required` }],
     ],
   };
 
@@ -942,7 +924,7 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     });
 
     await answerCallback(callback_id, "✅ Token ready", false);
-    const siteUrl = rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+    const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
     let finalShortUrl = "";
     try {
       finalShortUrl = await buildShortenerClaimUrl(token);
@@ -976,7 +958,7 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     await editMessageText(
       chat_id, message_id,
       `✅ <b>Access Granted</b>\n\nYour ${Math.round(grantMs / 3600000)}h access has been activated.\n\nReturn to the website — your player will resume automatically.`,
-      { reply_markup: { inline_keyboard: [[{ text: "🌐 Back to Website", url: rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app" }]] } },
+      { reply_markup: { inline_keyboard: [[{ text: "🌐 Back to Website", url: Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app" }]] } },
     );
   } catch {
     await sendMessage(chat_id, `✅ <b>Access Granted</b> — return to the website now.`);
@@ -1585,7 +1567,7 @@ ${perm}`,
 // buttons that deep-link directly to the website player for
 // both RS (Firebase webseries/movies) and AN (AnimeSalt) catalogs.
 
-let SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
 
 type CatalogItem = {
   id: string;            // share id used in ?anime=<id>
@@ -2021,8 +2003,6 @@ async function handleNotify(payload: any): Promise<{ ok: boolean; error?: string
 
 // ============== HTTP SERVER ==============
 Deno.serve(async (req) => {
-  await rsSiteDomain();
-  SITE_URL = rsSiteMemo.live || Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = new URL(req.url);

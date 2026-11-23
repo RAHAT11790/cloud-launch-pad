@@ -1,38 +1,6 @@
 # Roadmap
 
-## Google login on phones + guest data out of Firebase (2026-11-22, evening)
-- [x] Cause found: Google's return goes through Firebase's own page (firebaseapp.com); phones and the installed app keep that page's storage apart from the site, so the result is lost (pick account → back on site → not signed in, no error).
-- [x] Fix built: Firebase's sign-in helper now lives on the site's own address (/__/auth/); phones and the installed app use a full-page sign-in there; computers keep the small window. Switches on per domain only after the server confirms it works.
-- [x] Admin Domain Checker shows each domain's Google sign-in status and the exact line to add.
-- [ ] Owner: add `https://rsanime03.online/__/auth/handler` (and `https://rsanime03.lovable.app/__/auth/handler`, `https://www.rsanime03.online/__/auth/handler`) in Google Cloud → Credentials → Web client → Authorized redirect URIs. Until then Google still shows its "redirect_uri_mismatch" check result as not ready and the old way is used.
-- [ ] Real Google account sign-in on a phone: not tested (no Google test account) — owner tests after the step above.
-- [x] Guest data deleted from Firebase by a script (batches of 100): 35 guest records, 15,494 viewer entries, 1,001 daily entries, 1,335 view entries, 8,042 old view locks, 4,929 device visit-time records, 144 guest comments/likes. Guest count list kept.
-- [x] Database now refuses any guest record (live test: guest writes 401, normal writes 200); site no longer sends guest view locks, visit time or comments.
-- [x] Cloudflare manager login was readable by anyone in the live database — locked again (admin session only).
-
-## New domain live + full recheck (2026-11-22, afternoon)
-- [x] rsanime03.online and www are connected and serving; old address and www move visitors to rsanime03.online (live check).
-- [x] Google sign-in on rsanime03.online opens Google's account page (domain accepted); finishing with a real Google account not tested (no Google test account).
-- [x] Phone storage full (seen on many phones): re-downloadable caches are dropped automatically so saves keep working; hand-over no longer carries caches.
-- [x] www.rsanime03.online → rsanime03.online keeps logins (hand-over accepted from www).
-- [x] Admin: all 49 screens opened with the PIN (phone size); database screen fixed (admins may read the overview); email screen's wrong "server is older" note fixed.
-- [x] Email from @rsanime03.online: Lovable email on the own domain (domain active), Alwaysdata as automatic backup; two real reset codes sent via Lovable (phone test).
-- [ ] Second function server (EGD deploy target) blocked by its own usage limit — owner must raise that plan; not fixable from here.
-- [ ] Owner: Publish so the fixes reach the live site.
-
-## Only Adsterra + live domain checker + keep logins on the new domain (2026-11-22)
-- [x] Mondiad removed everywhere; admin section named "Adsterra Ads" again (old Adsterra boxes back, later player-ad fixes kept).
-- [x] Domain checker: the email server checks every owner domain (Firebase authorized domains + Lovable redirect) and saves the live one in `settings/siteDomain` (only the server may write it — live rule tested).
-- [x] Site: every link (share, Telegram, invite, install) uses the live domain.
-- [x] Old address moves visitors to the live domain WITH their login, guest coins and settings (phone test: signed in on old address → moved to new domain → same account on Profile, same device; crafted links ignored).
-- [x] Servers accept the live domain automatically (email/login, file names, Telegram post, share bot, backdrop, video…).
-- [x] Admin "Domain Checker" screen built (not opened in a test: admin PIN needed).
-- [x] Deployed: Cloudflare workers (all secrets kept) + backend functions.
-- [ ] Second function server (Live TV / APK download copies) is blocked by its own usage limit — not updated.
-- [ ] Password sign-in on the real new domain: waits until rsanime03.online is serving the site.
-- [ ] Owner: in Lovable domain settings, "Unset as primary" so the old address runs the site's own move (the server redirect cannot carry logins), then Publish.
-
-## Mondiad ad network + "Ads Network" admin section (2026-11-19) — REPLACED 2026-11-22: owner wants Adsterra only, Mondiad removed
+## Mondiad ad network + "Ads Network" admin section (2026-11-19)
 - [x] Mondiad domain verification code in the site head.
 - [ ] Owner: Publish, then tap Verify on Mondiad (Insert Code).
 - [x] Admin "Adsterra Ads" renamed to "Ads Network" with an Adsterra box and a Mondiad box.
@@ -51,7 +19,7 @@
 - [x] Redeem: bKash opens the bKash plans, Redeem Code opens the code box (phone test).
 - [x] Lucky Spin: admin tab (on/off, coins per spin, spins per N days, prizes with chance), golden Profile + Premium page button with timer, 3D wheel with logo (phone test: 3 spins, 60→0 coins, 2 days Premium won, locked 6d 23h). Left OFF for owner to switch on.
 - [ ] Admin Lucky Spin screen not opened in the test (admin PIN not available to me).
-- [x] Backup copy of the email sender on Lovable Cloud updated to the same version (v12).
+- [ ] Backup copy of the email sender on Lovable Cloud not updated: Cloud is paused (Cloudflare copy is the live one).
 - [ ] Owner: check Gmail for the reset code mail sent in the test (Inbox / Copy code).
 - [x] Python email server: owner skipped the question — not built (Cloudflare sender stays).
 - [x] Whole-database Base64: owner skipped the question — not done (Base64 is not protection and could break the site).
