@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { RefreshCw, CheckCircle, XCircle, Send, Trash2 } from "lucide-react";
 import CachedImg from "@/components/CachedImg";
 import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 // ==== Local helpers (mirror Admin.tsx module-scope helpers) ====
@@ -75,7 +76,7 @@ const formatEpisodeRangeLabel = (seasonValue?: string | number, start?: string |
 
 // Must mirror the Admin.tsx module-scope helper.
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
-  const base = typeof window !== "undefined" ? window.location.origin : "";
+  const base = liveSiteOrigin();
   const q = new URLSearchParams();
   q.set("id", animeId);
   if (typeof seasonIdx === "number") q.set("s", String(seasonIdx));

@@ -1,10 +1,19 @@
 {
   "rules": {
-    ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
+    ".read": "(auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')) || (auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now)",
     ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'rahatsarker224@gmail.com' || auth.token.email == 'sarkeremon207@gmail.com')",
     "$top": {
       ".read": true,
       ".write": true
+    },
+    "settings": {
+      ".read": true,
+      "$key": {
+        ".write": true
+      },
+      "siteDomain": {
+        ".write": false
+      }
     },
     "secure": {
       ".read": false,
@@ -35,7 +44,8 @@
         ".write": true,
         "password": {
           ".validate": "false"
-        }
+        },
+        ".validate": "!$key.beginsWith('guest_') && !$key.beginsWith('dev_')"
       }
     },
     "appUsers": {
@@ -50,12 +60,75 @@
         ".write": true,
         "password": {
           ".validate": "false"
-        }
+        },
+        ".validate": "!$key.beginsWith('guest_') && !$key.beginsWith('dev_')"
       }
     },
     "cfManager": {
       ".read": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now",
       ".write": "auth != null && root.child('secure/adminSessions').child(auth.uid).child('exp').val() > now"
+    },
+    "analytics": {
+      ".read": true,
+      ".write": true,
+      "activeViewers": {
+        "$a": {
+          "$u": {
+            ".validate": "!$u.beginsWith('guest_')"
+          }
+        }
+      },
+      "dailyActive": {
+        "$d": {
+          "$u": {
+            ".validate": "!$u.beginsWith('guest_')"
+          }
+        }
+      },
+      "views": {
+        "$a": {
+          "$d": {
+            "$u": {
+              ".validate": "!$u.beginsWith('guest_')"
+            }
+          }
+        }
+      }
+    },
+    "comments": {
+      ".read": true,
+      ".write": true,
+      "$a": {
+        "$c": {
+          ".validate": "!newData.child('userId').isString() || !newData.child('userId').val().beginsWith('guest_')",
+          "likes": {
+            "$u": {
+              ".validate": "!$u.beginsWith('guest_')"
+            }
+          },
+          "dislikes": {
+            "$u": {
+              ".validate": "!$u.beginsWith('guest_')"
+            }
+          }
+        }
+      }
+    },
+    "engagement": {
+      ".read": true,
+      ".write": true,
+      "$a": {
+        "likes": {
+          "$u": {
+            ".validate": "!$u.beginsWith('guest_')"
+          }
+        },
+        "dislikes": {
+          "$u": {
+            ".validate": "!$u.beginsWith('guest_')"
+          }
+        }
+      }
     }
   }
 }

@@ -40,4 +40,26 @@ describe("Firebase database rules", () => {
       expect(rules[node][".indexOn"]).toEqual(["name", "email"]);
     }
   });
+  it("only the server (domain checker) can change the live domain; other settings stay editable", () => {
+    expect(rules.settings[".read"]).toBe(true);
+    expect(rules.settings.siteDomain[".write"]).toBe(false);
+    expect(rules.settings.$key[".write"]).toBe(true);
+    expect(rules.settings[".write"]).toBeUndefined();
+  });
+
+  it("refuses every guest record (users, viewers, views, comments, likes) but keeps the guest count", () => {
+    for (const node of ["users", "appUsers"]) expect(rules[node].$key[".validate"]).toContain("!$key.beginsWith('guest_')");
+    expect(rules.analytics.activeViewers.$a.$u[".validate"]).toContain("guest_");
+    expect(rules.analytics.dailyActive.$d.$u[".validate"]).toContain("guest_");
+    expect(rules.analytics.views.$a.$d.$u[".validate"]).toContain("guest_");
+    expect(rules.comments.$a.$c[".validate"]).toContain("beginsWith('guest_')");
+    expect(rules.engagement.$a.likes.$u[".validate"]).toContain("guest_");
+    expect(rules.guestRegistry).toBeUndefined(); // count-only list stays writable via $top
+    expect(rules.analytics[".write"]).toBe(true);
+    expect(rules.comments[".write"]).toBe(true);
+  });
+
+  it("the Cloudflare manager login is readable only with an admin session", () => {
+    expect(String(rules.cfManager[".read"])).toContain("secure/adminSessions");
+  });
 });

@@ -1,6 +1,7 @@
 // Fire-and-forget bridge: website comment → admin Telegram group.
 // The standalone `comment-bridge` worker forwards it and lets the admin answer with /rs.
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 
 export interface TelegramCommentPayload {
   animeId: string;
@@ -19,7 +20,7 @@ export async function forwardCommentToTelegram(p: TelegramCommentPayload): Promi
     if (!url) return;
     const pageUrl =
       typeof window !== "undefined"
-        ? `${window.location.origin}/?anime=${encodeURIComponent(p.animeId)}#comments`
+        ? `${liveSiteOrigin()}/?anime=${encodeURIComponent(p.animeId)}#comments`
         : undefined;
     await fetch(url, {
       method: "POST",

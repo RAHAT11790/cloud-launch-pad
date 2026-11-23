@@ -3,6 +3,104 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    <script>
+      // Domain move with login hand-over, before the app bundle downloads (old-address visitors leave at once).
+      // Mirrors src/lib/domainBoot.ts + src/lib/siteDomain.ts — keep keys and limits in sync.
+      (function () {
+        var W = window, L = location, KEY = "rs_site_domain_v1", MOVES = "rs_domain_moves", AUTH = "firebase:authUser:";
+        var DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app/settings/siteDomain.json";
+        function preview(h) {
+          h = String(h || "").toLowerCase();
+          return !h || h === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || /\.lovableproject(-dev)?\.com$/.test(h) || /\.lovable\.dev$/.test(h)
+            || /\.firebaseapp\.com$/.test(h) || /\.web\.app$/.test(h) || (/\.lovable\.app$/.test(h) && h.indexOf("--") >= 0);
+        }
+        function parse(r) {
+          try {
+            var u = new URL(String(r && r.live || "")), at = Number(r.checkedAt) || 0;
+            if (u.protocol !== "https:" || preview(u.hostname) || !at) return null;
+            return { live: u.origin, hosts: r.hosts && typeof r.hosts === "object" ? r.hosts : {}, checkedAt: at };
+          } catch (e) { return null; }
+        }
+        function trusted(s) {
+          if (!s || Date.now() - s.checkedAt > 864e5) return false;
+          var lh = new URL(s.live).hostname, k;
+          for (k in s.hosts) { var x = s.hosts[k]; if (x && String(x.host || "").toLowerCase() === lh && x.serving === true) return true; }
+          return false;
+        }
+        function timed(p, ms, fb) {
+          return new Promise(function (res) { var t = setTimeout(function () { res(fb); }, ms); p.then(function (v) { clearTimeout(t); res(v); }, function () { clearTimeout(t); res(fb); }); });
+        }
+        function fetchState(ms) {
+          return timed(fetch(DB, { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+            var s = parse(j); if (s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} } return s;
+          }), ms, null);
+        }
+        function idbAuth() {
+          return timed(new Promise(function (res) {
+            var q = indexedDB.open("firebaseLocalStorageDb");
+            q.onupgradeneeded = function () { try { q.transaction.abort(); } catch (e) {} };
+            q.onerror = function () { res([]); };
+            q.onsuccess = function () {
+              var db = q.result;
+              try {
+                if (!db.objectStoreNames.contains("firebaseLocalStorage")) { db.close(); return res([]); }
+                var a = db.transaction("firebaseLocalStorage", "readonly").objectStore("firebaseLocalStorage").getAll();
+                a.onsuccess = function () {
+                  db.close();
+                  res((a.result || []).filter(function (r) { return typeof r.fbase_key === "string" && r.fbase_key.indexOf(AUTH) === 0; })
+                    .map(function (r) { return [r.fbase_key, JSON.stringify(r.value)]; }));
+                };
+                a.onerror = function () { db.close(); res([]); };
+              } catch (e) { res([]); }
+            };
+          }), 1500, []);
+        }
+        function collect() {
+          var all = [], i, k;
+          try { for (i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (k) all.push([k, localStorage.getItem(k) || ""]); } } catch (e) {}
+          var has = all.some(function (e) { return e[0].indexOf(AUTH) === 0; });
+          return has ? Promise.resolve(all) : idbAuth().then(function (x) { return all.concat(x); });
+        }
+        function pick(all) {
+          var skip = { rs_handoff_in_v1: 1, rs_site_domain_v1: 1, rs_domain_moves: 1 }, first = { rsanime_user: 1, rs_device_id: 1, rs_admin_session: 1 };
+          var rank = function (k) { return first[k] || k.indexOf(AUTH) === 0 ? 0 : 1; }, out = {}, total = 0;
+          all.filter(function (e) { return !skip[e[0]] && typeof e[1] === "string"; })
+            .sort(function (a, b) { return rank(a[0]) - rank(b[0]) || a[1].length - b[1].length; })
+            .forEach(function (e) {
+              var size = e[0].length + e[1].length;
+              if (rank(e[0]) === 1 && (e[1].length > 2e5 || total + size > 9e5)) return;
+              out[e[0]] = e[1]; total += size;
+            });
+          return out;
+        }
+        function enc(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+        // The live domain must answer from this phone before anyone is sent there (a stale check never strands visitors).
+        function reachable(origin) { return timed(fetch(origin + "/robots.txt?rs=" + Date.now(), { mode: "no-cors", cache: "no-store" }).then(function () { return true; }), 2500, false); }
+        W.__rsDomainMove = (function () {
+          try {
+            if (L.protocol !== "https:" || preview(L.hostname) || /[#&]rs_handoff=/.test(L.hash) || /[?&]rs_stay=1\b/.test(L.search)
+              || /bot|crawl|spider|slurp|facebookexternalhit/i.test(navigator.userAgent || "")) return Promise.resolve(false);
+            var st = null;
+            try { st = parse(JSON.parse(localStorage.getItem(KEY) || "null")); } catch (e) {}
+            if (st && st.live === L.origin) { fetchState(4000); return Promise.resolve(false); }
+            var ready = !st || Date.now() - st.checkedAt > 18e5 ? fetchState(2500).then(function (n) { return n || st; }) : (fetchState(4000), Promise.resolve(st));
+            return ready.then(function (s) {
+              if (!trusted(s) || s.live === L.origin) return false;
+              var now = Date.now(), moves = [];
+              try { moves = JSON.parse(sessionStorage.getItem(MOVES) || "[]").filter(function (t) { return now - t < 6e4; }); } catch (e) {}
+              if (moves.length >= 2) return false;
+              return Promise.all([reachable(s.live), collect()]).then(function (r) {
+                if (!r[0]) { W.__rsDomainDead = true; return false; }
+                try { sessionStorage.setItem(MOVES, JSON.stringify(moves.concat(now))); } catch (e) {}
+                var payload = { v: 1, at: now, e: pick(r[1]), h: L.hash || undefined };
+                L.replace(new URL(L.pathname + L.search, s.live).toString() + "#rs_handoff=" + enc(JSON.stringify(payload)));
+                return true;
+              });
+            }).catch(function () { return false; });
+          } catch (e) { return Promise.resolve(false); }
+        })();
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0b14" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -21,11 +119,11 @@
     <meta name="application-name" content="RS ANIME03" />
     <meta name="apple-mobile-web-app-title" content="RS Anime 03" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="rs-site-id" content="rsanime03" />
     <meta name="googlebot" content="index, follow" />
     <meta name="google-site-verification" content="_UnFPzj4AsCOrKaHjUmXvSW5g-Cdk67gomB4gQDXReM" />
     <meta name="google-site-verification" content="google-site-verification=_UnFPzj4AsCOrKaHjUmXvSW5g-Cdk67gomB4gQDXReM" />
-    <meta name="mnd-ver" content="h2rplj155e59g7iwkltw" />
-    <meta name="keywords" content="rs anime, rsanime, rs anime03, rsanime03, rs anime 03, rsanime03.lovable.app, rs anime app, rs anime website, rs anime online, rs anime free, rs anime hindi, rs anime dubbed, rs anime hindi dubbed, rs anime download, watch rs anime, rs anime streaming, anime, anime online, anime free, watch anime, watch anime online, anime streaming, anime app, anime website, anime hindi dubbed, anime hindi sub, anime english sub, anime dual audio, anime hd, anime 1080p, anime 4k, anime movies, anime series, anime episodes, new anime, latest anime, ongoing anime, completed anime, popular anime, trending anime, top anime, anime download, anime free download, anime mkv, anime mp4, cartoon online, donghua, chinese anime, japanese anime, korean anime, naruto, one piece, dragon ball, bleach, attack on titan, demon slayer, jujutsu kaisen, my hero academia, solo leveling, anime web series, free anime streaming, anime watch app, best anime site, rs anime telegram, rs anime channel" />
+    <meta name="keywords" content="rs anime, rsanime, rs anime03, rsanime03, rs anime 03, rsanime03.online, rsanime03.lovable.app, rs anime app, rs anime website, rs anime online, rs anime free, rs anime hindi, rs anime dubbed, rs anime hindi dubbed, rs anime download, watch rs anime, rs anime streaming, anime, anime online, anime free, watch anime, watch anime online, anime streaming, anime app, anime website, anime hindi dubbed, anime hindi sub, anime english sub, anime dual audio, anime hd, anime 1080p, anime 4k, anime movies, anime series, anime episodes, new anime, latest anime, ongoing anime, completed anime, popular anime, trending anime, top anime, anime download, anime free download, anime mkv, anime mp4, cartoon online, donghua, chinese anime, japanese anime, korean anime, naruto, one piece, dragon ball, bleach, attack on titan, demon slayer, jujutsu kaisen, my hero academia, solo leveling, anime web series, free anime streaming, anime watch app, best anime site, rs anime telegram, rs anime channel" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="RS ANIME03" />
@@ -96,7 +194,7 @@
 }
     </script>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script async src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
 
   <body>

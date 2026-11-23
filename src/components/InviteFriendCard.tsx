@@ -4,6 +4,7 @@ import { Users, Copy, Share2, Coins, ShieldCheck, Clock, AlertTriangle, Sparkles
 import { getLocalUserId } from "@/lib/unlockAccess";
 import { ensureGuestUser } from "@/lib/premiumAccess";
 import { firePopunderAd } from "@/lib/adsterraAds";
+import { liveSiteOrigin } from "@/lib/siteDomain";
 
 interface Props {
   variant?: "full" | "compact";
@@ -20,7 +21,7 @@ export default function InviteFriendCard({ variant = "full", siteName = "our pla
 
   const inviteUrl = useMemo(() => {
     const me = getLocalUserId() || ensureGuestUser() || "";
-    const base = typeof window !== "undefined" ? window.location.origin : "https://rsanime03.lovable.app";
+    const base = liveSiteOrigin();
     return `${base}/?ref=${encodeURIComponent(me)}`;
   }, []);
 

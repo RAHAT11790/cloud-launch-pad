@@ -4,9 +4,11 @@
 // সব হার্ডকোডেড ভ্যালু এখানে env থেকে আসে।
 // .env.example দেখে সব ভ্যালু সেট করুন।
 
+import { liveSiteOrigin } from "@/lib/siteDomain";
 // --- Branding ---
 export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "";
-export const SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://rsanime03.lovable.app");
+// Live domain (custom domain or Lovable address) decided by the domain checker — see siteDomain.ts.
+export const SITE_URL = import.meta.env.VITE_SITE_URL || liveSiteOrigin();
 export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "";
 
 // --- Telegram ---

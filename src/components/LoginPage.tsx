@@ -6,6 +6,7 @@ import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopu
 import { ensureGuestUser, transferGuestCoinsToUser } from "@/lib/premiumAccess";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
+import { liveSiteHost } from "@/lib/siteDomain";
 import { useBranding } from "@/hooks/useBranding";
 import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import {
@@ -197,7 +198,7 @@ const LoginPage = ({ onLogin, onGuest, onClose }: LoginPageProps) => {
       case "auth/popup-blocked":
         return "Your browser blocked the Google window. Allow pop-ups for this site, then tap Continue with Google again.";
       case "auth/unauthorized-domain":
-        return `Google sign-in isn't allowed on ${window.location.hostname} yet. Please use ${"rsanime03.lovable.app"} or sign in with email.`;
+        return `Google sign-in isn't allowed on ${window.location.hostname} yet. Please use ${liveSiteHost()} or sign in with email.`;
       case "auth/network-request-failed":
         return "No connection to Google. Check your internet and try again.";
       case "auth/operation-not-supported-in-this-environment":

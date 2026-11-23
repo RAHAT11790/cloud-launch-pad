@@ -495,3 +495,88 @@ describe("locked account lists: username sign-in and admin sessions", () => {
   });
 });
 
+
+describe("Lovable email relay (own domain first, SMTP fallback)", () => {
+  const RELAY = "https://relay.test/functions/v1/lovable-email";
+  let relayCalls: any[] = [];
+  let relayMode: "ok" | "down" = "ok";
+  let checks: boolean[] = [];
+  /** Plays the Lovable relay: confirms at /relay-check, then reports a real send. */
+  async function relayFetch(input: any, init: any = {}): Promise<Response> {
+    const url = typeof input === "string" ? input : input.url;
+    if (url !== RELAY) return fakeFetch(input, init);
+    const body = JSON.parse(init.body);
+    relayCalls.push(body);
+    if (relayMode === "down") return new Response(JSON.stringify({ ok: false, error: "timeout" }), { status: 502 });
+    const res = await worker.fetch(new Request(`${W}/relay-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), ENV, ctx);
+    const ok = (await res.json()).ok === true;
+    checks.push(ok);
+    return new Response(JSON.stringify({ ok }), { status: ok ? 200 : 502 });
+  }
+  beforeEach(() => {
+    relayCalls = []; checks = []; relayMode = "ok";
+    tree.settings.functionOverrides = { "lovable-email": { customUrl: RELAY, enabled: true } };
+    vi.stubGlobal("fetch", relayFetch);
+  });
+
+  it("sends through the Lovable relay and not over SMTP when the relay confirms", async () => {
+    const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(r.status).toBe(200);
+    expect(relayCalls).toHaveLength(1);
+    expect(relayCalls[0]).toMatchObject({ to: "new.user55@gmail.com", purpose: "register", otpMinutes: 5 });
+    expect(relayCalls[0].code).toMatch(/^\d{6}$/);
+    expect(checks).toEqual([true]);
+    expect(mails).toHaveLength(0);
+  });
+
+  it("the code sent through the relay is the one that verifies", async () => {
+    const r = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    const v = await api("verify", { ticket: r.data.ticket, code: relayCalls[0].code });
+    expect(v.status).toBe(200);
+    expect(v.data.ok).toBe(true);
+  });
+
+  it("falls back to SMTP when the relay fails, then skips the relay for 10 minutes", async () => {
+    relayMode = "down";
+    const r1 = await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(r1.status).toBe(200);
+    expect(mails).toHaveLength(1);
+    expect(relayCalls).toHaveLength(1);
+    relayMode = "ok";
+    now += 61_000;
+    await api("send", { email: "other.user77@gmail.com", purpose: "register" });
+    expect(relayCalls).toHaveLength(1);
+    expect(mails).toHaveLength(2);
+    now += 10 * 60_000;
+    (worker as any)._internals.resetMemory();
+    await api("send", { email: "third.user88@gmail.com", purpose: "register" });
+    expect(relayCalls).toHaveLength(2);
+    expect(mails).toHaveLength(2);
+  });
+
+  it("uses SMTP only when the router has no lovable-email row", async () => {
+    delete tree.settings.functionOverrides;
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(relayCalls).toHaveLength(0);
+    expect(mails).toHaveLength(1);
+  });
+
+  it("relay-check refuses a wrong code and confirms each ticket only once", async () => {
+    let captured: any = null;
+    vi.stubGlobal("fetch", async (input: any, init: any = {}) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url !== RELAY) return fakeFetch(input, init);
+      captured = JSON.parse(init.body);
+      const check = (b: any) => worker.fetch(new Request(`${W}/relay-check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }), ENV, ctx).then((x) => x.json());
+      const wrong = String((Number(captured.code) + 1) % 1000000).padStart(6, "0");
+      checks.push((await check({ ...captured, code: wrong })).ok);
+      checks.push((await check({ ...captured, to: "someone.else@gmail.com" })).ok);
+      checks.push((await check(captured)).ok);
+      checks.push((await check(captured)).ok);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    await api("send", { email: "new.user55@gmail.com", purpose: "register" });
+    expect(captured).not.toBeNull();
+    expect(checks).toEqual([false, false, true, false]);
+  });
+});

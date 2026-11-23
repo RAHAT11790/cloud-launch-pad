@@ -30,6 +30,12 @@
 //     resend                         { ticket }
 //     verify | verify-otp            { ticket, code }
 //
+// Delivery: first through Lovable's email service from the site's own domain
+// (EGD Router row `lovable-email`, which confirms each request back at
+// POST /relay-check), and over SMTP whenever that row is missing, the relay is
+// down, or it does not confirm a real send — so codes keep working when
+// Lovable Cloud is down.
+//
 // Inbox placement: the email is code-only — no links, no buttons, no images,
 // no web addresses — and the whole SMTP conversation uses only Alwaysdata's
 // own names (EHLO = the account's alwaysdata.net host, From/Message-ID on
@@ -40,7 +46,7 @@
 // conditional (ETag) write, so a code works exactly once.
 // ============================================================
 
-const VERSION = "email-service-smtp-v10";
+const VERSION = "email-service-smtp-v12";
 const BRAND = "RS ANIME03";
 const DEFAULT_SITE = "https://rsanime03.lovable.app";
 const DEFAULT_DB = "https://animeverse-d7b79-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -423,6 +429,62 @@ function buildMime({ from, to, subject, text, html, ref, date = new Date() }) {
 }
 const sendMail = (env, msg) => smtpSession(env, msg);
 
+// ---------------- Lovable email relay (own domain) ----------------
+// After a relay failure the Worker uses SMTP only for LOVABLE_PAUSE_MS, so a
+// broken relay costs at most one slow send per pause window.
+const LOVABLE_PAUSE_MS = 10 * 60_000;
+const LOVABLE_TIMEOUT_MS = 26_000;
+const LOVABLE_STATE_PATH = `${ROOT}/lovable`;
+let lovableMemo = { url: "", exp: 0, downUntil: 0 };
+async function lovableRelay(env) {
+  const now = Date.now();
+  if (lovableMemo.exp > now) return lovableMemo;
+  let url = "";
+  let downUntil = lovableMemo.downUntil;
+  try {
+    const [row, st] = await Promise.all([
+      dbGet(env, "settings/functionOverrides/lovable-email"),
+      dbGet(env, LOVABLE_STATE_PATH).catch(() => null),
+    ]);
+    const u = row && row.enabled !== false && typeof row.customUrl === "string" ? row.customUrl.trim().replace(/\/+$/, "") : "";
+    url = /^https:\/\//i.test(u) ? u : "";
+    downUntil = Math.max(downUntil, Number(st?.downUntil) || 0);
+  } catch { /* database unreachable: SMTP only */ }
+  lovableMemo = { url, exp: now + 60_000, downUntil };
+  return lovableMemo;
+}
+function noteLovable(env, ctx, patch) {
+  if (patch.downUntil != null) lovableMemo.downUntil = patch.downUntil;
+  if (!env.FIREBASE_DB_SECRET) return;
+  const p = dbPatch(env, LOVABLE_STATE_PATH, patch).catch(() => {});
+  try { ctx?.waitUntil?.(p); } catch {}
+}
+/** Lovable email first, SMTP fallback. Resolves to the provider that sent it. */
+async function deliverCode(env, ctx, { rid, to, purpose, code, name, otpMinutes, tpl }) {
+  const relay = await lovableRelay(env);
+  let lovableErr = "";
+  if (relay.url && relay.downUntil <= Date.now()) {
+    try {
+      const r = await withTimeout(fetch(relay.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rid, to, purpose, code, name: name || "", otpMinutes }),
+      }), LOVABLE_TIMEOUT_MS, "lovable_timeout", "Lovable email");
+      const j = await r.json().catch(() => null);
+      if (r.ok && j?.ok) {
+        noteLovable(env, ctx, { ok: true, lastOkAt: Date.now(), downUntil: 0 });
+        return "lovable";
+      }
+      lovableErr = String(j?.error || `http_${r.status}`).slice(0, 60);
+    } catch (e) {
+      lovableErr = String(e?.code || e?.message || "lovable_error").slice(0, 60);
+    }
+    noteLovable(env, ctx, { ok: false, lastErrAt: Date.now(), lastErr: lovableErr, downUntil: Date.now() + LOVABLE_PAUSE_MS });
+  }
+  await sendMail(env, { to, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
+  return "smtp";
+}
+
 // ---------------- templates ----------------
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 const MONO = "'SF Mono',SFMono-Regular,Menlo,Consolas,'Roboto Mono','Courier New',monospace";
@@ -559,6 +621,7 @@ function originAllowed(origin, env) {
   try { if (o === new URL(siteUrl(env)).origin) return true; } catch {}
   const h = u.hostname;
   if (h === "localhost" || h === "127.0.0.1") return true;
+  if (u.protocol === "https:" && siteMemo.hosts.includes(h.toLowerCase())) return true;
   return u.protocol === "https:" && (h.endsWith(".lovable.app") || h.endsWith(".lovableproject.com")) && (h.includes(PROJECT_TAG) || /^(?:[a-z0-9-]+--)?rsanime03\./.test(h));
 }
 function corsFor(req, env) {
@@ -693,8 +756,9 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
 
   const tpl = emailTemplate({ purpose, code: otp, name, otpMinutes: cfg.otpMinutes, requestedAt: now });
   const t0 = Date.now();
+  let via = "smtp";
   try {
-    await sendMail(env, { to: email, subject: tpl.subject, html: tpl.html, text: tpl.text, ref: rid });
+    via = await deliverCode(env, ctx, { rid, to: email, purpose, code: otp, name, otpMinutes: cfg.otpMinutes, tpl });
   } catch (err) {
     const ms = Date.now() - t0;
     const codeErr = String(err?.code || "send_failed");
@@ -714,7 +778,7 @@ async function issueTicket(env, ctx, cors, { email, purpose, name, origin, ip, r
       ? { next: { ...cur, st: "replaced" }, result: 1 } : { result: 0 })).catch(() => 0);
   }
   shadowPut(`g:${day}`, sentToday + 1, dayExp);
-  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, mail_ms: ms, mail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid) }));
+  track(env, ctx, { sent: 1, [`sent_${purpose}`]: 1, [`via_${via}`]: 1, mail_ms: ms, mail_n: 1, ...(replaces ? { resend: 1 } : {}) }, ev("sent", { ms, r: shortRef(rid), via }));
   noteHealth(env, ctx, { ok: true, lastOkAt: Date.now(), lastMs: ms });
   const dailyLeft = Math.max(0, cfg.perEmailDaily - gate.n);
   return json(cors, {
@@ -831,6 +895,30 @@ async function actVerify(env, ctx, cors, body, ip) {
 }
 
 let deepMemo = { at: 0, v: null };
+/**
+ * The Lovable relay confirms a send request here before mailing anything: the
+ * ticket must still be "sending", recent, for the same purpose, email and code,
+ * and each ticket can be confirmed only once. Reveals nothing but yes/no.
+ */
+async function actRelayCheck(env, ctx, req) {
+  const out = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...baseHeaders, "Content-Type": "application/json" } });
+  if (Number(req.headers.get("content-length") || 0) > 1024) return out({ ok: false }, 413);
+  const body = await req.json().catch(() => null);
+  const rid = String(body?.rid || "");
+  const to = normEmail(body?.to);
+  const code = String(body?.code || "");
+  const purpose = body?.purpose === "reset" ? "reset" : "register";
+  if (!RID_RE.test(rid) || !to || !/^\d{6}$/.test(code)) return out({ ok: false }, 400);
+  const [eh, oh] = await Promise.all([hash(env, "email", to), hash(env, "otp", rid, code)]);
+  const ok = await ticketTxn(env, ctx, rid, (cur) => {
+    if (!cur || cur.st !== "sending" || cur.rl || cur.p !== purpose) return { result: false };
+    if (Date.now() - (Number(cur.c) || 0) > 120_000) return { result: false };
+    if (!safeEq(String(cur.e || ""), eh) || !safeEq(String(cur.o || ""), oh)) return { result: false };
+    return { next: { ...cur, rl: 1 }, result: true };
+  }).catch(() => false);
+  return out({ ok: !!ok }, ok ? 200 : 403);
+}
+
 async function health(env, deep) {
   const missing = MISSING(env);
   const now = Date.now();
@@ -841,12 +929,14 @@ async function health(env, deep) {
     dbGet(env, `${ROOT}/health`).catch(() => null),
   ]);
   const sent = Math.max(Number(sentRaw) || 0, shadowGet(`g:${day}`, now));
+  const relay = await lovableRelay(env);
   const out = {
     ok: true, service: VERSION, provider: "smtp", ready: missing.length === 0, missing,
     optional: { EMAIL_SECRET: !!env.EMAIL_SECRET, SITE_URL: !!env.SITE_URL, FIREBASE_DB_URL: !!env.FIREBASE_DB_URL, FIREBASE_DB_SECRET: !!env.FIREBASE_DB_SECRET, ADMIN_PIN: !!env.ADMIN_PIN },
     sender: smtpConf(env).from,
     senderValid: SENDER_RE.test(smtpConf(env).from),
     smtpHost: `${smtpConf(env).host}:${smtpConf(env).port}`,
+    lovable: { configured: !!relay.url, pausedUntil: relay.downUntil > now ? relay.downUntil : 0 },
     settings: cfg,
     today: { day, sent, limit: cfg.dailyLimit, left: Math.max(0, cfg.dailyLimit - sent), resetsInSec: Math.ceil(msToDayEnd(now) / 1000) },
     last: last && typeof last === "object" ? {
@@ -1187,6 +1277,125 @@ async function actAdminSession(env, ctx, cors, body, ip) {
   return json(cors, { ok: true, exp, email, password });
 }
 
+// ---------------- Live site domain checker ----------------
+// Finds the address the site lives on and saves it in `settings/siteDomain`
+// (only this Worker writes it; the database rule blocks everyone else). The
+// candidates are domains only the owner controls — Firebase Auth authorized
+// domains and wherever the Lovable address redirects — and a candidate counts
+// only when it serves the site's own page (site marker) itself. The site, the
+// other servers and the old address's login hand-over all read this one record.
+const SITE_MARKS = [/<meta\s+name=["']rs-site-id["']\s+content=["']rsanime03["']/i, /google-site-verification["']?\s+content=["']_UnFPzj4AsCOrKaHjUmXvSW5g/i];
+const SITE_STATE_PATH = "settings/siteDomain";
+const SITE_CHECK_GAP = 120_000;
+const SITE_DEFAULT_HOST = new URL(DEFAULT_SITE).hostname;
+const isPreviewHost = (host) => {
+  const h = String(host || "").toLowerCase();
+  return !h || h === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(h) || h.endsWith(".lovableproject.com")
+    || h.endsWith(".lovableproject-dev.com") || h.endsWith(".lovable.dev") || h.endsWith(".firebaseapp.com")
+    || h.endsWith(".web.app") || (h.endsWith(".lovable.app") && h.includes("--"));
+};
+const HOST_RE = /^(?=.{3,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+let siteMemo = { hosts: [], live: "", exp: 0 };
+let siteCheckRun = null;
+
+/** Live host from probe results: Lovable's own redirect first, then a serving custom domain, then the Lovable address. */
+function decideLiveHost(results, defaultHost, prevLive) {
+  const serving = results.filter((r) => r.serving);
+  const isServing = (h) => serving.some((r) => r.host === h);
+  const def = results.find((r) => r.host === defaultHost);
+  if (def && def.redirect && isServing(def.redirect)) return def.redirect;
+  const custom = serving.filter((r) => !r.host.endsWith(".lovable.app"));
+  if (custom.length) {
+    const target = custom.find((c) => results.some((r) => r.redirect === c.host));
+    if (target) return target.host;
+    return custom.map((c) => c.host).sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+  }
+  if (isServing(defaultHost)) return defaultHost;
+  if (prevLive && isServing(prevLive)) return prevLive;
+  return serving.length ? serving[0].host : "";
+}
+
+async function probeSiteHost(host) {
+  try {
+    const r = await fetch(`https://${host}/`, { redirect: "manual", headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; RS-ANIME03-domain-check)" }, signal: AbortSignal.timeout(7000) });
+    if (r.status >= 300 && r.status < 400) {
+      let to = "";
+      try { to = new URL(r.headers.get("Location") || "", `https://${host}/`).hostname.toLowerCase(); } catch { /* bad header */ }
+      return { host, serving: false, redirect: to && to !== host ? to : "" };
+    }
+    if (!r.ok) return { host, serving: false };
+    const html = (await r.text()).slice(0, 200000);
+    const serving = SITE_MARKS.some((rx) => rx.test(html));
+    return serving ? { host, serving, google: await googleReturnReady(host) } : { host, serving };
+  } catch { return { host, serving: false }; }
+}
+
+// Google sign-in can finish on the site's own address (no third-party storage,
+// so it works in phone browsers and the installed app) only when that address
+// serves Firebase's sign-in helper at /__/auth/ AND the owner registered
+// https://<host>/__/auth/handler in the Google login settings. Both are checked
+// live; until then the site keeps using Firebase's own sign-in page.
+async function googleReturnReady(host) {
+  try {
+    const js = await fetch(`https://${host}/__/auth/handler.js`, { signal: AbortSignal.timeout(6000) });
+    if (!js.ok || !/javascript/i.test(js.headers.get("Content-Type") || "") || !(await js.text()).includes("fireauth")) return false;
+    const c = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=${FIREBASE_WEB_KEY}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Referer: `https://${host}/` },
+      body: JSON.stringify({ providerId: "google.com", continueUri: `https://${host}/__/auth/handler` }), signal: AbortSignal.timeout(6000),
+    });
+    const authUri = c.ok ? (await c.json()).authUri : "";
+    if (!authUri) return false;
+    const g = await fetch(authUri, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (Linux; Android 13) Chrome/131 Mobile" }, signal: AbortSignal.timeout(6000) });
+    const to = g.headers.get("Location") || "";
+    return g.status >= 300 && g.status < 400 && !!to && !/\/signin\/oauth\/error|redirect_uri_mismatch/i.test(to);
+  } catch { return false; }
+}
+
+async function ownerDomains() {
+  try {
+    const r = await fetch(`https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=${FIREBASE_WEB_KEY}`, { headers: { Referer: DEFAULT_SITE + "/" }, signal: AbortSignal.timeout(6000) });
+    const d = r.ok ? await r.json() : null;
+    return (Array.isArray(d?.authorizedDomains) ? d.authorizedDomains : []).map((h) => String(h).toLowerCase()).filter((h) => HOST_RE.test(h) && !isPreviewHost(h));
+  } catch { return []; }
+}
+
+async function checkSiteDomains(env, prev) {
+  const now = Date.now();
+  const hosts = [...new Set([SITE_DEFAULT_HOST, ...(await ownerDomains())])].slice(0, 12);
+  const results = await Promise.all(hosts.map(probeSiteHost));
+  // One hop further: where an owner domain redirects (e.g. Lovable's primary domain).
+  const extra = [...new Set(results.map((r) => r.redirect).filter((h) => h && HOST_RE.test(h) && !isPreviewHost(h) && !hosts.includes(h)))].slice(0, 4);
+  results.push(...(await Promise.all(extra.map(probeSiteHost))));
+  const prevLive = (() => { try { return new URL(prev?.live || "").hostname; } catch { return ""; } })();
+  const live = decideLiveHost(results, SITE_DEFAULT_HOST, prevLive);
+  if (!live) return null;
+  const map = {};
+  for (const r of results) map[r.host.replace(/\./g, ",")] = { host: r.host, serving: !!r.serving, ...(r.redirect ? { redirect: r.redirect } : {}), ...(r.serving ? { google: r.google === true } : {}), checkedAt: now };
+  return { live: `https://${live}`, hosts: map, checkedAt: now };
+}
+
+function rememberSite(state) {
+  const hosts = state && state.hosts && typeof state.hosts === "object" ? Object.values(state.hosts).filter((h) => h && h.serving && typeof h.host === "string").map((h) => h.host.toLowerCase()) : [];
+  siteMemo = { hosts, live: typeof state?.live === "string" ? state.live : "", exp: Date.now() + 300_000 };
+}
+async function loadSiteHosts(env) {
+  if (siteMemo.exp > Date.now()) return;
+  siteMemo.exp = Date.now() + 60_000;
+  try { rememberSite(await dbGet(env, SITE_STATE_PATH)); } catch { /* keep previous */ }
+}
+
+async function actSiteDomain(env, url) {
+  const cur = await dbGet(env, SITE_STATE_PATH).catch(() => null);
+  const gap = url.searchParams.get("force") === "1" ? 30_000 : SITE_CHECK_GAP;
+  if (cur && Date.now() - (Number(cur.checkedAt) || 0) < gap) { rememberSite(cur); return { ok: true, state: cur, cached: true }; }
+  if (!siteCheckRun) siteCheckRun = checkSiteDomains(env, cur).finally(() => { siteCheckRun = null; });
+  const next = await siteCheckRun;
+  if (!next) return { ok: true, state: cur, cached: true };
+  if (env.FIREBASE_DB_SECRET) await dbPut(env, SITE_STATE_PATH, next);
+  rememberSite(next);
+  return { ok: true, state: next };
+}
+
 // ---------------- Database security gateway (server-to-server) ----------------
 // Lets the owner's tooling read/replace the Realtime Database security rules and
 // run privileged one-off data moves (e.g. moving passwords to a locked path)
@@ -1229,14 +1438,16 @@ async function actDbRules(env, req) {
 
 const worker = {
   // Exposed for the project's unit tests only (not routes).
-  _internals: { pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; } },
+  _internals: { deliverCode, actRelayCheck, pwHash, pwCheck, buildMime, emailTemplate, smtpSession, makeOtp, originAllowed, decideLiveHost, rememberSite, DEFAULTS, BOUNDS, resetMemory: () => { shadow.clear(); settingsMemo = { v: null, exp: 0 }; lovableMemo = { url: "", exp: 0, downUntil: 0 }; siteMemo = { hosts: [], live: "", exp: 0 }; } },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
+    await loadSiteHosts(env);
     const cors = corsFor(req, env);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     const path = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (path === "/db-rules" && req.method === "POST") return await actDbRules(env, req);
+      if (path === "/relay-check" && req.method === "POST") return await actRelayCheck(env, ctx, req);
       if (req.method === "GET") {
         if (path === "/preview") {
           const type = url.searchParams.get("type") === "reset" ? "reset" : "register";
@@ -1245,6 +1456,7 @@ const worker = {
           if (url.searchParams.get("format") === "text") return new Response(tpl.text, { headers: { ...cors, ...baseHeaders, "Content-Type": "text/plain; charset=utf-8" } });
           return new Response(tpl.html, { headers: { ...cors, ...baseHeaders, "Content-Type": "text/html; charset=utf-8" } });
         }
+        if (path === "/site-domain") return json({ ...cors, "Access-Control-Allow-Origin": "*" }, await actSiteDomain(env, url));
         if (path === "/" || path === "/health") return json({ ...cors, "Access-Control-Allow-Origin": "*" }, await health(env, url.searchParams.get("deep") === "1"));
         return fail(cors, 404, "not_found", "Unknown route.");
       }
