@@ -1,17 +1,19 @@
 import type { CSSProperties } from "react";
 import { Wallet, Send, MessageCircle } from "lucide-react";
 import { contactLinks, type AdminContact, type PaymentMethod } from "@/lib/paymentGateway";
+import { PaymentLogo } from "./PaymentLogo";
+import { Button } from "@/components/ui/button";
 
 export function MethodTile({ method, active, index = 0, onClick }: { method: PaymentMethod; active?: boolean; index?: number; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} data-pay-method={method.id}
+    <Button variant="ghost" size="unstyled" type="button" onClick={onClick} data-pay-method={method.id} aria-pressed={!!active}
       className={`pg3d-method ${active ? "is-on" : ""}`}
       style={{ "--mc": method.color, animationDelay: `${index * 70}ms` } as CSSProperties}>
       <span className={`pg3d-tile ${method.logo ? "" : "is-dark"}`}>
-        {method.logo ? <img src={method.logo} alt={method.name} loading="lazy" /> : <Wallet className="w-6 h-6 text-muted-foreground" />}
+        {method.logo ? <PaymentLogo src={method.logo} /> : <Wallet className="w-6 h-6 text-muted-foreground" />}
       </span>
       <span className="pg3d-chip truncate max-w-full">{method.name}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -20,7 +22,7 @@ export function AdminContactCard({ contact }: { contact: AdminContact }) {
   if (!contact.enabled || (!links.telegram && !links.whatsapp)) return null;
   return (
     <div className="pg3d-contact" data-admin-contact>
-      <img src={contact.logo} alt="" />
+      <PaymentLogo src={contact.logo} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-extrabold text-foreground">{contact.title}</p>
         <p className="text-[11px] text-muted-foreground">Other payment or need help? Message the admin.</p>

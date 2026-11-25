@@ -2,11 +2,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Crown, Sparkles, Coins, ArrowLeft, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBranding } from "@/hooks/useBranding";
+import { usePaymentGateway } from "@/hooks/usePaymentGateway";
+import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
 
 export default function PremiumRequired() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const branding = useBranding();
+  const { config: gateway } = usePaymentGateway();
   const title = params.get("title") || "This content";
   const reason = params.get("reason") || "series"; // series | episode | quality | download
 
@@ -60,7 +63,9 @@ export default function PremiumRequired() {
 
           </div>
 
-          <div className="mt-10 grid grid-cols-3 gap-3 w-full max-w-md text-left">
+          {gateway.benefits.length ? (
+            <div className="mt-10 w-full max-w-md text-left"><PremiumBenefits benefits={gateway.benefits} fallback={[]} /></div>
+          ) : <div className="mt-10 grid grid-cols-3 gap-3 w-full max-w-md text-left">
             {[
               { icon: Sparkles, label: "All Premium Series" },
               { icon: Crown, label: "4K & 1080p Quality" },
@@ -74,7 +79,7 @@ export default function PremiumRequired() {
                 <span className="text-xs text-muted-foreground leading-snug">{label}</span>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
       </div>
     </div>

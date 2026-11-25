@@ -32,4 +32,14 @@ describe("payment gateway", () => {
     });
   });
   it("review wait defaults to 24 hours", () => expect(normalizeGateway({}).reviewHours).toBe(24));
+  it("keeps admin benefits in order even when Firebase returns sparse numeric keys", () => {
+    expect(normalizeGateway({ benefits: { 0: "NO ANY ADS", 2: "4K QUALITY UNLOCK", 4: "NO WATER MARK" } }).benefits)
+      .toEqual(["NO ANY ADS", "4K QUALITY UNLOCK", "NO WATER MARK"]);
+  });
+  it.each(["BEP20 (USDT)", "TRC20 (USDT)", "TON (USDT)"])("preserves the configured %s network and its address/QR", (network) => {
+    const cfg = normalizeGateway({ methods: [{ id: "binance", kind: "crypto", accountType: network, number: "wallet-address", qr: "data:image/png;base64,QR" }] });
+    expect(cfg.methods[0].accountType).toBe(network);
+    expect(cfg.methods[0].number).toBe("wallet-address");
+    expect(cfg.methods[0].qr).toBe("data:image/png;base64,QR");
+  });
 });

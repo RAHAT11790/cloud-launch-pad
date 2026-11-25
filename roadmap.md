@@ -1,5 +1,14 @@
 # Roadmap
 
+## Payment and player corrections (2026-11-25)
+- [x] Sync saved benefits across free/premium Profile, Premium purchase and Premium Required screens; live hook regression test passes.
+- [x] Separate admin logos, keep payment logo/QR pixels white in all themes, polish crypto address/network display; real admin PIN + 360/390px light/dark checks pass.
+- [x] Restore original player control placement while retaining stronger 3D icons and animations; real Naruto Shippuden E383 plays, Fit→Crop, Settings close and Lock verified.
+- [x] Run 30 focused tests; free Profile bKash QR/plan and Nagad purchase path verified, no page errors or horizontal overflow.
+- [ ] Verify the signed-in paid Premium Profile branch — requires a premium-account sign-in; branch code inspected, no account fabricated.
+- [ ] Verify Binance payment with the owner's actual address/QR — both are unset and method disabled; admin fields and BEP20/TRC20/TON preservation tested.
+- [ ] Verify real sponsor opening — saved abscloud.org popunder returns HTTP 200 with zero bytes; no Direct Link configured. Waiting for provider delivery or owner's actual Adsterra Direct Link; ad settings unchanged.
+
 ## Re-done after the code was rolled back (2026-11-23)
 - [x] Adsterra-only ads and "Adsterra Ads" name back; domain checker back.
 - [x] Fast move: the page itself decides at the very start (before the big app file loads) and sends old-address visitors to the live domain with their login (phone test: old episode link → same episode on new domain, login data and device kept).

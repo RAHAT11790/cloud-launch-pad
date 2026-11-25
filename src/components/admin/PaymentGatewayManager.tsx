@@ -9,6 +9,7 @@ import {
   DEFAULT_GATEWAY, DEFAULT_LOGOS, normalizeGateway, priceFor, type PaymentGatewayConfig, type PaymentKind, type PaymentMethod,
 } from "@/lib/paymentGateway";
 import { imageFileToDataUrl } from "@/lib/imageDataUrl";
+import { PaymentLogo } from "@/components/premium/PaymentLogo";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }
 type Tab = "methods" | "plans" | "benefits" | "contact";
@@ -25,8 +26,8 @@ function ImagePick({ value, onChange, label, icon, maxSide, btnSecondary }: { va
   const r = useRef<HTMLInputElement>(null);
   return (
     <div className="flex items-center gap-3">
-      <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
-        {value ? <img src={value} alt="" className="w-full h-full object-contain p-1" /> : <span className="text-zinc-400">{icon}</span>}
+      <div className="payment-logo-surface w-14 h-14 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+        {value ? <PaymentLogo src={value} className="w-full h-full object-contain p-1" /> : <span className="text-muted-foreground">{icon}</span>}
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => r.current?.click()} className={`${btnSecondary} px-3 py-2 text-xs inline-flex items-center gap-1.5`}>{icon} {label}</button>
@@ -106,10 +107,10 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
   return (
     <div className="space-y-4 pb-24" data-payment-gateway-manager>
       <div className="pg3d-admin-hero">
-        <div className="flex -space-x-3">
+        <div className="pg3d-admin-logos">
           {cfg.methods.slice(0, 4).map((m) => (
             <span key={m.id} className="pg3d-coin" style={{ ["--c" as any]: m.color }}>
-              {m.logo ? <img src={m.logo} alt="" /> : <Wallet size={16} />}
+              {m.logo ? <PaymentLogo src={m.logo} alt={m.name} /> : <Wallet size={16} />}
             </span>
           ))}
         </div>
@@ -134,8 +135,8 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
             return (
               <div key={m.id} className={`${glassCard} overflow-hidden`} style={{ borderColor: isOpen ? m.color + "88" : undefined }}>
                 <div className="flex items-center gap-3 p-3">
-                  <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-[0_4px_0_rgba(0,0,0,.35)]">
-                    {m.logo ? <img src={m.logo} alt="" className="w-full h-full object-contain p-1" /> : <Wallet size={18} className="text-zinc-500" />}
+                  <div className="payment-logo-surface w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                    {m.logo ? <PaymentLogo src={m.logo} alt={m.name} className="w-full h-full object-contain p-1" /> : <Wallet size={18} className="text-muted-foreground" />}
                   </div>
                   <button className="flex-1 min-w-0 text-left" onClick={() => setOpen(isOpen ? null : m.id)}>
                     <p className="text-sm font-bold text-white truncate">{m.name}</p>
@@ -162,10 +163,10 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
                         </select></label>
                     </div>
                     <label className="block"><span className="text-[10px] text-zinc-500">{m.kind === "crypto" ? "Wallet address / Pay ID" : "Account number"}</span>
-                      <input value={m.number} onChange={(e) => editMethod(m.id, { number: e.target.value.trim() })} className={inputClass + " font-mono"} placeholder={m.kind === "crypto" ? "0x… or Pay ID" : "01XXXXXXXXX"} /></label>
+                      <textarea rows={m.kind === "crypto" ? 2 : 1} value={m.number} onChange={(e) => editMethod(m.id, { number: e.target.value.trim() })} className={inputClass + " font-mono resize-none break-all"} placeholder={m.kind === "crypto" ? "Wallet address or Binance Pay ID" : "01XXXXXXXXX"} /></label>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block"><span className="text-[10px] text-zinc-500">{m.kind === "crypto" ? "Network" : "Account type"}</span>
-                        <input value={m.accountType} onChange={(e) => editMethod(m.id, { accountType: e.target.value })} className={inputClass} placeholder={m.kind === "crypto" ? "BEP20 (USDT)" : "Agent / Personal"} /></label>
+                        <input list={m.kind === "crypto" ? "payment-crypto-networks" : undefined} value={m.accountType} onChange={(e) => editMethod(m.id, { accountType: e.target.value })} className={inputClass} placeholder={m.kind === "crypto" ? "BEP20 / TRC20 / TON" : "Agent / Personal"} /></label>
                       <label className="block"><span className="text-[10px] text-zinc-500">Brand color</span>
                         <input type="color" value={m.color} onChange={(e) => editMethod(m.id, { color: e.target.value })} className="w-full h-[42px] rounded-lg bg-transparent border border-white/10" /></label>
                     </div>
@@ -231,7 +232,7 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
           {cfg.benefits.map((b, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="w-6 h-6 shrink-0 rounded-full bg-amber-400 text-black text-[11px] font-black flex items-center justify-center">{i + 1}</span>
-              <input value={b} onChange={(e) => edit((c) => ({ ...c, benefits: c.benefits.map((x, k) => (k === i ? e.target.value : x)) }))} className={inputClass} />
+              <textarea rows={2} value={b} onChange={(e) => edit((c) => ({ ...c, benefits: c.benefits.map((x, k) => (k === i ? e.target.value : x)) }))} className={inputClass + " min-w-0 flex-1 resize-none leading-relaxed"} />
               <div className="flex flex-col">
                 <button onClick={() => edit((c) => { const a = [...c.benefits]; if (i > 0) [a[i - 1], a[i]] = [a[i], a[i - 1]]; return { ...c, benefits: a }; })} className="text-zinc-400"><ChevronUp size={13} /></button>
                 <button onClick={() => edit((c) => { const a = [...c.benefits]; if (i < a.length - 1) [a[i + 1], a[i]] = [a[i], a[i + 1]]; return { ...c, benefits: a }; })} className="text-zinc-400"><ChevronDown size={13} /></button>
@@ -268,11 +269,12 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
         </div>
       )}
 
-      <div className="sticky bottom-3 z-10">
+      <div className="sticky bottom-20 z-10">
         <button onClick={save} disabled={saving || legacy === null} className={`${btnPrimary} w-full gap-2 shadow-[0_10px_30px_-8px_rgba(0,0,0,.8)] disabled:opacity-50`}>
           <Save size={16} /> {saving ? "Saving…" : "Save payment gateway"}
         </button>
       </div>
+      <datalist id="payment-crypto-networks"><option value="BEP20 (USDT)" /><option value="TRC20 (USDT)" /><option value="TON (USDT)" /></datalist>
     </div>
   );
 }

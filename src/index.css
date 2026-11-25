@@ -458,6 +458,11 @@ div[style*="z-index: 2147483647"],
   .player-control-chip svg {
     filter: drop-shadow(0 1px 0 hsl(0 0% 0% / 0.7)) drop-shadow(0 2px 3px hsl(var(--primary) / 0.35));
   }
+  .p3d-icon { position: relative; display: inline-block; flex-shrink: 0; overflow: visible; }
+  .player-touch-button .p3d-icon svg, .player-control-chip .p3d-icon svg { position: absolute; inset: 0; width: 100% !important; height: 100% !important; filter: none; }
+  .p3d-icon .p3d-icon-depth { color: hsl(var(--player-icon-depth)); transform: translate(2px, 3px); }
+  .p3d-icon .p3d-icon-edge { color: hsl(var(--player-icon-edge)); transform: translate(1px, 1.5px); }
+  .p3d-icon .p3d-icon-face { color: hsl(var(--player-icon-face)); transform: translateY(-.5px); }
   .player-touch-button:active,
   .player-control-chip:active {
     transform: perspective(260px) rotateX(18deg) scale(0.9);
@@ -4099,6 +4104,12 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
 .otp-resume { border-color: hsl(var(--otp-pink) / .35); background-image: linear-gradient(135deg, hsl(var(--otp-violet) / .12), hsl(var(--otp-pink) / .08)); }
 
 /* ===== Premium payment gateway (3D) — buyer page, profile pay sheet, admin ===== */
+:root { --payment-paper: 0 0% 100%; --payment-ink: 222 18% 13%; --payment-shadow: 0 0% 0%; --player-icon-face: 195 35% 96%; --player-icon-edge: 195 24% 60%; --player-icon-depth: 220 20% 12%; }
+.payment-logo-surface, .payment-logo-image { color-scheme: only light; background: hsl(var(--payment-paper)) !important; color: hsl(var(--payment-ink)); isolation: isolate; }
+.payment-logo-image { mix-blend-mode: normal; filter: none !important; }
+.payment-qr { border: 1px solid hsl(var(--payment-paper)); }
+.pg3d-network { display: inline-flex; margin-bottom: 10px; padding: 5px 10px; border-radius: 6px; color: hsl(var(--foreground)); background: color-mix(in srgb, var(--mc) 20%, transparent); border: 1px solid color-mix(in srgb, var(--mc) 45%, transparent); font: 700 11px sans-serif; }
+.pg3d-crypto-address { border-style: solid !important; }
 @layer components {
   /* Premium surfaces are always the dark gold look, whatever the site theme */
   .pg3d-page, .pg3d-hero, .pg3d-card, .pg3d-method, .pg3d-plan, .pg3d-contact {
@@ -4145,17 +4156,17 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   .pg3d-plan:active { transform: translateY(4px); box-shadow: 0 1px 0 hsl(230 30% 5%); }
   .pg3d-plan.is-best { border-color: hsl(45 90% 60% / 0.55); background: linear-gradient(170deg, hsl(40 55% 22%), hsl(230 28% 10%)); }
   .pg3d-plan.is-on { border-color: var(--pc, hsl(45 90% 60%)); box-shadow: 0 5px 0 hsl(230 30% 5%), 0 0 0 2px var(--pc, hsl(45 90% 60%)) inset; }
-  .pg3d-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .pg3d-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding-bottom: 5px; }
   .pg3d-method {
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px 10px;
-    border-radius: 18px; background: linear-gradient(180deg, hsl(230 22% 16%), hsl(230 28% 10%));
+    height: auto; min-width: 0; white-space: normal; border-radius: 8px; background: linear-gradient(180deg, hsl(230 22% 16%), hsl(230 28% 10%));
     border: 1px solid hsl(0 0% 100% / 0.08); box-shadow: 0 5px 0 hsl(230 30% 5%), inset 0 1px 0 hsl(0 0% 100% / 0.07);
     transition: transform 150ms ease, box-shadow 150ms ease; opacity: 0; animation: pg3dFlip 520ms cubic-bezier(.2,.8,.2,1) forwards;
   }
   .pg3d-method:active { transform: translateY(4px); box-shadow: 0 1px 0 hsl(230 30% 5%); }
   .pg3d-method.is-on { border-color: var(--mc); box-shadow: 0 5px 0 hsl(230 30% 5%), 0 0 0 2px var(--mc) inset, 0 10px 24px -10px var(--mc); }
   .pg3d-tile {
-    width: 100%; aspect-ratio: 16 / 10; border-radius: 13px; background: hsl(0 0% 100%);
+    width: 100%; aspect-ratio: 16 / 10; border-radius: 8px; background: hsl(var(--payment-paper)); color-scheme: only light;
     display: flex; align-items: center; justify-content: center; overflow: hidden;
     box-shadow: inset 0 -3px 0 hsl(0 0% 0% / 0.08), 0 6px 14px -8px hsl(0 0% 0% / 0.9);
   }
@@ -4190,9 +4201,10 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   .pg3d-wait::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: hsl(230 30% 9%); }
   .pg3d-wait > * { position: relative; }
   /* admin */
-  .pg3d-admin-hero { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px;
+  .pg3d-admin-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px; border-radius: 8px;
     background: linear-gradient(135deg, hsl(40 55% 20%), hsl(235 30% 12%)); border: 1px solid hsl(45 90% 60% / 0.25); }
-  .pg3d-coin { width: 38px; height: 38px; border-radius: 50%; background: hsl(0 0% 100%); display: flex; align-items: center; justify-content: center; overflow: hidden;
+  .pg3d-admin-logos { display: grid; grid-template-columns: repeat(2, 42px); gap: 8px; flex-shrink: 0; }
+  .pg3d-coin { width: 42px; height: 38px; border-radius: 8px; background: hsl(var(--payment-paper)); color-scheme: only light; display: flex; align-items: center; justify-content: center; overflow: hidden;
     border: 2px solid var(--c); box-shadow: 0 3px 0 hsl(0 0% 0% / 0.5); }
   .pg3d-coin img { width: 80%; height: 80%; object-fit: contain; }
   .pg3d-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; border-radius: 12px; font-size: 10px; font-weight: 700;

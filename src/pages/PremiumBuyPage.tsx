@@ -11,6 +11,7 @@ import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 import { usePaymentGateway } from "@/hooks/usePaymentGateway";
 import { usableMethods, priceFor } from "@/lib/paymentGateway";
 import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
+import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
 
 const DEFAULT_COIN_PLANS: CoinPlan[] = [
   { id: "coin-10d", name: "10 Days", coins: 100, days: 10 },
@@ -111,11 +112,7 @@ export default function PremiumBuyPage() {
         {dynamicFeatures.length > 0 && (
           <div className="pg3d-card" data-premium-benefits>
             <h2 className="pg3d-h">What you get</h2>
-            {dynamicFeatures.map((f, i) => (
-              <div key={f + i} className="pg3d-step" style={{ animationDelay: `${i * 80}ms` }}>
-                <b>{i + 1}</b><span className="text-sm leading-snug pt-0.5">{f}</span>
-              </div>
-            ))}
+            <PremiumBenefits benefits={gateway.benefits} fallback={dynamicFeatures} />
           </div>
         )}
 

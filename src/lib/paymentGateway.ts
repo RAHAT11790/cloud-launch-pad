@@ -112,7 +112,7 @@ export function normalizeGateway(raw: any, legacyBkash?: any): PaymentGatewayCon
       telegram: str(c.telegram),
       whatsapp: str(c.whatsapp),
     },
-    benefits: (Array.isArray(src.benefits) ? src.benefits : []).map((b: unknown) => str(b).trim()).filter(Boolean),
+    benefits: (Array.isArray(src.benefits) ? src.benefits : src.benefits && typeof src.benefits === "object" ? Object.values(src.benefits) : []).map((b: unknown) => str(b).trim()).filter(Boolean),
     usdtRate: num(src.usdtRate, DEFAULT_GATEWAY.usdtRate, 1, 100000),
     reviewHours: num(src.reviewHours, DEFAULT_GATEWAY.reviewHours, 1, 720),
   };

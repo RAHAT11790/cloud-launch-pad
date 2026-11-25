@@ -5,6 +5,8 @@ import { clearPremiumPayParam, readPremiumPayTab } from "@/lib/premiumPayLink";
 import { usePaymentGateway } from "@/hooks/usePaymentGateway";
 import { usableMethods, priceFor, senderLooksValid, type PaymentMethod } from "@/lib/paymentGateway";
 import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
+import { PaymentLogo } from "@/components/premium/PaymentLogo";
+import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
 import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
@@ -1410,16 +1412,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
             {selectedPlan && (
               <div className="pg3d-card mb-4" data-pay-form>
                 <div className="flex items-center gap-3 mb-3">
-                  {activeMethod.logo && <span className="pg3d-tile !w-16 shrink-0"><img src={activeMethod.logo} alt="" /></span>}
+                  {activeMethod.logo && <span className="pg3d-tile !w-16 shrink-0"><PaymentLogo src={activeMethod.logo} alt={activeMethod.name} /></span>}
                   <h4 className="text-sm font-extrabold" style={{ color: mc }}>{editingPendingRequest ? "Update your request" : `Pay with ${activeMethod.name}`}</h4>
                 </div>
 
-                <div className="pg3d-number mb-3">
+                <div className={`pg3d-number mb-3 ${activeMethod.kind === "crypto" ? "pg3d-crypto-address" : ""}`}>
+                  {activeMethod.kind === "crypto" && <span className="pg3d-network">{activeMethod.accountType || "USDT"}</span>}
                   <p className="text-[11px] text-muted-foreground mb-1">{activeMethod.accountType ? `${activeMethod.accountType} ` : ""}{activeMethod.kind === "crypto" ? "address / Pay ID" : "number"}:</p>
                   <div className="flex items-center gap-2">
-                    <p className="flex-1 min-w-0 text-lg font-black tracking-wider break-all" style={{ color: mc }}>{activeMethod.number}</p>
-                    <button type="button" onClick={() => { navigator.clipboard?.writeText(activeMethod.number).then(() => toast.success("Copied")).catch(() => {}); }}
-                      className="shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-foreground/10">Copy</button>
+                    <p className={`flex-1 min-w-0 break-all ${activeMethod.kind === "crypto" ? "font-mono text-sm leading-relaxed" : "text-lg font-black"}`} style={{ color: mc }}>{activeMethod.number}</p>
+                    <Button variant="secondary" size="sm" type="button" onClick={() => { navigator.clipboard?.writeText(activeMethod.number).then(() => toast.success("Copied")).catch(() => {}); }}
+                      className="shrink-0 text-[11px] font-bold">Copy</Button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Amount: <span className="font-bold text-foreground">{priceFor(activeMethod, Number(selectedPlan.price) || 0, gateway.usdtRate)}</span></p>
                 </div>
@@ -1429,7 +1432,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                 {activeMethod.qr && (
                   <div className="text-center mb-3">
                     <p className="text-xs text-muted-foreground mb-2">Scan the QR code:</p>
-                    <img src={activeMethod.qr} alt={`${activeMethod.name} QR`} className="w-44 h-44 mx-auto rounded-2xl bg-white p-2 object-contain" />
+                    <PaymentLogo src={activeMethod.qr} alt={`${activeMethod.name} QR`} className="payment-qr w-44 h-44 mx-auto rounded-lg p-2 object-contain" />
                   </div>
                 )}
 
@@ -1571,20 +1574,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <h4 className="text-sm font-semibold premium-text mb-3 flex items-center gap-2">
                 <Sparkles className="w-4 h-4" style={{ color: "hsl(45,90%,55%)" }} /> Premium Benefits
               </h4>
-              <div className="space-y-2.5">
-                {[
-                  { icon: "🚫", text: "Ad-free streaming" },
-                  { icon: "📺", text: "4K quality access" },
-                  { icon: "⚡", text: "Priority support" },
-                  { icon: "🔒", text: "Exclusive content" },
-                ].map((b, i) => (
-                  <div key={i} className="flex items-center gap-3 py-1.5">
-                    <span className="text-base">{b.icon}</span>
-                    <span className="text-sm text-foreground/90">{b.text}</span>
-                    <Check className="w-4 h-4 ml-auto" style={{ color: "hsl(45,90%,55%)" }} />
-                  </div>
-                ))}
-              </div>
+              <PremiumBenefits benefits={gateway.benefits} fallback={["Ad-free streaming", "4K quality access", "Priority support", "Exclusive content"]} />
             </div>
 
             {/* Device Info */}
@@ -1691,19 +1681,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div className="absolute top-0 left-0 right-0 h-1 premium-gradient" />
               <Crown className="w-14 h-14 mx-auto mb-3" style={{ color: "hsl(45,90%,55%)", animation: "crownFloat 3s ease-in-out infinite" }} />
               <h3 className="text-xl font-bold premium-text mb-3">{brandingCfg.premiumTitle}</h3>
-              <div className="space-y-2.5 text-left">
-                {[
-                  { icon: "🚫", text: "Ad-free streaming" },
-                  { icon: "📺", text: "4K Ultra HD quality" },
-                  { icon: "⚡", text: "Uninterrupted streaming" },
-                  { icon: "💎", text: "Support the creators" },
-                ].map((f, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: "hsla(45,90%,55%,0.15)" }}>{f.icon}</span>
-                    <span className="text-foreground/90">{f.text}</span>
-                  </div>
-                ))}
-              </div>
+              <div className="text-left"><PremiumBenefits benefits={gateway.benefits} fallback={["Ad-free streaming", "4K Ultra HD quality", "Uninterrupted streaming", "Support the creators"]} /></div>
             </div>
 
             {renderPaymentOptions()}

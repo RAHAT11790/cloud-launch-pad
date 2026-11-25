@@ -18,6 +18,7 @@ import { decodeSubtitleBytes, parseSubtitleFile, uniqueLines } from "@/lib/subti
 import { EmbeddedSubtitleLayer, SUBTITLE_FONTS } from "@/components/player/EmbeddedSubtitleLayer";
 import { EmbeddedTracksPanel } from "@/components/player/EmbeddedTracksPanel";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
+import { PlayerIcon3D } from "@/components/player/PlayerIcon3D";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -5523,66 +5524,66 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 data-shown={showControls ? "1" : "0"}
                 className={`player-controls-layer p3d-deck absolute inset-0 z-[70] flex flex-col justify-between text-white transition-opacity duration-150 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               >
-              {/* Top bar: back + title | server, CC, lock */}
-              <div className="flex items-center gap-1.5 px-2.5 pt-2.5">
-                <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleBackPress(); }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="player-touch-button p3d-anim h-[38px] w-[38px] rounded-full flex items-center justify-center shrink-0" aria-label="Back">
-                  <ArrowLeft className="w-[20px] h-[20px]" />
-                </button>
-                <div className="p3d-title min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-[13px] font-bold">{title}</p>
-                  {subtitle ? <p className="truncate text-[10px] font-medium opacity-75">{subtitle}</p> : null}
-                </div>
-                <div className="flex items-center justify-end gap-1.5 shrink-0">
+              {/* Original top row: back | fit, server, CC, lock */}
+              <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
+                <Button variant="player" size="unstyled" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleBackPress(); }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="player-touch-button p3d-anim h-[40px] w-[40px] rounded-full flex items-center justify-center shrink-0" aria-label="Back">
+                  <PlayerIcon3D icon={ArrowLeft} className="w-[20px] h-[20px]" />
+                </Button>
+                <div className="flex max-w-[calc(100%-46px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">
+                  <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} aria-label="Screen fit" title="Screen fit" className={`player-touch-button p3d-anim h-[32px] px-2 rounded-full flex items-center justify-center gap-1 shrink-0 ${cropIndex !== 0 ? "is-on" : ""}`}>
+                    <PlayerIcon3D icon={Crop} className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-semibold">{cropLabels[cropIndex]}</span>
+                  </Button>
                 {isHlsSrc ? (
-                    <button className="player-touch-button p3d-anim h-[32px] px-2.5 rounded-full flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Server className="w-3.5 h-3.5" />
+                    <Button variant="player" size="unstyled" className="player-touch-button p3d-anim h-[32px] px-2.5 rounded-full flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <PlayerIcon3D icon={Server} className="w-3.5 h-3.5" />
                     <span className="text-[11px] font-semibold">HLS</span>
-                  </button>
+                  </Button>
                 ) : (effectiveVideoServers.length >= 1 && !noServerSwitch) || extraServers.length > 0 ? (
-                    <button
+                    <Button variant="player" size="unstyled"
                       onPointerDown={toggleServerPanelFast}
                       onClick={stopControlPress}
                       aria-label="Video servers"
                       className={`player-touch-button p3d-anim h-[32px] px-2.5 rounded-full flex items-center justify-center gap-1 shrink-0 ${showServerPanel || manualServerSelected ? 'is-on' : ''}`}
                     >
-                      <Server className="w-3.5 h-3.5" />
+                      <PlayerIcon3D icon={Server} className="w-3.5 h-3.5" />
                       <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{extraServers.find((x) => x.active)?.label || effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
-                      <ChevronDown className="w-3 h-3 opacity-80" />
-                    </button>
+                      <PlayerIcon3D icon={ChevronDown} className="w-3 h-3 opacity-80" />
+                    </Button>
                 ) : null}
                 {(embedded.available || ((isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0))) && (
-                    <button
+                    <Button variant="player" size="unstyled"
                       onPointerDown={toggleCcPanelFast}
                       onClick={stopControlPress}
                       aria-label="Audio and subtitles"
                       className={`player-touch-button p3d-anim h-[32px] px-2.5 rounded-full flex items-center justify-center gap-1 shrink-0 ${showCcPanel || currentHlsSubtitle >= 0 || embedded.activeSubtitle >= 0 ? "is-on" : ""}`}
                     >
-                      <Subtitles className="w-3.5 h-3.5" />
+                      <PlayerIcon3D icon={Subtitles} className="w-3.5 h-3.5" />
                       <span className="text-[11px] font-semibold">CC</span>
-                    </button>
+                    </Button>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); lockPlayer(); }} aria-label="Lock screen" className="player-touch-button p3d-anim w-[32px] h-[32px] rounded-full flex items-center justify-center shrink-0">
-                  <Lock className="w-3.5 h-3.5" />
-                </button>
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); lockPlayer(); }} aria-label="Lock screen" className="player-touch-button p3d-anim w-[32px] h-[32px] rounded-full flex items-center justify-center shrink-0">
+                  <PlayerIcon3D icon={Lock} className="w-3.5 h-3.5" />
+                </Button>
                 </div>
               </div>
 
               {/* Center: replay 10 | play | forward 10 */}
-              <div className="flex items-center justify-center gap-9">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} aria-label="Back 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[48px] h-[48px] rounded-full flex items-center justify-center">
-                  <RotateCcw className="w-6 h-6" />
+              <div className="flex items-center justify-center gap-8">
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(-10); }} aria-label="Back 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[46px] h-[46px] rounded-full flex items-center justify-center">
+                  <PlayerIcon3D icon={RotateCcw} className="w-6 h-6" />
                   <span className="p3d-seek-num">10</span>
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} aria-label={playing ? "Pause" : "Play"} className={`player-touch-button player-touch-button--primary p3d-anim rounded-full flex items-center justify-center ${playing ? "" : "is-paused"}`} style={{ width: 62, height: 62 }}>
+                </Button>
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); togglePlay(); }} aria-label={playing ? "Pause" : "Play"} className={`player-touch-button player-touch-button--primary p3d-anim rounded-full flex items-center justify-center ${playing ? "" : "is-paused"}`} style={{ width: 58, height: 58 }}>
                   {playing ? <Pause className="w-8 h-8" fill="currentColor" /> : <Play className="w-8 h-8 ml-1" fill="currentColor" />}
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} aria-label="Forward 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[48px] h-[48px] rounded-full flex items-center justify-center">
-                  <RotateCw className="w-6 h-6" />
+                </Button>
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(10); }} aria-label="Forward 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[46px] h-[46px] rounded-full flex items-center justify-center">
+                  <PlayerIcon3D icon={RotateCw} className="w-6 h-6" />
                   <span className="p3d-seek-num">10</span>
-                </button>
+                </Button>
               </div>
 
-              {/* Bottom deck: progress, then time/volume | speed, quality, audio, fit, next, settings, fullscreen */}
+              {/* Bottom deck: progress, then time/volume | speed, quality, audio, next, settings, fullscreen */}
               <div className="px-2.5 pb-2.5">
                 <div
                   ref={progressBarRef}
@@ -5604,19 +5605,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="flex items-center justify-between gap-1.5 min-w-0">
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={(e) => {
-                      e.stopPropagation();
-                      applyPlayerVolume(boostedVolume, !muted);
-                    }} className="player-touch-button p3d-anim w-7 h-7 flex items-center justify-center shrink-0 rounded-full" aria-label="Toggle mute">
-                      {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                    </button>
                     <span
                       ref={timeDisplayRef}
                       className="p3d-time text-[11px] font-bold whitespace-nowrap tabular-nums leading-none"
                     >{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <Button variant="player" size="unstyled" onClick={(e) => {
+                      e.stopPropagation();
+                      applyPlayerVolume(boostedVolume, !muted);
+                    }} className="player-touch-button p3d-anim w-7 h-7 flex items-center justify-center shrink-0 rounded-full" aria-label="Toggle mute">
+                      {muted || boostedVolume <= 0 ? <PlayerIcon3D icon={VolumeX} className="w-3.5 h-3.5" /> : <PlayerIcon3D icon={Volume2} className="w-3.5 h-3.5" />}
+                    </Button>
                   </div>
                   <div className="flex items-center justify-end gap-1 flex-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pl-0.5">
-                    <button
+                    <Button variant="player" size="unstyled"
                       onClick={(e) => {
                         e.stopPropagation();
                         const rates = [1, 1.25, 1.5, 1.75, 2, 0.75];
@@ -5626,43 +5627,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       }}
                       className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full shrink-0 leading-none font-bold inline-flex items-center justify-center min-w-[32px] ${playbackRate !== 1 ? "is-on" : ""}`}
                       aria-label="Playback speed"
-                    >{playbackRate}x</button>
+                    >{playbackRate}x</Button>
                     {availableQualities.length > 1 && (
-                      <button
+                      <Button variant="player" size="unstyled"
                         onPointerDown={toggleQualityPanelFast}
                         onClick={stopControlPress}
                         aria-label="Quality"
                         className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full font-bold shrink-0 inline-flex items-center justify-center max-w-[58px] ${showQualityPanel || currentQuality !== "Auto" ? "is-on" : ""}`}
                       >
                         <span className="truncate">{currentQuality}</span>
-                      </button>
+                      </Button>
                     )}
                     {(audioTrackOptions.length > 1 || embeddedAudioList.length > 0) && (
-                      <button
+                      <Button variant="player" size="unstyled"
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
                         className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full font-bold inline-flex items-center gap-1 max-w-[86px] shrink-0 ${showAudioPanel ? "is-on" : ""}`}
                         aria-label="Audio track"
                       >
-                        {embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <Languages className="w-3 h-3 shrink-0" />}
+                        {embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <PlayerIcon3D icon={Languages} className="w-3 h-3 shrink-0" />}
                         <span className="truncate">{embeddedAudioList.length > 0 ? embeddedAudioLabel : activePlaybackLanguage || "Audio"}</span>
-                      </button>
+                      </Button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} aria-label="Screen fit" className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full font-bold inline-flex items-center gap-1 shrink-0 ${cropIndex !== 0 ? "is-on" : ""}`}>
-                      <Crop className="w-3 h-3" />
-                      <span>{cropLabels[cropIndex]}</span>
-                    </button>
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} aria-label="Next episode" className="player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full inline-flex items-center justify-center gap-0.5 shrink-0 font-bold">
-                        Next <ChevronRight className="w-3 h-3" />
-                      </button>
+                      <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} aria-label="Next episode" className="player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full inline-flex items-center justify-center gap-0.5 shrink-0 font-bold">
+                        Next <PlayerIcon3D icon={ChevronRight} className="w-3 h-3" />
+                      </Button>
                     )}
-                    <button onPointerDown={toggleSettingsPanelFast} onClick={stopControlPress} aria-label="Settings" className={`player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${showSettings ? "is-on" : ""}`}>
-                      <Settings className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} aria-label="Fullscreen" className="player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0">
-                      {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                    </button>
+                    <Button variant="player" size="unstyled" onPointerDown={toggleSettingsPanelFast} onClick={stopControlPress} aria-label="Settings" className={`player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${showSettings ? "is-on" : ""}`}>
+                      <PlayerIcon3D icon={Settings} className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} aria-label="Fullscreen" className="player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0">
+                      {isFullscreen ? <PlayerIcon3D icon={Minimize} className="w-3.5 h-3.5" /> : <PlayerIcon3D icon={Maximize} className="w-3.5 h-3.5" />}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -5854,9 +5851,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* Settings panel */}
           {!locked && showSettings && (
             <div data-player-panel="true" className={`${panelBaseClass} w-[min(240px,76%)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-              <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
-                <X className="w-3 h-3" />
-              </button>
+              <Button variant="player" size="unstyled" aria-label="Close settings" title="Close settings" onClick={() => setShowSettings(false)} className="player-touch-button absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center">
+                <PlayerIcon3D icon={X} className="w-3 h-3" />
+              </Button>
               <div className="flex gap-1 mb-2 pr-6 flex-wrap">
                 <button onClick={() => setSettingsTab("speed")} className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-all ${settingsTab === "speed" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Speed
