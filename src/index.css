@@ -635,20 +635,21 @@ div[style*="z-index: 2147483647"],
     flex-direction: column;
     align-items: center;
     gap: 2px;
-    opacity: 0.42;
+    opacity: var(--wm-opacity, 0.42);
+    filter: brightness(var(--wm-bright, 1));
     pointer-events: none;
     user-select: none;
     transition: opacity 200ms ease;
   }
   .player-watermark img {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
+    width: var(--wm-size, 26px);
+    height: var(--wm-size, 26px);
+    border-radius: 27%;
     object-fit: cover;
     box-shadow: 0 1px 3px hsl(0 0% 0% / 0.5);
   }
   .player-watermark span {
-    font-size: 7px;
+    font-size: calc(var(--wm-size, 26px) * 0.27);
     font-weight: 800;
     letter-spacing: 0.08em;
     color: hsl(0 0% 100%);
@@ -656,8 +657,8 @@ div[style*="z-index: 2147483647"],
     white-space: nowrap;
   }
   .player-watermark.is-fs { top: 16px; right: 18px; }
-  .player-watermark.is-fs img { width: 34px; height: 34px; border-radius: 9px; }
-  .player-watermark.is-fs span { font-size: 9px; }
+  .player-watermark.is-fs img { width: calc(var(--wm-size, 26px) * 1.3); height: calc(var(--wm-size, 26px) * 1.3); }
+  .player-watermark.is-fs span { font-size: calc(var(--wm-size, 26px) * 0.35); }
   .player-watermark.is-hidden { opacity: 0; }
 
   /* Phone held sideways without fullscreen: the video fits the screen height so
@@ -4096,3 +4097,114 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
 .otp-close:hover { border-color: hsl(var(--otp-pink) / .55); box-shadow: 0 3px 0 hsl(var(--background) / .9), 0 0 0 3px hsl(var(--otp-pink) / .16), 0 8px 18px hsl(var(--otp-violet) / .3); }
 .otp-close:active { box-shadow: 0 1px 0 hsl(var(--background) / .9), 0 4px 10px hsl(var(--background) / .5); }
 .otp-resume { border-color: hsl(var(--otp-pink) / .35); background-image: linear-gradient(135deg, hsl(var(--otp-violet) / .12), hsl(var(--otp-pink) / .08)); }
+
+/* ===== Premium payment gateway (3D) — buyer page, profile pay sheet, admin ===== */
+@layer components {
+  /* Premium surfaces are always the dark gold look, whatever the site theme */
+  .pg3d-page, .pg3d-hero, .pg3d-card, .pg3d-method, .pg3d-plan, .pg3d-contact {
+    --foreground: 0 0% 97%; --muted-foreground: 225 14% 70%; color: hsl(var(--foreground));
+  }
+  .pg3d-page { background: radial-gradient(120% 60% at 50% -10%, hsl(42 90% 55% / 0.16), transparent 60%), hsl(230 32% 6%); }
+  .pg3d-hero {
+    position: relative; overflow: hidden; border-radius: 28px; padding: 22px 18px 20px;
+    background: linear-gradient(160deg, hsl(40 60% 18%) 0%, hsl(230 30% 10%) 60%, hsl(230 35% 7%) 100%);
+    border: 1px solid hsl(45 90% 60% / 0.28);
+    box-shadow: 0 1px 0 hsl(45 100% 80% / 0.25) inset, 0 24px 50px -24px hsl(42 90% 50% / 0.55);
+  }
+  .pg3d-hero::after {
+    content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; aspect-ratio: 1;
+    background: radial-gradient(circle, hsl(45 100% 60% / 0.28), transparent 65%); pointer-events: none;
+    animation: pg3dGlow 6s ease-in-out infinite;
+  }
+  .pg3d-medal {
+    position: relative; width: 74px; height: 74px; border-radius: 24px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transform-style: preserve-3d;
+    background: linear-gradient(145deg, hsl(48 100% 70%), hsl(36 90% 45%));
+    box-shadow: 0 6px 0 hsl(30 80% 28%), 0 14px 26px -6px hsl(36 90% 40% / 0.7), inset 0 2px 0 hsl(50 100% 88% / 0.8);
+    animation: pg3dFloat 4s ease-in-out infinite;
+  }
+  .pg3d-medal img { width: 62px; height: 62px; border-radius: 19px; object-fit: cover; }
+  .pg3d-title { background: linear-gradient(90deg, hsl(48 100% 80%), hsl(40 95% 60%)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .pg3d-card {
+    border-radius: 20px; padding: 16px; background: linear-gradient(180deg, hsl(230 25% 13%), hsl(230 30% 9%));
+    border: 1px solid hsl(0 0% 100% / 0.07); box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.06), 0 14px 30px -20px hsl(0 0% 0% / 0.9);
+  }
+  .pg3d-h { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: hsl(45 90% 65%); margin-bottom: 10px; }
+  .pg3d-step { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; opacity: 0; transform: translateY(6px); animation: pg3dIn 420ms cubic-bezier(.2,.8,.2,1) forwards; }
+  .pg3d-step b {
+    width: 24px; height: 24px; flex-shrink: 0; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 900; color: hsl(30 40% 10%);
+    background: linear-gradient(145deg, hsl(48 100% 72%), hsl(38 90% 50%)); box-shadow: 0 3px 0 hsl(30 80% 30%);
+  }
+  .pg3d-plans { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(132px, 1fr); gap: 10px; overflow-x: auto; padding: 12px 2px 14px; scroll-snap-type: x mandatory; }
+  .pg3d-plan {
+    position: relative; scroll-snap-align: start; border-radius: 18px; padding: 14px 12px; text-align: left;
+    background: linear-gradient(170deg, hsl(230 22% 16%), hsl(230 28% 10%)); border: 1px solid hsl(0 0% 100% / 0.08);
+    box-shadow: 0 5px 0 hsl(230 30% 5%), inset 0 1px 0 hsl(0 0% 100% / 0.07); transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .pg3d-plan:active { transform: translateY(4px); box-shadow: 0 1px 0 hsl(230 30% 5%); }
+  .pg3d-plan.is-best { border-color: hsl(45 90% 60% / 0.55); background: linear-gradient(170deg, hsl(40 55% 22%), hsl(230 28% 10%)); }
+  .pg3d-plan.is-on { border-color: var(--pc, hsl(45 90% 60%)); box-shadow: 0 5px 0 hsl(230 30% 5%), 0 0 0 2px var(--pc, hsl(45 90% 60%)) inset; }
+  .pg3d-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .pg3d-method {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px 10px;
+    border-radius: 18px; background: linear-gradient(180deg, hsl(230 22% 16%), hsl(230 28% 10%));
+    border: 1px solid hsl(0 0% 100% / 0.08); box-shadow: 0 5px 0 hsl(230 30% 5%), inset 0 1px 0 hsl(0 0% 100% / 0.07);
+    transition: transform 150ms ease, box-shadow 150ms ease; opacity: 0; animation: pg3dFlip 520ms cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .pg3d-method:active { transform: translateY(4px); box-shadow: 0 1px 0 hsl(230 30% 5%); }
+  .pg3d-method.is-on { border-color: var(--mc); box-shadow: 0 5px 0 hsl(230 30% 5%), 0 0 0 2px var(--mc) inset, 0 10px 24px -10px var(--mc); }
+  .pg3d-tile {
+    width: 100%; aspect-ratio: 16 / 10; border-radius: 13px; background: hsl(0 0% 100%);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    box-shadow: inset 0 -3px 0 hsl(0 0% 0% / 0.08), 0 6px 14px -8px hsl(0 0% 0% / 0.9);
+  }
+  .pg3d-tile img { width: 86%; height: 80%; object-fit: contain; }
+  .pg3d-tile.is-dark { background: hsl(230 25% 20%); }
+  .pg3d-chip { font-size: 11px; font-weight: 800; color: hsl(var(--foreground)); }
+  .pg3d-pay {
+    width: 100%; border-radius: 16px; padding: 14px; font-weight: 800; color: hsl(0 0% 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--mc) 100%, white 12%), var(--mc));
+    box-shadow: 0 5px 0 color-mix(in srgb, var(--mc) 60%, black 40%), 0 14px 26px -12px var(--mc);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+  .pg3d-pay:active { transform: translateY(4px); box-shadow: 0 1px 0 color-mix(in srgb, var(--mc) 60%, black 40%); }
+  .pg3d-pay:disabled { opacity: 0.5; }
+  .pg3d-number {
+    border-radius: 16px; padding: 12px 14px; border: 1px dashed color-mix(in srgb, var(--mc) 70%, transparent);
+    background: color-mix(in srgb, var(--mc) 12%, transparent);
+  }
+  .pg3d-input {
+    width: 100%; border-radius: 14px; padding: 12px 14px; font-size: 14px; color: hsl(var(--foreground));
+    background: hsl(230 25% 8%); border: 1px solid hsl(0 0% 100% / 0.1); box-shadow: inset 0 2px 6px hsl(0 0% 0% / 0.5);
+  }
+  .pg3d-input:focus { outline: none; border-color: var(--mc, hsl(45 90% 60%)); }
+  .pg3d-contact {
+    display: flex; align-items: center; gap: 12px; border-radius: 20px; padding: 12px;
+    background: linear-gradient(120deg, hsl(200 70% 22% / 0.55), hsl(140 55% 20% / 0.45));
+    border: 1px solid hsl(0 0% 100% / 0.1); box-shadow: 0 5px 0 hsl(230 30% 5%);
+  }
+  .pg3d-contact img { width: 54px; height: 54px; flex-shrink: 0; animation: pg3dFloat 5s ease-in-out infinite; }
+  .pg3d-wait { width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 14px; position: relative;
+    background: conic-gradient(hsl(45 95% 60%) var(--p, 0%), hsl(0 0% 100% / 0.08) 0); display: flex; align-items: center; justify-content: center; }
+  .pg3d-wait::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: hsl(230 30% 9%); }
+  .pg3d-wait > * { position: relative; }
+  /* admin */
+  .pg3d-admin-hero { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px;
+    background: linear-gradient(135deg, hsl(40 55% 20%), hsl(235 30% 12%)); border: 1px solid hsl(45 90% 60% / 0.25); }
+  .pg3d-coin { width: 38px; height: 38px; border-radius: 50%; background: hsl(0 0% 100%); display: flex; align-items: center; justify-content: center; overflow: hidden;
+    border: 2px solid var(--c); box-shadow: 0 3px 0 hsl(0 0% 0% / 0.5); }
+  .pg3d-coin img { width: 80%; height: 80%; object-fit: contain; }
+  .pg3d-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px; border-radius: 12px; font-size: 10px; font-weight: 700;
+    color: hsl(0 0% 75%); background: hsl(235 25% 14%); box-shadow: 0 3px 0 hsl(235 30% 6%); transition: transform 120ms ease; }
+  .pg3d-tab:active { transform: translateY(2px); }
+  .pg3d-tab.is-on { color: hsl(30 40% 10%); background: linear-gradient(180deg, hsl(48 100% 70%), hsl(40 90% 52%)); box-shadow: 0 3px 0 hsl(30 80% 30%); }
+}
+@keyframes pg3dFloat { 0%, 100% { transform: translateY(0) rotateY(0deg); } 50% { transform: translateY(-5px) rotateY(12deg); } }
+@keyframes pg3dGlow { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.12); } }
+@keyframes pg3dIn { to { opacity: 1; transform: none; } }
+@keyframes pg3dFlip { from { opacity: 0; transform: perspective(500px) rotateX(-55deg) translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pg3d-medal, .pg3d-contact img, .pg3d-hero::after { animation: none; }
+  .pg3d-step, .pg3d-method { animation: none; opacity: 1; transform: none; }
+}

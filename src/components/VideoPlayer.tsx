@@ -7,7 +7,7 @@ import EpisodeSearchPopup from "@/components/EpisodeSearchPopup";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { getDeviceId } from "@/lib/premiumDevice";
 import { buildTrackLabel } from "@/lib/mkv/mkvDemux";
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo, type CSSProperties } from "react";
 import { remoteActionFor, stepIndex, channelIndexFromDigits, stepVolume, WHEEL_VOLUME_STEP } from "@/lib/remoteKeys";
 import { isAbyssLink, resolveAbyss, invalidateAbyss } from "@/lib/abyss";
 import Hls from "hls.js";
@@ -35,6 +35,7 @@ import { fireAdOnly } from "@/lib/adEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
 import { optimizedImageUrl } from "@/lib/imageCache";
 import { showPlayerWatermark } from "@/lib/playerWatermark";
+import { useWatermarkSettings } from "@/hooks/useWatermarkSettings";
 import { contentCategoryLabels, normalizeCastFrom, normalizeDirectorsFrom, normalizeOverviewFrom } from "@/lib/contentMetadata";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
@@ -479,6 +480,7 @@ const normalizeDownloadQualityKey = (label: string) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false, extraServers = [], remoteChannels }: VideoPlayerProps) => {
   const branding = useBranding();
+  const watermark = useWatermarkSettings();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
 
@@ -5260,10 +5262,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {showPlayerWatermark(isPremium) && (
-            <div className={`player-watermark ${isFullscreen ? "is-fs" : ""} ${showControls ? "is-hidden" : ""}`} aria-hidden="true">
-              <img src={branding.logoUrl || "/android-chrome-192x192.png"} alt="" draggable={false} />
-              <span>RS ANIME03</span>
+          {showPlayerWatermark(isPremium, watermark.enabled) && (
+            <div
+              className={`player-watermark ${isFullscreen ? "is-fs" : ""} ${showControls ? "is-hidden" : ""}`}
+              style={{ "--wm-size": `${watermark.size}px`, "--wm-opacity": watermark.opacity, "--wm-bright": watermark.brightness } as CSSProperties}
+              aria-hidden="true"
+            >
+              <img src={watermark.logoUrl || branding.logoUrl || "/android-chrome-192x192.png"} alt="" draggable={false} />
+              {watermark.showText && watermark.text && <span>{watermark.text}</span>}
             </div>
           )}
 

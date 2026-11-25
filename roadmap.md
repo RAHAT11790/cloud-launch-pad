@@ -348,3 +348,10 @@
 - [x] Free-user watermark (logo + RS ANIME03), hidden for premium
 - [x] Backdrop image instead of black screen until the video plays
 - [ ] Real phone volume/brightness — not possible from a website (browser limit)
+
+## Payment gateway + watermark controls
+- [x] Admin "Player Watermark": on/off, gallery logo, size, visibility, brightness, text, live preview
+- [x] Premium page redesign (3D), benefits list, price list, bKash/Nagad/Binance + Others/Admin Contact
+- [x] Admin "Payment Gateway": methods (logo + QR upload, add/remove/reorder), price list, benefits, contact
+- [x] Default logos stored in Firebase
+- [ ] Nagad / Binance numbers + Telegram/WhatsApp contact — waiting for owner to enter them in admin

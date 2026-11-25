@@ -2,6 +2,9 @@ import { filterExistingHistory } from "@/lib/historyFilter";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearPremiumPayParam, readPremiumPayTab } from "@/lib/premiumPayLink";
+import { usePaymentGateway } from "@/hooks/usePaymentGateway";
+import { usableMethods, priceFor, senderLooksValid, type PaymentMethod } from "@/lib/paymentGateway";
+import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
 import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
@@ -100,7 +103,6 @@ interface ProfilePageProps {
 }
 
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
-const PAYMENT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const AccessTimer = () => {
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
@@ -553,7 +555,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [pendingPaymentRequest, setPendingPaymentRequest] = useState<any | null>(null);
   const [editingPendingRequest, setEditingPendingRequest] = useState(false);
   const [bkashSenderNumber, setBkashSenderNumber] = useState("");
-  const [paymentTab, setPaymentTab] = useState<"bkash" | "redeem">(() => readPremiumPayTab(window.location.search) || "bkash");
+  const [paymentTab, setPaymentTab] = useState<string>(() => readPremiumPayTab(window.location.search) || "");
+  const { config: gateway } = usePaymentGateway();
   useEffect(() => { clearPremiumPayParam(); }, []);
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
@@ -860,7 +863,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     });
     setBkashSenderNumber(pendingPaymentRequest.bkashNumber || "");
     setTrxInput((pendingPaymentRequest.transactionId || "").toUpperCase());
-    setPaymentTab("bkash");
+    setPaymentTab(pendingPaymentRequest.method || "bkash");
     setEditingPendingRequest(true);
   };
 
@@ -1062,13 +1065,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     finally { setRedeemLoading(false); }
   };
 
-  const submitBkashPayment = async () => {
+  const submitBkashPayment = async (method: PaymentMethod) => {
     if (!userId || !selectedPlan || !trxInput.trim()) {
       toast.error("Enter Transaction ID");
       return;
     }
-    if (!bkashSenderNumber.trim() || bkashSenderNumber.trim().length < 11) {
-      toast.error("Enter your bKash number");
+    if (!senderLooksValid(method, bkashSenderNumber)) {
+      toast.error(method.kind === "mobile" ? `Enter your 11-digit ${method.name} number` : `Enter ${method.senderLabel.toLowerCase()}`);
       return;
     }
     setTrxSubmitting(true);
@@ -1086,6 +1089,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         planName: selectedPlan.name,
         planPrice: selectedPlan.price,
         planDays: selectedPlan.days,
+        method: method.id,
+        methodName: method.name,
+        ...(method.kind === "crypto" ? { planPriceLabel: priceFor(method, Number(selectedPlan.price) || 0, gateway.usdtRate) } : {}),
         status: "pending",
         submittedAt: pendingPaymentRequest?.submittedAt || Date.now(),
         updatedAt: Date.now(),
@@ -1106,7 +1112,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
       // 🔁 Instant auto-match attempt — if the SMS has already been forwarded
       // by the Android side, the user gets premium without admin intervention.
-      try {
+      if (method.id === "bkash") try {
         const { tryMatchPayment } = await import("@/lib/bkashAutoMatcher");
         const reqId = isEditingExistingRequest
           ? pendingPaymentRequest!.id
@@ -1350,115 +1356,109 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   // Premium Panel
   if (activePanel === "premium") {
     const activePlans = (bkashSettings?.plans || []).filter((p: any) => p.active !== false);
-    const hasBkash = bkashSettings?.phoneNumber;
+    const payMethods = usableMethods(gateway);
+    const activeMethod = paymentTab === "redeem" ? null : (payMethods.find((m) => m.id === paymentTab) || payMethods[0] || null);
     const pendingReviewMs = pendingPaymentRequest
-      ? (pendingPaymentRequest.submittedAt || Date.now()) + PAYMENT_REVIEW_WINDOW_MS - Date.now()
+      ? (pendingPaymentRequest.submittedAt || Date.now()) + gateway.reviewHours * 3600000 - Date.now()
       : 0;
     const showPendingRequest = !!pendingPaymentRequest && !editingPendingRequest;
+    const mc = activeMethod?.color || "#E2136E";
 
     const renderPaymentOptions = () => (
       <>
-        {hasBkash && (
-          <div className="flex gap-2 mb-4">
-            <button onClick={() => setPaymentTab("bkash")}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${paymentTab === "bkash" ? "bg-[#E2136E] text-white" : "bg-foreground/10 text-foreground"}`}>
-              📱 bKash Payment
-            </button>
-            <button onClick={() => setPaymentTab("redeem")}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${paymentTab === "redeem" ? "premium-gradient text-primary-foreground" : "bg-foreground/10 text-foreground"}`}>
-              🎁 Redeem Code
+        <div className="pg3d-card mb-4" data-profile-pay-methods>
+          <h4 className="pg3d-h">Pay with</h4>
+          <div className="pg3d-methods">
+            {payMethods.map((m, i) => (
+              <MethodTile key={m.id} method={m} index={i} active={activeMethod?.id === m.id} onClick={() => setPaymentTab(m.id)} />
+            ))}
+            <button type="button" onClick={() => setPaymentTab("redeem")} data-pay-method="redeem"
+              className={`pg3d-method ${!activeMethod ? "is-on" : ""}`} style={{ ["--mc" as any]: "hsl(250 80% 65%)", animationDelay: `${payMethods.length * 70}ms` }}>
+              <span className="pg3d-tile is-dark"><Gift className="w-7 h-7" style={{ color: "hsl(45,90%,55%)" }} /></span>
+              <span className="pg3d-chip">Redeem Code</span>
             </button>
           </div>
-        )}
+        </div>
 
-        {(paymentTab === "bkash" && hasBkash) ? (
-          <div>
-            <div className="premium-card p-4 rounded-2xl mb-4">
+        {activeMethod ? (
+          <div style={{ ["--mc" as any]: mc, ["--pc" as any]: mc }}>
+            <div className="pg3d-card mb-4">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <h4 className="text-sm font-semibold premium-text">📦 {isPremium ? "Extend or Renew Your Plan" : editingPendingRequest ? "Edit Payment Request" : "Select a Plan"}</h4>
+                <h4 className="pg3d-h !mb-0">{isPremium ? "Extend or renew" : editingPendingRequest ? "Edit request" : "Select a plan"}</h4>
                 {editingPendingRequest && (
-                  <button
-                    onClick={() => setEditingPendingRequest(false)}
-                    className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 text-muted-foreground hover:bg-foreground/15 transition-colors"
-                  >
-                    Cancel Edit
-                  </button>
+                  <button onClick={() => setEditingPendingRequest(false)}
+                    className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 text-muted-foreground hover:bg-foreground/15 transition-colors">Cancel Edit</button>
                 )}
               </div>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 {activePlans.map((plan: any) => (
-                  <div key={plan.id} onClick={() => setSelectedPlan(plan)}
-                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${selectedPlan?.id === plan.id ? "border-[#E2136E] bg-[#E2136E]/10" : "border-foreground/10 bg-foreground/5 hover:border-foreground/20"}`}>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-bold">{plan.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{plan.days} days Ad-Free</p>
-                        {plan.maxDevices && (
-                          <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "hsl(45,90%,55%)" }}>
-                            <Smartphone className="w-3 h-3" /> Up to {plan.maxDevices} devices
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-lg font-extrabold text-[#E2136E]">৳{plan.price}</p>
-                    </div>
-                  </div>
+                  <button key={plan.id} type="button" onClick={() => setSelectedPlan(plan)} data-plan={plan.id}
+                    className={`pg3d-plan ${selectedPlan?.id === plan.id ? "is-on" : ""}`}>
+                    <p className="text-[12px] font-bold text-muted-foreground">{plan.name}</p>
+                    <p className="mt-1 text-xl font-black" style={{ color: mc }}>{priceFor(activeMethod, Number(plan.price) || 0, gateway.usdtRate)}</p>
+                    <p className="mt-1 text-[11px] text-foreground/75">{plan.days} days Ad-Free</p>
+                    {plan.maxDevices && (
+                      <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "hsl(45,90%,55%)" }}>
+                        <Smartphone className="w-3 h-3" /> Up to {plan.maxDevices} devices
+                      </p>
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
 
             {selectedPlan && (
-              <div className="premium-card p-4 rounded-2xl mb-4">
-                <h4 className="text-sm font-semibold mb-3 text-[#E2136E]">📲 {editingPendingRequest ? "Update Your Request" : "Complete Payment"}</h4>
-
-                <div className="bg-[#E2136E]/10 border border-[#E2136E]/30 rounded-xl p-3 mb-3">
-                  <p className="text-xs text-muted-foreground mb-1">{bkashSettings.accountType} number:</p>
-                  <p className="text-lg font-bold text-[#E2136E] tracking-wider">{bkashSettings.phoneNumber}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Amount: <span className="font-bold text-foreground">৳{selectedPlan.price}</span></p>
+              <div className="pg3d-card mb-4" data-pay-form>
+                <div className="flex items-center gap-3 mb-3">
+                  {activeMethod.logo && <span className="pg3d-tile !w-16 shrink-0"><img src={activeMethod.logo} alt="" /></span>}
+                  <h4 className="text-sm font-extrabold" style={{ color: mc }}>{editingPendingRequest ? "Update your request" : `Pay with ${activeMethod.name}`}</h4>
                 </div>
 
-                {bkashSettings.instructions && (
-                  <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{bkashSettings.instructions}</p>
-                )}
+                <div className="pg3d-number mb-3">
+                  <p className="text-[11px] text-muted-foreground mb-1">{activeMethod.accountType ? `${activeMethod.accountType} ` : ""}{activeMethod.kind === "crypto" ? "address / Pay ID" : "number"}:</p>
+                  <div className="flex items-center gap-2">
+                    <p className="flex-1 min-w-0 text-lg font-black tracking-wider break-all" style={{ color: mc }}>{activeMethod.number}</p>
+                    <button type="button" onClick={() => { navigator.clipboard?.writeText(activeMethod.number).then(() => toast.success("Copied")).catch(() => {}); }}
+                      className="shrink-0 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-foreground/10">Copy</button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Amount: <span className="font-bold text-foreground">{priceFor(activeMethod, Number(selectedPlan.price) || 0, gateway.usdtRate)}</span></p>
+                </div>
 
-                {bkashSettings.qrCodeLink && (
+                {activeMethod.instructions && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{activeMethod.instructions}</p>}
+
+                {activeMethod.qr && (
                   <div className="text-center mb-3">
                     <p className="text-xs text-muted-foreground mb-2">Scan the QR code:</p>
-                    <img src={bkashSettings.qrCodeLink} alt="bKash QR" className="w-40 h-40 mx-auto rounded-xl border border-foreground/10" />
+                    <img src={activeMethod.qr} alt={`${activeMethod.name} QR`} className="w-44 h-44 mx-auto rounded-2xl bg-white p-2 object-contain" />
                   </div>
                 )}
 
                 <div className="mb-3">
-                  <label className="text-xs text-muted-foreground mb-1 block">Your bKash Number</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">{activeMethod.senderLabel}</label>
                   <input value={bkashSenderNumber} onChange={e => setBkashSenderNumber(e.target.value)}
-                    placeholder="01XXXXXXXXX" maxLength={11}
-                    className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-[#E2136E] focus:outline-none transition-colors" />
+                    placeholder={activeMethod.kind === "mobile" ? "01XXXXXXXXX" : "Your account / ID"} maxLength={activeMethod.kind === "mobile" ? 11 : 80}
+                    inputMode={activeMethod.kind === "mobile" ? "numeric" : "text"} className="pg3d-input" />
                 </div>
 
-                <div className="mb-3">
+                <div className="mb-4">
                   <label className="text-xs text-muted-foreground mb-1 block">Transaction ID</label>
                   <input value={trxInput} onChange={e => setTrxInput(e.target.value.toUpperCase())}
-                    placeholder="Example: 0A1B2C3D4E"
-                    className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm font-mono tracking-wider focus:border-[#E2136E] focus:outline-none transition-colors" />
+                    placeholder="Example: 0A1B2C3D4E" className="pg3d-input font-mono tracking-wider" />
                 </div>
 
-                <button onClick={submitBkashPayment} disabled={trxSubmitting || !trxInput.trim() || !bkashSenderNumber.trim()}
-                  className="w-full py-3 rounded-xl bg-[#E2136E] text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-colors hover:bg-[#C8115F]">
+                <button onClick={() => submitBkashPayment(activeMethod)} disabled={trxSubmitting || !trxInput.trim() || !bkashSenderNumber.trim()} className="pg3d-pay">
                   {trxSubmitting ? "Submitting..." : editingPendingRequest ? "✅ Update Request" : "✅ Submit Request"}
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="premium-card p-4 rounded-2xl mb-4">
+          <div className="pg3d-card mb-4">
             <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Gift className="w-4 h-4" style={{ color: "hsl(45,90%,55%)" }} /> Enter Redeem Code
             </h4>
-            <input
-              value={redeemInput}
-              onChange={e => setRedeemInput(e.target.value.toUpperCase())}
-              placeholder=""
-              className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm font-mono tracking-widest focus:border-primary focus:outline-none transition-colors mb-3 text-center"
-            />
+            <input value={redeemInput} onChange={e => setRedeemInput(e.target.value.toUpperCase())} placeholder=""
+              className="pg3d-input font-mono tracking-widest text-center mb-3" />
             <button onClick={redeemCode} disabled={redeemLoading}
               className="w-full py-3 rounded-xl premium-gradient font-semibold flex items-center justify-center gap-2 disabled:opacity-50" style={{ color: "hsl(30,20%,8%)" }}>
               {redeemLoading ? "Verifying..." : "Activate"}
@@ -1466,10 +1466,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           </div>
         )}
 
-        <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
-          className="block w-full py-3 rounded-xl bg-[#0088cc] text-white font-semibold text-center text-sm transition-colors hover:opacity-90">
-          📩 Need help? Contact Owner
-        </a>
+        {gateway.contact.enabled && (gateway.contact.telegram || gateway.contact.whatsapp) ? (
+          <AdminContactCard contact={gateway.contact} />
+        ) : TELEGRAM_ADMIN_URL ? (
+          <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
+            className="block w-full py-3 rounded-xl bg-[#0088cc] text-white font-semibold text-center text-sm transition-colors hover:opacity-90">
+            📩 Need help? Contact Owner
+          </a>
+        ) : null}
       </>
     );
 
@@ -1495,14 +1499,14 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
               <div className="rounded-xl bg-foreground/5 border border-foreground/10 p-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Plan</span>
-                  <span className="font-semibold">{pendingPaymentRequest.planName} • ৳{pendingPaymentRequest.planPrice}</span>
+                  <span className="font-semibold">{pendingPaymentRequest.planName} • {pendingPaymentRequest.planPriceLabel || `৳${pendingPaymentRequest.planPrice}`}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Transaction ID</span>
                   <span className="font-mono font-semibold">{pendingPaymentRequest.transactionId}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">bKash Number</span>
+                  <span className="text-muted-foreground">{pendingPaymentRequest.methodName || "bKash"} account</span>
                   <span className="font-semibold">{pendingPaymentRequest.bkashNumber || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">

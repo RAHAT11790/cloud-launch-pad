@@ -69,6 +69,8 @@ const WeeklyEpisodeManager = lazy(() => import("@/components/admin/WeeklyEpisode
 
 const AnManager = lazy(() => import("@/components/admin/AnManager"));
 const DailyTaskManager = lazy(() => import("@/components/admin/DailyTaskManager"));
+const PaymentGatewayManager = lazy(() => import("@/components/admin/PaymentGatewayManager"));
+const PlayerWatermarkManager = lazy(() => import("@/components/admin/PlayerWatermarkManager"));
 
 const PremiumUsersManager = lazySection(() => import("@/components/admin/PremiumUsersManager"), "Premium Users");
 const EgdManager = lazySection(() => import("@/components/admin/EgdManager"), "Edge Function Manager");
@@ -215,7 +217,7 @@ const normalizeTelegramButtonText = (value: string) => String(value || DEFAULT_T
  .replace(/\s+/g, " ")
  .trim();
 
-type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "domain-checker" | "backdrop-ai" | "security-center" | "browser-access" | "task-manager" | "tg-download" | "download-manager" | "profile-shop" | "global-chat";
+type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "new-releases" | "notifications" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "premium-users" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "cf-manager" | "fb-analytics" | "adsterra" | "domain-checker" | "backdrop-ai" | "security-center" | "browser-access" | "task-manager" | "tg-download" | "download-manager" | "profile-shop" | "global-chat" | "payment-gateway" | "player-watermark";
 
 const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL enter আগে/g, "Enter the AI URL first"],
@@ -1998,7 +2000,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router", "branding", "ai-config", "live-tv", "url-changer",
     "link-checker", "video-servers", "unlock-duration", "email-service", "apk-dw",
     "egd-manager", "cf-manager", "fb-analytics", "adsterra", "domain-checker", "backdrop-ai",
-    "security-center", "browser-access", "task-manager", "tg-download", "download-manager", "profile-shop", "global-chat"
+    "security-center", "browser-access", "task-manager", "tg-download", "download-manager", "profile-shop", "global-chat", "payment-gateway", "player-watermark"
   ]), []);
   const routeParams = useParams<{ section?: string }>();
   const routeNavigate = useNavigate();
@@ -3336,7 +3338,9 @@ type MoviePartEditor = { partNumber: number; title?: string; link: string; link4
  analytics: "Analytics & Views",
  "auto-import": "Auto Import",
  "animesalt-manager": "AnimeSalt Manager",
- "bkash-payments": "bKash Payments",
+ "bkash-payments": "Payment Requests",
+ "payment-gateway": "Payment Gateway",
+ "player-watermark": "Player Watermark",
  "premium-users": "Premium Users",
  "device-limits": "Device Limits",
  "telegram-post": "Telegram Post",
@@ -5514,7 +5518,8 @@ ${tgBulkFooter}
  { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
  { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
  { section: "redeem-codes", icon: <Shield size={16} />, label: "Redeem Codes" },
- { section: "bkash-payments", icon: <KeyRound size={16} />, label: "bKash Payments" },
+ { section: "payment-gateway", icon: <Crown size={16} />, label: "Payment Gateway" },
+ { section: "bkash-payments", icon: <KeyRound size={16} />, label: "Payment Requests" },
  { section: "premium-users", icon: <Crown size={16} />, label: "Premium Users" },
  { section: "device-limits", icon: <Lock size={16} />, label: "Device Limits" },
  { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
@@ -5538,6 +5543,7 @@ ${tgBulkFooter}
  { section: "fb-analytics", icon: <Database size={16} />, label: "FB Analytics" },
  { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
  { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
+ { section: "player-watermark", icon: <Eye size={16} />, label: "Player Watermark" },
  { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
  { section: "url-changer", icon: <Link size={16} />, label: "URL Changer" },
  { section: "link-checker", icon: <Search size={16} />, label: "Link Checker" },
@@ -8160,97 +8166,10 @@ ${tgBulkFooter}
  {/* ==================== BKASH PAYMENTS ==================== */}
  {activeSection === "bkash-payments" && (
  <div>
- {/* Settings Card */}
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Settings size={14} className="text-pink-500" /> bKash settings
- </h3>
- <div className="space-y-3">
- <div>
- <label className="text-[11px] text-zinc-400 mb-1 block">bKash name্</label>
- <input value={bkashSettings.phoneNumber || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, phoneNumber: e.target.value }))} className={inputClass} placeholder="01XXXXXXXXX" />
- </div>
- <div>
- <label className="text-[11px] text-zinc-400 mb-1 block">account type</label>
- <select value={bkashSettings.accountType || "Agent"} onChange={e => setBkashSettings((p: any) => ({ ...p, accountType: e.target.value }))} className={selectClass}>
- <option value="Agent">Agent</option>
- <option value="Personal">Personal</option>
- <option value="Merchant">Merchant</option>
- </select>
- </div>
- <div>
- <label className="text-[11px] text-zinc-400 mb-1 block">QR code link (imageর URL)</label>
- <input value={bkashSettings.qrCodeLink || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, qrCodeLink: e.target.value }))} className={inputClass} placeholder="https://example.com/qr.png" />
- </div>
- <div>
- <label className="text-[11px] text-zinc-400 mb-1 block">নির্শNo (userদ for users)</label>
- <textarea value={bkashSettings.instructions || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, instructions: e.target.value }))} className={inputClass + " min-h-[80px] resize-none"} placeholder="Send Money ..." />
- </div>
-
- {/* Plans */}
- <div>
- <label className="text-[11px] text-zinc-400 mb-2 block font-semibold">subscription plan (3)</label>
- {(bkashSettings.plans || []).map((plan: any, idx: number) => (
- <div key={plan.id || idx} className="bg-[#141422] rounded-lg p-3 mb-2 border border-white/6">
- <div className="grid grid-cols-2 gap-2 mb-2">
- <div>
- <label className="text-[10px] text-zinc-500 block">plan name</label>
- <input value={plan.name} onChange={e => {
- const plans = [...(bkashSettings.plans || [])];
- plans[idx] = { ...plans[idx], name: e.target.value };
- setBkashSettings((p: any) => ({ ...p, plans }));
- }} className={inputClass + " !py-1.5 !text-xs"} />
- </div>
- <div>
- <label className="text-[10px] text-zinc-500 block">price (৳)</label>
- <input type="number" value={plan.price} onChange={e => {
- const plans = [...(bkashSettings.plans || [])];
- plans[idx] = { ...plans[idx], price: Number(e.target.value) };
- setBkashSettings((p: any) => ({ ...p, plans }));
- }} className={inputClass + " !py-1.5 !text-xs"} />
- </div>
- </div>
- <div className="grid grid-cols-3 gap-2">
- <div>
- <label className="text-[10px] text-zinc-500 block">day</label>
- <input type="number" value={plan.days} onChange={e => {
- const plans = [...(bkashSettings.plans || [])];
- plans[idx] = { ...plans[idx], days: Number(e.target.value) };
- setBkashSettings((p: any) => ({ ...p, plans }));
- }} className={inputClass + " !py-1.5 !text-xs"} />
- </div>
- <div>
- <label className="text-[10px] text-zinc-500 block">device</label>
- <input type="number" value={plan.maxDevices || 1} onChange={e => {
- const plans = [...(bkashSettings.plans || [])];
- plans[idx] = { ...plans[idx], maxDevices: Number(e.target.value) || 1 };
- setBkashSettings((p: any) => ({ ...p, plans }));
- }} className={inputClass + " !py-1.5 !text-xs"} min="1" max="10" />
- </div>
- <div className="flex items-end">
- <label className="flex items-center gap-2 cursor-pointer text-xs">
- <input type="checkbox" checked={plan.active !== false} onChange={e => {
- const plans = [...(bkashSettings.plans || [])];
- plans[idx] = { ...plans[idx], active: e.target.checked };
- setBkashSettings((p: any) => ({ ...p, plans }));
- }} className="accent-indigo-500" />
- active
- </label>
- </div>
- </div>
- </div>
- ))}
- </div>
-
- <button onClick={() => {
- set(ref(db, "bkashSettings"), bkashSettings)
- .then(() => toast.success("bKash settings save done"))
- .catch(err => toast.error("Error: " + err.message));
- }} className={`${btnPrimary} w-full py-3.5 flex items-center justify-center gap-2`}>
- <Save size={16} /> settings save 
+ <button onClick={() => setActiveSection("payment-gateway" as any)} className={`${glassCard} w-full p-4 mb-4 flex items-center justify-between text-left`}>
+ <span><span className="block text-sm font-semibold">Numbers, plans, logos & benefits</span><span className="block text-[11px] text-zinc-400">Edit them in Payment Gateway</span></span>
+ <Settings size={16} className="text-amber-400" />
  </button>
- </div>
- </div>
 
  {/* Payment Requests */}
  <div className={`${glassCard} p-4`}>
@@ -8280,7 +8199,8 @@ ${tgBulkFooter}
  <p>📱 TrxID: <span className="font-mono font-bold text-white">{req.transactionId}</span></p>
  <p>💰 plan: {req.planName} — ৳{req.planPrice}</p>
  <p>📅 {new Date(req.submittedAt).toLocaleString("bn-BD")}</p>
- {req.bkashNumber && <p>📞 bKash: {req.bkashNumber}</p>}
+ {req.bkashNumber && <p>📞 {req.methodName || "bKash"}: {req.bkashNumber}</p>}
+ {req.methodName && <p>💳 Method: <span className="font-semibold text-white">{req.methodName}</span></p>}
  </div>
  {req.status === "pending" && (
  <div className="flex gap-2">
@@ -9394,6 +9314,16 @@ ${tgBulkFooter}
 {activeSection === "global-chat" && <GlobalChatManager />}
 
  {/* ==================== DAILY TASK MANAGER ==================== */}
+ {activeSection === "payment-gateway" && (
+ <Suspense fallback={<AdminSectionLoader label="Payment Gateway" />}>
+ <PaymentGatewayManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+ </Suspense>
+ )}
+ {activeSection === "player-watermark" && (
+ <Suspense fallback={<AdminSectionLoader label="Player Watermark" />}>
+ <PlayerWatermarkManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+ </Suspense>
+ )}
  {activeSection === "task-manager" && (
  <Suspense fallback={<AdminSectionLoader label="Daily Task Manager" />}>
  <DailyTaskManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
