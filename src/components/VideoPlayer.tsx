@@ -5255,7 +5255,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
           {!isEmbedPlayback && loadingBackdrop && (
-            <div className={`player-load-backdrop ${frameReady ? "is-gone" : ""}`} aria-hidden="true">
+            <div className={`player-load-backdrop ${anime ? "" : "is-contain"} ${frameReady ? "is-gone" : ""}`} aria-hidden="true">
               <img src={loadingBackdrop} alt="" decoding="async" draggable={false} />
             </div>
           )}

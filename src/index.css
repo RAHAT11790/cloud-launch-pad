@@ -616,6 +616,8 @@ div[style*="z-index: 2147483647"],
     inset: 0;
     background: radial-gradient(ellipse at center, hsl(0 0% 0% / 0.25) 0%, hsl(0 0% 0% / 0.62) 100%);
   }
+  /* Live TV logo / single poster: show it whole on dark instead of cropping it */
+  .player-load-backdrop.is-contain img { object-fit: contain; padding: 14%; }
   .player-load-backdrop.is-gone { opacity: 0; }
   .player-load-backdrop.is-gone img { animation: none; }
   @keyframes p3d-backdrop-zoom {
