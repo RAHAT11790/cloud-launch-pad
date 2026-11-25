@@ -431,40 +431,255 @@ div[style*="z-index: 2147483647"],
     -webkit-backdrop-filter: none;
   }
 
-  .player-touch-button {
-    background: hsl(0 0% 0% / 0.55);
+  /* ===== 3D control deck =====
+     Every player button is a lit, bevelled glass orb: top highlight, bottom
+     shade, soft drop shadow and an extruded icon. Motion is transform/opacity
+     only, so low-end phones stay smooth. */
+  .player-touch-button,
+  .player-control-chip {
+    position: relative;
     color: hsl(0 0% 100%);
-    border: 0;
-    box-shadow: none;
+    background:
+      linear-gradient(165deg, hsl(0 0% 100% / 0.26) 0%, hsl(0 0% 100% / 0.07) 42%, hsl(0 0% 0% / 0.28) 100%),
+      hsl(0 0% 6% / 0.62);
+    border: 1px solid hsl(0 0% 100% / 0.16);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.32),
+      inset 0 -2px 4px hsl(0 0% 0% / 0.45),
+      0 3px 8px hsl(0 0% 0% / 0.45);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    contain: paint;
-    transform: translateZ(0);
+    transform: perspective(260px) translateZ(0);
+    transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease;
   }
-
-  .player-touch-button:active {
-    transform: scale(0.92);
+  .player-touch-button svg,
+  .player-control-chip svg {
+    filter: drop-shadow(0 1px 0 hsl(0 0% 0% / 0.7)) drop-shadow(0 2px 3px hsl(var(--primary) / 0.35));
+  }
+  .player-touch-button:active,
+  .player-control-chip:active {
+    transform: perspective(260px) rotateX(18deg) scale(0.9);
+    box-shadow:
+      inset 0 2px 4px hsl(0 0% 0% / 0.55),
+      inset 0 -1px 0 hsl(0 0% 100% / 0.18),
+      0 1px 3px hsl(0 0% 0% / 0.4);
+  }
+  .player-touch-button.is-on,
+  .player-control-chip.is-on {
+    background:
+      linear-gradient(165deg, hsl(0 0% 100% / 0.34) 0%, hsl(0 0% 100% / 0) 45%, hsl(0 0% 0% / 0.22) 100%),
+      hsl(var(--primary) / 0.85);
+    border-color: hsl(var(--primary) / 0.9);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.4),
+      inset 0 -2px 4px hsl(0 0% 0% / 0.3),
+      0 3px 12px hsl(var(--primary) / 0.45);
   }
 
   .player-touch-button--primary {
-    background: hsl(0 0% 0% / 0.6);
     color: hsl(0 0% 100%);
-    border: 1px solid hsl(0 0% 100% / 0.14);
-    box-shadow: none;
+    background:
+      radial-gradient(circle at 32% 24%, hsl(0 0% 100% / 0.55) 0%, hsl(0 0% 100% / 0) 34%),
+      radial-gradient(circle at 50% 60%, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.78) 58%, hsl(var(--primary) / 0.5) 100%);
+    border: 1px solid hsl(0 0% 100% / 0.3);
+    box-shadow:
+      inset 0 2px 0 hsl(0 0% 100% / 0.4),
+      inset 0 -5px 10px hsl(0 0% 0% / 0.35),
+      0 6px 18px hsl(var(--primary) / 0.5),
+      0 2px 4px hsl(0 0% 0% / 0.5);
+  }
+  .player-touch-button--primary svg {
+    filter: drop-shadow(0 1px 0 hsl(0 0% 0% / 0.45)) drop-shadow(0 2px 0 hsl(0 0% 0% / 0.25)) drop-shadow(0 4px 6px hsl(0 0% 0% / 0.35));
+  }
+  /* Soft 3D halo ring while paused (transform/opacity only) */
+  .player-touch-button--primary.is-paused::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--primary) / 0.7);
+    animation: p3d-halo 2.2s ease-out infinite;
+    pointer-events: none;
+  }
+  @keyframes p3d-halo {
+    0% { transform: scale(0.94); opacity: 0.85; }
+    100% { transform: scale(1.32); opacity: 0; }
   }
 
-  .player-control-chip {
-    background: hsl(0 0% 0% / 0.55);
+  /* Seek buttons: circular arrow with the "10" sitting in the middle */
+  .p3d-seek { position: relative; }
+  .p3d-seek-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 800;
+    padding-top: 1px;
+    text-shadow: 0 1px 0 hsl(0 0% 0% / 0.7);
+    pointer-events: none;
+  }
+
+  /* 3D flip-in of every control each time the deck appears */
+  .p3d-deck[data-shown="1"] .p3d-anim {
+    animation: p3d-pop 320ms cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards;
+  }
+  .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 380ms; }
+  @keyframes p3d-pop {
+    0% { opacity: 0; transform: perspective(260px) rotateX(60deg) translateY(8px) scale(0.8); }
+    100% { opacity: 1; transform: perspective(260px) rotateX(0deg) translateY(0) scale(1); }
+  }
+
+  .p3d-title p { text-shadow: 0 1px 2px hsl(0 0% 0% / 0.85); }
+  .p3d-time {
     color: hsl(0 0% 100%);
-    border: 0;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    touch-action: manipulation;
-    contain: paint;
-    transform: translateZ(0);
+    text-shadow: 0 1px 3px hsl(0 0% 0% / 0.85), 0 0 6px hsl(0 0% 0% / 0.55);
+  }
+  .p3d-track {
+    background: hsl(0 0% 100% / 0.22);
+    box-shadow: inset 0 1px 2px hsl(0 0% 0% / 0.6);
+  }
+  .p3d-fill {
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.35), hsl(0 0% 100% / 0) 60%), hsl(var(--primary));
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.55);
+  }
+  .p3d-knob {
+    background: radial-gradient(circle at 35% 30%, hsl(0 0% 100%) 0%, hsl(0 0% 100% / 0.9) 30%, hsl(var(--primary)) 75%);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.28), 0 2px 5px hsl(0 0% 0% / 0.55);
+  }
+
+  /* Right-side menu drawer (servers, quality, audio, CC, settings) */
+  .player-drawer {
+    border-radius: 16px 0 0 16px;
+    border-right: 0;
+    background:
+      linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0) 30%),
+      hsl(0 0% 4% / 0.94);
+    box-shadow: -10px 0 28px hsl(0 0% 0% / 0.55);
+    animation: p3d-drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    -webkit-overflow-scrolling: touch;
+  }
+  @keyframes p3d-drawer-in {
+    0% { transform: translateX(100%); opacity: 0.4; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  .player-drawer > button,
+  .player-drawer .space-y-0\.5 > button,
+  .player-drawer .space-y-1 > button { margin-bottom: 3px; }
+  .player-drawer-head {
+    position: sticky;
+    top: -10px;
+    z-index: 2;
+    margin: -10px -10px 8px;
+    padding: 10px 10px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: hsl(0 0% 4% / 0.96);
+    border-bottom: 1px solid hsl(0 0% 100% / 0.08);
+  }
+  .player-drawer-close {
+    width: 26px;
+    height: 26px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: hsl(0 0% 100% / 0.1);
+  }
+
+  /* Backdrop shown instead of a black screen until the first frame plays */
+  .player-load-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 450ms ease;
+  }
+  .player-load-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    animation: p3d-backdrop-zoom 9s ease-out both;
+  }
+  .player-load-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, hsl(0 0% 0% / 0.25) 0%, hsl(0 0% 0% / 0.62) 100%);
+  }
+  .player-load-backdrop.is-gone { opacity: 0; }
+  .player-load-backdrop.is-gone img { animation: none; }
+  @keyframes p3d-backdrop-zoom {
+    0% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+
+  /* Free-user watermark: tiny, faint, top-right corner */
+  .player-watermark {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    opacity: 0.42;
+    pointer-events: none;
+    user-select: none;
+    transition: opacity 200ms ease;
+  }
+  .player-watermark img {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    object-fit: cover;
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.5);
+  }
+  .player-watermark span {
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: hsl(0 0% 100%);
+    text-shadow: 0 1px 2px hsl(0 0% 0% / 0.9);
+    white-space: nowrap;
+  }
+  .player-watermark.is-fs { top: 16px; right: 18px; }
+  .player-watermark.is-fs img { width: 34px; height: 34px; border-radius: 9px; }
+  .player-watermark.is-fs span { font-size: 9px; }
+  .player-watermark.is-hidden { opacity: 0; }
+
+  /* Phone held sideways without fullscreen: the video fits the screen height so
+     the bottom controls and the full server drawer stay on screen. */
+  @media (orientation: landscape) and (max-height: 540px) {
+    .rs-video-player-root[data-player-fs="off"] .rs-video-player-shell { max-height: 100dvh; }
+  }
+
+  .player-unlock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px 0 6px;
+    height: 38px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .p3d-deck[data-shown="1"] .p3d-anim,
+    .player-drawer,
+    .player-load-backdrop img,
+    .player-touch-button--primary.is-paused::after { animation: none !important; }
   }
 
   .player-controls-layer {

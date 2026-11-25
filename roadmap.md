@@ -340,3 +340,11 @@
 - [ ] Owner: choose old Smartlink (earning) or the new rsanime03 Smartlink (0 views so far) for the player.
 - [ ] Paused by owner (ads first): Cloudflare manager key lock (rules written, not applied live yet).
 
+
+## Video player redesign (3D controls)
+- [x] 3D-style buttons + flip-in animation, new layout (title top, Fit moved to bottom bar, ±10 s buttons)
+- [x] Menus (servers, quality, audio, CC, settings) open as a scrollable right-side drawer; sideways phone fits the screen
+- [x] Lock closes every open menu
+- [x] Free-user watermark (logo + RS ANIME03), hidden for premium
+- [x] Backdrop image instead of black screen until the video plays
+- [ ] Real phone volume/brightness — not possible from a website (browser limit)

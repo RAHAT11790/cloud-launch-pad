@@ -1,0 +1,1 @@
+- Video player controls use the CSS 3D deck in `src/index.css` (`player-touch-button`/`player-control-chip` bevel, `p3d-*` transform-only animation) and every player menu is one full-height right `player-drawer` — one look for all buttons/menus, long lists always scroll inside the video, cheap on low-end phones.
