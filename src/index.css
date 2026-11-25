@@ -4203,7 +4203,7 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   /* admin */
   .pg3d-admin-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px; border-radius: 8px;
     background: linear-gradient(135deg, hsl(40 55% 20%), hsl(235 30% 12%)); border: 1px solid hsl(45 90% 60% / 0.25); }
-  .pg3d-admin-logos { display: grid; grid-template-columns: repeat(2, 42px); gap: 8px; flex-shrink: 0; }
+  .pg3d-admin-logos { display: grid; grid-template-columns: repeat(3, 42px); gap: 8px; flex-shrink: 0; }
   .pg3d-coin { width: 42px; height: 38px; border-radius: 8px; background: hsl(var(--payment-paper)); color-scheme: only light; display: flex; align-items: center; justify-content: center; overflow: hidden;
     border: 2px solid var(--c); box-shadow: 0 3px 0 hsl(0 0% 0% / 0.5); }
   .pg3d-coin img { width: 80%; height: 80%; object-fit: contain; }

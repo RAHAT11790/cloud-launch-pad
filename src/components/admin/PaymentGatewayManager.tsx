@@ -9,6 +9,8 @@ import {
   DEFAULT_GATEWAY, DEFAULT_LOGOS, normalizeGateway, priceFor, type PaymentGatewayConfig, type PaymentKind, type PaymentMethod,
 } from "@/lib/paymentGateway";
 import { imageFileToDataUrl } from "@/lib/imageDataUrl";
+import { Button } from "@/components/ui/button";
+import { MethodTile } from "@/components/premium/PaymentBits";
 import { PaymentLogo } from "@/components/premium/PaymentLogo";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }
@@ -50,6 +52,7 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
   const [rawGateway, setRawGateway] = useState<any>(undefined);
   const [plans, setPlans] = useState<any[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [planMethodId, setPlanMethodId] = useState("wallet");
   const [saving, setSaving] = useState(false);
   const dirty = useRef(false);
 
@@ -61,7 +64,7 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
   useEffect(() => {
     if (rawGateway === undefined || legacy === null || dirty.current) return;
     setCfg(normalizeGateway(rawGateway, legacy));
-    setPlans(Array.isArray(legacy?.plans) ? legacy.plans : []);
+    setPlans(Object.values(legacy?.plans || {}));
   }, [rawGateway, legacy]);
 
   const edit = (fn: (c: PaymentGatewayConfig) => PaymentGatewayConfig) => { dirty.current = true; setCfg(fn); };
@@ -80,12 +83,19 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
     }] }));
     setOpen(id);
   };
-  const editPlan = (i: number, p: any) => { dirty.current = true; setPlans((o) => o.map((x, k) => (k === i ? { ...x, ...p } : x))); };
+  const planMethod = cfg.methods.find((m) => m.id === planMethodId && m.kind === "crypto");
+  const displayedPlans = planMethod ? planMethod.plans || [] : plans;
+  const changePlans = (fn: (items: any[]) => any[]) => {
+    dirty.current = true;
+    if (planMethod) editMethod(planMethod.id, { plans: fn(planMethod.plans || []) });
+    else setPlans(fn);
+  };
+  const editPlan = (i: number, p: any) => changePlans((items) => items.map((x, k) => k === i ? { ...x, ...p } : x));
 
   const save = async () => {
     setSaving(true);
     try {
-      await set(ref(db, "settings/paymentGateway"), cfg);
+      await update(ref(db, "settings/paymentGateway"), cfg);
       const bk = cfg.methods.find((m) => m.id === "bkash");
       await update(ref(db, "bkashSettings"), {
         plans,
@@ -108,7 +118,7 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
     <div className="space-y-4 pb-24" data-payment-gateway-manager>
       <div className="pg3d-admin-hero">
         <div className="pg3d-admin-logos">
-          {cfg.methods.slice(0, 4).map((m) => (
+          {cfg.methods.filter((m) => ["bkash", "nagad", "binance"].includes(m.id)).map((m) => (
             <span key={m.id} className="pg3d-coin" style={{ ["--c" as any]: m.color }}>
               {m.logo ? <PaymentLogo src={m.logo} alt={m.name} /> : <Wallet size={16} />}
             </span>
@@ -129,8 +139,12 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
 
       {tab === "methods" && (
         <div className="space-y-2.5">
+          <div className="pg3d-methods" data-admin-method-picker>
+            {cfg.methods.map((m, i) => <MethodTile key={m.id} method={m} index={i} active={m.id === (open || cfg.methods[0]?.id)} onClick={() => setOpen(m.id)} />)}
+          </div>
           {cfg.methods.map((m, i) => {
-            const isOpen = open === m.id;
+            const isOpen = (open || cfg.methods[0]?.id) === m.id;
+            if (!isOpen) return null;
             const isDefault = ["bkash", "nagad", "binance"].includes(m.id);
             return (
               <div key={m.id} className={`${glassCard} overflow-hidden`} style={{ borderColor: isOpen ? m.color + "88" : undefined }}>
@@ -198,30 +212,30 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
 
       {tab === "plans" && (
         <div className="space-y-2.5">
-          <div className={`${glassCard} p-3 grid grid-cols-2 gap-2`}>
-            <label className="block"><span className="text-[10px] text-zinc-500">1 USDT = ৳</span>
-              <input type="number" value={cfg.usdtRate} onChange={(e) => edit((c) => ({ ...c, usdtRate: Number(e.target.value) || 1 }))} className={inputClass} /></label>
-            <label className="block"><span className="text-[10px] text-zinc-500">Review wait (hours)</span>
-              <input type="number" value={cfg.reviewHours} onChange={(e) => edit((c) => ({ ...c, reviewHours: Number(e.target.value) || 24 }))} className={inputClass} /></label>
+          <div className="flex flex-wrap gap-2" data-admin-plan-currency>
+            <Button variant={planMethodId === "wallet" ? "default" : "secondary"} onClick={() => setPlanMethodId("wallet")}>bKash / Nagad · ৳</Button>
+            {cfg.methods.filter((m) => m.kind === "crypto").map((m) => <Button key={m.id} variant={planMethodId === m.id ? "default" : "secondary"} onClick={() => setPlanMethodId(m.id)}>{m.name} · USDT</Button>)}
           </div>
-          {plans.map((p, i) => (
+          <label className="block"><span className="text-[10px] text-muted-foreground">Review wait (hours)</span>
+            <input type="number" value={cfg.reviewHours} onChange={(e) => edit((c) => ({ ...c, reviewHours: Number(e.target.value) || 24 }))} className={inputClass} /></label>
+          {displayedPlans.map((p, i) => (
             <div key={p.id || i} className={`${glassCard} p-3`}>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <label className="block"><span className="text-[10px] text-zinc-500">Plan name</span><input value={p.name || ""} onChange={(e) => editPlan(i, { name: e.target.value })} className={inputClass} /></label>
-                <label className="block"><span className="text-[10px] text-zinc-500">Price (৳)</span><input type="number" value={p.price ?? 0} onChange={(e) => editPlan(i, { price: Number(e.target.value) })} className={inputClass} /></label>
+                <label className="block"><span className="text-[10px] text-zinc-500">Price ({planMethod ? "USDT" : "৳"})</span><input type="number" min={0} step={planMethod ? "0.01" : "1"} value={p.price ?? 0} onChange={(e) => editPlan(i, { price: Number(e.target.value) })} className={inputClass} /></label>
               </div>
               <div className="grid grid-cols-3 gap-2 items-end">
                 <label className="block"><span className="text-[10px] text-zinc-500">Days</span><input type="number" value={p.days ?? 30} onChange={(e) => editPlan(i, { days: Number(e.target.value) })} className={inputClass} /></label>
                 <label className="block"><span className="text-[10px] text-zinc-500">Devices</span><input type="number" min={1} max={10} value={p.maxDevices || 1} onChange={(e) => editPlan(i, { maxDevices: Number(e.target.value) || 1 })} className={inputClass} /></label>
                 <div className="flex gap-1.5">
                   <button onClick={() => editPlan(i, { active: p.active === false })} className={`flex-1 h-[42px] rounded-lg text-[10px] font-black ${p.active !== false ? "bg-emerald-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>{p.active !== false ? "ON" : "OFF"}</button>
-                  <button onClick={() => { dirty.current = true; setPlans((o) => o.filter((_, k) => k !== i)); }} className="w-[42px] h-[42px] rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center" aria-label="Delete plan"><Trash2 size={14} /></button>
+                  <button onClick={() => { changePlans((o) => o.filter((_, k) => k !== i)); }} className="w-[42px] h-[42px] rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center" aria-label="Delete plan"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <p className="mt-2 text-[10px] text-zinc-500">Shown as ৳{p.price ?? 0} • {priceFor({ kind: "crypto" }, Number(p.price) || 0, cfg.usdtRate)}</p>
+              <p className="mt-2 text-[10px] text-zinc-500">{priceFor({ kind: planMethod ? "crypto" : "mobile" }, Number(p.price) || 0)}</p>
             </div>
           ))}
-          <button onClick={() => { dirty.current = true; setPlans((o) => [...o, { id: `plan${Date.now().toString(36)}`, name: "New Plan", days: 30, price: 100, maxDevices: 1, active: true }]); }}
+          <button onClick={() => { changePlans((o) => [...o, { id: `plan${Date.now().toString(36)}`, name: "New Plan", days: 30, price: 0, maxDevices: 1, active: true }]); }}
             className={`${btnSecondary} w-full py-2.5 text-xs inline-flex items-center justify-center gap-1.5`}><Plus size={14} /> Add plan</button>
         </div>
       )}

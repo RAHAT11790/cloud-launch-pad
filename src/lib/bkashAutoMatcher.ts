@@ -16,6 +16,7 @@
  */
 
 import { db, ref, get, set, update, onValue, remove } from "@/lib/firebase";
+import { paymentRequestGroup } from "@/lib/paymentGateway";
 
 const SMS_NODE = "XNXANIKPAY";
 const PAYMENTS_NODE = "bkashPayments";
@@ -54,6 +55,11 @@ export interface PaymentRequest {
   matchedSmsType?: string;
   matchedSmsAmount?: string;
   matchedSmsAgent?: string;
+  method?: string;
+  methodKind?: string;
+  currency?: string;
+  planPriceLabel?: string;
+  planMaxDevices?: number;
 }
 
 const normalizeTrx = (s: string) => String(s || "").trim().toUpperCase();
@@ -94,11 +100,14 @@ async function findSmsByTrxId(rawTrx: string): Promise<SmsEntry | null> {
  * - Optional: receiver type check (we don't have receiver in SMS, only sender,
  *   so we trust the txid + amount combo)
  */
-function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
+export function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
   ok: boolean;
   reason?: string;
 } {
   if (!sms || !req) return { ok: false, reason: "missing_data" };
+  if (paymentRequestGroup(req) === "crypto") return { ok: false, reason: "crypto_manual_review" };
+  const expectedType = ({ bkash: "B", nagad: "N", rocket: "R" } as Record<string, string>)[req.method || "bkash"];
+  if (!expectedType || (sms.type && sms.type !== expectedType)) return { ok: false, reason: "method_mismatch" };
   if (normalizeTrx(sms.txid) !== normalizeTrx(req.transactionId)) {
     return { ok: false, reason: "txid_mismatch" };
   }
@@ -114,16 +123,18 @@ function smsMatchesRequest(sms: SmsEntry, req: PaymentRequest): {
 async function autoApprovePayment(
   req: PaymentRequest,
   opts: { sms?: SmsEntry; source: "auto-sms" | "manual" } = { source: "manual" },
-): Promise<void> {
+): Promise<boolean> {
+  const fresh = (await get(ref(db, `${PAYMENTS_NODE}/${req.id}`))).val();
+  if (fresh?.status !== "pending") return false;
   // Resolve plan device limit from settings if available
   let maxDevices = 1;
   try {
     const settingsSnap = await get(ref(db, SETTINGS_NODE));
     const plans = settingsSnap.val()?.plans || [];
-    const plan = plans.find((p: any) => p.id === req.planId);
-    maxDevices = plan?.maxDevices || (req.planDays <= 30 ? 1 : req.planDays <= 90 ? 3 : 4);
+    const plan = Object.values(plans).find((p: any) => p.id === req.planId) as any;
+    maxDevices = req.planMaxDevices || plan?.maxDevices || (req.planDays <= 30 ? 1 : req.planDays <= 90 ? 3 : 4);
   } catch {
-    maxDevices = req.planDays <= 30 ? 1 : req.planDays <= 90 ? 3 : 4;
+    maxDevices = req.planMaxDevices || (req.planDays <= 30 ? 1 : req.planDays <= 90 ? 3 : 4);
   }
 
   // Stack onto existing premium if still active
@@ -139,7 +150,7 @@ async function autoApprovePayment(
     active: true,
     expiresAt,
     redeemedAt: Date.now(),
-    method: opts.source === "auto-sms" ? "bkash-auto" : "bkash",
+    method: opts.source === "auto-sms" ? `${req.method || "bkash"}-auto` : req.method || "bkash",
     transactionId: req.transactionId,
     maxDevices,
     devices: currentPremium?.devices || {},
@@ -167,6 +178,7 @@ async function autoApprovePayment(
   }
 
   // FCM push removed — in-app notification (above) is enough
+  return true;
 }
 
 /**
@@ -174,7 +186,7 @@ async function autoApprovePayment(
  * Returns true if matched & approved.
  */
 export async function tryMatchPayment(req: PaymentRequest): Promise<boolean> {
-  if (req.status !== "pending") return false;
+  if (req.status !== "pending" || paymentRequestGroup(req) === "crypto") return false;
 
   const sms = await findSmsByTrxId(req.transactionId);
   if (!sms) return false;
@@ -183,8 +195,7 @@ export async function tryMatchPayment(req: PaymentRequest): Promise<boolean> {
   const check = smsMatchesRequest(sms, req);
   if (!check.ok) return false;
 
-  await autoApprovePayment(req, { sms, source: "auto-sms" });
-  return true;
+  return await autoApprovePayment(req, { sms, source: "auto-sms" });
 }
 
 /**
@@ -203,7 +214,7 @@ export function startGlobalAutoMatcher(): () => void {
 
   const tryMatchAll = async () => {
     for (const req of pendingCache) {
-      if (req.status !== "pending") continue;
+      if (req.status !== "pending" || paymentRequestGroup(req) === "crypto") continue;
       const txKey = normalizeTrx(req.transactionId);
       // direct lookup first
       let sms = smsCache[txKey] || smsCache[req.transactionId];
@@ -220,9 +231,9 @@ export function startGlobalAutoMatcher(): () => void {
       const check = smsMatchesRequest(sms, req);
       if (!check.ok) continue;
       try {
-        await autoApprovePayment(req, { sms, source: "auto-sms" });
+        const approved = await autoApprovePayment(req, { sms, source: "auto-sms" });
         // mutate local cache so we don't double-process
-        req.status = "approved";
+        if (approved) req.status = "approved";
       } catch (e) {
         console.warn("[autoMatcher] approve failed", e);
       }

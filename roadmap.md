@@ -1,5 +1,13 @@
 # Roadmap
 
+## Separate crypto pricing and popunder review (2026-11-25)
+- [x] Keep bKash, Nagad and Binance side by side in admin and buyer method grids, with Redeem/Contact separate; disabled/unconfigured methods remain unavailable.
+- [x] Remove Taka-to-USDT conversion; add independent per-crypto-method plans, separate pending/admin request views, currency/device snapshots and SMS isolation. Historical records/settings were not changed.
+- [x] Diagnose real popunder delivery: provider returns 200 with zero bytes; mounted real tag opens no sponsor, no Direct Link configured. CPM is provider-controlled; ad behavior unchanged pending clarification.
+- [x] Focused tests and 390px real bKash→Nagad form switch, admin PIN/method/currency/request views, and Naruto E383 playback verified with screenshots and no page errors.
+- [ ] Full Binance payment submission/readback — owner has not configured an actual address/QR or independent USDT plans; no fake payment submitted.
+- [ ] Real popunder opening — requires working provider delivery or owner's actual Direct Link; question about the intended CPM/popunder change remains unanswered.
+
 ## Payment and player corrections (2026-11-25)
 - [x] Sync saved benefits across free/premium Profile, Premium purchase and Premium Required screens; live hook regression test passes.
 - [x] Separate admin logos, keep payment logo/QR pixels white in all themes, polish crypto address/network display; real admin PIN + 360/390px light/dark checks pass.

@@ -12,6 +12,8 @@ import { firebaseRestShallowKeys } from "@/lib/firebaseRest";
 import { ensureAdminDbSession, startAdminDbSession, endAdminDbSession } from "@/lib/adminDbSession";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
+import { Button } from "@/components/ui/button";
+import { paymentRequestGroup, normalizeGateway, plansFor } from "@/lib/paymentGateway";
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
 import { toast } from "sonner";
 import {
@@ -2270,6 +2272,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  ],
  });
  const [bkashPaymentRequests, setBkashPaymentRequests] = useState<any[]>([]);
+ const [paymentRequestTab, setPaymentRequestTab] = useState<"wallet" | "crypto">("wallet");
  const [bkashSettingsLoaded, setBkashSettingsLoaded] = useState(false);
 
  // Free access users state
@@ -8172,13 +8175,17 @@ ${tgBulkFooter}
  </button>
 
  {/* Payment Requests */}
+ <div className="grid grid-cols-2 gap-2 mb-4" data-payment-request-tabs>
+ <Button variant={paymentRequestTab === "wallet" ? "default" : "secondary"} onClick={() => setPaymentRequestTab("wallet")}>bKash / Nagad · ৳</Button>
+ <Button variant={paymentRequestTab === "crypto" ? "default" : "secondary"} onClick={() => setPaymentRequestTab("crypto")}>Binance / Crypto · USDT</Button>
+ </div>
  <div className={`${glassCard} p-4`}>
  <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <List size={14} className="text-green-500" /> payment request ({bkashPaymentRequests.filter((r: any) => r.status === "pending").length} pending)
+ <List size={14} className="text-green-500" /> {paymentRequestTab === "crypto" ? "Crypto requests" : "Wallet requests"} ({bkashPaymentRequests.filter((r: any) => r.status === "pending" && paymentRequestGroup(r) === paymentRequestTab).length} pending)
  </h3>
  <div className="space-y-2.5">
- {bkashPaymentRequests.length === 0 && <p className="text-center text-zinc-500 text-sm py-6">any payment request none</p>}
- {bkashPaymentRequests.map((req: any) => (
+ {bkashPaymentRequests.filter((req) => paymentRequestGroup(req) === paymentRequestTab).length === 0 && <p className="text-center text-muted-foreground text-sm py-6">No {paymentRequestTab} requests</p>}
+ {bkashPaymentRequests.filter((req) => paymentRequestGroup(req) === paymentRequestTab).map((req: any) => (
  <div key={req.id} className={`p-3 rounded-xl border transition-colors ${
  req.status === "approved" ? "bg-green-500/10 border-green-500/30" :
  req.status === "rejected" ? "bg-red-500/10 border-red-500/30" :
@@ -8197,7 +8204,7 @@ ${tgBulkFooter}
  </div>
  <div className="text-[11px] text-zinc-400 space-y-0.5 mb-2">
  <p>📱 TrxID: <span className="font-mono font-bold text-white">{req.transactionId}</span></p>
- <p>💰 plan: {req.planName} — ৳{req.planPrice}</p>
+ <p>💰 plan: {req.planName} — {req.planPriceLabel || `৳${req.planPrice}`}</p>
  <p>📅 {new Date(req.submittedAt).toLocaleString("bn-BD")}</p>
  {req.bkashNumber && <p>📞 {req.methodName || "bKash"}: {req.bkashNumber}</p>}
  {req.methodName && <p>💳 Method: <span className="font-semibold text-white">{req.methodName}</span></p>}
@@ -8205,11 +8212,17 @@ ${tgBulkFooter}
  {req.status === "pending" && (
  <div className="flex gap-2">
  <button onClick={async () => {
+ const fresh = (await get(ref(db, `bkashPayments/${req.id}`))).val();
+ if (fresh?.status !== "pending") { toast.error("This request has already been reviewed"); return; }
  const days = req.planDays || 30;
- const maxDevices = (() => {
- const plan = (bkashSettings.plans || []).find((p: any) => p.id === req.planId);
- return plan?.maxDevices || (days <= 30 ? 1 : days <= 90 ? 3 : 4);
- })();
+ let maxDevices = req.planMaxDevices;
+ if (!maxDevices) {
+ const walletPlans = Object.values(bkashSettings.plans || {});
+ const gatewayRaw = paymentRequestGroup(req) === "crypto" ? (await get(ref(db, "settings/paymentGateway"))).val() : null;
+ const method = normalizeGateway(gatewayRaw).methods.find((m) => m.id === (req.method || "bkash"));
+ const plan = (method ? plansFor(method, walletPlans) : walletPlans).find((p: any) => p.id === req.planId) as any;
+ maxDevices = plan?.maxDevices || (days <= 30 ? 1 : days <= 90 ? 3 : 4);
+ }
  const premiumSnap = await get(ref(db, `users/${req.userId}/premium`));
  const currentPremium = premiumSnap.val() || {};
  const baseExpiry = currentPremium?.active && currentPremium?.expiresAt > Date.now() ? currentPremium.expiresAt : Date.now();
@@ -8219,7 +8232,7 @@ ${tgBulkFooter}
  active: true,
  expiresAt,
  redeemedAt: Date.now(),
- method: "bkash",
+ method: req.method || "bkash",
  transactionId: req.transactionId,
  maxDevices,
  devices: currentPremium?.devices || {},
@@ -8230,6 +8243,8 @@ ${tgBulkFooter}
  <Check size={12} /> Approve
  </button>
  <button onClick={async () => {
+ const fresh = (await get(ref(db, `bkashPayments/${req.id}`))).val();
+ if (fresh?.status !== "pending") { toast.error("This request has already been reviewed"); return; }
  await update(ref(db, `bkashPayments/${req.id}`), { status: "rejected", rejectedAt: Date.now() });
  toast.success("request reject done");
  }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">

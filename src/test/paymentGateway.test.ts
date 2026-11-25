@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeGateway, usableMethods, priceFor, senderLooksValid, contactLinks } from "@/lib/paymentGateway";
+import { normalizeGateway, usableMethods, priceFor, plansFor, paymentRequestGroup, senderLooksValid, contactLinks } from "@/lib/paymentGateway";
 
 describe("payment gateway", () => {
   it("defaults list bKash first, then Nagad, then Binance", () => {
@@ -16,10 +16,22 @@ describe("payment gateway", () => {
     ] });
     expect(usableMethods(cfg).map((m) => m.id)).toEqual(["bkash"]);
   });
-  it("crypto price is the Taka price divided by the USDT rate, rounded up", () => {
-    expect(priceFor({ kind: "crypto" }, 100, 125)).toBe("0.80 USDT");
-    expect(priceFor({ kind: "crypto" }, 101, 125)).toBe("0.81 USDT");
-    expect(priceFor({ kind: "mobile" }, 100, 125)).toBe("৳100");
+  it("crypto uses the independent admin dollar price, never the old 125 Taka rate", () => {
+    const cfg = normalizeGateway({ usdtRate: 125, methods: [{ id: "binance", kind: "crypto", plans: [{ id: "usd", name: "Month", price: 3.5, days: 30 }] }] });
+    const list = plansFor(cfg.methods[0], [{ id: "taka", price: 100 }]);
+    expect(list.map((p) => p.id)).toEqual(["usd"]);
+    expect(priceFor(cfg.methods[0], list[0].price)).toBe("3.50 USDT");
+    expect(priceFor({ kind: "mobile" }, 100)).toBe("৳100");
+  });
+  it("an unset Binance price list never falls back to bKash prices", () => {
+    expect(plansFor({ kind: "crypto" }, [{ id: "wallet", price: 125 }])).toEqual([]);
+  });
+  it("wallet and crypto requests belong to separate lists, including old Binance requests", () => {
+    expect(paymentRequestGroup({ method: "bkash" })).toBe("wallet");
+    expect(paymentRequestGroup({ method: "nagad" })).toBe("wallet");
+    expect(paymentRequestGroup({ method: "binance" })).toBe("crypto");
+    expect(paymentRequestGroup({ method: "custom", methodKind: "crypto", currency: "USDT" })).toBe("crypto");
+    expect(paymentRequestGroup({})).toBe("wallet");
   });
   it("wallet sender must be an 11-digit number starting 01", () => {
     expect(senderLooksValid({ kind: "mobile" }, "01712345678")).toBe(true);

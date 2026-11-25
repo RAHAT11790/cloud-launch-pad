@@ -9,7 +9,7 @@ import { buyPremiumWithCoins, type CoinPlan } from "@/lib/premiumAccess";
 import { premiumPayPath } from "@/lib/premiumPayLink";
 import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
 import { usePaymentGateway } from "@/hooks/usePaymentGateway";
-import { usableMethods, priceFor } from "@/lib/paymentGateway";
+import { usableMethods, priceFor, plansFor } from "@/lib/paymentGateway";
 import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
 import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
 
@@ -126,7 +126,7 @@ export default function PremiumBuyPage() {
                   {i === bestIdx && <span className="absolute -top-2 right-3 text-[9px] font-black px-1.5 py-0.5 rounded bg-primary text-primary-foreground inline-flex items-center gap-1"><Sparkles className="w-2.5 h-2.5" /> BEST</span>}
                   <p className="text-[12px] font-bold text-muted-foreground">{p.name}</p>
                   <p className="mt-1 text-2xl font-black pg3d-title">৳{p.price}</p>
-                  {mainMethods.some((m) => m.kind === "crypto") && <p className="text-[10px] text-muted-foreground">≈ {priceFor({ kind: "crypto" }, Number(p.price) || 0, gateway.usdtRate)}</p>}
+
                   <p className="mt-2 text-[11px] text-foreground/80">{p.days} days</p>
                   <p className="text-[11px] text-foreground/60 inline-flex items-center gap-1"><Smartphone className="w-3 h-3" /> {p.maxDevices || 1} device{(p.maxDevices || 1) > 1 ? "s" : ""}</p>
                 </div>
@@ -135,6 +135,18 @@ export default function PremiumBuyPage() {
           </div>
         )}
 
+        {mainMethods.filter((m) => m.kind === "crypto").map((method) => {
+          const cryptoPlans = plansFor(method, plans);
+          return cryptoPlans.length > 0 ? <div key={method.id} data-crypto-price-list={method.id}>
+            <h2 className="pg3d-h px-1">{method.name} · USDT price list</h2>
+            <div className="pg3d-plans">{cryptoPlans.map((plan) => <div key={plan.id} className="pg3d-plan">
+              <p className="text-[12px] font-bold text-muted-foreground">{plan.name}</p>
+              <p className="mt-1 text-xl font-black pg3d-title">{priceFor(method, Number(plan.price) || 0)}</p>
+              <p className="mt-2 text-[11px] text-foreground/80">{plan.days} days · {plan.maxDevices || 1} devices</p>
+            </div>)}</div>
+          </div> : null;
+        })}
+
         {/* Payment methods */}
         <div className="pg3d-card" data-premium-methods>
           <h2 className="pg3d-h">Pay with</h2>
@@ -142,6 +154,8 @@ export default function PremiumBuyPage() {
             {mainMethods.map((m, i) => (
               <MethodTile key={m.id} method={m} index={i} onClick={() => navigate(premiumPayPath(m.id))} />
             ))}
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
             <button type="button" onClick={() => navigate(premiumPayPath("redeem"))} className="pg3d-method" style={{ ["--mc" as any]: "hsl(250 80% 65%)", animationDelay: `${mainMethods.length * 70}ms` }} data-pay-method="redeem">
               <span className="pg3d-tile is-dark"><KeyRound className="w-7 h-7 text-primary" /></span>
               <span className="pg3d-chip">Redeem Code</span>

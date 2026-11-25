@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSS
 import { useNavigate } from "react-router-dom";
 import { clearPremiumPayParam, readPremiumPayTab } from "@/lib/premiumPayLink";
 import { usePaymentGateway } from "@/hooks/usePaymentGateway";
-import { usableMethods, priceFor, senderLooksValid, type PaymentMethod } from "@/lib/paymentGateway";
+import { usableMethods, priceFor, plansFor, paymentRequestGroup, senderLooksValid, type PaymentMethod } from "@/lib/paymentGateway";
 import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
 import { PaymentLogo } from "@/components/premium/PaymentLogo";
 import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
@@ -554,11 +554,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [trxInput, setTrxInput] = useState("");
   const [trxSubmitting, setTrxSubmitting] = useState(false);
-  const [pendingPaymentRequest, setPendingPaymentRequest] = useState<any | null>(null);
+  const [pendingPaymentRequests, setPendingPaymentRequests] = useState<any[]>([]);
   const [editingPendingRequest, setEditingPendingRequest] = useState(false);
   const [bkashSenderNumber, setBkashSenderNumber] = useState("");
   const [paymentTab, setPaymentTab] = useState<string>(() => readPremiumPayTab(window.location.search) || "");
-  const { config: gateway } = usePaymentGateway();
+  const { config: gateway, plans: walletPlans } = usePaymentGateway();
+  const selectedMethod = gateway.methods.find((m) => m.id === paymentTab);
+  const pendingGroup = selectedMethod?.kind === "crypto" ? "crypto" : "wallet";
+  const pendingPaymentRequest = pendingPaymentRequests.find((r) => r.status === "pending" && paymentRequestGroup(r) === pendingGroup) || null;
+  const changePaymentMethod = (id: string) => {
+    setPaymentTab(id); setSelectedPlan(null); setTrxInput(""); setBkashSenderNumber(""); setEditingPendingRequest(false);
+  };
   useEffect(() => { clearPremiumPayParam(); }, []);
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
@@ -817,7 +823,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           .sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
 
         const activePending = items.find((item: any) => item.status === "pending") || null;
-        setPendingPaymentRequest(activePending);
+        setPendingPaymentRequests(items.filter((item: any) => item.status === "pending"));
 
         if (!activePending) {
           setEditingPendingRequest(false);
@@ -852,7 +858,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const startEditingPendingRequest = () => {
     if (!pendingPaymentRequest) return;
 
-    const matchedPlan = (bkashSettings?.plans || []).find((plan: any) => (
+    const pendingMethod = gateway.methods.find((m) => m.id === (pendingPaymentRequest.method || "bkash"));
+    const matchedPlan = (pendingMethod ? plansFor(pendingMethod, walletPlans) : walletPlans).find((plan: any) => (
       plan.id === pendingPaymentRequest.planId ||
       (plan.name === pendingPaymentRequest.planName && Number(plan.price) === Number(pendingPaymentRequest.planPrice))
     ));
@@ -1076,9 +1083,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       toast.error(method.kind === "mobile" ? `Enter your 11-digit ${method.name} number` : `Enter ${method.senderLabel.toLowerCase()}`);
       return;
     }
+    const currentPlan = plansFor(method, walletPlans).find((p) => p.id === selectedPlan.id);
+    if (!currentPlan || !method.enabled || !method.number.trim()) {
+      toast.error("Select an available plan for this payment method"); return;
+    }
     setTrxSubmitting(true);
     try {
-      const isEditingExistingRequest = !!pendingPaymentRequest?.id;
+      const isEditingExistingRequest = editingPendingRequest && !!pendingPaymentRequest?.id;
       const userName = (() => { try { return JSON.parse(localStorage.getItem("rsanime_user") || "{}").name || "Unknown"; } catch { return "Unknown"; } })();
       const userEmail = (() => { try { return JSON.parse(localStorage.getItem("rsanime_user") || "{}").email || ""; } catch { return ""; } })();
       const paymentData = {
@@ -1089,20 +1100,29 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         bkashNumber: bkashSenderNumber.trim(),
         planId: selectedPlan.id,
         planName: selectedPlan.name,
-        planPrice: selectedPlan.price,
+        planPrice: currentPlan.price,
         planDays: selectedPlan.days,
         method: method.id,
         methodName: method.name,
-        ...(method.kind === "crypto" ? { planPriceLabel: priceFor(method, Number(selectedPlan.price) || 0, gateway.usdtRate) } : {}),
+        methodKind: method.kind,
+        currency: method.kind === "crypto" ? "USDT" : "BDT",
+        planPriceLabel: priceFor(method, Number(currentPlan.price) || 0),
+        planMaxDevices: currentPlan.maxDevices || 1,
         status: "pending",
-        submittedAt: pendingPaymentRequest?.submittedAt || Date.now(),
+        submittedAt: isEditingExistingRequest ? pendingPaymentRequest.submittedAt : Date.now(),
         updatedAt: Date.now(),
       };
 
+      let requestId: string;
       if (isEditingExistingRequest) {
-        await update(ref(db, `bkashPayments/${pendingPaymentRequest.id}`), paymentData);
+        requestId = pendingPaymentRequest.id;
+        const fresh = (await get(ref(db, `bkashPayments/${requestId}`))).val();
+        if (fresh?.status !== "pending") { toast.error("This request has already been reviewed"); return; }
+        await update(ref(db, `bkashPayments/${requestId}`), paymentData);
       } else {
         const newRef = push(ref(db, "bkashPayments"));
+        if (!newRef.key) throw new Error("Could not create request");
+        requestId = newRef.key;
         await set(newRef, paymentData);
       }
 
@@ -1116,16 +1136,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       // by the Android side, the user gets premium without admin intervention.
       if (method.id === "bkash") try {
         const { tryMatchPayment } = await import("@/lib/bkashAutoMatcher");
-        const reqId = isEditingExistingRequest
-          ? pendingPaymentRequest!.id
-          : (await get(query(ref(db, "bkashPayments"), orderByChild("transactionId"), equalTo(trxInput.trim()))));
-        const requestSnapshot = isEditingExistingRequest
-          ? { ...pendingPaymentRequest, ...paymentData, id: pendingPaymentRequest!.id }
-          : (() => {
-              const data = (reqId as any)?.val?.() || {};
-              const entry = Object.entries<any>(data)[0];
-              return entry ? { id: entry[0], ...entry[1] } : null;
-            })();
+        const requestSnapshot = { ...paymentData, id: requestId };
         if (requestSnapshot) {
           const matched = await tryMatchPayment(requestSnapshot as any);
           if (matched) toast.success("⚡ Auto-verified! Premium activated instantly.");
@@ -1357,9 +1368,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   // Premium Panel
   if (activePanel === "premium") {
-    const activePlans = (bkashSettings?.plans || []).filter((p: any) => p.active !== false);
     const payMethods = usableMethods(gateway);
     const activeMethod = paymentTab === "redeem" ? null : (payMethods.find((m) => m.id === paymentTab) || payMethods[0] || null);
+    const activePlans = activeMethod ? plansFor(activeMethod, walletPlans) : [];
     const pendingReviewMs = pendingPaymentRequest
       ? (pendingPaymentRequest.submittedAt || Date.now()) + gateway.reviewHours * 3600000 - Date.now()
       : 0;
@@ -1372,9 +1383,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
           <h4 className="pg3d-h">Pay with</h4>
           <div className="pg3d-methods">
             {payMethods.map((m, i) => (
-              <MethodTile key={m.id} method={m} index={i} active={activeMethod?.id === m.id} onClick={() => setPaymentTab(m.id)} />
+              <MethodTile key={m.id} method={m} index={i} active={activeMethod?.id === m.id} onClick={() => changePaymentMethod(m.id)} />
             ))}
-            <button type="button" onClick={() => setPaymentTab("redeem")} data-pay-method="redeem"
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <button type="button" onClick={() => changePaymentMethod("redeem")} data-pay-method="redeem"
               className={`pg3d-method ${!activeMethod ? "is-on" : ""}`} style={{ ["--mc" as any]: "hsl(250 80% 65%)", animationDelay: `${payMethods.length * 70}ms` }}>
               <span className="pg3d-tile is-dark"><Gift className="w-7 h-7" style={{ color: "hsl(45,90%,55%)" }} /></span>
               <span className="pg3d-chip">Redeem Code</span>
@@ -1392,12 +1405,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     className="text-[11px] px-3 py-1.5 rounded-lg bg-foreground/10 text-muted-foreground hover:bg-foreground/15 transition-colors">Cancel Edit</button>
                 )}
               </div>
+              {activePlans.length === 0 && <p className="text-xs text-muted-foreground">No {activeMethod.name} plans available yet. Contact the admin.</p>}
               <div className="grid grid-cols-2 gap-2.5">
                 {activePlans.map((plan: any) => (
                   <button key={plan.id} type="button" onClick={() => setSelectedPlan(plan)} data-plan={plan.id}
                     className={`pg3d-plan ${selectedPlan?.id === plan.id ? "is-on" : ""}`}>
                     <p className="text-[12px] font-bold text-muted-foreground">{plan.name}</p>
-                    <p className="mt-1 text-xl font-black" style={{ color: mc }}>{priceFor(activeMethod, Number(plan.price) || 0, gateway.usdtRate)}</p>
+                    <p className="mt-1 text-xl font-black" style={{ color: mc }}>{priceFor(activeMethod, Number(plan.price) || 0)}</p>
                     <p className="mt-1 text-[11px] text-foreground/75">{plan.days} days Ad-Free</p>
                     {plan.maxDevices && (
                       <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "hsl(45,90%,55%)" }}>
@@ -1424,7 +1438,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     <Button variant="secondary" size="sm" type="button" onClick={() => { navigator.clipboard?.writeText(activeMethod.number).then(() => toast.success("Copied")).catch(() => {}); }}
                       className="shrink-0 text-[11px] font-bold">Copy</Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Amount: <span className="font-bold text-foreground">{priceFor(activeMethod, Number(selectedPlan.price) || 0, gateway.usdtRate)}</span></p>
+                  <p className="text-xs text-muted-foreground mt-1">Amount: <span className="font-bold text-foreground">{priceFor(activeMethod, Number(selectedPlan.price) || 0)}</span></p>
                 </div>
 
                 {activeMethod.instructions && <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{activeMethod.instructions}</p>}
@@ -1492,6 +1506,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
         {showPendingRequest ? (
           <div>
+            <div className="pg3d-methods mb-5" data-pending-method-picker>
+              {usableMethods(gateway).map((m) => <MethodTile key={m.id} method={m} active={activeMethod?.id === m.id} onClick={() => changePaymentMethod(m.id)} />)}
+            </div>
             <div className="premium-card-glow p-6 rounded-2xl mb-5 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 premium-gradient" />
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "hsla(45,90%,55%,0.15)", border: "1px solid hsla(45,90%,55%,0.3)" }}>

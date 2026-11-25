@@ -1,9 +1,18 @@
 /**
  * Premium payment gateway config — one Firebase node `settings/paymentGateway`.
  * Methods (bKash, Nagad, Binance, custom), the admin-contact card and the
- * "what you get" list. Plans stay in `bkashSettings.plans` (shared by all methods).
+ * Wallet plans stay in `bkashSettings.plans`; crypto methods own their USDT plans.
  */
 export type PaymentKind = "mobile" | "crypto" | "other";
+
+export interface PaymentPlan {
+  id: string;
+  name: string;
+  price: number;
+  days: number;
+  maxDevices: number;
+  active: boolean;
+}
 
 export interface PaymentMethod {
   id: string;
@@ -21,6 +30,8 @@ export interface PaymentMethod {
   color: string;
   /** Label for the box where the user types the account they paid from. */
   senderLabel: string;
+  /** Independent USDT prices; never derived from wallet prices. */
+  plans?: PaymentPlan[];
 }
 
 export interface AdminContact {
@@ -36,8 +47,6 @@ export interface PaymentGatewayConfig {
   contact: AdminContact;
   /** Custom benefit lines; empty = the site's automatic list. */
   benefits: string[];
-  /** ৳ per 1 USDT, used to show crypto prices. */
-  usdtRate: number;
   /** How long a payment request waits for review, in hours. */
   reviewHours: number;
 }
@@ -59,7 +68,6 @@ export const DEFAULT_GATEWAY: PaymentGatewayConfig = {
   methods: DEFAULT_METHODS,
   contact: { enabled: true, title: "Admin Contact", logo: DEFAULT_LOGOS.contact, telegram: "", whatsapp: "" },
   benefits: [],
-  usdtRate: 125,
   reviewHours: 24,
 };
 
@@ -91,6 +99,10 @@ export function normalizeGateway(raw: any, legacyBkash?: any): PaymentGatewayCon
         enabled: m.enabled !== false,
         color: /^#[0-9a-f]{6}$/i.test(str(m.color)) ? m.color : def?.color || "#F5B83D",
         senderLabel: str(m.senderLabel) || def?.senderLabel || "Your account / number",
+        plans: Object.values(m.plans || {}).filter((p: any) => p && str(p.id)).map((p: any) => ({
+          id: str(p.id), name: str(p.name, "Plan"), price: num(p.price, 0, 0, 1000000),
+          days: num(p.days, 30, 1, 36500), maxDevices: num(p.maxDevices, 1, 1, 10), active: p.active !== false,
+        })),
       };
     });
   const bk = methods.find((m) => m.id === "bkash");
@@ -113,7 +125,6 @@ export function normalizeGateway(raw: any, legacyBkash?: any): PaymentGatewayCon
       whatsapp: str(c.whatsapp),
     },
     benefits: (Array.isArray(src.benefits) ? src.benefits : src.benefits && typeof src.benefits === "object" ? Object.values(src.benefits) : []).map((b: unknown) => str(b).trim()).filter(Boolean),
-    usdtRate: num(src.usdtRate, DEFAULT_GATEWAY.usdtRate, 1, 100000),
     reviewHours: num(src.reviewHours, DEFAULT_GATEWAY.reviewHours, 1, 720),
   };
 }
@@ -121,13 +132,18 @@ export function normalizeGateway(raw: any, legacyBkash?: any): PaymentGatewayCon
 /** Methods a buyer can actually use: switched on and with a number/address set. */
 export const usableMethods = (cfg: PaymentGatewayConfig) => cfg.methods.filter((m) => m.enabled && m.number.trim());
 
-/** Plan price shown for a method: Taka for wallets, USDT (2 decimals, rounded up) for crypto. */
-export function priceFor(method: Pick<PaymentMethod, "kind">, priceTaka: number, usdtRate: number): string {
-  if (method.kind === "crypto") {
-    const usdt = Math.ceil((priceTaka / usdtRate) * 100) / 100;
-    return `${usdt.toFixed(2)} USDT`;
-  }
-  return `৳${priceTaka}`;
+/** Formats the admin's price in its own currency without conversion. */
+export function priceFor(method: Pick<PaymentMethod, "kind">, price: number): string {
+  return method.kind === "crypto" ? `${price.toFixed(2)} USDT` : `৳${price}`;
+}
+
+export function plansFor(method: Pick<PaymentMethod, "kind" | "plans">, walletPlans: any[]): any[] {
+  return (method.kind === "crypto" ? method.plans || [] : walletPlans).filter((p) => p && p.active !== false);
+}
+
+/** Old requests without method metadata remain wallet requests; no historical writes. */
+export function paymentRequestGroup(request: { methodKind?: string; currency?: string; method?: string; planPriceLabel?: string }): "wallet" | "crypto" {
+  return request.methodKind === "crypto" || request.currency === "USDT" || request.method === "binance" || /USDT/i.test(request.planPriceLabel || "") ? "crypto" : "wallet";
 }
 
 /** Sender check: wallets need an 11-digit BD number, others any 4+ characters. */
