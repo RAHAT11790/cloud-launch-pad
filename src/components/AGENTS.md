@@ -1,2 +1,3 @@
 - Video player controls use the CSS 3D deck in `src/index.css` (`player-touch-button`/`player-control-chip` bevel, `p3d-*` transform-only animation) and every player menu is one full-height right `player-drawer` — one look for all buttons/menus, long lists always scroll inside the video, cheap on low-end phones.
+- PlayerIcon3D renders one unfiltered Lucide symbol at the caller's fixed size; depth belongs to the button surface, so symbols stay readable on small screens without overlapping copies.
 - PaymentLogo bakes a white background into payment logo/QR pixels; PremiumBenefits renders the same live admin lines on all premium surfaces, so phone forced-dark mode and mounted tabs cannot diverge.

@@ -1,5 +1,9 @@
 # Roadmap
 
+## Crisp player controls (2026-11-25)
+- [x] Replace displaced three-layer control glyphs with one crisp icon; retain existing positions and button depth.
+- [ ] Verify Fit/Crop, settings, playback, seeking and lock with real video on phone-size screens; inspect close-up screenshots and build signal.
+
 ## Separate crypto pricing and popunder review (2026-11-25)
 - [x] Keep bKash, Nagad and Binance side by side in admin and buyer method grids, with Redeem/Contact separate; disabled/unconfigured methods remain unavailable.
 - [x] Remove Taka-to-USDT conversion; add independent per-crypto-method plans, separate pending/admin request views, currency/device snapshots and SMS isolation. Historical records/settings were not changed.

@@ -433,7 +433,7 @@ div[style*="z-index: 2147483647"],
 
   /* ===== 3D control deck =====
      Every player button is a lit, bevelled glass orb: top highlight, bottom
-     shade, soft drop shadow and an extruded icon. Motion is transform/opacity
+     shade, soft drop shadow and a single crisp icon. Motion is transform/opacity
      only, so low-end phones stay smooth. */
   .player-touch-button,
   .player-control-chip {
@@ -456,16 +456,13 @@ div[style*="z-index: 2147483647"],
   }
   .player-touch-button svg,
   .player-control-chip svg {
-    filter: drop-shadow(0 1px 0 hsl(0 0% 0% / 0.7)) drop-shadow(0 2px 3px hsl(var(--primary) / 0.35));
+    filter: none;
   }
-  .p3d-icon { position: relative; display: inline-block; flex-shrink: 0; overflow: visible; }
-  .player-touch-button .p3d-icon svg, .player-control-chip .p3d-icon svg { position: absolute; inset: 0; width: 100% !important; height: 100% !important; filter: none; }
-  .p3d-icon .p3d-icon-depth { color: hsl(var(--player-icon-depth)); transform: translate(2px, 3px); }
-  .p3d-icon .p3d-icon-edge { color: hsl(var(--player-icon-edge)); transform: translate(1px, 1.5px); }
-  .p3d-icon .p3d-icon-face { color: hsl(var(--player-icon-face)); transform: translateY(-.5px); }
+  .p3d-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; line-height: 0; color: inherit; }
+  .p3d-icon > svg { display: block; width: 100% !important; height: 100% !important; filter: none; transform: none; }
   .player-touch-button:active,
   .player-control-chip:active {
-    transform: perspective(260px) rotateX(18deg) scale(0.9);
+    transform: translateY(1px) scale(0.96);
     box-shadow:
       inset 0 2px 4px hsl(0 0% 0% / 0.55),
       inset 0 -1px 0 hsl(0 0% 100% / 0.18),
@@ -496,7 +493,9 @@ div[style*="z-index: 2147483647"],
       0 2px 4px hsl(0 0% 0% / 0.5);
   }
   .player-touch-button--primary svg {
-    filter: drop-shadow(0 1px 0 hsl(0 0% 0% / 0.45)) drop-shadow(0 2px 0 hsl(0 0% 0% / 0.25)) drop-shadow(0 4px 6px hsl(0 0% 0% / 0.35));
+    filter: none;
+    width: 28px;
+    height: 28px;
   }
   /* Soft 3D halo ring while paused (transform/opacity only) */
   .player-touch-button--primary.is-paused::after {
@@ -528,14 +527,14 @@ div[style*="z-index: 2147483647"],
     pointer-events: none;
   }
 
-  /* 3D flip-in of every control each time the deck appears */
+  /* Gentle raised-button entrance without tilting or blurring the symbols. */
   .p3d-deck[data-shown="1"] .p3d-anim {
-    animation: p3d-pop 320ms cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards;
+    animation: p3d-pop 180ms ease-out backwards;
   }
-  .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 380ms; }
+  .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 180ms; }
   @keyframes p3d-pop {
-    0% { opacity: 0; transform: perspective(260px) rotateX(60deg) translateY(8px) scale(0.8); }
-    100% { opacity: 1; transform: perspective(260px) rotateX(0deg) translateY(0) scale(1); }
+    0% { opacity: 0; transform: translateY(3px); }
+    100% { opacity: 1; transform: none; }
   }
 
   .p3d-title p { text-shadow: 0 1px 2px hsl(0 0% 0% / 0.85); }
