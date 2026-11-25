@@ -26,6 +26,28 @@ describe("pop-under keeps showing ads after the tag hits its own cap", () => {
     Object.keys(w).filter((k) => k.startsWith("__adsterra")).forEach((k) => delete w[k]);
   });
 
+  it("always prioritizes the healthy popunder, including the third and sixth eligible turns", async () => {
+    const mod = await load();
+    const openDirect = vi.fn();
+    window.__adsterraOpenOriginal = openDirect;
+    window.__adsterraPopunderMounted = true;
+    window.__adsterraScriptOk = true;
+    const releases = [];
+    for (let i = 0; i < 6; i++) releases.push(await mod.releaseAd());
+    expect(releases).toEqual(["tag", "tag", "tag", "tag", "tag", "tag"]);
+    expect(openDirect).not.toHaveBeenCalled();
+  });
+
+  it("uses the alternative only when the popunder script is blocked", async () => {
+    const mod = await load();
+    const openDirect = vi.fn();
+    window.__adsterraOpenOriginal = openDirect;
+    window.__adsterraPopunderMounted = true;
+    window.__adsterraScriptOk = false;
+    expect(await mod.releaseAd()).toBe("direct");
+    expect(openDirect).toHaveBeenCalledWith("https://direct.example/sponsor", "_blank", "noopener,noreferrer");
+  });
+
   it("a silent tag click is followed by the Direct Link on the next eligible tap", async () => {
     const mod = await load();
     const opened: string[] = [];

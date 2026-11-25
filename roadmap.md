@@ -6,7 +6,9 @@
 - [x] Diagnose real popunder delivery: provider returns 200 with zero bytes; mounted real tag opens no sponsor, no Direct Link configured. CPM is provider-controlled; ad behavior unchanged pending clarification.
 - [x] Focused tests and 390px real bKash→Nagad form switch, admin PIN/method/currency/request views, and Naruto E383 playback verified with screenshots and no page errors.
 - [ ] Full Binance payment submission/readback — owner has not configured an actual address/QR or independent USDT plans; no fake payment submitted.
-- [ ] Real popunder opening — requires working provider delivery or owner's actual Direct Link; question about the intended CPM/popunder change remains unanswered.
+- [x] Owner clarified popunder-first preference: removed scheduled third-turn Direct Link; healthy popunder always wins, blocked/absent/capped fallback retained.
+- [x] 12 ad regression tests pass (healthy tag wins all six turns, blocked/capped fallback, retry and unchanged pacing). Real 390px Naruto E383 playback advances without page errors; saved provider tag mounts, but opens zero sponsor tabs.
+- [ ] Real popunder opening — requires working provider delivery or owner's actual Direct Link; current provider returns an empty script.
 
 ## Payment and player corrections (2026-11-25)
 - [x] Sync saved benefits across free/premium Profile, Premium purchase and Premium Required screens; live hook regression test passes.

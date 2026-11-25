@@ -699,8 +699,8 @@ export type AdRelease = "direct" | "tag" | "mounted" | "none";
  * 1. The Adsterra pop-under tag is mounted exactly once per page session
  *    (re-injecting stacks click handlers → ad storms).
  * 2. Every eligible click after the cool-down releases ONE ad:
- *      • normally the mounted tag handles the click (higher CPM), every
- *        third cycle the Direct Link opens instead;
+ *      • always prefer the mounted pop-under tag; never replace a healthy
+ *        tag with a scheduled Direct Link turn;
  *      • when the tag is blocked or has hit its own frequency cap (it did
  *        not open a tab last time), the Direct Link opens synchronously
  *        inside the gesture — so ads keep running for the whole session.
@@ -726,7 +726,7 @@ export async function releaseAd(): Promise<AdRelease> {
   const cycle = (window.__adsterraCycleCount ?? 0) + 1;
 
   // Direct-link path — must run synchronously inside the user gesture.
-  const useDirect = !!direct && (scriptBlocked || !script || tagCapped || (mounted && cycle % 3 === 0));
+  const useDirect = !!direct && (scriptBlocked || !script || tagCapped);
   if (useDirect) {
     if (!reserveAdFire()) return "none";
     window.__adsterraCycleCount = cycle;
