@@ -533,8 +533,8 @@ div[style*="z-index: 2147483647"],
   }
   .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 180ms; }
   @keyframes p3d-pop {
-    0% { opacity: 0; transform: translateY(3px); }
-    100% { opacity: 1; transform: none; }
+    0% { opacity: 0; }
+    100% { opacity: 1; }
   }
 
   .p3d-title p { text-shadow: 0 1px 2px hsl(0 0% 0% / 0.85); }
@@ -563,12 +563,13 @@ div[style*="z-index: 2147483647"],
       linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0) 30%),
       hsl(0 0% 4% / 0.94);
     box-shadow: -10px 0 28px hsl(0 0% 0% / 0.55);
-    animation: p3d-drawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: p3d-drawer-in 240ms ease-out both;
     -webkit-overflow-scrolling: touch;
   }
+  /* Menus fade in place (no sliding), so the open feels calm and smooth. */
   @keyframes p3d-drawer-in {
-    0% { transform: translateX(100%); opacity: 0.4; }
-    100% { transform: translateX(0); opacity: 1; }
+    0% { opacity: 0; }
+    100% { opacity: 1; }
   }
   .player-drawer > button,
   .player-drawer .space-y-0\.5 > button,
@@ -4219,3 +4220,22 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   .pg3d-medal, .pg3d-contact img, .pg3d-hero::after { animation: none; }
   .pg3d-step, .pg3d-method { animation: none; opacity: 1; transform: none; }
 }
+
+/* Raised buttons under the player: bevel from inner light/shade only, no outer shadow. */
+.rs-3d {
+  color: hsl(var(--foreground) / 0.9);
+  background: linear-gradient(180deg, hsl(var(--foreground) / 0.1), hsl(var(--foreground) / 0.03) 55%, hsl(var(--foreground) / 0.06));
+  border: 1px solid hsl(var(--foreground) / 0.12);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.14), inset 0 -2px 0 hsl(var(--background) / 0.55);
+  transition: background-color 200ms ease, color 200ms ease, opacity 200ms ease, transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.rs-3d:active { transform: scale(0.96); }
+.rs-3d.is-on {
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.45);
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.08) 60%, hsl(var(--primary) / 0.14));
+}
+.rs-3d-in { animation: rs-fade-in 320ms ease-out both; }
+@keyframes rs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rs-3d-in { animation: none; } }

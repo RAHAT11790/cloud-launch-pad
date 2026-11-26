@@ -543,6 +543,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
+  // A fast menu toggle opens on pointerdown; the same finger's click must not land on a menu row.
+  const panelTapGuardUntil = useRef(0);
+  const panelSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const block = (ev: Event) => {
+      if (Date.now() > panelTapGuardUntil.current) return;
+      const el = ev.target as Element | null;
+      if (el && el.closest && el.closest('[data-player-panel="true"]')) { ev.preventDefault(); ev.stopPropagation(); }
+    };
+    window.addEventListener("click", block, true);
+    window.addEventListener("pointerup", block, true);
+    return () => { window.removeEventListener("click", block, true); window.removeEventListener("pointerup", block, true); };
+  }, []);
   const [shareFallback, setShareFallback] = useState<{ url: string; title: string } | null>(null);
 
   // ===== AN iframe minimal overlay auto-hide =====
@@ -3902,6 +3915,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const toggleQualityPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
+    panelTapGuardUntil.current = Date.now() + 450;
     setShowQualityPanel((p) => !p);
     setShowAudioPanel(false);
     setShowCcPanel(false);
@@ -3912,6 +3926,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const toggleAudioPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
+    panelTapGuardUntil.current = Date.now() + 450;
     setShowAudioPanel((p) => !p);
     setShowQualityPanel(false);
     setShowCcPanel(false);
@@ -3922,6 +3937,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const toggleSettingsPanelFast = useCallback((e: React.PointerEvent | React.MouseEvent) => {
     stopControlPress(e);
+    panelTapGuardUntil.current = Date.now() + 450;
     setShowSettings((p) => !p);
     setSettingsTab("speed");
     setShowAudioPanel(false);
@@ -4946,10 +4962,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPlayerInteractiveTarget]);
   const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
+    if (e.type !== "touchend") return;
+    const start = panelSwipeStart.current;
+    panelSwipeStart.current = null;
+    const t = (e as React.TouchEvent).changedTouches?.[0];
+    if (!start || !t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Swipe the drawer to the right to close it.
+    if (dx > 60 && Math.abs(dy) < 45) {
+      setShowServerPanel(false); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false);
+    }
   }, []);
 
   const keepPanelScrollActive = useCallback((e: React.TouchEvent | React.UIEvent<HTMLDivElement>) => {
     e.stopPropagation();
+    if (e.type === "touchstart") {
+      const t = (e as React.TouchEvent).touches?.[0];
+      if (t) panelSwipeStart.current = { x: t.clientX, y: t.clientY };
+    }
   }, []);
 
   const stopPanelWheelPropagation = useCallback((e: React.WheelEvent) => {
@@ -5570,14 +5601,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {/* Center: replay 10 | play | forward 10 */}
               <div className="flex items-center justify-center gap-8">
-                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(-10); }} aria-label="Back 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[46px] h-[46px] rounded-full flex items-center justify-center">
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(-10); }} aria-label="Back 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[42px] h-[42px] rounded-full flex items-center justify-center">
                   <PlayerIcon3D icon={RotateCcw} className="w-6 h-6" />
                   <span className="p3d-seek-num">10</span>
                 </Button>
                 <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); togglePlay(); }} aria-label={playing ? "Pause" : "Play"} className={`player-touch-button player-touch-button--primary p3d-anim rounded-full flex items-center justify-center ${playing ? "" : "is-paused"}`} style={{ width: 58, height: 58 }}>
                   {playing ? <Pause className="w-8 h-8" fill="currentColor" /> : <Play className="w-8 h-8 ml-1" fill="currentColor" />}
                 </Button>
-                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(10); }} aria-label="Forward 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[46px] h-[46px] rounded-full flex items-center justify-center">
+                <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); seek(10); }} aria-label="Forward 10 seconds" className="player-touch-button p3d-anim p3d-seek w-[42px] h-[42px] rounded-full flex items-center justify-center">
                   <PlayerIcon3D icon={RotateCw} className="w-6 h-6" />
                   <span className="p3d-seek-num">10</span>
                 </Button>
@@ -5612,11 +5643,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <Button variant="player" size="unstyled" onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="player-touch-button p3d-anim w-7 h-7 flex items-center justify-center shrink-0 rounded-full" aria-label="Toggle mute">
-                      {muted || boostedVolume <= 0 ? <PlayerIcon3D icon={VolumeX} className="w-3.5 h-3.5" /> : <PlayerIcon3D icon={Volume2} className="w-3.5 h-3.5" />}
+                    }} className="player-touch-button p3d-anim w-6 h-6 flex items-center justify-center shrink-0 rounded-full" aria-label="Toggle mute">
+                      {muted || boostedVolume <= 0 ? <PlayerIcon3D icon={VolumeX} className="w-3 h-3" /> : <PlayerIcon3D icon={Volume2} className="w-3 h-3" />}
                     </Button>
                   </div>
-                  <div className="flex items-center justify-end gap-1 flex-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pl-0.5">
+                  <div className="flex items-center gap-1 flex-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pl-1 [&>*:first-child]:ml-auto">
                     <Button variant="player" size="unstyled"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -5625,7 +5656,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full shrink-0 leading-none font-bold inline-flex items-center justify-center min-w-[32px] ${playbackRate !== 1 ? "is-on" : ""}`}
+                      className={`player-control-chip p3d-anim h-6 px-1.5 text-[9.5px] rounded-full shrink-0 leading-none font-bold inline-flex items-center justify-center min-w-[28px] ${playbackRate !== 1 ? "is-on" : ""}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</Button>
                     {availableQualities.length > 1 && (
@@ -5633,7 +5664,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         onPointerDown={toggleQualityPanelFast}
                         onClick={stopControlPress}
                         aria-label="Quality"
-                        className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full font-bold shrink-0 inline-flex items-center justify-center max-w-[58px] ${showQualityPanel || currentQuality !== "Auto" ? "is-on" : ""}`}
+                        className={`player-control-chip p3d-anim h-6 px-1.5 text-[9.5px] rounded-full font-bold shrink-0 inline-flex items-center justify-center max-w-[58px] ${showQualityPanel || currentQuality !== "Auto" ? "is-on" : ""}`}
                       >
                         <span className="truncate">{currentQuality}</span>
                       </Button>
@@ -5642,23 +5673,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <Button variant="player" size="unstyled"
                         onPointerDown={toggleAudioPanelFast}
                         onClick={stopControlPress}
-                        className={`player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full font-bold inline-flex items-center gap-1 max-w-[86px] shrink-0 ${showAudioPanel ? "is-on" : ""}`}
+                        className={`player-control-chip p3d-anim h-6 px-1.5 text-[9.5px] rounded-full font-bold inline-flex items-center gap-1 max-w-[78px] shrink-0 ${showAudioPanel ? "is-on" : ""}`}
                         aria-label="Audio track"
                       >
-                        {embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <PlayerIcon3D icon={Languages} className="w-3 h-3 shrink-0" />}
+                        {embedded.busy ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <PlayerIcon3D icon={Languages} className="w-2.5 h-2.5 shrink-0" />}
                         <span className="truncate">{embeddedAudioList.length > 0 ? embeddedAudioLabel : activePlaybackLanguage || "Audio"}</span>
                       </Button>
                     )}
                     {onNextEpisode && (
-                      <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} aria-label="Next episode" className="player-control-chip p3d-anim h-7 px-2 text-[10px] rounded-full inline-flex items-center justify-center gap-0.5 shrink-0 font-bold">
+                      <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} aria-label="Next episode" className="player-control-chip p3d-anim h-6 px-1.5 text-[9.5px] rounded-full inline-flex items-center justify-center gap-0.5 shrink-0 font-bold">
                         Next <PlayerIcon3D icon={ChevronRight} className="w-3 h-3" />
                       </Button>
                     )}
-                    <Button variant="player" size="unstyled" onPointerDown={toggleSettingsPanelFast} onClick={stopControlPress} aria-label="Settings" className={`player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${showSettings ? "is-on" : ""}`}>
-                      <PlayerIcon3D icon={Settings} className="w-3.5 h-3.5" />
+                    <Button variant="player" size="unstyled" onPointerDown={toggleSettingsPanelFast} onClick={stopControlPress} aria-label="Settings" className={`player-touch-button p3d-anim w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${showSettings ? "is-on" : ""}`}>
+                      <PlayerIcon3D icon={Settings} className="w-3 h-3" />
                     </Button>
-                    <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} aria-label="Fullscreen" className="player-touch-button p3d-anim w-7 h-7 rounded-full flex items-center justify-center shrink-0">
-                      {isFullscreen ? <PlayerIcon3D icon={Minimize} className="w-3.5 h-3.5" /> : <PlayerIcon3D icon={Maximize} className="w-3.5 h-3.5" />}
+                    <Button variant="player" size="unstyled" onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} aria-label="Fullscreen" className="player-touch-button p3d-anim w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                      {isFullscreen ? <PlayerIcon3D icon={Minimize} className="w-3 h-3" /> : <PlayerIcon3D icon={Maximize} className="w-3 h-3" />}
                     </Button>
                   </div>
                 </div>
@@ -5966,23 +5997,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
 
-            <div className={`rs-player-actions grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3`}>
-              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+            <div className={`rs-player-actions grid ${isAnimeSaltContent ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5 mt-3 rs-3d-in`}>
+              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10.5px] font-semibold transition-colors border ${saved ? 'rs-3d is-on' : 'rs-3d'}`}>
                 <Bookmark className={`w-3 h-3 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
                 <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add'}</span>
               </button>
-              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
+              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10.5px] font-semibold rs-3d">
                 <Share2 className="w-3 h-3 flex-shrink-0" />
                 <span>Share</span>
               </button>
               {!isAnimeSaltContent && (
-                <button onClick={() => { openDownloadWithAd(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <button onClick={() => { openDownloadWithAd(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10.5px] font-semibold border active:scale-95 transition-all disabled:opacity-60 ${showDownloadQualityPicker ? 'rs-3d is-on' : 'rs-3d'}`}>
                   <Download className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Download</span>
                 </button>
 
               )}
-              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10.5px] font-semibold border active:scale-95 transition-all ${showLibrarySheet ? 'rs-3d is-on' : 'rs-3d'}`}>
                 <FolderDown className="w-3 h-3 flex-shrink-0" />
                 <span className="whitespace-nowrap truncate">Library</span>
               </button>
@@ -6005,12 +6036,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 {showEpisodeSearch && <EpisodeSearchPopup episodes={episodeList} onClose={() => setShowEpisodeSearch(false)} />}
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                  <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold rs-3d">
                     {embedded.engineActive && embeddedAudioList.length > 0 ? embeddedAudioLabel : currentLangLabel}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                   {seasons && seasons.length > 0 && (
-                    <button onClick={() => openInlineSheet("season")} className="inline-flex min-w-[140px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                    <button onClick={() => openInlineSheet("season")} className="inline-flex min-w-[140px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold rs-3d">
                       {activeSeasonLabel}
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>

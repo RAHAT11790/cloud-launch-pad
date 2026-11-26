@@ -1,3 +1,4 @@
+import { imageFileToDataUrl } from "@/lib/imageDataUrl";
 import { filterExistingHistory } from "@/lib/historyFilter";
 import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
@@ -553,6 +554,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [bkashSettings, setBkashSettings] = useState<any>(null);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [trxInput, setTrxInput] = useState("");
+  const [payProof, setPayProof] = useState("");
+  const [payProofBusy, setPayProofBusy] = useState(false);
   const [trxSubmitting, setTrxSubmitting] = useState(false);
   const [pendingPaymentRequests, setPendingPaymentRequests] = useState<any[]>([]);
   const [editingPendingRequest, setEditingPendingRequest] = useState(false);
@@ -872,6 +875,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     });
     setBkashSenderNumber(pendingPaymentRequest.bkashNumber || "");
     setTrxInput((pendingPaymentRequest.transactionId || "").toUpperCase());
+    setPayProof(pendingPaymentRequest.screenshot || "");
     setPaymentTab(pendingPaymentRequest.method || "bkash");
     setEditingPendingRequest(true);
   };
@@ -1075,8 +1079,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   };
 
   const submitBkashPayment = async (method: PaymentMethod) => {
-    if (!userId || !selectedPlan || !trxInput.trim()) {
-      toast.error("Enter Transaction ID");
+    if (!userId || !selectedPlan) return;
+    if (!payProof) {
+      toast.error("Add a screenshot of your payment");
       return;
     }
     if (!senderLooksValid(method, bkashSenderNumber)) {
@@ -1097,6 +1102,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         userName,
         userEmail,
         transactionId: trxInput.trim(),
+        screenshot: payProof,
         bkashNumber: bkashSenderNumber.trim(),
         planId: selectedPlan.id,
         planName: selectedPlan.name,
@@ -1129,6 +1135,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       // In-app admin notification inbox removed (Firebase bandwidth optimization).
       setEditingPendingRequest(false);
       setTrxInput("");
+      setPayProof("");
       setBkashSenderNumber("");
       toast.success(isEditingExistingRequest ? "Payment request updated!" : "Payment request submitted!");
 
@@ -1457,13 +1464,31 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                     inputMode={activeMethod.kind === "mobile" ? "numeric" : "text"} className="pg3d-input" />
                 </div>
 
-                <div className="mb-4">
-                  <label className="text-xs text-muted-foreground mb-1 block">Transaction ID</label>
+                <div className="mb-3">
+                  <label className="text-xs text-muted-foreground mb-1 block">Transaction ID <span className="opacity-70">(optional)</span></label>
                   <input value={trxInput} onChange={e => setTrxInput(e.target.value.toUpperCase())}
                     placeholder="Example: 0A1B2C3D4E" className="pg3d-input font-mono tracking-wider" />
                 </div>
 
-                <button onClick={() => submitBkashPayment(activeMethod)} disabled={trxSubmitting || !trxInput.trim() || !bkashSenderNumber.trim()} className="pg3d-pay">
+                <div className="mb-4">
+                  <label className="text-xs text-muted-foreground mb-1 block">Payment screenshot</label>
+                  <label data-pay-proof className="pg3d-input flex items-center gap-3 cursor-pointer min-h-[64px]">
+                    {payProof
+                      ? <img src={payProof} alt="Payment screenshot" className="w-12 h-16 rounded-md object-cover shrink-0" />
+                      : <span className="w-12 h-12 rounded-md border border-dashed border-border flex items-center justify-center text-lg shrink-0">📷</span>}
+                    <span className="text-xs flex-1 min-w-0">{payProofBusy ? "Adding..." : payProof ? "Screenshot added — tap to change" : "Tap to add the screenshot from your gallery"}</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                      const file = e.target.files?.[0]; e.target.value = "";
+                      if (!file) return;
+                      setPayProofBusy(true);
+                      try { setPayProof(await imageFileToDataUrl(file, 1100, 0.72)); }
+                      catch { toast.error("Could not read this image"); }
+                      finally { setPayProofBusy(false); }
+                    }} />
+                  </label>
+                </div>
+
+                <button onClick={() => submitBkashPayment(activeMethod)} disabled={trxSubmitting || payProofBusy || !payProof || !bkashSenderNumber.trim()} className="pg3d-pay">
                   {trxSubmitting ? "Submitting..." : editingPendingRequest ? "✅ Update Request" : "✅ Submit Request"}
                 </button>
               </div>

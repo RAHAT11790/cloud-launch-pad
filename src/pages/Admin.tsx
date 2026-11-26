@@ -8203,7 +8203,12 @@ ${tgBulkFooter}
  }`}>{req.status === "approved" ? "✅ Approved" : req.status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
  </div>
  <div className="text-[11px] text-zinc-400 space-y-0.5 mb-2">
- <p>📱 TrxID: <span className="font-mono font-bold text-white">{req.transactionId}</span></p>
+ <p>📱 TrxID: <span className="font-mono font-bold text-white">{req.transactionId || "—"}</span></p>
+ {req.screenshot && (
+ <a href={req.screenshot} target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); const w = window.open(); if (w) w.document.write(`<img src="${req.screenshot}" style="max-width:100%">`); }} className="inline-block mt-1">
+ <img src={req.screenshot} alt="Payment screenshot" loading="lazy" className="w-20 h-28 rounded-lg object-cover border border-white/15" />
+ </a>
+ )}
  <p>💰 plan: {req.planName} — {req.planPriceLabel || `৳${req.planPrice}`}</p>
  <p>📅 {new Date(req.submittedAt).toLocaleString("bn-BD")}</p>
  {req.bkashNumber && <p>📞 {req.methodName || "bKash"}: {req.bkashNumber}</p>}
