@@ -546,6 +546,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // A fast menu toggle opens on pointerdown; the same finger's click must not land on a menu row.
   const panelTapGuardUntil = useRef(0);
   const panelSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  // Visible tap feedback (bounce + glow ring) on every player and below-player button.
+  useEffect(() => {
+    const onDown = (ev: PointerEvent) => {
+      const el = (ev.target as Element | null)?.closest?.(".player-touch-button, .player-control-chip, .rs-3d") as HTMLElement | null;
+      if (!el) return;
+      el.classList.remove("is-tapped");
+      void el.offsetWidth;
+      el.classList.add("is-tapped");
+      window.setTimeout(() => el.classList.remove("is-tapped"), 520);
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, []);
   useEffect(() => {
     const block = (ev: Event) => {
       if (Date.now() > panelTapGuardUntil.current) return;
@@ -5615,7 +5628,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
 
               {/* Bottom deck: progress, then time/volume | speed, quality, audio, next, settings, fullscreen */}
-              <div className="px-2.5 pb-2.5">
+              <div className="p3d-bottom px-2.5 pb-2.5">
                 <div
                   ref={progressBarRef}
                   className="w-full h-5 flex items-center cursor-pointer mb-1 relative touch-none"

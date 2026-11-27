@@ -4,12 +4,12 @@ import { useState, useRef, useEffect, forwardRef, useMemo, useCallback, type CSS
 import { useNavigate } from "react-router-dom";
 import { clearPremiumPayParam, readPremiumPayTab } from "@/lib/premiumPayLink";
 import { usePaymentGateway } from "@/hooks/usePaymentGateway";
-import { usableMethods, priceFor, plansFor, paymentRequestGroup, senderLooksValid, type PaymentMethod } from "@/lib/paymentGateway";
+import { usableMethods, priceFor, plansFor, paymentRequestGroup, paymentProofRule, paymentSubmissionError, type PaymentMethod } from "@/lib/paymentGateway";
 import { MethodTile, AdminContactCard } from "@/components/premium/PaymentBits";
 import { PaymentLogo } from "@/components/premium/PaymentLogo";
 import { PremiumBenefits } from "@/components/premium/PremiumBenefits";
 import LuckySpinButton from "@/components/luckyspin/LuckySpinButton";
-import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon } from "lucide-react";
+import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles, Coins, Palette, ScanFace, Type, ShoppingBag, Image as ImageIcon, Upload } from "lucide-react";
 import { usePremium } from "@/hooks/usePremium";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
@@ -556,6 +556,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const [trxInput, setTrxInput] = useState("");
   const [payProof, setPayProof] = useState("");
   const [payProofBusy, setPayProofBusy] = useState(false);
+  const [payNote, setPayNote] = useState("");
   const [trxSubmitting, setTrxSubmitting] = useState(false);
   const [pendingPaymentRequests, setPendingPaymentRequests] = useState<any[]>([]);
   const [editingPendingRequest, setEditingPendingRequest] = useState(false);
@@ -876,6 +877,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
     setBkashSenderNumber(pendingPaymentRequest.bkashNumber || "");
     setTrxInput((pendingPaymentRequest.transactionId || "").toUpperCase());
     setPayProof(pendingPaymentRequest.screenshot || "");
+    setPayNote(pendingPaymentRequest.note || "");
     setPaymentTab(pendingPaymentRequest.method || "bkash");
     setEditingPendingRequest(true);
   };
@@ -1080,14 +1082,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
 
   const submitBkashPayment = async (method: PaymentMethod) => {
     if (!userId || !selectedPlan) return;
-    if (!payProof) {
-      toast.error("Add a screenshot of your payment");
-      return;
-    }
-    if (!senderLooksValid(method, bkashSenderNumber)) {
-      toast.error(method.kind === "mobile" ? `Enter your 11-digit ${method.name} number` : `Enter ${method.senderLabel.toLowerCase()}`);
-      return;
-    }
+    const proofRule = paymentProofRule(method);
+    const proofError = paymentSubmissionError(method, { sender: bkashSenderNumber, transactionId: trxInput, screenshot: payProof });
+    if (proofError) { toast.error(proofError); return; }
     const currentPlan = plansFor(method, walletPlans).find((p) => p.id === selectedPlan.id);
     if (!currentPlan || !method.enabled || !method.number.trim()) {
       toast.error("Select an available plan for this payment method"); return;
@@ -1101,9 +1098,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
         userId,
         userName,
         userEmail,
-        transactionId: trxInput.trim(),
-        screenshot: payProof,
-        bkashNumber: bkashSenderNumber.trim(),
+        transactionId: proofRule.needsTransactionId ? trxInput.trim().toUpperCase() : "",
+        screenshot: proofRule.needsScreenshot ? payProof : "",
+        note: proofRule.needsScreenshot ? payNote.trim().slice(0, 500) : "",
+        bkashNumber: proofRule.needsSender ? bkashSenderNumber.trim() : "",
         planId: selectedPlan.id,
         planName: selectedPlan.name,
         planPrice: currentPlan.price,
@@ -1136,6 +1134,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
       setEditingPendingRequest(false);
       setTrxInput("");
       setPayProof("");
+      setPayNote("");
       setBkashSenderNumber("");
       toast.success(isEditingExistingRequest ? "Payment request updated!" : "Payment request submitted!");
 
@@ -1457,38 +1456,56 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   </div>
                 )}
 
-                <div className="mb-3">
-                  <label className="text-xs text-muted-foreground mb-1 block">{activeMethod.senderLabel}</label>
-                  <input value={bkashSenderNumber} onChange={e => setBkashSenderNumber(e.target.value)}
-                    placeholder={activeMethod.kind === "mobile" ? "01XXXXXXXXX" : "Your account / ID"} maxLength={activeMethod.kind === "mobile" ? 11 : 80}
-                    inputMode={activeMethod.kind === "mobile" ? "numeric" : "text"} className="pg3d-input" />
-                </div>
+                {paymentProofRule(activeMethod).needsTransactionId ? (
+                  <>
+                    <div className="mb-3">
+                      <label className="text-xs text-muted-foreground mb-1 block">{activeMethod.senderLabel}</label>
+                      <input value={bkashSenderNumber} onChange={e => setBkashSenderNumber(e.target.value)}
+                        placeholder={activeMethod.kind === "mobile" ? "01XXXXXXXXX" : "Your account / ID"} maxLength={activeMethod.kind === "mobile" ? 11 : 80}
+                        inputMode={activeMethod.kind === "mobile" ? "numeric" : "text"} className="pg3d-input" />
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-muted-foreground mb-1 block">Transaction ID</label>
+                      <input value={trxInput} onChange={e => setTrxInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                        placeholder="Example: 0A1B2C3D4E" maxLength={30} className="pg3d-input font-mono tracking-wider" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <label className="text-xs text-muted-foreground mb-1.5 block">Payment screenshot</label>
+                      <label data-pay-proof className={`pg3d-proof ${payProof ? "has-image" : ""}`}>
+                        {payProof ? (
+                          <>
+                            <img src={payProof} alt="Payment screenshot" className="pg3d-proof-img" />
+                            <span className="pg3d-proof-change">Tap to change</span>
+                          </>
+                        ) : (
+                          <span className="flex flex-col items-center gap-2 py-6">
+                            <span className="pg3d-proof-icon"><Upload className="w-6 h-6" /></span>
+                            <span className="text-sm font-bold">{payProofBusy ? "Adding..." : "Upload payment screenshot"}</span>
+                            <span className="text-[11px] text-muted-foreground">Choose it from your gallery</span>
+                          </span>
+                        )}
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0]; e.target.value = "";
+                          if (!file) return;
+                          setPayProofBusy(true);
+                          try { setPayProof(await imageFileToDataUrl(file, 1100, 0.72)); }
+                          catch { toast.error("Could not read this image"); }
+                          finally { setPayProofBusy(false); }
+                        }} />
+                      </label>
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-muted-foreground mb-1 block">Description <span className="opacity-70">(optional)</span></label>
+                      <textarea value={payNote} onChange={e => setPayNote(e.target.value)} maxLength={500} rows={3}
+                        placeholder="Anything the admin should know about this payment" className="pg3d-input resize-none" />
+                    </div>
+                  </>
+                )}
 
-                <div className="mb-3">
-                  <label className="text-xs text-muted-foreground mb-1 block">Transaction ID <span className="opacity-70">(optional)</span></label>
-                  <input value={trxInput} onChange={e => setTrxInput(e.target.value.toUpperCase())}
-                    placeholder="Example: 0A1B2C3D4E" className="pg3d-input font-mono tracking-wider" />
-                </div>
-
-                <div className="mb-4">
-                  <label className="text-xs text-muted-foreground mb-1 block">Payment screenshot</label>
-                  <label data-pay-proof className="pg3d-input flex items-center gap-3 cursor-pointer min-h-[64px]">
-                    {payProof
-                      ? <img src={payProof} alt="Payment screenshot" className="w-12 h-16 rounded-md object-cover shrink-0" />
-                      : <span className="w-12 h-12 rounded-md border border-dashed border-border flex items-center justify-center text-lg shrink-0">📷</span>}
-                    <span className="text-xs flex-1 min-w-0">{payProofBusy ? "Adding..." : payProof ? "Screenshot added — tap to change" : "Tap to add the screenshot from your gallery"}</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                      const file = e.target.files?.[0]; e.target.value = "";
-                      if (!file) return;
-                      setPayProofBusy(true);
-                      try { setPayProof(await imageFileToDataUrl(file, 1100, 0.72)); }
-                      catch { toast.error("Could not read this image"); }
-                      finally { setPayProofBusy(false); }
-                    }} />
-                  </label>
-                </div>
-
-                <button onClick={() => submitBkashPayment(activeMethod)} disabled={trxSubmitting || payProofBusy || !payProof || !bkashSenderNumber.trim()} className="pg3d-pay">
+                <button onClick={() => submitBkashPayment(activeMethod)} disabled={trxSubmitting || payProofBusy || (paymentProofRule(activeMethod).needsTransactionId ? (!bkashSenderNumber.trim() || !trxInput.trim()) : !payProof)} className="pg3d-pay">
                   {trxSubmitting ? "Submitting..." : editingPendingRequest ? "✅ Update Request" : "✅ Submit Request"}
                 </button>
               </div>
@@ -1546,14 +1563,25 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   <span className="text-muted-foreground">Plan</span>
                   <span className="font-semibold">{pendingPaymentRequest.planName} • {pendingPaymentRequest.planPriceLabel || `৳${pendingPaymentRequest.planPrice}`}</span>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Transaction ID</span>
-                  <span className="font-mono font-semibold">{pendingPaymentRequest.transactionId}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">{pendingPaymentRequest.methodName || "bKash"} account</span>
-                  <span className="font-semibold">{pendingPaymentRequest.bkashNumber || "—"}</span>
-                </div>
+                {pendingPaymentRequest.transactionId ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Transaction ID</span>
+                      <span className="font-mono font-semibold">{pendingPaymentRequest.transactionId}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">{pendingPaymentRequest.methodName || "bKash"} account</span>
+                      <span className="font-semibold">{pendingPaymentRequest.bkashNumber || "—"}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">{pendingPaymentRequest.methodName || "Binance"} screenshot</span>
+                    {pendingPaymentRequest.screenshot
+                      ? <img src={pendingPaymentRequest.screenshot} alt="Payment screenshot" className="w-10 h-14 rounded-md object-cover border border-foreground/15" />
+                      : <span className="font-semibold">—</span>}
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Time left</span>
                   <span className="font-semibold" style={{ color: pendingReviewMs > 0 ? "hsl(45,90%,55%)" : "hsl(var(--destructive))" }}>

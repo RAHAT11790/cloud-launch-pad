@@ -529,12 +529,12 @@ div[style*="z-index: 2147483647"],
 
   /* Gentle raised-button entrance without tilting or blurring the symbols. */
   .p3d-deck[data-shown="1"] .p3d-anim {
-    animation: p3d-pop 180ms ease-out backwards;
+    animation: p3d-pop 260ms cubic-bezier(.3,1.4,.5,1) backwards;
   }
   .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 180ms; }
   @keyframes p3d-pop {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
+    0% { opacity: 0; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
   }
 
   .p3d-title p { text-shadow: 0 1px 2px hsl(0 0% 0% / 0.85); }
@@ -4221,21 +4221,113 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   .pg3d-step, .pg3d-method { animation: none; opacity: 1; transform: none; }
 }
 
-/* Raised buttons under the player: bevel from inner light/shade only, no outer shadow. */
+/* Raised buttons under the player: bevel from inner light/shade only, no outer shadow.
+   Tuned for the dark theme first (most users), still readable in light. */
 .rs-3d {
-  color: hsl(var(--foreground) / 0.9);
-  background: linear-gradient(180deg, hsl(var(--foreground) / 0.1), hsl(var(--foreground) / 0.03) 55%, hsl(var(--foreground) / 0.06));
-  border: 1px solid hsl(var(--foreground) / 0.12);
-  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.14), inset 0 -2px 0 hsl(var(--background) / 0.55);
-  transition: background-color 200ms ease, color 200ms ease, opacity 200ms ease, transform 120ms ease;
+  position: relative;
+  color: hsl(var(--foreground) / 0.95);
+  background:
+    linear-gradient(180deg, hsl(var(--foreground) / 0.16) 0%, hsl(var(--foreground) / 0.06) 48%, hsl(var(--foreground) / 0.03) 52%, hsl(var(--foreground) / 0.08) 100%),
+    hsl(var(--card));
+  border: 1px solid hsl(var(--foreground) / 0.16);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.26), inset 0 -3px 0 hsl(var(--background) / 0.75);
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease, transform 140ms cubic-bezier(.2,.8,.2,1);
   -webkit-tap-highlight-color: transparent;
 }
-.rs-3d:active { transform: scale(0.96); }
+.rs-3d svg { color: hsl(var(--primary)); transition: transform 200ms ease; }
+.rs-3d:active { transform: translateY(1px) scale(0.95); }
 .rs-3d.is-on {
   color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.45);
-  background: linear-gradient(180deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.08) 60%, hsl(var(--primary) / 0.14));
+  border-color: hsl(var(--primary) / 0.6);
+  background:
+    linear-gradient(180deg, hsl(var(--primary) / 0.32), hsl(var(--primary) / 0.12) 55%, hsl(var(--primary) / 0.2)),
+    hsl(var(--card));
 }
-.rs-3d-in { animation: rs-fade-in 320ms ease-out both; }
+.rs-3d-in > * { animation: rs-rise 420ms cubic-bezier(.2,.8,.2,1) both; }
+.rs-3d-in > *:nth-child(2) { animation-delay: 60ms; }
+.rs-3d-in > *:nth-child(3) { animation-delay: 120ms; }
+.rs-3d-in > *:nth-child(4) { animation-delay: 180ms; }
+@keyframes rs-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+
+/* Tap feedback for player + below-player buttons: bounce and a primary glow ring (transform/opacity only). */
+.player-touch-button.is-tapped,
+.player-control-chip.is-tapped,
+.rs-3d.is-tapped { animation: p3d-tap 420ms cubic-bezier(.3,1.6,.5,1) both; }
+.player-touch-button.is-tapped::before,
+.player-control-chip.is-tapped::before,
+.rs-3d.is-tapped::before {
+  content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
+  border: 2px solid hsl(var(--primary));
+  box-shadow: 0 0 14px hsl(var(--primary) / 0.8);
+  animation: p3d-ring 480ms ease-out both;
+}
+.rs-3d.is-tapped svg { animation: rs-icon-hop 420ms cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes p3d-tap { 0% { transform: scale(1); } 35% { transform: scale(0.86); } 70% { transform: scale(1.07); } 100% { transform: scale(1); } }
+@keyframes p3d-ring { 0% { opacity: 0.95; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes rs-icon-hop { 0% { transform: none; } 40% { transform: translateY(3px) scale(0.85); } 75% { transform: translateY(-3px) scale(1.15); } 100% { transform: none; } }
+
+/* Landscape / fullscreen: the bottom deck grows so icons and chips are easy to hit. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .p3d-bottom .p3d-time { font-size: 13px; }
+  .p3d-bottom .player-control-chip { height: 34px !important; padding: 0 12px !important; font-size: 13px !important; min-width: 40px; max-width: 120px !important; }
+  .p3d-bottom .player-touch-button { width: 34px !important; height: 34px !important; }
+  .p3d-bottom .p3d-icon, .p3d-bottom svg { width: 16px !important; height: 16px !important; }
+  .p3d-bottom > div:last-child, .p3d-bottom > div:last-child > div { gap: 8px !important; }
+}
+
+/* Payment screenshot uploader (crypto) */
+.pg3d-proof {
+  position: relative; display: block; cursor: pointer; overflow: hidden; border-radius: 18px; text-align: center;
+  color: hsl(var(--foreground));
+  background: linear-gradient(180deg, hsl(var(--foreground) / 0.07), hsl(var(--foreground) / 0.02)), hsl(var(--card));
+  border: 2px dashed color-mix(in srgb, var(--mc, hsl(var(--primary))) 70%, transparent);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.14), inset 0 -3px 0 hsl(var(--background) / 0.7);
+  transition: transform 140ms ease;
+}
+.pg3d-proof:active { transform: scale(0.98); }
+.pg3d-proof.has-image { border-style: solid; padding: 8px; }
+.pg3d-proof-img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 12px; background: hsl(var(--background)); animation: rs-rise 360ms ease-out both; }
+.pg3d-proof-change { display: block; margin-top: 6px; font-size: 11px; font-weight: 700; color: var(--mc, hsl(var(--primary))); }
+.pg3d-proof-icon {
+  width: 54px; height: 54px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;
+  color: var(--mc, hsl(var(--primary))); background: color-mix(in srgb, var(--mc, hsl(var(--primary))) 18%, transparent);
+  animation: pg3dFloat 3.2s ease-in-out infinite;
+}
+
+/* Admin payment request tabs, clear button, proof viewer */
+.pr-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pr-tab {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 11px 14px; border-radius: 16px; text-align: left;
+  color: hsl(var(--foreground) / 0.8);
+  background: linear-gradient(180deg, hsl(var(--foreground) / 0.1), hsl(var(--foreground) / 0.03)), hsl(var(--card));
+  border: 1px solid hsl(var(--foreground) / 0.12);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.18), 0 4px 0 hsl(var(--background));
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.pr-tab:active { transform: translateY(3px); box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.18), 0 1px 0 hsl(var(--background)); }
+.pr-tab.is-on {
+  color: hsl(var(--primary-foreground));
+  background: linear-gradient(180deg, hsl(var(--primary) / 0.9), hsl(var(--primary) / 0.7));
+  border-color: hsl(var(--primary));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.35), 0 4px 0 hsl(var(--primary) / 0.45), 0 10px 22px -12px hsl(var(--primary));
+}
+.pr-tab-title { font-size: 14px; font-weight: 800; line-height: 1.15; }
+.pr-tab-sub { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; opacity: 0.8; }
+.pr-tab-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: hsl(0 0% 100%); background: hsl(var(--destructive)); }
+.pr-clear, .pr-del {
+  display: inline-flex; align-items: center; gap: 5px; border-radius: 9999px; font-weight: 700;
+  color: hsl(var(--destructive)); background: hsl(var(--destructive) / 0.12); border: 1px solid hsl(var(--destructive) / 0.4);
+  transition: transform 120ms ease;
+}
+.pr-clear { padding: 6px 12px; font-size: 12px; }
+.pr-del { padding: 4px 10px; font-size: 11px; margin-top: 4px; }
+.pr-clear:active, .pr-del:active { transform: scale(0.94); }
+.pr-clear:disabled { opacity: 0.4; }
+.pr-proof-thumb { position: relative; display: block; width: 96px; margin: 6px 0; border-radius: 12px; overflow: hidden; border: 1px solid hsl(var(--foreground) / 0.2); }
+.pr-proof-thumb img { width: 96px; height: 132px; object-fit: cover; display: block; }
+.pr-proof-thumb span { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 0; font-size: 10px; font-weight: 700; text-align: center; color: hsl(0 0% 100%); background: hsl(0 0% 0% / 0.65); }
+.pr-lightbox { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 16px; background: hsl(0 0% 0% / 0.88); animation: rs-fade-in 200ms ease-out both; }
+.pr-lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; }
+.pr-lightbox-close { position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; color: hsl(0 0% 100%); background: hsl(0 0% 100% / 0.16); }
 @keyframes rs-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .rs-3d-in { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .rs-3d-in > * { animation: none; } }

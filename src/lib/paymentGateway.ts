@@ -61,7 +61,7 @@ export const DEFAULT_LOGOS = {
 export const DEFAULT_METHODS: PaymentMethod[] = [
   { id: "bkash", name: "bKash", kind: "mobile", logo: DEFAULT_LOGOS.bkash, number: "", accountType: "Agent", qr: "", instructions: "Send Money to the number below, then submit the Transaction ID.", enabled: true, color: "#E2136E", senderLabel: "Your bKash Number" },
   { id: "nagad", name: "Nagad", kind: "mobile", logo: DEFAULT_LOGOS.nagad, number: "", accountType: "Personal", qr: "", instructions: "Send Money to the number below, then submit the Transaction ID.", enabled: true, color: "#EC1C24", senderLabel: "Your Nagad Number" },
-  { id: "binance", name: "Binance", kind: "crypto", logo: DEFAULT_LOGOS.binance, number: "", accountType: "BEP20 (USDT)", qr: "", instructions: "Send USDT to the address / Pay ID below, then submit the Transaction ID.", enabled: true, color: "#F0B90B", senderLabel: "Your Binance Pay ID or wallet" },
+  { id: "binance", name: "Binance", kind: "crypto", logo: DEFAULT_LOGOS.binance, number: "", accountType: "BEP20 (USDT)", qr: "", instructions: "Send USDT to the address / Pay ID below, then upload the payment screenshot.", enabled: true, color: "#F0B90B", senderLabel: "Your Binance Pay ID or wallet" },
 ];
 
 export const DEFAULT_GATEWAY: PaymentGatewayConfig = {
@@ -95,7 +95,11 @@ export function normalizeGateway(raw: any, legacyBkash?: any): PaymentGatewayCon
         number: str(m.number),
         accountType: str(m.accountType, def?.accountType || ""),
         qr: str(m.qr),
-        instructions: str(m.instructions, def?.instructions || ""),
+        instructions: (() => {
+          const t = str(m.instructions, def?.instructions || "");
+          // Crypto never asks for a Transaction ID; replace the old built-in sentence only.
+          return t === "Send USDT to the address / Pay ID below, then submit the Transaction ID." ? "Send USDT to the address / Pay ID below, then upload the payment screenshot." : t;
+        })(),
         enabled: m.enabled !== false,
         color: /^#[0-9a-f]{6}$/i.test(str(m.color)) ? m.color : def?.color || "#F5B83D",
         senderLabel: str(m.senderLabel) || def?.senderLabel || "Your account / number",
@@ -169,4 +173,26 @@ export function readCachedGateway(): any {
 }
 export function writeCachedGateway(raw: any) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(raw ?? null)); } catch { /* full */ }
+}
+
+/** What a buyer must provide: Taka wallets keep sender + Transaction ID; crypto needs only a screenshot (+ optional note). */
+export function paymentProofRule(method: Pick<PaymentMethod, "kind">) {
+  const crypto = method.kind === "crypto";
+  return { needsSender: !crypto, needsTransactionId: !crypto, needsScreenshot: crypto };
+}
+
+/** Returns an error message, or "" when the request can be submitted. */
+export function paymentSubmissionError(
+  method: Pick<PaymentMethod, "kind" | "name" | "senderLabel">,
+  input: { sender: string; transactionId: string; screenshot: string },
+): string {
+  const rule = paymentProofRule(method);
+  if (rule.needsSender && !senderLooksValid(method, input.sender)) {
+    return method.kind === "mobile" ? `Enter your 11-digit ${method.name} number` : `Enter ${method.senderLabel.toLowerCase()}`;
+  }
+  if (rule.needsTransactionId && !/^[A-Z0-9]{6,}$/.test(input.transactionId.trim().toUpperCase())) {
+    return "Enter the Transaction ID from your payment message";
+  }
+  if (rule.needsScreenshot && !input.screenshot) return "Add a screenshot of your payment";
+  return "";
 }

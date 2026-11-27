@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeGateway, usableMethods, priceFor, plansFor, paymentRequestGroup, senderLooksValid, contactLinks } from "@/lib/paymentGateway";
+import { normalizeGateway, usableMethods, priceFor, plansFor, paymentRequestGroup, senderLooksValid, contactLinks, paymentProofRule, paymentSubmissionError } from "@/lib/paymentGateway";
 
 describe("payment gateway", () => {
   it("defaults list bKash first, then Nagad, then Binance", () => {
@@ -53,5 +53,21 @@ describe("payment gateway", () => {
     expect(cfg.methods[0].accountType).toBe(network);
     expect(cfg.methods[0].number).toBe("wallet-address");
     expect(cfg.methods[0].qr).toBe("data:image/png;base64,QR");
+  });
+});
+
+describe("payment proof rules", () => {
+  const wallet = { kind: "mobile" as const, name: "bKash", senderLabel: "Your bKash number" };
+  const crypto = { kind: "crypto" as const, name: "Binance", senderLabel: "Your Binance ID" };
+
+  it("bKash still requires the Transaction ID and needs no screenshot", () => {
+    expect(paymentSubmissionError(wallet, { sender: "01712345678", transactionId: "", screenshot: "" })).toMatch(/Transaction ID/);
+    expect(paymentSubmissionError(wallet, { sender: "01712345678", transactionId: "DKQ923H0TJ", screenshot: "" })).toBe("");
+  });
+
+  it("Binance never asks for a Transaction ID but requires the screenshot", () => {
+    expect(paymentProofRule(crypto).needsTransactionId).toBe(false);
+    expect(paymentSubmissionError(crypto, { sender: "", transactionId: "", screenshot: "" })).toMatch(/screenshot/);
+    expect(paymentSubmissionError(crypto, { sender: "", transactionId: "", screenshot: "data:image/webp;base64,AA" })).toBe("");
   });
 });

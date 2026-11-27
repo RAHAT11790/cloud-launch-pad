@@ -78,7 +78,7 @@ export default function PaymentGatewayManager({ glassCard, inputClass, btnPrimar
     edit((c) => ({ ...c, methods: [...c.methods, {
       id, name: kind === "crypto" ? "Crypto (USDT)" : kind === "mobile" ? "Mobile Wallet" : "Other Payment",
       kind, logo: "", number: "", accountType: kind === "crypto" ? "BEP20 (USDT)" : kind === "mobile" ? "Personal" : "",
-      qr: "", instructions: "Pay to the account below, then submit the Transaction ID.", enabled: true,
+      qr: "", instructions: kind === "crypto" ? "Pay to the address below, then upload the payment screenshot." : "Pay to the account below, then submit the Transaction ID.", enabled: true,
       color: kind === "crypto" ? "#F0B90B" : "#F5B83D", senderLabel: kind === "mobile" ? "Your wallet number" : "Your account / ID",
     }] }));
     setOpen(id);

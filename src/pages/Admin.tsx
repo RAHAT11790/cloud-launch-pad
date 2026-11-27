@@ -2273,6 +2273,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  const [bkashPaymentRequests, setBkashPaymentRequests] = useState<any[]>([]);
  const [paymentRequestTab, setPaymentRequestTab] = useState<"wallet" | "crypto">("wallet");
+const [paymentProofView, setPaymentProofView] = useState<string | null>(null);
+const [paymentClearing, setPaymentClearing] = useState(false);
  const [bkashSettingsLoaded, setBkashSettingsLoaded] = useState(false);
 
  // Free access users state
@@ -8175,14 +8177,43 @@ ${tgBulkFooter}
  </button>
 
  {/* Payment Requests */}
- <div className="grid grid-cols-2 gap-2 mb-4" data-payment-request-tabs>
- <Button variant={paymentRequestTab === "wallet" ? "default" : "secondary"} onClick={() => setPaymentRequestTab("wallet")}>bKash / Nagad · ৳</Button>
- <Button variant={paymentRequestTab === "crypto" ? "default" : "secondary"} onClick={() => setPaymentRequestTab("crypto")}>Binance / Crypto · USDT</Button>
+ <div className="pr-tabs mb-4" data-payment-request-tabs role="tablist">
+ {(["wallet", "crypto"] as const).map((tab) => {
+ const pending = bkashPaymentRequests.filter((r: any) => r.status === "pending" && paymentRequestGroup(r) === tab).length;
+ return (
+ <button key={tab} role="tab" aria-selected={paymentRequestTab === tab} onClick={() => setPaymentRequestTab(tab)} className={`pr-tab ${paymentRequestTab === tab ? "is-on" : ""}`}>
+ <span className="pr-tab-title">{tab === "wallet" ? "bKash / Nagad" : "Binance / Crypto"}</span>
+ <span className="pr-tab-sub">{tab === "wallet" ? "Taka · ৳" : "USDT"}{pending > 0 && <span className="pr-tab-badge">{pending}</span>}</span>
+ </button>
+ );
+ })}
  </div>
  <div className={`${glassCard} p-4`}>
- <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <List size={14} className="text-green-500" /> {paymentRequestTab === "crypto" ? "Crypto requests" : "Wallet requests"} ({bkashPaymentRequests.filter((r: any) => r.status === "pending" && paymentRequestGroup(r) === paymentRequestTab).length} pending)
+ <div className="flex items-center justify-between gap-2 mb-3.5">
+ <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+ <List size={14} className="text-green-500 shrink-0" /> <span className="truncate">{paymentRequestTab === "crypto" ? "Crypto requests" : "Wallet requests"} ({bkashPaymentRequests.filter((r: any) => r.status === "pending" && paymentRequestGroup(r) === paymentRequestTab).length} pending)</span>
  </h3>
+ <button
+ data-payment-clear
+ disabled={paymentClearing || !bkashPaymentRequests.some((r: any) => r.status !== "pending" && paymentRequestGroup(r) === paymentRequestTab)}
+ onClick={async () => {
+ const done = bkashPaymentRequests.filter((r: any) => r.status !== "pending" && paymentRequestGroup(r) === paymentRequestTab);
+ if (!done.length) return;
+ if (!window.confirm(`Delete ${done.length} approved/rejected ${paymentRequestTab} request(s)? Pending requests stay.`)) return;
+ setPaymentClearing(true);
+ try {
+ const patch: Record<string, null> = {};
+ done.forEach((r: any) => { patch[r.id] = null; });
+ await update(ref(db, "bkashPayments"), patch);
+ toast.success(`${done.length} request(s) cleared`);
+ } catch (err: any) { toast.error("Clear failed: " + (err?.message || err)); }
+ finally { setPaymentClearing(false); }
+ }}
+ className="pr-clear shrink-0"
+ >
+ <Trash2 size={13} /> {paymentClearing ? "Clearing..." : "Clear"}
+ </button>
+ </div>
  <div className="space-y-2.5">
  {bkashPaymentRequests.filter((req) => paymentRequestGroup(req) === paymentRequestTab).length === 0 && <p className="text-center text-muted-foreground text-sm py-6">No {paymentRequestTab} requests</p>}
  {bkashPaymentRequests.filter((req) => paymentRequestGroup(req) === paymentRequestTab).map((req: any) => (
@@ -8203,17 +8234,29 @@ ${tgBulkFooter}
  }`}>{req.status === "approved" ? "✅ Approved" : req.status === "rejected" ? "❌ Rejected" : "⏳ Pending"}</span>
  </div>
  <div className="text-[11px] text-zinc-400 space-y-0.5 mb-2">
+ {paymentRequestGroup(req) === "crypto" ? (
+ <>
+ {req.screenshot ? (
+ <button type="button" onClick={() => setPaymentProofView(req.screenshot)} className="pr-proof-thumb" aria-label="Open payment screenshot">
+ <img src={req.screenshot} alt="Payment screenshot" loading="lazy" />
+ <span>Tap to view</span>
+ </button>
+ ) : <p>🖼️ No screenshot</p>}
+ {req.note && <p className="whitespace-pre-wrap break-words text-zinc-300">📝 {req.note}</p>}
+ </>
+ ) : (
  <p>📱 TrxID: <span className="font-mono font-bold text-white">{req.transactionId || "—"}</span></p>
- {req.screenshot && (
- <a href={req.screenshot} target="_blank" rel="noreferrer" onClick={(e) => { e.preventDefault(); const w = window.open(); if (w) w.document.write(`<img src="${req.screenshot}" style="max-width:100%">`); }} className="inline-block mt-1">
- <img src={req.screenshot} alt="Payment screenshot" loading="lazy" className="w-20 h-28 rounded-lg object-cover border border-white/15" />
- </a>
  )}
  <p>💰 plan: {req.planName} — {req.planPriceLabel || `৳${req.planPrice}`}</p>
  <p>📅 {new Date(req.submittedAt).toLocaleString("bn-BD")}</p>
  {req.bkashNumber && <p>📞 {req.methodName || "bKash"}: {req.bkashNumber}</p>}
  {req.methodName && <p>💳 Method: <span className="font-semibold text-white">{req.methodName}</span></p>}
  </div>
+ {req.status !== "pending" && (
+ <button onClick={async () => { if (!window.confirm("Delete this request?")) return; await remove(ref(db, `bkashPayments/${req.id}`)); toast.success("Request deleted"); }} className="pr-del" aria-label="Delete request">
+ <Trash2 size={12} /> Delete
+ </button>
+ )}
  {req.status === "pending" && (
  <div className="flex gap-2">
  <button onClick={async () => {
@@ -8262,6 +8305,12 @@ ${tgBulkFooter}
  </div>
  </div>
 
+ {paymentProofView && (
+ <div className="pr-lightbox" role="dialog" aria-label="Payment screenshot" onClick={() => setPaymentProofView(null)}>
+ <img src={paymentProofView} alt="Payment screenshot" onClick={(e) => e.stopPropagation()} />
+ <button type="button" className="pr-lightbox-close" onClick={() => setPaymentProofView(null)} aria-label="Close"><X size={18} /></button>
+ </div>
+ )}
  {/* ==================== LIVE SMS FEED (Auto Payment) ==================== */}
  <div className={`${glassCard} p-4 mt-4`}>
  <div className="flex items-center justify-between mb-3.5">
