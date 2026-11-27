@@ -431,86 +431,106 @@ div[style*="z-index: 2147483647"],
     -webkit-backdrop-filter: none;
   }
 
-  /* ===== 3D control deck =====
-     Every player button is a lit, bevelled glass orb: top highlight, bottom
-     shade, soft drop shadow and a single crisp icon. Motion is transform/opacity
-     only, so low-end phones stay smooth. */
+  /* ===== Flat control deck =====
+     Solid smoked discs with a hairline edge; depth comes from the two-tone
+     glyphs, never from glow, blur or box-shadow. Sizes are CSS variables so
+     landscape/fullscreen simply scales the whole deck up. Motion is
+     transform/opacity only. */
+  .pd-deck {
+    --pd-pad: 10px;
+    --pd-btn: 38px;
+    --pd-btn-sm: 32px;
+    --pd-chip: 32px;
+    --pd-ico: 19px;
+    --pd-ico-sm: 17px;
+    --pd-seek: 48px;
+    --pd-seek-ico: 28px;
+    --pd-play: 64px;
+    --pd-play-ico: 30px;
+    --pd-font: 11.5px;
+    --pd-gap: 6px;
+    --pd-center-gap: 34px;
+    --pd-track: 4px;
+    --pd-knob: 13px;
+  }
   .player-touch-button,
   .player-control-chip {
     position: relative;
     color: hsl(0 0% 100%);
-    background:
-      linear-gradient(165deg, hsl(0 0% 100% / 0.26) 0%, hsl(0 0% 100% / 0.07) 42%, hsl(0 0% 0% / 0.28) 100%),
-      hsl(0 0% 6% / 0.62);
-    border: 1px solid hsl(0 0% 100% / 0.16);
-    box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.32),
-      inset 0 -2px 4px hsl(0 0% 0% / 0.45),
-      0 3px 8px hsl(0 0% 0% / 0.45);
+    background: hsl(0 0% 8% / 0.58);
+    border: 1px solid hsl(0 0% 100% / 0.14);
+    box-shadow: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
-    transform: perspective(260px) translateZ(0);
-    transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease;
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 160ms ease, border-color 160ms ease, color 160ms ease;
   }
   .player-touch-button svg,
-  .player-control-chip svg {
-    filter: none;
-  }
-  .p3d-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; line-height: 0; color: inherit; }
-  .p3d-icon > svg { display: block; width: 100% !important; height: 100% !important; filter: none; transform: none; }
+  .player-control-chip svg { filter: none; }
   .player-touch-button:active,
-  .player-control-chip:active {
-    transform: translateY(1px) scale(0.96);
-    box-shadow:
-      inset 0 2px 4px hsl(0 0% 0% / 0.55),
-      inset 0 -1px 0 hsl(0 0% 100% / 0.18),
-      0 1px 3px hsl(0 0% 0% / 0.4);
-  }
+  .player-control-chip:active { transform: scale(0.9); background: hsl(0 0% 100% / 0.22); box-shadow: none; }
   .player-touch-button.is-on,
   .player-control-chip.is-on {
-    background:
-      linear-gradient(165deg, hsl(0 0% 100% / 0.34) 0%, hsl(0 0% 100% / 0) 45%, hsl(0 0% 0% / 0.22) 100%),
-      hsl(var(--primary) / 0.85);
-    border-color: hsl(var(--primary) / 0.9);
-    box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.4),
-      inset 0 -2px 4px hsl(0 0% 0% / 0.3),
-      0 3px 12px hsl(var(--primary) / 0.45);
+    color: hsl(var(--primary-foreground));
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    box-shadow: none;
   }
 
-  .player-touch-button--primary {
-    color: hsl(0 0% 100%);
-    background:
-      radial-gradient(circle at 32% 24%, hsl(0 0% 100% / 0.55) 0%, hsl(0 0% 100% / 0) 34%),
-      radial-gradient(circle at 50% 60%, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.78) 58%, hsl(var(--primary) / 0.5) 100%);
-    border: 1px solid hsl(0 0% 100% / 0.3);
-    box-shadow:
-      inset 0 2px 0 hsl(0 0% 100% / 0.4),
-      inset 0 -5px 10px hsl(0 0% 0% / 0.35),
-      0 6px 18px hsl(var(--primary) / 0.5),
-      0 2px 4px hsl(0 0% 0% / 0.5);
-  }
-  .player-touch-button--primary svg {
-    filter: none;
-    width: 28px;
-    height: 28px;
-  }
-  /* Soft 3D halo ring while paused (transform/opacity only) */
-  .player-touch-button--primary.is-paused::after {
-    content: "";
-    position: absolute;
-    inset: -5px;
+  .pd-top { padding: var(--pd-pad) var(--pd-pad) 0; }
+  .pd-top-right { gap: var(--pd-gap); max-width: calc(100% - var(--pd-btn) - 8px); }
+  .pd-btn {
+    width: var(--pd-btn);
+    height: var(--pd-btn);
     border-radius: 9999px;
-    border: 2px solid hsl(var(--primary) / 0.7);
-    animation: p3d-halo 2.2s ease-out infinite;
-    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
-  @keyframes p3d-halo {
-    0% { transform: scale(0.94); opacity: 0.85; }
-    100% { transform: scale(1.32); opacity: 0; }
+  .pd-btn .pg-glyph { width: var(--pd-ico); height: var(--pd-ico); }
+  .pd-btn--sm { width: var(--pd-btn-sm); height: var(--pd-btn-sm); }
+  .pd-btn--sm .pg-glyph { width: var(--pd-ico-sm); height: var(--pd-ico-sm); }
+  .pd-chip {
+    height: var(--pd-chip);
+    min-width: var(--pd-chip);
+    padding: 0 11px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: var(--pd-font);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
   }
+  .pd-chip .pg-glyph { width: var(--pd-ico-sm); height: var(--pd-ico-sm); flex-shrink: 0; }
+  .pd-chip .pd-chev { width: 13px; height: 13px; opacity: 0.75; margin-left: -2px; }
+  .pd-chip-label { max-width: 76px; overflow: hidden; text-overflow: ellipsis; }
+
+  .pd-center { gap: var(--pd-center-gap); }
+  .pd-seek { width: var(--pd-seek); height: var(--pd-seek); background: hsl(0 0% 8% / 0.5); }
+  .pd-seek .pg-glyph { width: var(--pd-seek-ico); height: var(--pd-seek-ico); }
+  .pd-play {
+    width: var(--pd-play);
+    height: var(--pd-play);
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .player-touch-button--primary {
+    color: hsl(0 0% 7%);
+    background: hsl(0 0% 100%);
+    border: 0;
+    box-shadow: none;
+  }
+  .player-touch-button--primary:active { background: hsl(0 0% 88%); }
+  .player-touch-button--primary .pg-glyph { width: var(--pd-play-ico); height: var(--pd-play-ico); }
+  .pd-play-nudge { margin-left: 3px; }
 
   /* Seek buttons: circular arrow with the "10" sitting in the middle */
   .p3d-seek { position: relative; }
@@ -520,39 +540,54 @@ div[style*="z-index: 2147483647"],
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: calc(var(--pd-seek-ico) * 0.36);
     font-weight: 800;
     padding-top: 1px;
-    text-shadow: 0 1px 0 hsl(0 0% 0% / 0.7);
     pointer-events: none;
   }
 
-  /* Gentle raised-button entrance without tilting or blurring the symbols. */
+  /* Calm entrance when the deck appears: fade + small rise, no tilt or blur. */
   .p3d-deck[data-shown="1"] .p3d-anim {
-    animation: p3d-pop 260ms cubic-bezier(.3,1.4,.5,1) backwards;
+    animation: p3d-pop 240ms cubic-bezier(.2,.8,.2,1) backwards;
   }
-  .p3d-deck[data-shown="1"] .player-touch-button--primary.p3d-anim { animation-duration: 180ms; }
+  .p3d-deck[data-shown="1"] .pd-center .p3d-anim:nth-child(1) { animation-delay: 30ms; }
+  .p3d-deck[data-shown="1"] .pd-center .p3d-anim:nth-child(3) { animation-delay: 30ms; }
   @keyframes p3d-pop {
-    0% { opacity: 0; transform: scale(0.8); }
+    0% { opacity: 0; transform: scale(0.86); }
     100% { opacity: 1; transform: scale(1); }
   }
 
+  .pd-bottom { padding: 0 var(--pd-pad) var(--pd-pad); }
+  .pd-tools-left, .pd-tools-right { gap: var(--pd-gap); }
+  .pd-tools { gap: var(--pd-gap); margin-top: 2px; }
+  .pd-time { font-size: var(--pd-font); font-weight: 700; }
   .p3d-title p { text-shadow: 0 1px 2px hsl(0 0% 0% / 0.85); }
-  .p3d-time {
-    color: hsl(0 0% 100%);
-    text-shadow: 0 1px 3px hsl(0 0% 0% / 0.85), 0 0 6px hsl(0 0% 0% / 0.55);
-  }
-  .p3d-track {
-    background: hsl(0 0% 100% / 0.22);
-    box-shadow: inset 0 1px 2px hsl(0 0% 0% / 0.6);
-  }
-  .p3d-fill {
-    background: linear-gradient(180deg, hsl(0 0% 100% / 0.35), hsl(0 0% 100% / 0) 60%), hsl(var(--primary));
-    box-shadow: 0 0 8px hsl(var(--primary) / 0.55);
-  }
-  .p3d-knob {
-    background: radial-gradient(circle at 35% 30%, hsl(0 0% 100%) 0%, hsl(0 0% 100% / 0.9) 30%, hsl(var(--primary)) 75%);
-    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.28), 0 2px 5px hsl(0 0% 0% / 0.55);
+  .p3d-time { color: hsl(0 0% 100%); text-shadow: 0 1px 2px hsl(0 0% 0% / 0.7); }
+  .p3d-track { height: var(--pd-track); background: hsl(0 0% 100% / 0.26); box-shadow: none; }
+  .p3d-fill { background: hsl(var(--primary)); box-shadow: none; }
+  .p3d-knob { width: var(--pd-knob); height: var(--pd-knob); background: hsl(0 0% 100%); border: 3px solid hsl(var(--primary)); box-shadow: none; }
+
+  /* Phone sideways / fullscreen: the whole deck scales up so every button is easy to hit. */
+  @media (orientation: landscape) and (max-height: 600px) {
+    .pd-deck {
+      --pd-pad: 16px;
+      --pd-btn: 46px;
+      --pd-btn-sm: 42px;
+      --pd-chip: 40px;
+      --pd-ico: 23px;
+      --pd-ico-sm: 21px;
+      --pd-seek: 60px;
+      --pd-seek-ico: 34px;
+      --pd-play: 78px;
+      --pd-play-ico: 36px;
+      --pd-font: 13.5px;
+      --pd-gap: 10px;
+      --pd-center-gap: 64px;
+      --pd-track: 5px;
+      --pd-knob: 16px;
+    }
+    .pd-chip { padding: 0 15px; }
+    .pd-chip-label { max-width: 120px; }
   }
 
   /* Right-side menu drawer (servers, quality, audio, CC, settings) */
@@ -562,7 +597,8 @@ div[style*="z-index: 2147483647"],
     background:
       linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0) 30%),
       hsl(0 0% 4% / 0.94);
-    box-shadow: -10px 0 28px hsl(0 0% 0% / 0.55);
+    box-shadow: none;
+    border-left: 1px solid hsl(0 0% 100% / 0.1);
     animation: p3d-drawer-in 240ms ease-out both;
     -webkit-overflow-scrolling: touch;
   }
@@ -686,8 +722,7 @@ div[style*="z-index: 2147483647"],
   @media (prefers-reduced-motion: reduce) {
     .p3d-deck[data-shown="1"] .p3d-anim,
     .player-drawer,
-    .player-load-backdrop img,
-    .player-touch-button--primary.is-paused::after { animation: none !important; }
+    .player-load-backdrop img { animation: none !important; }
   }
 
   .player-controls-layer {
@@ -3826,7 +3861,8 @@ html[data-route="/admin"] body, html[data-route="/admin"] body * {
     font-size: 13px !important;
     gap: 7px !important;
   }
-  .rs-player-info .rs-player-actions > button svg { width: 15px !important; height: 15px !important; }
+  .rs-player-info .rs-player-actions > button { flex-direction: row; border-radius: 9999px; }
+  .rs-player-info .rs-player-actions > button svg { width: 17px !important; height: 17px !important; }
   .rs-player-layout > .rs-player-side {
     grid-column: 2;
     grid-row: 1 / span 2;
@@ -4221,59 +4257,65 @@ html.tv-mode .rs-remote-btn { width: 44px; height: 44px; }
   .pg3d-step, .pg3d-method { animation: none; opacity: 1; transform: none; }
 }
 
-/* Raised buttons under the player: bevel from inner light/shade only, no outer shadow.
+/* Buttons under the player: flat tiles with a hairline edge, no shadow of any kind.
    Tuned for the dark theme first (most users), still readable in light. */
 .rs-3d {
   position: relative;
-  color: hsl(var(--foreground) / 0.95);
-  background:
-    linear-gradient(180deg, hsl(var(--foreground) / 0.16) 0%, hsl(var(--foreground) / 0.06) 48%, hsl(var(--foreground) / 0.03) 52%, hsl(var(--foreground) / 0.08) 100%),
-    hsl(var(--card));
-  border: 1px solid hsl(var(--foreground) / 0.16);
-  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.26), inset 0 -3px 0 hsl(var(--background) / 0.75);
-  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease, transform 140ms cubic-bezier(.2,.8,.2,1);
+  color: hsl(var(--foreground) / 0.92);
+  background: hsl(var(--foreground) / 0.06);
+  border: 1px solid hsl(var(--foreground) / 0.1);
+  box-shadow: none;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, transform 160ms cubic-bezier(.2,.8,.2,1);
   -webkit-tap-highlight-color: transparent;
 }
-.rs-3d svg { color: hsl(var(--primary)); transition: transform 200ms ease; }
-.rs-3d:active { transform: translateY(1px) scale(0.95); }
+.rs-3d svg { color: hsl(var(--primary)); }
+.rs-3d:active { transform: scale(0.94); background: hsl(var(--foreground) / 0.12); }
 .rs-3d.is-on {
   color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.6);
-  background:
-    linear-gradient(180deg, hsl(var(--primary) / 0.32), hsl(var(--primary) / 0.12) 55%, hsl(var(--primary) / 0.2)),
-    hsl(var(--card));
+  border-color: hsl(var(--primary) / 0.55);
+  background: hsl(var(--primary) / 0.14);
 }
-.rs-3d-in > * { animation: rs-rise 420ms cubic-bezier(.2,.8,.2,1) both; }
-.rs-3d-in > *:nth-child(2) { animation-delay: 60ms; }
-.rs-3d-in > *:nth-child(3) { animation-delay: 120ms; }
-.rs-3d-in > *:nth-child(4) { animation-delay: 180ms; }
-@keyframes rs-rise { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+/* Action tiles: icon on top, label below */
+.rs-act {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; min-width: 0; padding: 10px 4px 8px; border-radius: 16px;
+  font-size: 11px; font-weight: 700; line-height: 1;
+}
+.rs-act > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-act .pg-glyph { width: 22px; height: 22px; }
+.rs-act--download { color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); border-color: hsl(var(--primary)); }
+.rs-act--download svg { color: currentColor; }
+.rs-act--download:active { background: hsl(var(--primary) / 0.85); }
+.rs-act--download.is-on { color: hsl(var(--primary-foreground)); background: hsl(var(--primary) / 0.85); }
+/* The download arrow keeps nudging down so the button reads as "tap to download". */
+.rs-act--download .pg-glyph { animation: rs-dl-nudge 2.4s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes rs-dl-nudge { 0%, 70%, 100% { transform: none; } 80% { transform: translateY(3px); } 90% { transform: translateY(-1px); } }
 
-/* Tap feedback for player + below-player buttons: bounce and a primary glow ring (transform/opacity only). */
+.rs-3d-in > * { animation: rs-rise 380ms cubic-bezier(.2,.8,.2,1) both; }
+.rs-3d-in > *:nth-child(2) { animation-delay: 50ms; }
+.rs-3d-in > *:nth-child(3) { animation-delay: 100ms; }
+.rs-3d-in > *:nth-child(4) { animation-delay: 150ms; }
+@keyframes rs-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Tap feedback for player + below-player buttons: press bounce and a soft filled ripple (no glow). */
 .player-touch-button.is-tapped,
 .player-control-chip.is-tapped,
-.rs-3d.is-tapped { animation: p3d-tap 420ms cubic-bezier(.3,1.6,.5,1) both; }
+.rs-3d.is-tapped { animation: p3d-tap 380ms cubic-bezier(.3,1.5,.5,1) both; }
 .player-touch-button.is-tapped::before,
 .player-control-chip.is-tapped::before,
 .rs-3d.is-tapped::before {
-  content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
-  border: 2px solid hsl(var(--primary));
-  box-shadow: 0 0 14px hsl(var(--primary) / 0.8);
-  animation: p3d-ring 480ms ease-out both;
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: hsl(0 0% 100% / 0.35);
+  animation: p3d-ripple 420ms ease-out both;
 }
-.rs-3d.is-tapped svg { animation: rs-icon-hop 420ms cubic-bezier(.3,1.6,.5,1) both; }
-@keyframes p3d-tap { 0% { transform: scale(1); } 35% { transform: scale(0.86); } 70% { transform: scale(1.07); } 100% { transform: scale(1); } }
-@keyframes p3d-ring { 0% { opacity: 0.95; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.35); } }
-@keyframes rs-icon-hop { 0% { transform: none; } 40% { transform: translateY(3px) scale(0.85); } 75% { transform: translateY(-3px) scale(1.15); } 100% { transform: none; } }
-
-/* Landscape / fullscreen: the bottom deck grows so icons and chips are easy to hit. */
-@media (orientation: landscape) and (max-height: 600px) {
-  .p3d-bottom .p3d-time { font-size: 13px; }
-  .p3d-bottom .player-control-chip { height: 34px !important; padding: 0 12px !important; font-size: 13px !important; min-width: 40px; max-width: 120px !important; }
-  .p3d-bottom .player-touch-button { width: 34px !important; height: 34px !important; }
-  .p3d-bottom .p3d-icon, .p3d-bottom svg { width: 16px !important; height: 16px !important; }
-  .p3d-bottom > div:last-child, .p3d-bottom > div:last-child > div { gap: 8px !important; }
-}
+.rs-3d.is-tapped::before { background: hsl(var(--primary) / 0.3); }
+.rs-3d.is-tapped svg { animation: rs-icon-hop 380ms cubic-bezier(.3,1.5,.5,1) both; }
+.rs-act--download.is-tapped svg { animation: rs-dl-drop 460ms cubic-bezier(.3,1.5,.5,1) both; }
+@keyframes p3d-tap { 0% { transform: scale(1); } 35% { transform: scale(0.84); } 70% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes p3d-ripple { 0% { opacity: 1; transform: scale(0.5); } 100% { opacity: 0; transform: scale(1); } }
+@keyframes rs-icon-hop { 0% { transform: none; } 40% { transform: translateY(2px) scale(0.86); } 75% { transform: translateY(-3px) scale(1.12); } 100% { transform: none; } }
+@keyframes rs-dl-drop { 0% { transform: none; } 45% { transform: translateY(6px) scale(0.9); } 75% { transform: translateY(-2px); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rs-act--download .pg-glyph { animation: none; } }
 
 /* Payment screenshot uploader (crypto) */
 .pg3d-proof {
