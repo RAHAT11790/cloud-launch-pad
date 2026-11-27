@@ -11,7 +11,7 @@ const B = { fill: "currentColor", fillOpacity: 0.28, stroke: "none" } as const;
 
 function paths(name: PlayerGlyphName) {
   switch (name) {
-    case "back": return <><circle cx="12" cy="12" r="9" {...B} /><path d="M13.5 7.5 9 12l4.5 4.5M9.5 12H17" /></>;
+    case "back": return <path d="M11 5.5 4.5 12l6.5 6.5M5 12h14.5" strokeWidth={2.4} />;
     case "fit": return <><rect x="3" y="5" width="18" height="14" rx="3" {...B} /><path d="M3 9V7a2 2 0 0 1 2-2h2M17 5h2a2 2 0 0 1 2 2v2M21 15v2a2 2 0 0 1-2 2h-2M7 19H5a2 2 0 0 1-2-2v-2" /></>;
     case "server": return <><rect x="3.5" y="4" width="17" height="7" rx="2.5" {...B} /><rect x="3.5" y="13" width="17" height="7" rx="2.5" {...B} /><rect x="3.5" y="4" width="17" height="7" rx="2.5" /><rect x="3.5" y="13" width="17" height="7" rx="2.5" /><path d="M7.5 7.5h.01M7.5 16.5h.01" strokeWidth={3} /></>;
     case "cc": return <><rect x="2.5" y="5" width="19" height="14" rx="3.5" {...B} /><rect x="2.5" y="5" width="19" height="14" rx="3.5" /><path d="M10.5 10.2a2.4 2.4 0 1 0 0 3.6M17 10.2a2.4 2.4 0 1 0 0 3.6" /></>;

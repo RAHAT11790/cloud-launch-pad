@@ -480,10 +480,11 @@ div[style*="z-index: 2147483647"],
 
   .pd-top { padding: var(--pd-pad) var(--pd-pad) 0; }
   .pd-top-right { gap: var(--pd-gap); max-width: calc(100% - var(--pd-btn) - 8px); }
+  /* Deliberate squircle shape on every deck button (beats the Button base radius). */
   .pd-btn {
     width: var(--pd-btn);
     height: var(--pd-btn);
-    border-radius: 9999px;
+    border-radius: calc(var(--pd-btn) * 0.3) !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -496,7 +497,7 @@ div[style*="z-index: 2147483647"],
     height: var(--pd-chip);
     min-width: var(--pd-chip);
     padding: 0 11px;
-    border-radius: 9999px;
+    border-radius: calc(var(--pd-chip) * 0.3) !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -517,7 +518,7 @@ div[style*="z-index: 2147483647"],
   .pd-play {
     width: var(--pd-play);
     height: var(--pd-play);
-    border-radius: 9999px;
+    border-radius: calc(var(--pd-play) * 0.3) !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
